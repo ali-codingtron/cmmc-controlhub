@@ -17,6 +17,7 @@ import {
 } from "@workspace/db";
 import { eq, and, desc, ilike, or, inArray, lte, gte } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireOrg } from "../middleware/org";
 import { logAudit } from "../lib/audit";
 import { randomUUID } from "crypto";
 
@@ -195,8 +196,9 @@ router.patch("/document-templates/:id", requireAuth, async (req, res) => {
 
 // ─── DOCUMENTS ──────────────────────────────────────────────────────────────
 
-router.get("/documents", requireAuth, async (req, res) => {
+router.get("/documents", requireAuth, requireOrg, async (req, res) => {
   const { docType, status, controlId, search, dueForReview } = req.query as Record<string, string>;
+  const orgId = req.orgId;
 
   const rows = await db
     .select({
@@ -234,6 +236,7 @@ router.get("/documents", requireAuth, async (req, res) => {
     .leftJoin(documentTemplatesTable, eq(documentTemplatesTable.id, documentsTable.templateId))
     .where(
       and(
+        orgId ? eq(documentsTable.organizationId, orgId) : undefined,
         docType ? eq(documentsTable.docType, docType as any) : undefined,
         status ? eq(documentsTable.status, status as any) : undefined,
         search ? ilike(documentsTable.title, `%${search}%`) : undefined,
@@ -272,7 +275,7 @@ router.get("/documents", requireAuth, async (req, res) => {
   res.json(enriched);
 });
 
-router.post("/documents/generate", requireAuth, async (req, res) => {
+router.post("/documents/generate", requireAuth, requireOrg, async (req, res) => {
   const {
     templateId, title, organizationName, systemName, policyOwner,
     reviewerId, effectiveDate, nextReviewDate, fieldValues, linkedControlIds,
@@ -302,6 +305,7 @@ router.post("/documents/generate", requireAuth, async (req, res) => {
     .insert(documentsTable)
     .values({
       id,
+      organizationId: req.orgId ?? null,
       templateId,
       title: title ?? template.title,
       docType: template.docType,
@@ -312,7 +316,7 @@ router.post("/documents/generate", requireAuth, async (req, res) => {
       fieldValues: mergeValues,
       organizationName,
       systemName,
-      ownerId: (req as any).user.id,
+      ownerId: req.authUser!.id,
       reviewerId,
       reviewFrequency: template.reviewFrequency,
       requiresApproval: template.requiresApproval,
@@ -332,7 +336,7 @@ router.post("/documents/generate", requireAuth, async (req, res) => {
     body,
     fieldValues: mergeValues,
     status: "draft",
-    changedById: (req as any).user.id,
+    changedById: req.authUser!.id,
     changeNotes: "Initial generation from template",
   });
 
@@ -341,7 +345,7 @@ router.post("/documents/generate", requireAuth, async (req, res) => {
   res.status(201).json({ ...doc, linkedControlLabels: labels, templateTitle: template.title });
 });
 
-router.get("/documents/missing", requireAuth, async (req, res) => {
+router.get("/documents/missing", requireAuth, requireOrg, async (req, res) => {
   const allControls = await db
     .select({ id: controlsTable.id, controlId: controlsTable.controlId, domainId: controlsTable.domainId })
     .from(controlsTable);
@@ -405,7 +409,7 @@ router.get("/documents/missing", requireAuth, async (req, res) => {
   });
 });
 
-router.get("/documents/:id", requireAuth, async (req, res) => {
+router.get("/documents/:id", requireAuth, requireOrg, async (req, res) => {
   const rows = await db
     .select({
       id: documentsTable.id,
@@ -486,7 +490,7 @@ router.get("/documents/:id", requireAuth, async (req, res) => {
   res.json({ ...doc, linkedControlIds, linkedControlLabels: labels, versionHistory: versions, reviews });
 });
 
-router.patch("/documents/:id", requireAuth, async (req, res) => {
+router.patch("/documents/:id", requireAuth, requireOrg, async (req, res) => {
   const {
     title, body, organizationName, systemName, reviewerId, nextReviewDate,
     internalNotes, comments, fieldValues, linkedControlIds,
@@ -518,7 +522,7 @@ router.patch("/documents/:id", requireAuth, async (req, res) => {
   res.json({ ...updated, linkedControlLabels: labels });
 });
 
-router.post("/documents/:id/submit-review", requireAuth, async (req, res) => {
+router.post("/documents/:id/submit-review", requireAuth, requireOrg, async (req, res) => {
   const { reviewerId, notes } = req.body;
   const [prev] = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.id));
   if (!prev) { res.status(404).json({ error: "Not found" }); return; }
@@ -543,7 +547,7 @@ router.post("/documents/:id/submit-review", requireAuth, async (req, res) => {
   res.json({ ...updated, linkedControlLabels: labels });
 });
 
-router.post("/documents/:id/approve", requireAuth, async (req, res) => {
+router.post("/documents/:id/approve", requireAuth, requireOrg, async (req, res) => {
   const { notes } = req.body;
   const [prev] = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.id));
   if (!prev) { res.status(404).json({ error: "Not found" }); return; }
@@ -575,7 +579,7 @@ router.post("/documents/:id/approve", requireAuth, async (req, res) => {
   res.json({ ...updated, linkedControlLabels: labels });
 });
 
-router.post("/documents/:id/reject", requireAuth, async (req, res) => {
+router.post("/documents/:id/reject", requireAuth, requireOrg, async (req, res) => {
   const { rejectionNotes } = req.body;
   const [prev] = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.id));
   if (!prev) { res.status(404).json({ error: "Not found" }); return; }
@@ -600,7 +604,7 @@ router.post("/documents/:id/reject", requireAuth, async (req, res) => {
   res.json({ ...updated, linkedControlLabels: labels });
 });
 
-router.post("/documents/:id/activate", requireAuth, async (req, res) => {
+router.post("/documents/:id/activate", requireAuth, requireOrg, async (req, res) => {
   const { notes } = req.body;
   const [prev] = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.id));
   if (!prev) { res.status(404).json({ error: "Not found" }); return; }
@@ -627,7 +631,7 @@ router.post("/documents/:id/activate", requireAuth, async (req, res) => {
   res.json({ ...updated, linkedControlLabels: labels });
 });
 
-router.post("/documents/:id/archive", requireAuth, async (req, res) => {
+router.post("/documents/:id/archive", requireAuth, requireOrg, async (req, res) => {
   const { notes } = req.body;
   const [prev] = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.id));
   if (!prev) { res.status(404).json({ error: "Not found" }); return; }
@@ -652,7 +656,7 @@ router.post("/documents/:id/archive", requireAuth, async (req, res) => {
   res.json({ ...updated, linkedControlLabels: labels });
 });
 
-router.get("/documents/:id/versions", requireAuth, async (req, res) => {
+router.get("/documents/:id/versions", requireAuth, requireOrg, async (req, res) => {
   const versions = await db
     .select({
       id: documentVersionsTable.id,
@@ -673,7 +677,7 @@ router.get("/documents/:id/versions", requireAuth, async (req, res) => {
 
 // ─── DOCUMENT LOGS ──────────────────────────────────────────────────────────
 
-router.get("/document-logs", requireAuth, async (req, res) => {
+router.get("/document-logs", requireAuth, requireOrg, async (req, res) => {
   const { status, templateId, search } = req.query as Record<string, string>;
 
   const logs = await db
@@ -711,7 +715,7 @@ router.get("/document-logs", requireAuth, async (req, res) => {
   res.json(logs);
 });
 
-router.post("/document-logs/generate", requireAuth, async (req, res) => {
+router.post("/document-logs/generate", requireAuth, requireOrg, async (req, res) => {
   const { templateId, title, periodStart, periodEnd, responsibleUserId, linkedControlIds, fieldValues } = req.body;
 
   let template = null;
@@ -762,7 +766,7 @@ router.post("/document-logs/generate", requireAuth, async (req, res) => {
   res.status(201).json({ ...log, templateTitle: template?.title });
 });
 
-router.get("/document-logs/:id", requireAuth, async (req, res) => {
+router.get("/document-logs/:id", requireAuth, requireOrg, async (req, res) => {
   const rows = await db
     .select({
       id: generatedLogsTable.id,
@@ -800,7 +804,7 @@ router.get("/document-logs/:id", requireAuth, async (req, res) => {
   res.json({ ...rows[0], entries });
 });
 
-router.patch("/document-logs/:id", requireAuth, async (req, res) => {
+router.patch("/document-logs/:id", requireAuth, requireOrg, async (req, res) => {
   const { completionNotes, fieldValues } = req.body;
   const [prev] = await db.select().from(generatedLogsTable).where(eq(generatedLogsTable.id, req.params.id));
   if (!prev) { res.status(404).json({ error: "Not found" }); return; }
@@ -818,7 +822,7 @@ router.patch("/document-logs/:id", requireAuth, async (req, res) => {
   res.json(updated);
 });
 
-router.post("/document-logs/:id/complete", requireAuth, async (req, res) => {
+router.post("/document-logs/:id/complete", requireAuth, requireOrg, async (req, res) => {
   const { completionNotes, entries, generateEvidence } = req.body;
   const [prev] = await db.select().from(generatedLogsTable).where(eq(generatedLogsTable.id, req.params.id));
   if (!prev) { res.status(404).json({ error: "Not found" }); return; }
@@ -862,7 +866,7 @@ router.post("/document-logs/:id/complete", requireAuth, async (req, res) => {
   res.json(updated);
 });
 
-router.post("/document-logs/:id/approve", requireAuth, async (req, res) => {
+router.post("/document-logs/:id/approve", requireAuth, requireOrg, async (req, res) => {
   const { notes } = req.body;
   const [prev] = await db.select().from(generatedLogsTable).where(eq(generatedLogsTable.id, req.params.id));
   if (!prev) { res.status(404).json({ error: "Not found" }); return; }
@@ -884,7 +888,7 @@ router.post("/document-logs/:id/approve", requireAuth, async (req, res) => {
 
 // ─── CHECKLISTS ─────────────────────────────────────────────────────────────
 
-router.get("/checklists", requireAuth, async (req, res) => {
+router.get("/checklists", requireAuth, requireOrg, async (req, res) => {
   const templates = await db
     .select()
     .from(documentTemplatesTable)
@@ -905,7 +909,7 @@ router.get("/checklists", requireAuth, async (req, res) => {
   res.json(enriched);
 });
 
-router.post("/checklists/:id/complete", requireAuth, async (req, res) => {
+router.post("/checklists/:id/complete", requireAuth, requireOrg, async (req, res) => {
   const { title, notes, itemResults, generateEvidence } = req.body;
   const [template] = await db
     .select()
@@ -950,7 +954,7 @@ router.post("/checklists/:id/complete", requireAuth, async (req, res) => {
 
 // ─── AUTOMATION ─────────────────────────────────────────────────────────────
 
-router.get("/automation/doc-status", requireAuth, async (req, res) => {
+router.get("/automation/doc-status", requireAuth, requireOrg, async (req, res) => {
   const now = new Date();
   const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
@@ -1048,7 +1052,7 @@ router.get("/automation/doc-status", requireAuth, async (req, res) => {
   });
 });
 
-router.post("/automation/run-doc-checks", requireAuth, async (req, res) => {
+router.post("/automation/run-doc-checks", requireAuth, requireOrg, async (req, res) => {
   const now = new Date();
 
   const expired = await db

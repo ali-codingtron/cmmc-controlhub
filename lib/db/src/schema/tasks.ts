@@ -9,6 +9,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { usersTable } from "./users";
 import { controlsTable } from "./controls";
+import { organizationsTable } from "./organizations";
 
 export const taskStatusEnum = pgEnum("task_status", [
   "open",
@@ -51,6 +52,10 @@ export const taskRecurrenceEnum = pgEnum("task_recurrence", [
 
 export const tasksTable = pgTable("tasks", {
   id: text("id").primaryKey(),
+  organizationId: text("organization_id").references(
+    () => organizationsTable.id,
+    { onDelete: "cascade" }
+  ),
   title: text("title").notNull(),
   description: text("description"),
   status: taskStatusEnum("status").notNull().default("open"),

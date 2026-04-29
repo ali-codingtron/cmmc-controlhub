@@ -14,13 +14,15 @@ import {
 } from "@workspace/db";
 import { eq, and, ilike, count, inArray, or } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireOrg } from "../middleware/org";
 import { logAudit } from "../lib/audit";
 import { randomUUID } from "crypto";
 
 const router = Router();
 
-router.get("/controls", requireAuth, async (req, res) => {
+router.get("/controls", requireAuth, requireOrg, async (req, res) => {
   const { domain, level, status, search } = req.query as Record<string, string>;
+  const orgId = req.orgId;
 
   const controls = await db
     .select({
@@ -44,7 +46,10 @@ router.get("/controls", requireAuth, async (req, res) => {
     .leftJoin(domainsTable, eq(domainsTable.id, controlsTable.domainId))
     .leftJoin(
       controlAssessmentsTable,
-      eq(controlAssessmentsTable.controlId, controlsTable.id)
+      and(
+        eq(controlAssessmentsTable.controlId, controlsTable.id),
+        orgId ? eq(controlAssessmentsTable.organizationId, orgId) : undefined
+      )
     )
     .where(
       and(
@@ -52,10 +57,7 @@ router.get("/controls", requireAuth, async (req, res) => {
         domain ? eq(controlsTable.domainId, domain) : undefined,
         level ? eq(controlsTable.level, level as "L1" | "L2") : undefined,
         status
-          ? eq(
-              controlAssessmentsTable.status,
-              status as typeof controlAssessmentsTable.status
-            )
+          ? eq(controlAssessmentsTable.status, status as typeof controlAssessmentsTable.status)
           : undefined,
         search
           ? or(
@@ -76,20 +78,24 @@ router.get("/controls", requireAuth, async (req, res) => {
     const evRows = await db
       .select({ controlId: evidenceControlLinksTable.controlId, cnt: count() })
       .from(evidenceControlLinksTable)
-      .where(inArray(evidenceControlLinksTable.controlId, controlIds))
+      .innerJoin(evidenceItemsTable, eq(evidenceItemsTable.id, evidenceControlLinksTable.evidenceId))
+      .where(
+        and(
+          inArray(evidenceControlLinksTable.controlId, controlIds),
+          orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined
+        )
+      )
       .groupBy(evidenceControlLinksTable.controlId);
 
     const approvedEvRows = await db
       .select({ controlId: evidenceControlLinksTable.controlId, cnt: count() })
       .from(evidenceControlLinksTable)
-      .leftJoin(
-        evidenceItemsTable,
-        eq(evidenceItemsTable.id, evidenceControlLinksTable.evidenceId)
-      )
+      .leftJoin(evidenceItemsTable, eq(evidenceItemsTable.id, evidenceControlLinksTable.evidenceId))
       .where(
         and(
           inArray(evidenceControlLinksTable.controlId, controlIds),
-          eq(evidenceItemsTable.status, "approved")
+          eq(evidenceItemsTable.status, "approved"),
+          orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined
         )
       )
       .groupBy(evidenceControlLinksTable.controlId);
@@ -101,7 +107,8 @@ router.get("/controls", requireAuth, async (req, res) => {
       .where(
         and(
           inArray(taskControlLinksTable.controlId, controlIds),
-          or(eq(tasksTable.status, "open"), eq(tasksTable.status, "in_progress"))
+          or(eq(tasksTable.status, "open"), eq(tasksTable.status, "in_progress")),
+          orgId ? eq(tasksTable.organizationId, orgId) : undefined
         )
       )
       .groupBy(taskControlLinksTable.controlId);
@@ -112,23 +119,16 @@ router.get("/controls", requireAuth, async (req, res) => {
       .where(
         and(
           inArray(poamsTable.linkedControlId as any, controlIds),
-          or(eq(poamsTable.status, "open"), eq(poamsTable.status, "in_progress"))
+          or(eq(poamsTable.status, "open"), eq(poamsTable.status, "in_progress")),
+          orgId ? eq(poamsTable.organizationId, orgId) : undefined
         )
       )
       .groupBy(poamsTable.linkedControlId);
 
-    evRows.forEach((r) => {
-      evidenceCounts[r.controlId] = Number(r.cnt);
-    });
-    approvedEvRows.forEach((r) => {
-      evidenceCounts[`approved_${r.controlId}`] = Number(r.cnt);
-    });
-    taskRows.forEach((r) => {
-      taskCounts[r.controlId] = Number(r.cnt);
-    });
-    poamRows.forEach((r) => {
-      if (r.controlId) poamCounts[r.controlId] = Number(r.cnt);
-    });
+    evRows.forEach((r) => { evidenceCounts[r.controlId] = Number(r.cnt); });
+    approvedEvRows.forEach((r) => { evidenceCounts[`approved_${r.controlId}`] = Number(r.cnt); });
+    taskRows.forEach((r) => { taskCounts[r.controlId] = Number(r.cnt); });
+    poamRows.forEach((r) => { if (r.controlId) poamCounts[r.controlId] = Number(r.cnt); });
   }
 
   const result = controls.map((c) => ({
@@ -143,7 +143,9 @@ router.get("/controls", requireAuth, async (req, res) => {
   res.json(result);
 });
 
-router.get("/controls/:id", requireAuth, async (req, res) => {
+router.get("/controls/:id", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
+
   const [control] = await db
     .select({
       id: controlsTable.id,
@@ -165,7 +167,10 @@ router.get("/controls/:id", requireAuth, async (req, res) => {
     .leftJoin(domainsTable, eq(domainsTable.id, controlsTable.domainId))
     .leftJoin(
       controlAssessmentsTable,
-      eq(controlAssessmentsTable.controlId, controlsTable.id)
+      and(
+        eq(controlAssessmentsTable.controlId, controlsTable.id),
+        orgId ? eq(controlAssessmentsTable.organizationId, orgId) : undefined
+      )
     )
     .where(eq(controlsTable.id, req.params.id))
     .limit(1);
@@ -184,8 +189,9 @@ router.get("/controls/:id", requireAuth, async (req, res) => {
   res.json({ ...control, status: control.status ?? "not_started", objectives });
 });
 
-router.patch("/controls/:id", requireAuth, async (req, res) => {
+router.patch("/controls/:id", requireAuth, requireOrg, async (req, res) => {
   const { status, implementationNarrative } = req.body;
+  const orgId = req.orgId;
 
   const [control] = await db
     .select()
@@ -201,15 +207,21 @@ router.patch("/controls/:id", requireAuth, async (req, res) => {
   const existing = await db
     .select()
     .from(controlAssessmentsTable)
-    .where(eq(controlAssessmentsTable.controlId, req.params.id))
+    .where(
+      and(
+        eq(controlAssessmentsTable.controlId, req.params.id),
+        orgId ? eq(controlAssessmentsTable.organizationId, orgId) : undefined
+      )
+    )
     .limit(1);
 
   if (existing.length === 0) {
     await db.insert(controlAssessmentsTable).values({
       id: randomUUID(),
+      organizationId: orgId ?? null,
       controlId: req.params.id,
       status: status ?? "not_started",
-      implementationNarrative: implementationNarrative,
+      implementationNarrative,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -219,12 +231,10 @@ router.patch("/controls/:id", requireAuth, async (req, res) => {
       .set({
         status: status ?? existing[0].status,
         implementationNarrative:
-          implementationNarrative !== undefined
-            ? implementationNarrative
-            : existing[0].implementationNarrative,
+          implementationNarrative !== undefined ? implementationNarrative : existing[0].implementationNarrative,
         updatedAt: new Date(),
       })
-      .where(eq(controlAssessmentsTable.controlId, req.params.id));
+      .where(eq(controlAssessmentsTable.id, existing[0].id));
   }
 
   await logAudit(req, "status_changed", "control", req.params.id, {
@@ -236,7 +246,9 @@ router.patch("/controls/:id", requireAuth, async (req, res) => {
   res.json({ id: req.params.id, status, implementationNarrative });
 });
 
-router.get("/controls/:id/evidence", requireAuth, async (req, res) => {
+router.get("/controls/:id/evidence", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
+
   const links = await db
     .select({
       id: evidenceItemsTable.id,
@@ -248,16 +260,20 @@ router.get("/controls/:id/evidence", requireAuth, async (req, res) => {
       createdAt: evidenceItemsTable.createdAt,
     })
     .from(evidenceControlLinksTable)
-    .innerJoin(
-      evidenceItemsTable,
-      eq(evidenceItemsTable.id, evidenceControlLinksTable.evidenceId)
-    )
-    .where(eq(evidenceControlLinksTable.controlId, req.params.id));
+    .innerJoin(evidenceItemsTable, eq(evidenceItemsTable.id, evidenceControlLinksTable.evidenceId))
+    .where(
+      and(
+        eq(evidenceControlLinksTable.controlId, req.params.id),
+        orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined
+      )
+    );
 
   res.json(links);
 });
 
-router.get("/controls/:id/tasks", requireAuth, async (req, res) => {
+router.get("/controls/:id/tasks", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
+
   const tasks = await db
     .select({
       id: tasksTable.id,
@@ -268,16 +284,28 @@ router.get("/controls/:id/tasks", requireAuth, async (req, res) => {
     })
     .from(taskControlLinksTable)
     .innerJoin(tasksTable, eq(tasksTable.id, taskControlLinksTable.taskId))
-    .where(eq(taskControlLinksTable.controlId, req.params.id));
+    .where(
+      and(
+        eq(taskControlLinksTable.controlId, req.params.id),
+        orgId ? eq(tasksTable.organizationId, orgId) : undefined
+      )
+    );
 
   res.json(tasks);
 });
 
-router.get("/controls/:id/poams", requireAuth, async (req, res) => {
+router.get("/controls/:id/poams", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
+
   const items = await db
     .select()
     .from(poamsTable)
-    .where(eq(poamsTable.linkedControlId, req.params.id));
+    .where(
+      and(
+        eq(poamsTable.linkedControlId, req.params.id),
+        orgId ? eq(poamsTable.organizationId, orgId) : undefined
+      )
+    );
 
   res.json(items);
 });

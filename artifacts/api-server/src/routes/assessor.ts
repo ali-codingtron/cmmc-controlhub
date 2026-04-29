@@ -12,12 +12,14 @@ import {
 } from "@workspace/db";
 import { eq, and, or, ilike, desc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireOrg } from "../middleware/org";
 import { logAudit } from "../lib/audit";
 
 const router = Router();
 
-router.get("/assessor/controls", requireAuth, async (req, res) => {
+router.get("/assessor/controls", requireAuth, requireOrg, async (req, res) => {
   const { domain, level, search } = req.query as Record<string, string>;
+  const orgId = req.orgId;
 
   const controls = await db
     .select({
@@ -37,7 +39,10 @@ router.get("/assessor/controls", requireAuth, async (req, res) => {
     .leftJoin(domainsTable, eq(domainsTable.id, controlsTable.domainId))
     .leftJoin(
       controlAssessmentsTable,
-      eq(controlAssessmentsTable.controlId, controlsTable.id)
+      and(
+        eq(controlAssessmentsTable.controlId, controlsTable.id),
+        orgId ? eq(controlAssessmentsTable.organizationId, orgId) : undefined
+      )
     )
     .where(
       and(
@@ -61,7 +66,9 @@ router.get("/assessor/controls", requireAuth, async (req, res) => {
   res.json(controls);
 });
 
-router.get("/assessor/controls/:id/package", requireAuth, async (req, res) => {
+router.get("/assessor/controls/:id/package", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
+
   const [control] = await db
     .select({
       id: controlsTable.id,
@@ -83,15 +90,15 @@ router.get("/assessor/controls/:id/package", requireAuth, async (req, res) => {
     .leftJoin(domainsTable, eq(domainsTable.id, controlsTable.domainId))
     .leftJoin(
       controlAssessmentsTable,
-      eq(controlAssessmentsTable.controlId, controlsTable.id)
+      and(
+        eq(controlAssessmentsTable.controlId, controlsTable.id),
+        orgId ? eq(controlAssessmentsTable.organizationId, orgId) : undefined
+      )
     )
     .where(eq(controlsTable.id, req.params.id))
     .limit(1);
 
-  if (!control) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
+  if (!control) { res.status(404).json({ error: "Not found" }); return; }
 
   const evidence = await db
     .select({
@@ -109,25 +116,25 @@ router.get("/assessor/controls/:id/package", requireAuth, async (req, res) => {
       ownerName: usersTable.name,
     })
     .from(evidenceControlLinksTable)
-    .innerJoin(
-      evidenceItemsTable,
-      eq(evidenceItemsTable.id, evidenceControlLinksTable.evidenceId)
-    )
+    .innerJoin(evidenceItemsTable, eq(evidenceItemsTable.id, evidenceControlLinksTable.evidenceId))
     .leftJoin(usersTable, eq(usersTable.id, evidenceItemsTable.ownerId))
     .where(
       and(
         eq(evidenceControlLinksTable.controlId, req.params.id),
-        or(
-          eq(evidenceItemsTable.status, "approved"),
-          eq(evidenceItemsTable.status, "assessor_ready")
-        )
+        or(eq(evidenceItemsTable.status, "approved"), eq(evidenceItemsTable.status, "assessor_ready")),
+        orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined
       )
     );
 
   const poams = await db
     .select()
     .from(poamsTable)
-    .where(eq(poamsTable.linkedControlId, req.params.id));
+    .where(
+      and(
+        eq(poamsTable.linkedControlId, req.params.id),
+        orgId ? eq(poamsTable.organizationId, orgId) : undefined
+      )
+    );
 
   const history = await db
     .select()
@@ -135,28 +142,27 @@ router.get("/assessor/controls/:id/package", requireAuth, async (req, res) => {
     .where(
       and(
         eq(auditLogsTable.entityType, "control"),
-        eq(auditLogsTable.entityId, req.params.id)
+        eq(auditLogsTable.entityId, req.params.id),
+        orgId ? eq(auditLogsTable.organizationId, orgId) : undefined
       )
     )
     .orderBy(desc(auditLogsTable.timestamp))
     .limit(20);
 
-  await logAudit(req, "downloaded", "control", req.params.id, {
-    entityLabel: control.controlId,
-  });
+  await logAudit(req, "downloaded", "control", req.params.id, { entityLabel: control.controlId });
 
   res.json({ ...control, evidence, poams, history });
 });
 
-router.post("/assessor/controls/:id/export", requireAuth, async (req, res) => {
+router.post("/assessor/controls/:id/export", requireAuth, requireOrg, async (req, res) => {
   res.json({ message: "Export queued", controlId: req.params.id });
 });
 
-router.post("/assessor/domains/:id/export", requireAuth, async (req, res) => {
+router.post("/assessor/domains/:id/export", requireAuth, requireOrg, async (req, res) => {
   res.json({ message: "Export queued", domainId: req.params.id });
 });
 
-router.post("/assessor/export-full", requireAuth, async (req, res) => {
+router.post("/assessor/export-full", requireAuth, requireOrg, async (req, res) => {
   res.json({ message: "Full export queued" });
 });
 

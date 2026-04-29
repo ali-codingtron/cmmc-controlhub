@@ -13,6 +13,7 @@ import { usersTable } from "./users";
 import { controlsTable } from "./controls";
 import { domainsTable } from "./domains";
 import { evidenceItemsTable } from "./evidence";
+import { organizationsTable } from "./organizations";
 
 export const docTypeEnum = pgEnum("doc_type", [
   "policy",
@@ -48,6 +49,10 @@ export const cmmcDocLevelEnum = pgEnum("cmmc_doc_level", ["L1", "L2", "both"]);
 
 export const documentTemplatesTable = pgTable("document_templates", {
   id: text("id").primaryKey(),
+  organizationId: text("organization_id").references(
+    () => organizationsTable.id,
+    { onDelete: "cascade" }
+  ),
   title: text("title").notNull(),
   docType: docTypeEnum("doc_type").notNull(),
   cmmcLevel: cmmcDocLevelEnum("cmmc_level").notNull().default("both"),
@@ -72,6 +77,10 @@ export const documentTemplatesTable = pgTable("document_templates", {
 
 export const documentsTable = pgTable("documents", {
   id: text("id").primaryKey(),
+  organizationId: text("organization_id").references(
+    () => organizationsTable.id,
+    { onDelete: "cascade" }
+  ),
   templateId: text("template_id").references(() => documentTemplatesTable.id),
   title: text("title").notNull(),
   docType: docTypeEnum("doc_type").notNull(),
@@ -157,6 +166,10 @@ export const documentReviewsTable = pgTable("document_reviews", {
 
 export const generatedLogsTable = pgTable("generated_logs", {
   id: text("id").primaryKey(),
+  organizationId: text("organization_id").references(
+    () => organizationsTable.id,
+    { onDelete: "cascade" }
+  ),
   templateId: text("template_id").references(() => documentTemplatesTable.id),
   documentId: text("document_id").references(() => documentsTable.id),
   title: text("title").notNull(),
@@ -204,6 +217,10 @@ export const checklistItemsTable = pgTable("checklist_items", {
 
 export const checklistCompletionsTable = pgTable("checklist_completions", {
   id: text("id").primaryKey(),
+  organizationId: text("organization_id").references(
+    () => organizationsTable.id,
+    { onDelete: "cascade" }
+  ),
   templateId: text("template_id")
     .notNull()
     .references(() => documentTemplatesTable.id),

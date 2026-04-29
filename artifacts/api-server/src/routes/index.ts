@@ -11,12 +11,14 @@ import dashboardRouter from "./dashboard";
 import assessorRouter from "./assessor";
 import auditRouter from "./auditlogs";
 import documentsRouter from "./documents";
+import organizationsRouter from "./organizations";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
 router.use(usersRouter);
+router.use(organizationsRouter);
 router.use(domainsRouter);
 router.use(controlsRouter);
 router.use(evidenceRouter);

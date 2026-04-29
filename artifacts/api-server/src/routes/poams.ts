@@ -5,15 +5,17 @@ import {
   controlsTable,
   usersTable,
 } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, count } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireOrg } from "../middleware/org";
 import { logAudit } from "../lib/audit";
 import { randomUUID } from "crypto";
 
 const router = Router();
 
-router.get("/poams", requireAuth, async (req, res) => {
+router.get("/poams", requireAuth, requireOrg, async (req, res) => {
   const { status, riskLevel, controlId } = req.query as Record<string, string>;
+  const orgId = req.orgId;
 
   const items = await db
     .select({
@@ -40,6 +42,7 @@ router.get("/poams", requireAuth, async (req, res) => {
     .leftJoin(usersTable, eq(usersTable.id, poamsTable.ownerId))
     .where(
       and(
+        orgId ? eq(poamsTable.organizationId, orgId) : undefined,
         status ? eq(poamsTable.status, status as any) : undefined,
         riskLevel ? eq(poamsTable.riskLevel, riskLevel as any) : undefined,
         controlId ? eq(poamsTable.linkedControlId, controlId) : undefined
@@ -50,18 +53,12 @@ router.get("/poams", requireAuth, async (req, res) => {
   res.json(items);
 });
 
-router.post("/poams", requireAuth, async (req, res) => {
+router.post("/poams", requireAuth, requireOrg, async (req, res) => {
   const {
-    title,
-    deficiencyDescription,
-    riskLevel,
-    linkedControlId,
-    ownerId,
-    scheduledCompletionDate,
-    remediationPlan,
-    resourcesRequired,
-    notes,
+    title, deficiencyDescription, riskLevel, linkedControlId,
+    ownerId, scheduledCompletionDate, remediationPlan, resourcesRequired, notes,
   } = req.body;
+  const orgId = req.orgId;
 
   if (!title || !deficiencyDescription) {
     res.status(400).json({ error: "title and deficiencyDescription required" });
@@ -69,11 +66,16 @@ router.post("/poams", requireAuth, async (req, res) => {
   }
 
   const id = randomUUID();
-  const count = await db.select().from(poamsTable);
-  const poamNumber = `POA&M-${String(count.length + 1).padStart(4, "0")}`;
+  const existing = await db
+    .select({ id: poamsTable.id })
+    .from(poamsTable)
+    .where(orgId ? eq(poamsTable.organizationId, orgId) : undefined);
+  const prefix = orgId ? "POA&M" : "POA&M";
+  const poamNumber = `${prefix}-${String(existing.length + 1).padStart(4, "0")}`;
 
   await db.insert(poamsTable).values({
     id,
+    organizationId: orgId ?? null,
     poamNumber,
     title,
     deficiencyDescription,
@@ -81,9 +83,7 @@ router.post("/poams", requireAuth, async (req, res) => {
     riskLevel: riskLevel ?? "medium",
     linkedControlId,
     ownerId,
-    scheduledCompletionDate: scheduledCompletionDate
-      ? new Date(scheduledCompletionDate)
-      : undefined,
+    scheduledCompletionDate: scheduledCompletionDate ? new Date(scheduledCompletionDate) : undefined,
     remediationPlan,
     resourcesRequired,
     notes,
@@ -97,7 +97,9 @@ router.post("/poams", requireAuth, async (req, res) => {
   res.status(201).json(created);
 });
 
-router.get("/poams/:id", requireAuth, async (req, res) => {
+router.get("/poams/:id", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
+
   const [item] = await db
     .select({
       id: poamsTable.id,
@@ -122,36 +124,27 @@ router.get("/poams/:id", requireAuth, async (req, res) => {
     .from(poamsTable)
     .leftJoin(controlsTable, eq(controlsTable.id, poamsTable.linkedControlId))
     .leftJoin(usersTable, eq(usersTable.id, poamsTable.ownerId))
-    .where(eq(poamsTable.id, req.params.id))
+    .where(
+      and(
+        eq(poamsTable.id, req.params.id),
+        orgId ? eq(poamsTable.organizationId, orgId) : undefined
+      )
+    )
     .limit(1);
 
-  if (!item) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
-
+  if (!item) { res.status(404).json({ error: "Not found" }); return; }
   res.json(item);
 });
 
-router.patch("/poams/:id", requireAuth, async (req, res) => {
-  const [existing] = await db.select().from(poamsTable).where(eq(poamsTable.id, req.params.id)).limit(1);
+router.patch("/poams/:id", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
 
-  if (!existing) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
+  const [existing] = await db.select().from(poamsTable).where(and(eq(poamsTable.id, req.params.id), orgId ? eq(poamsTable.organizationId, orgId) : undefined)).limit(1);
+  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
 
   const {
-    title,
-    deficiencyDescription,
-    status,
-    riskLevel,
-    ownerId,
-    scheduledCompletionDate,
-    remediationPlan,
-    resourcesRequired,
-    notes,
-    linkedControlId,
+    title, deficiencyDescription, status, riskLevel, ownerId,
+    scheduledCompletionDate, remediationPlan, resourcesRequired, notes, linkedControlId,
   } = req.body;
 
   await db
@@ -165,9 +158,7 @@ router.patch("/poams/:id", requireAuth, async (req, res) => {
       linkedControlId: linkedControlId !== undefined ? linkedControlId : existing.linkedControlId,
       scheduledCompletionDate:
         scheduledCompletionDate !== undefined
-          ? scheduledCompletionDate
-            ? new Date(scheduledCompletionDate)
-            : null
+          ? scheduledCompletionDate ? new Date(scheduledCompletionDate) : null
           : existing.scheduledCompletionDate,
       remediationPlan: remediationPlan !== undefined ? remediationPlan : existing.remediationPlan,
       resourcesRequired: resourcesRequired !== undefined ? resourcesRequired : existing.resourcesRequired,
@@ -182,27 +173,15 @@ router.patch("/poams/:id", requireAuth, async (req, res) => {
   res.json(updated);
 });
 
-router.post("/poams/:id/close", requireAuth, async (req, res) => {
+router.post("/poams/:id/close", requireAuth, requireOrg, async (req, res) => {
   const { resolutionSummary } = req.body;
-  const [existing] = await db.select().from(poamsTable).where(eq(poamsTable.id, req.params.id)).limit(1);
+  const orgId = req.orgId;
+  const [existing] = await db.select().from(poamsTable).where(and(eq(poamsTable.id, req.params.id), orgId ? eq(poamsTable.organizationId, orgId) : undefined)).limit(1);
 
-  if (!existing) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
+  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
 
-  await db
-    .update(poamsTable)
-    .set({
-      status: "closed",
-      completedDate: new Date(),
-      resolutionSummary,
-      updatedAt: new Date(),
-    })
-    .where(eq(poamsTable.id, req.params.id));
-
+  await db.update(poamsTable).set({ status: "closed", completedDate: new Date(), resolutionSummary, updatedAt: new Date() }).where(eq(poamsTable.id, req.params.id));
   await logAudit(req, "closed", "poam", req.params.id, { entityLabel: existing.title });
-
   res.json({ id: req.params.id, status: "closed" });
 });
 

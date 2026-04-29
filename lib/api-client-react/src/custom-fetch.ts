@@ -17,6 +17,16 @@ const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
 let _baseUrl: string | null = null;
 let _authTokenGetter: AuthTokenGetter | null = null;
+let _orgIdGetter: (() => string | null) | null = null;
+
+/**
+ * Register a getter that supplies the active organization ID.
+ * When set, an `X-Organization-ID` header is attached to every request.
+ * Pass `null` to clear the getter.
+ */
+export function setOrgIdGetter(getter: (() => string | null) | null): void {
+  _orgIdGetter = getter;
+}
 
 /**
  * Set a base URL that is prepended to every relative request URL
@@ -355,6 +365,14 @@ export async function customFetch<T = unknown>(
     const token = await _authTokenGetter();
     if (token) {
       headers.set("authorization", `Bearer ${token}`);
+    }
+  }
+
+  // Attach organization ID header when a getter is configured.
+  if (_orgIdGetter && !headers.has("x-organization-id")) {
+    const orgId = _orgIdGetter();
+    if (orgId) {
+      headers.set("x-organization-id", orgId);
     }
   }
 

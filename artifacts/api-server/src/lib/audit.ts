@@ -18,6 +18,7 @@ export async function logAudit(
   try {
     await db.insert(auditLogsTable).values({
       id: randomUUID(),
+      organizationId: req.orgId ?? null,
       userId: req.authUser?.id,
       userName: req.authUser?.name,
       action,

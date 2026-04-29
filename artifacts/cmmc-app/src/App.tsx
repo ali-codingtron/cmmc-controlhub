@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
+import { OrgProvider, useOrg } from "@/context/OrgContext";
 import { Layout } from "@/components/layout/layout";
 import NotFound from "@/pages/not-found";
 
@@ -31,6 +32,7 @@ import DocumentChecklists from "@/pages/documents-checklists";
 import DocumentsMissing from "@/pages/documents-missing";
 import DocumentDetail from "@/pages/document-detail";
 import DocumentLogDetail from "@/pages/document-log-detail";
+import Organizations from "@/pages/organizations";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,9 +45,10 @@ const queryClient = new QueryClient({
 
 function Guard({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
+  const { isLoading: orgLoading } = useOrg();
   const [location] = useLocation();
 
-  if (isLoading) {
+  if (isLoading || orgLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -93,6 +96,7 @@ function AppRoutes() {
               <Route path="/audit-logs" component={AuditLogs} />
               <Route path="/users" component={Users} />
               <Route path="/settings" component={Settings} />
+              <Route path="/organizations" component={Organizations} />
               <Route path="/documents" component={Documents} />
               <Route path="/documents/list" component={DocumentsList} />
               <Route path="/documents/templates" component={DocumentTemplates} />
@@ -120,9 +124,11 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <AppRoutes />
-          </WouterRouter>
+          <OrgProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <AppRoutes />
+            </WouterRouter>
+          </OrgProvider>
         </AuthProvider>
         <Toaster />
       </TooltipProvider>

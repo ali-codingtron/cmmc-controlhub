@@ -6,6 +6,7 @@ import {
   pgEnum,
 } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
+import { organizationsTable } from "./organizations";
 
 export const auditActionEnum = pgEnum("audit_action", [
   "created",
@@ -34,6 +35,10 @@ export const auditActionEnum = pgEnum("audit_action", [
 
 export const auditLogsTable = pgTable("audit_logs", {
   id: text("id").primaryKey(),
+  organizationId: text("organization_id").references(
+    () => organizationsTable.id,
+    { onDelete: "set null" }
+  ),
   userId: text("user_id").references(() => usersTable.id),
   userName: text("user_name"),
   action: auditActionEnum("action").notNull(),

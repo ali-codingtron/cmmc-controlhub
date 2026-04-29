@@ -8,6 +8,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { usersTable } from "./users";
 import { controlsTable } from "./controls";
+import { organizationsTable } from "./organizations";
 
 export const poamStatusEnum = pgEnum("poam_status", [
   "open",
@@ -27,6 +28,10 @@ export const riskLevelEnum = pgEnum("risk_level", [
 
 export const poamsTable = pgTable("poams", {
   id: text("id").primaryKey(),
+  organizationId: text("organization_id").references(
+    () => organizationsTable.id,
+    { onDelete: "cascade" }
+  ),
   poamNumber: text("poam_number"),
   title: text("title").notNull(),
   deficiencyDescription: text("deficiency_description").notNull(),

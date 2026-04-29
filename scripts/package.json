@@ -7,11 +7,13 @@
     "hello": "tsx ./src/hello.ts",
     "seed-cmmc": "tsx ./src/seed-cmmc.ts",
     "seed-doc-templates": "tsx ./src/seed-document-templates.ts",
+    "seed-orgs": "tsx ./src/seed-organizations.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@workspace/db": "workspace:*",
-    "bcryptjs": "^2.4.3"
+    "bcryptjs": "^2.4.3",
+    "drizzle-orm": "catalog:"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

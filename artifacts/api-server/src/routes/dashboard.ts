@@ -13,14 +13,15 @@ import {
 } from "@workspace/db";
 import { eq, and, or, count, lte, gte, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireOrg } from "../middleware/org";
 
 const router = Router();
 
-router.get("/dashboard/summary", requireAuth, async (req, res) => {
+router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
+
   const [controlStats] = await db
-    .select({
-      total: count(),
-    })
+    .select({ total: count() })
     .from(controlsTable)
     .where(eq(controlsTable.isActive, true));
 
@@ -32,28 +33,29 @@ router.get("/dashboard/summary", requireAuth, async (req, res) => {
     })
     .from(controlAssessmentsTable)
     .innerJoin(controlsTable, eq(controlsTable.id, controlAssessmentsTable.controlId))
+    .where(orgId ? eq(controlAssessmentsTable.organizationId, orgId) : undefined)
     .groupBy(controlAssessmentsTable.status, controlsTable.level);
 
   const [evidenceStats] = await db
-    .select({
-      total: count(),
-    })
+    .select({ total: count() })
     .from(evidenceItemsTable)
-    .where(sql`deleted_at IS NULL`);
+    .where(and(sql`deleted_at IS NULL`, orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined));
 
   const evidenceByStatus = await db
-    .select({
-      status: evidenceItemsTable.status,
-      cnt: count(),
-    })
+    .select({ status: evidenceItemsTable.status, cnt: count() })
     .from(evidenceItemsTable)
-    .where(sql`deleted_at IS NULL`)
+    .where(and(sql`deleted_at IS NULL`, orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined))
     .groupBy(evidenceItemsTable.status);
 
   const [taskStats] = await db
     .select({ total: count() })
     .from(tasksTable)
-    .where(or(eq(tasksTable.status, "open"), eq(tasksTable.status, "in_progress"), eq(tasksTable.status, "overdue")));
+    .where(
+      and(
+        or(eq(tasksTable.status, "open"), eq(tasksTable.status, "in_progress"), eq(tasksTable.status, "overdue")),
+        orgId ? eq(tasksTable.organizationId, orgId) : undefined
+      )
+    );
 
   const [overdueTaskStats] = await db
     .select({ total: count() })
@@ -61,14 +63,20 @@ router.get("/dashboard/summary", requireAuth, async (req, res) => {
     .where(
       and(
         or(eq(tasksTable.status, "open"), eq(tasksTable.status, "in_progress")),
-        lte(tasksTable.dueDate, new Date())
+        lte(tasksTable.dueDate, new Date()),
+        orgId ? eq(tasksTable.organizationId, orgId) : undefined
       )
     );
 
   const [openPoamStats] = await db
     .select({ total: count() })
     .from(poamsTable)
-    .where(or(eq(poamsTable.status, "open"), eq(poamsTable.status, "in_progress")));
+    .where(
+      and(
+        or(eq(poamsTable.status, "open"), eq(poamsTable.status, "in_progress")),
+        orgId ? eq(poamsTable.organizationId, orgId) : undefined
+      )
+    );
 
   const [criticalPoamStats] = await db
     .select({ total: count() })
@@ -76,7 +84,8 @@ router.get("/dashboard/summary", requireAuth, async (req, res) => {
     .where(
       and(
         or(eq(poamsTable.status, "open"), eq(poamsTable.status, "in_progress")),
-        eq(poamsTable.riskLevel, "critical")
+        eq(poamsTable.riskLevel, "critical"),
+        orgId ? eq(poamsTable.organizationId, orgId) : undefined
       )
     );
 
@@ -87,25 +96,24 @@ router.get("/dashboard/summary", requireAuth, async (req, res) => {
   const assessorReady = assessmentStats
     .filter((s) => s.status === "assessor_ready")
     .reduce((sum, s) => sum + Number(s.cnt), 0);
-  const notStarted = assessmentStats
-    .filter((s) => s.status === "not_started")
-    .reduce((sum, s) => sum + Number(s.cnt), 0);
+  const notStarted = totalControls - assessmentStats.reduce((sum, s) => sum + Number(s.cnt), 0);
   const atRisk = assessmentStats
     .filter((s) => s.status === "at_risk")
     .reduce((sum, s) => sum + Number(s.cnt), 0);
 
-  const l1Total = assessmentStats
-    .filter((s) => s.level === "L1")
-    .reduce((sum, s) => sum + Number(s.cnt), 0);
+  const l1AssessedTotal = assessmentStats.filter((s) => s.level === "L1").reduce((sum, s) => sum + Number(s.cnt), 0);
   const l1Implemented = assessmentStats
     .filter((s) => (s.status === "implemented" || s.status === "assessor_ready") && s.level === "L1")
     .reduce((sum, s) => sum + Number(s.cnt), 0);
-  const l2Total = assessmentStats
-    .filter((s) => s.level === "L2")
-    .reduce((sum, s) => sum + Number(s.cnt), 0);
+  const l2AssessedTotal = assessmentStats.filter((s) => s.level === "L2").reduce((sum, s) => sum + Number(s.cnt), 0);
   const l2Implemented = assessmentStats
     .filter((s) => (s.status === "implemented" || s.status === "assessor_ready") && s.level === "L2")
     .reduce((sum, s) => sum + Number(s.cnt), 0);
+
+  const [l1ControlCount] = await db.select({ cnt: count() }).from(controlsTable).where(and(eq(controlsTable.isActive, true), eq(controlsTable.level, "L1")));
+  const [l2ControlCount] = await db.select({ cnt: count() }).from(controlsTable).where(and(eq(controlsTable.isActive, true), eq(controlsTable.level, "L2")));
+  const l1Total = Number(l1ControlCount?.cnt ?? 0);
+  const l2Total = Number(l2ControlCount?.cnt ?? 0);
 
   const totalEvidence = Number(evidenceStats?.total ?? 0);
   const approvedEvidence = evidenceByStatus.find((e) => e.status === "approved");
@@ -113,14 +121,13 @@ router.get("/dashboard/summary", requireAuth, async (req, res) => {
   const pendingReview = evidenceByStatus.find((e) => e.status === "pending_review");
 
   res.json({
-    overallReadinessPercent:
-      totalControls > 0 ? Math.round((implemented / totalControls) * 100) : 0,
+    overallReadinessPercent: totalControls > 0 ? Math.round((implemented / totalControls) * 100) : 0,
     l1ReadinessPercent: l1Total > 0 ? Math.round((l1Implemented / l1Total) * 100) : 0,
     l2ReadinessPercent: l2Total > 0 ? Math.round((l2Implemented / l2Total) * 100) : 0,
     totalControls,
     implementedControls: implemented,
     assessorReadyControls: assessorReady,
-    notStartedControls: notStarted,
+    notStartedControls: notStarted < 0 ? 0 : notStarted,
     atRiskControls: atRisk,
     totalEvidenceItems: totalEvidence,
     approvedEvidenceItems: Number(approvedEvidence?.cnt ?? 0),
@@ -136,11 +143,10 @@ router.get("/dashboard/summary", requireAuth, async (req, res) => {
   });
 });
 
-router.get("/dashboard/readiness-by-domain", requireAuth, async (req, res) => {
-  const domains = await db
-    .select()
-    .from(domainsTable)
-    .orderBy(domainsTable.sortOrder);
+router.get("/dashboard/readiness-by-domain", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
+
+  const domains = await db.select().from(domainsTable).orderBy(domainsTable.sortOrder);
 
   const assessments = await db
     .select({
@@ -151,7 +157,10 @@ router.get("/dashboard/readiness-by-domain", requireAuth, async (req, res) => {
     .from(controlsTable)
     .leftJoin(
       controlAssessmentsTable,
-      eq(controlAssessmentsTable.controlId, controlsTable.id)
+      and(
+        eq(controlAssessmentsTable.controlId, controlsTable.id),
+        orgId ? eq(controlAssessmentsTable.organizationId, orgId) : undefined
+      )
     )
     .where(eq(controlsTable.isActive, true))
     .groupBy(controlsTable.domainId, controlAssessmentsTable.status);
@@ -180,10 +189,14 @@ router.get("/dashboard/readiness-by-domain", requireAuth, async (req, res) => {
   res.json(result);
 });
 
-router.get("/dashboard/missing-evidence", requireAuth, async (req, res) => {
+router.get("/dashboard/missing-evidence", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
+
   const controlsWithEvidence = await db
     .select({ controlId: evidenceControlLinksTable.controlId })
     .from(evidenceControlLinksTable)
+    .innerJoin(evidenceItemsTable, eq(evidenceItemsTable.id, evidenceControlLinksTable.evidenceId))
+    .where(orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined)
     .groupBy(evidenceControlLinksTable.controlId);
 
   const coveredIds = new Set(controlsWithEvidence.map((c) => c.controlId));
@@ -205,19 +218,16 @@ router.get("/dashboard/missing-evidence", requireAuth, async (req, res) => {
   res.json(missing);
 });
 
-router.get("/dashboard/stale-evidence", requireAuth, async (req, res) => {
-  const { days } = req.query as Record<string, string>;
-  const cutoff = days
-    ? new Date(Date.now() - parseInt(days) * 86400000)
-    : new Date(Date.now() - 365 * 86400000);
+router.get("/dashboard/stale-evidence", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
 
   const items = await db
     .select()
     .from(evidenceItemsTable)
     .where(
-      or(
-        eq(evidenceItemsTable.status, "stale"),
-        lte(evidenceItemsTable.expiresAt, new Date())
+      and(
+        or(eq(evidenceItemsTable.status, "stale"), lte(evidenceItemsTable.expiresAt, new Date())),
+        orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined
       )
     )
     .orderBy(evidenceItemsTable.expiresAt);
@@ -225,7 +235,9 @@ router.get("/dashboard/stale-evidence", requireAuth, async (req, res) => {
   res.json(items);
 });
 
-router.get("/dashboard/overdue-tasks", requireAuth, async (req, res) => {
+router.get("/dashboard/overdue-tasks", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
+
   const tasks = await db
     .select({
       id: tasksTable.id,
@@ -241,7 +253,8 @@ router.get("/dashboard/overdue-tasks", requireAuth, async (req, res) => {
     .where(
       and(
         or(eq(tasksTable.status, "open"), eq(tasksTable.status, "in_progress")),
-        lte(tasksTable.dueDate, new Date())
+        lte(tasksTable.dueDate, new Date()),
+        orgId ? eq(tasksTable.organizationId, orgId) : undefined
       )
     )
     .orderBy(tasksTable.dueDate);
@@ -249,8 +262,10 @@ router.get("/dashboard/overdue-tasks", requireAuth, async (req, res) => {
   res.json(tasks);
 });
 
-router.get("/dashboard/upcoming-reviews", requireAuth, async (req, res) => {
+router.get("/dashboard/upcoming-reviews", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
   const cutoff = new Date(Date.now() + 30 * 86400000);
+
   const items = await db
     .select()
     .from(evidenceItemsTable)
@@ -258,7 +273,8 @@ router.get("/dashboard/upcoming-reviews", requireAuth, async (req, res) => {
       and(
         lte(evidenceItemsTable.reviewDueDate, cutoff),
         gte(evidenceItemsTable.reviewDueDate, new Date()),
-        eq(evidenceItemsTable.status, "approved")
+        eq(evidenceItemsTable.status, "approved"),
+        orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined
       )
     )
     .orderBy(evidenceItemsTable.reviewDueDate)
@@ -267,11 +283,14 @@ router.get("/dashboard/upcoming-reviews", requireAuth, async (req, res) => {
   res.json(items);
 });
 
-router.get("/dashboard/recent-activity", requireAuth, async (req, res) => {
+router.get("/dashboard/recent-activity", requireAuth, requireOrg, async (req, res) => {
   const { limit } = req.query as Record<string, string>;
+  const orgId = req.orgId;
+
   const logs = await db
     .select()
     .from(auditLogsTable)
+    .where(orgId ? eq(auditLogsTable.organizationId, orgId) : undefined)
     .orderBy(desc(auditLogsTable.timestamp))
     .limit(parseInt(limit ?? "20"));
 

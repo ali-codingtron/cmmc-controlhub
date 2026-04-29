@@ -10,6 +10,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { usersTable } from "./users";
 import { controlsTable } from "./controls";
+import { organizationsTable } from "./organizations";
 
 export const evidenceStatusEnum = pgEnum("evidence_status", [
   "draft",
@@ -42,6 +43,10 @@ export const evidenceTypeEnum = pgEnum("evidence_type", [
 
 export const evidenceItemsTable = pgTable("evidence_items", {
   id: text("id").primaryKey(),
+  organizationId: text("organization_id").references(
+    () => organizationsTable.id,
+    { onDelete: "cascade" }
+  ),
   title: text("title").notNull(),
   description: text("description"),
   evidenceType: evidenceTypeEnum("evidence_type").notNull(),

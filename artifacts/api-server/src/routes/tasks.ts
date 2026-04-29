@@ -6,23 +6,18 @@ import {
   usersTable,
   controlsTable,
 } from "@workspace/db";
-import {
-  eq,
-  and,
-  desc,
-  or,
-  inArray,
-  lte,
-} from "drizzle-orm";
+import { eq, and, desc, or, inArray, lte } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireOrg } from "../middleware/org";
 import { logAudit } from "../lib/audit";
 import { randomUUID } from "crypto";
 
 const router = Router();
 
-router.get("/tasks", requireAuth, async (req, res) => {
+router.get("/tasks", requireAuth, requireOrg, async (req, res) => {
   const { status, assigneeId, controlId, priority, dueBefore } =
     req.query as Record<string, string>;
+  const orgId = req.orgId;
 
   let taskIds: string[] | undefined;
 
@@ -32,10 +27,7 @@ router.get("/tasks", requireAuth, async (req, res) => {
       .from(taskControlLinksTable)
       .where(eq(taskControlLinksTable.controlId, controlId));
     taskIds = links.map((l) => l.taskId);
-    if (taskIds.length === 0) {
-      res.json([]);
-      return;
-    }
+    if (taskIds.length === 0) { res.json([]); return; }
   }
 
   const tasks = await db
@@ -61,6 +53,7 @@ router.get("/tasks", requireAuth, async (req, res) => {
     .leftJoin(usersTable, eq(usersTable.id, tasksTable.assigneeId))
     .where(
       and(
+        orgId ? eq(tasksTable.organizationId, orgId) : undefined,
         status ? eq(tasksTable.status, status as any) : undefined,
         assigneeId ? eq(tasksTable.assigneeId, assigneeId) : undefined,
         priority ? eq(tasksTable.priority, priority as any) : undefined,
@@ -73,28 +66,15 @@ router.get("/tasks", requireAuth, async (req, res) => {
   res.json(tasks);
 });
 
-router.post("/tasks", requireAuth, async (req, res) => {
-  const {
-    title,
-    description,
-    priority,
-    taskType,
-    dueDate,
-    assigneeId,
-    controlIds,
-    tags,
-    isRecurring,
-    recurrence,
-  } = req.body;
+router.post("/tasks", requireAuth, requireOrg, async (req, res) => {
+  const { title, description, priority, taskType, dueDate, assigneeId, controlIds, tags, isRecurring, recurrence } = req.body;
 
-  if (!title) {
-    res.status(400).json({ error: "title required" });
-    return;
-  }
+  if (!title) { res.status(400).json({ error: "title required" }); return; }
 
   const id = randomUUID();
   await db.insert(tasksTable).values({
     id,
+    organizationId: req.orgId ?? null,
     title,
     description,
     status: "open",
@@ -123,16 +103,13 @@ router.post("/tasks", requireAuth, async (req, res) => {
 
   await logAudit(req, "created", "task", id, { entityLabel: title });
 
-  const [created] = await db
-    .select()
-    .from(tasksTable)
-    .where(eq(tasksTable.id, id))
-    .limit(1);
-
+  const [created] = await db.select().from(tasksTable).where(eq(tasksTable.id, id)).limit(1);
   res.status(201).json(created);
 });
 
-router.get("/tasks/:id", requireAuth, async (req, res) => {
+router.get("/tasks/:id", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
+
   const [task] = await db
     .select({
       id: tasksTable.id,
@@ -155,13 +132,15 @@ router.get("/tasks/:id", requireAuth, async (req, res) => {
     })
     .from(tasksTable)
     .leftJoin(usersTable, eq(usersTable.id, tasksTable.assigneeId))
-    .where(eq(tasksTable.id, req.params.id))
+    .where(
+      and(
+        eq(tasksTable.id, req.params.id),
+        orgId ? eq(tasksTable.organizationId, orgId) : undefined
+      )
+    )
     .limit(1);
 
-  if (!task) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
+  if (!task) { res.status(404).json({ error: "Not found" }); return; }
 
   const links = await db
     .select({ controlId: taskControlLinksTable.controlId, label: controlsTable.controlId })
@@ -172,17 +151,16 @@ router.get("/tasks/:id", requireAuth, async (req, res) => {
   res.json({ ...task, linkedControlIds: links.map((l) => l.controlId) });
 });
 
-router.patch("/tasks/:id", requireAuth, async (req, res) => {
+router.patch("/tasks/:id", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
+
   const [existing] = await db
     .select()
     .from(tasksTable)
-    .where(eq(tasksTable.id, req.params.id))
+    .where(and(eq(tasksTable.id, req.params.id), orgId ? eq(tasksTable.organizationId, orgId) : undefined))
     .limit(1);
 
-  if (!existing) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
+  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
 
   const { title, description, status, priority, dueDate, assigneeId, tags } = req.body;
 
@@ -200,53 +178,32 @@ router.patch("/tasks/:id", requireAuth, async (req, res) => {
     })
     .where(eq(tasksTable.id, req.params.id));
 
-  await logAudit(req, "updated", "task", req.params.id, {
-    entityLabel: existing.title,
-  });
+  await logAudit(req, "updated", "task", req.params.id, { entityLabel: existing.title });
 
   const [updated] = await db.select().from(tasksTable).where(eq(tasksTable.id, req.params.id)).limit(1);
   res.json(updated);
 });
 
-router.post("/tasks/:id/complete", requireAuth, async (req, res) => {
+router.post("/tasks/:id/complete", requireAuth, requireOrg, async (req, res) => {
   const { notes } = req.body;
-  const [existing] = await db.select().from(tasksTable).where(eq(tasksTable.id, req.params.id)).limit(1);
+  const orgId = req.orgId;
+  const [existing] = await db.select().from(tasksTable).where(and(eq(tasksTable.id, req.params.id), orgId ? eq(tasksTable.organizationId, orgId) : undefined)).limit(1);
 
-  if (!existing) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
+  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
 
-  await db
-    .update(tasksTable)
-    .set({
-      status: "completed",
-      completedAt: new Date(),
-      completionNotes: notes,
-      updatedAt: new Date(),
-    })
-    .where(eq(tasksTable.id, req.params.id));
-
+  await db.update(tasksTable).set({ status: "completed", completedAt: new Date(), completionNotes: notes, updatedAt: new Date() }).where(eq(tasksTable.id, req.params.id));
   await logAudit(req, "completed", "task", req.params.id, { entityLabel: existing.title });
-
   res.json({ id: req.params.id, status: "completed" });
 });
 
-router.post("/tasks/:id/reopen", requireAuth, async (req, res) => {
-  const [existing] = await db.select().from(tasksTable).where(eq(tasksTable.id, req.params.id)).limit(1);
+router.post("/tasks/:id/reopen", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
+  const [existing] = await db.select().from(tasksTable).where(and(eq(tasksTable.id, req.params.id), orgId ? eq(tasksTable.organizationId, orgId) : undefined)).limit(1);
 
-  if (!existing) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
+  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
 
-  await db
-    .update(tasksTable)
-    .set({ status: "open", completedAt: null, updatedAt: new Date() })
-    .where(eq(tasksTable.id, req.params.id));
-
+  await db.update(tasksTable).set({ status: "open", completedAt: null, updatedAt: new Date() }).where(eq(tasksTable.id, req.params.id));
   await logAudit(req, "reopened", "task", req.params.id, { entityLabel: existing.title });
-
   res.json({ id: req.params.id, status: "open" });
 });
 

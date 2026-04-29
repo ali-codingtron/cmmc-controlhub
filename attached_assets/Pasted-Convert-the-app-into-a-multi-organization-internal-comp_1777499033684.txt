@@ -1,0 +1,190 @@
+Convert the app into a multi-organization internal compliance platform.
+
+I need to manage CMMC readiness for multiple client organizations from the same app.
+
+Add multi-tenant support.
+
+Requirements:
+
+1. Organizations
+Add an Organization model with:
+- id
+- name
+- legal_name
+- short_name
+- CAGE code
+- UEI
+- industry
+- primary_contact
+- compliance_manager
+- organization_address
+- assessment_scope
+- CMMC target level
+- notes
+- created_at
+- updated_at
+
+2. Tenant Isolation
+Every major record must belong to an organization:
+- users
+- controls status
+- evidence
+- documents
+- templates
+- tasks
+- reminders
+- POA&M items
+- assets
+- suppliers
+- risks
+- incidents
+- audit logs
+- assessor packages
+
+Do not mix data between organizations.
+
+3. Organization Switcher
+Add an organization selector in the top navigation.
+
+When I select an organization:
+- dashboards show only that organization
+- controls show that organization’s status
+- evidence repository shows only that organization’s evidence
+- documents show only that organization’s documents
+- tasks and reminders show only that organization
+- assessor view shows only that organization
+
+4. Global Admin View
+Add a global admin dashboard showing:
+- all organizations
+- target CMMC level
+- readiness percentage
+- open POA&M count
+- overdue task count
+- stale evidence count
+- documents needing review
+- last activity date
+
+5. User Access
+Users can belong to one or more organizations.
+
+Add OrganizationUser membership with:
+- user_id
+- organization_id
+- role
+- status
+- invited_at
+- joined_at
+
+Roles should be organization-specific:
+- Global Admin
+- Organization Admin
+- Compliance Manager
+- IT Contributor
+- Reviewer
+- Executive Viewer
+- Assessor Read-Only
+
+6. Data Model Changes
+Update Prisma schema so all organization-specific tables include organization_id.
+
+Add organization_id to:
+- ControlStatus or ControlImplementation
+- Evidence
+- Document
+- DocumentTemplate if templates can be org-specific
+- Task
+- Reminder
+- POAM
+- AuditLog
+- Asset
+- Supplier
+- Risk
+- Incident
+- TrainingRecord
+- AssessmentPackage
+- GeneratedLog
+- ChecklistCompletion
+
+Keep the master CMMC controls library global, but make each organization’s implementation status separate.
+
+Use this pattern:
+- Control = global CMMC practice library
+- OrganizationControl = organization-specific status, owner, implementation narrative, due dates, review dates, readiness score
+
+7. Templates
+Support both:
+- global default templates
+- organization-specific customized templates
+
+Organizations should be able to copy a global template and customize it.
+
+8. Reports
+Reports must be organization-specific by default.
+
+Add global reports for admins:
+- readiness comparison across organizations
+- overdue tasks across organizations
+- stale evidence across organizations
+- document review backlog across organizations
+
+9. Assessor View
+Assessor access must be restricted to one organization only.
+
+An assessor should never see another organization’s data.
+
+10. API Updates
+Every API endpoint must enforce organization scoping.
+
+Examples:
+- GET /api/organizations
+- GET /api/organizations/:organizationId/dashboard
+- GET /api/organizations/:organizationId/controls
+- GET /api/organizations/:organizationId/evidence
+- GET /api/organizations/:organizationId/documents
+- GET /api/organizations/:organizationId/tasks
+- GET /api/organizations/:organizationId/poams
+- GET /api/organizations/:organizationId/assessor
+
+11. Security
+Add authorization checks to every query.
+
+Rules:
+- Global Admin can access all organizations
+- Organization users can only access assigned organizations
+- Assessor Read-Only can only access assessor-ready data for assigned organization
+- Users cannot change organization_id manually in API calls
+- Audit logs must include organization_id
+
+12. Migration
+Update existing sample data so it belongs to a sample organization.
+
+Seed at least three organizations:
+- Internal Company
+- Client A
+- Client B
+
+Each organization should have:
+- controls status
+- sample evidence
+- sample documents
+- sample tasks
+- sample POA&M items
+- dashboard data
+
+13. UI Updates
+Add pages:
+- Organizations List
+- Organization Detail
+- Add Organization
+- Organization Settings
+- Organization Users
+- Global Dashboard
+- Cross-Organization Reports
+
+14. Important
+Do not duplicate the global CMMC controls library for each organization.
+
+Only duplicate organization-specific status, evidence, documents, tasks, and reviews.
+
+Make the app feel like an internal MSP/compliance consultant platform for managing CMMC readiness across multiple organizations.

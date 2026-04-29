@@ -10,6 +10,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { domainsTable } from "./domains";
 import { usersTable } from "./users";
+import { organizationsTable } from "./organizations";
 
 export const cmmcLevelEnum = pgEnum("cmmc_level", ["L1", "L2"]);
 
@@ -74,6 +75,10 @@ export const controlEvidenceTypesTable = pgTable("control_evidence_types", {
 
 export const controlAssessmentsTable = pgTable("control_assessments", {
   id: text("id").primaryKey(),
+  organizationId: text("organization_id").references(
+    () => organizationsTable.id,
+    { onDelete: "cascade" }
+  ),
   controlId: text("control_id")
     .notNull()
     .references(() => controlsTable.id),
