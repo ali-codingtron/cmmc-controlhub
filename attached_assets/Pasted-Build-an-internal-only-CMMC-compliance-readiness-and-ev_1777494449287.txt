@@ -1,0 +1,503 @@
+Build an internal-only CMMC compliance readiness and evidence management web app for my team.
+
+This is not a public SaaS product. It is an internal tool used by me and my team to manage CMMC Level 1 and Level 2 readiness, evidence, recurring reviews, dashboards, and assessor-facing documentation.
+
+Use a practical stack suitable for Replit:
+- Next.js or React frontend
+- Node.js backend
+- PostgreSQL database
+- Prisma ORM
+- Role-based access control
+- Local/internal authentication
+- File upload support
+- Background jobs or scheduled task logic for reminders
+
+Core goal:
+Create an internal compliance operations platform where we can track CMMC L1/L2 controls, upload evidence, label documents correctly, monitor compliance progress, and prepare documentation for a C3PAO assessor.
+
+Build the app around these modules:
+
+1. Dashboard
+Create dashboards showing:
+- Overall CMMC readiness score
+- Readiness by CMMC level
+- Readiness by security domain
+- Readiness by control
+- Missing evidence
+- Stale evidence
+- Overdue reviews
+- Upcoming reviews due in 7, 30, and 60 days
+- Open POA&M items
+- Evidence awaiting review
+- Controls with no evidence
+- Controls with no procedure
+- Controls marked assessor-ready
+- Recent compliance activity
+
+2. CMMC Controls Library
+Create a seeded controls library for CMMC Level 1 and Level 2.
+
+Each control should include:
+- control_id
+- title
+- description
+- CMMC level
+- domain
+- assessment objectives
+- expected evidence types
+- recommended review frequency
+- implementation guidance
+- status
+- owner
+- reviewer
+- due date
+- last reviewed date
+- next review date
+
+Allow users to:
+- view controls by level
+- view controls by domain
+- search by control ID or keyword
+- open a control detail page
+- see all linked evidence
+- see tasks, reviews, gaps, and POA&M items for that control
+
+3. Evidence Repository
+Create a metadata-driven evidence repository.
+
+Evidence items must support:
+- evidence_id
+- title
+- description
+- evidence_type
+- file upload
+- storage key or file URL
+- linked controls
+- linked domains
+- linked assessment objectives
+- owner
+- reviewer
+- approver
+- source system
+- collection date
+- review due date
+- expiration date
+- confidentiality level
+- status
+- version
+- tags
+- assessor-facing summary
+- internal notes
+
+Evidence types should include:
+- policy
+- procedure
+- screenshot
+- log
+- report
+- ticket
+- configuration export
+- training record
+- incident record
+- risk record
+- approval record
+- other
+
+Evidence statuses should include:
+- draft
+- needs_classification
+- pending_review
+- approved
+- assessor_ready
+- rejected
+- stale
+- superseded
+- archived
+
+Build workflows for:
+- uploading evidence
+- tagging evidence
+- linking evidence to controls
+- submitting evidence for review
+- approving evidence
+- rejecting evidence
+- marking evidence stale
+- superseding old evidence with a newer version
+- archiving evidence
+
+4. Tasks and Reminders
+Create recurring compliance tasks and reminders.
+
+Task types should include:
+- access review
+- policy review
+- procedure review
+- log review
+- backup review
+- incident review
+- training review
+- evidence refresh
+- control review
+- POA&M follow-up
+- general compliance task
+
+Each task should include:
+- title
+- description
+- linked control
+- linked evidence
+- owner
+- reviewer
+- due date
+- recurrence
+- priority
+- status
+- completion notes
+- proof of completion
+- created date
+- completed date
+
+Task statuses:
+- not_started
+- in_progress
+- waiting_on_evidence
+- pending_review
+- completed
+- overdue
+- cancelled
+
+Reminder logic:
+- show upcoming tasks due in 7, 30, and 60 days
+- mark tasks overdue after due date
+- flag evidence as stale after expiration date
+- notify users in-app when reviews are due
+- escalate overdue tasks to the compliance manager
+- create recurring tasks automatically after completion
+
+5. POA&M / Gap Tracking
+Create a POA&M module for gaps and remediation.
+
+Each POA&M item should include:
+- title
+- description
+- linked control
+- weakness/gap
+- risk level
+- owner
+- target completion date
+- actual completion date
+- status
+- remediation plan
+- evidence required
+- linked evidence
+- notes
+
+Statuses:
+- open
+- in_progress
+- waiting_on_vendor
+- mitigated
+- accepted_risk
+- closed
+
+6. Assessor View
+Create a read-only assessor-facing mode that my team can use during a C3PAO assessment.
+
+The assessor view should allow browsing by:
+- CMMC level
+- security domain
+- control number
+- evidence type
+- keyword
+- assessor-ready status
+
+For each control, show:
+- control ID
+- title
+- description
+- assessment objectives
+- implementation narrative
+- linked policies
+- linked procedures
+- screenshots
+- logs
+- reports
+- review history
+- approvals
+- evidence timeline
+- POA&M status
+- assessor-facing notes
+
+Include an export option for:
+- one control evidence package
+- one domain evidence package
+- full assessment package
+
+7. Audit Trail
+Create a complete audit trail.
+
+Track:
+- user login
+- evidence upload
+- evidence metadata changes
+- evidence status changes
+- evidence approval
+- evidence rejection
+- evidence download
+- control status changes
+- task creation
+- task completion
+- POA&M changes
+- assessor package export
+
+Each audit log entry should include:
+- user
+- action
+- entity type
+- entity ID
+- previous value
+- new value
+- timestamp
+- IP address if available
+
+8. Roles and Permissions
+Since this is internal-only, use simple role-based access control.
+
+Roles:
+- Admin
+- Compliance Manager
+- IT Contributor
+- Reviewer
+- Executive Viewer
+- Assessor Read-Only
+
+Permissions:
+- Admin can manage everything
+- Compliance Manager can manage controls, evidence, tasks, reviews, and POA&M items
+- IT Contributor can upload evidence and complete assigned tasks
+- Reviewer can review and approve evidence
+- Executive Viewer can view dashboards and reports only
+- Assessor Read-Only can only view assessor-ready evidence and export packages
+
+9. Database
+Use Prisma with PostgreSQL.
+
+Create models for:
+- User
+- Role
+- Domain
+- Control
+- AssessmentObjective
+- Evidence
+- EvidenceVersion
+- EvidenceControlMap
+- EvidenceReview
+- EvidenceApproval
+- EvidenceTag
+- Task
+- Reminder
+- ReviewSchedule
+- POAM
+- Comment
+- AuditLog
+- AssessmentPackage
+- SystemAsset
+- Supplier
+- TrainingRecord
+- Incident
+- Risk
+- ExceptionRecord
+
+Include:
+- primary keys
+- foreign keys
+- created_at
+- updated_at
+- deleted_at where useful
+- status enums
+- indexes for control_id, domain_id, evidence status, task due date, owner, and tags
+
+10. API Endpoints
+Create REST API endpoints for:
+
+Controls:
+- GET /api/controls
+- GET /api/controls/:id
+- PATCH /api/controls/:id
+- GET /api/controls/:id/evidence
+- GET /api/controls/:id/tasks
+- GET /api/controls/:id/poams
+
+Evidence:
+- POST /api/evidence/upload
+- GET /api/evidence
+- GET /api/evidence/:id
+- PATCH /api/evidence/:id
+- POST /api/evidence/:id/submit-review
+- POST /api/evidence/:id/approve
+- POST /api/evidence/:id/reject
+- POST /api/evidence/:id/mark-stale
+- POST /api/evidence/:id/supersede
+- POST /api/evidence/:id/link-controls
+- GET /api/evidence/search
+
+Tasks:
+- GET /api/tasks
+- POST /api/tasks
+- PATCH /api/tasks/:id
+- POST /api/tasks/:id/complete
+- POST /api/tasks/:id/reopen
+
+POA&M:
+- GET /api/poams
+- POST /api/poams
+- PATCH /api/poams/:id
+- POST /api/poams/:id/close
+
+Dashboard:
+- GET /api/dashboard/summary
+- GET /api/dashboard/readiness-by-domain
+- GET /api/dashboard/missing-evidence
+- GET /api/dashboard/stale-evidence
+- GET /api/dashboard/overdue-tasks
+
+Assessor:
+- GET /api/assessor/controls
+- GET /api/assessor/controls/:id/package
+- POST /api/assessor/export/control/:id
+- POST /api/assessor/export/domain/:id
+- POST /api/assessor/export/full
+
+Audit:
+- GET /api/audit-logs
+
+11. Readiness Logic
+Implement basic scoring logic.
+
+A control should be:
+- Not Started if it has no evidence and no tasks completed
+- In Progress if it has some evidence or open tasks
+- Needs Review if evidence exists but is not approved
+- Implemented if required evidence exists and is approved
+- Assessor Ready if evidence is approved, current, mapped to assessment objectives, and has an assessor summary
+- At Risk if evidence is stale, reviews are overdue, or POA&M items are open
+
+Domain readiness should be based on the percentage of controls that are implemented or assessor-ready.
+
+Dashboard score should be calculated from:
+- control status
+- evidence completeness
+- evidence freshness
+- overdue tasks
+- open POA&M items
+- missing procedures
+- missing policies
+
+12. UI Pages
+Create these pages:
+
+- Login
+- Dashboard
+- Controls Library
+- Control Detail
+- Evidence Repository
+- Evidence Detail
+- Upload Evidence
+- Tasks
+- Task Detail
+- Calendar / Upcoming Reviews
+- POA&M List
+- POA&M Detail
+- Assessor View
+- Assessor Control Package
+- Reports / Exports
+- Audit Trail
+- Users and Roles
+- Settings
+
+Use a clean internal enterprise UI:
+- left navigation
+- searchable tables
+- filters
+- status badges
+- dashboard cards
+- progress bars
+- evidence cards
+- control detail tabs
+- task kanban or table
+- assessor-friendly read-only layout
+
+13. Automation Rules
+Implement or stub these automation rules:
+
+- When evidence is uploaded without a linked control, mark it needs_classification
+- When evidence is uploaded with all required metadata, allow submit for review
+- When evidence is approved, update linked control scoring
+- When evidence expires, mark it stale
+- When evidence is superseded, keep old version but remove it from active assessor package
+- When a task due date passes, mark it overdue
+- When a recurring task is completed, create the next task
+- When a control has no evidence, show it on missing evidence dashboard
+- When a control has stale evidence, mark the control at risk
+- When a POA&M item is open, reduce readiness score for linked control
+- When all required evidence is approved and current, mark control implemented
+- When implementation narrative and assessor summary exist, allow assessor_ready status
+- When evidence is rejected, notify owner and require notes
+- When control status changes, write audit log
+- When evidence is downloaded, write audit log
+- When assessor package is exported, write audit log
+- When policy review is due in 14 days, show reminder
+- When access review is overdue, escalate to Compliance Manager
+- When training record expires, create review task
+- When backup review is missed, create high-priority task
+
+14. Seed Data
+Seed initial data with:
+- sample users
+- roles
+- CMMC domains
+- sample CMMC L1/L2 controls
+- sample evidence
+- sample tasks
+- sample POA&M items
+- sample audit logs
+
+Important:
+Use placeholder/sample CMMC controls if the complete official list is too long, but structure the app so the complete official CMMC model can be imported later from JSON or CSV.
+
+15. Build Order
+Build in this order:
+
+Phase 1:
+- authentication
+- roles
+- database schema
+- controls library
+- basic dashboard
+
+Phase 2:
+- evidence repository
+- evidence upload
+- evidence metadata
+- control-to-evidence linking
+
+Phase 3:
+- task/reminder system
+- overdue/stale logic
+- POA&M tracking
+
+Phase 4:
+- assessor view
+- exports
+- audit logs
+- reporting
+
+Phase 5:
+- polish UI
+- seed data
+- improve scoring logic
+- prepare for production deployment
+
+Output actual working code, not just a plan.
+
+Start by creating the Prisma schema, seed data, API routes, and core UI pages. Make the app usable immediately with sample data.

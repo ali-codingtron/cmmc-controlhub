@@ -3,20 +3,39 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: CMMC Compliance Operations Platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: users
+    description: User management
+  - name: domains
+    description: CMMC Security Domains
+  - name: controls
+    description: CMMC Controls
+  - name: evidence
+    description: Evidence Repository
+  - name: tasks
+    description: Compliance Tasks
+  - name: poams
+    description: Plan of Action and Milestones
+  - name: dashboard
+    description: Dashboard and Readiness Metrics
+  - name: assessor
+    description: Assessor-facing views and exports
+  - name: audit
+    description: Audit Trail
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +43,1117 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ─── AUTH ───────────────────────────────────────────────────
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Log in with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginBody"
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Log out and clear session
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ─── USERS ──────────────────────────────────────────────────
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserBody"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get a user by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserBody"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  # ─── DOMAINS ────────────────────────────────────────────────
+  /domains:
+    get:
+      operationId: listDomains
+      tags: [domains]
+      summary: List all CMMC security domains with readiness stats
+      responses:
+        "200":
+          description: Domains with readiness
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DomainWithStats"
+
+  /domains/{id}:
+    get:
+      operationId: getDomain
+      tags: [domains]
+      summary: Get a domain by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Domain
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DomainWithStats"
+
+  # ─── CONTROLS ───────────────────────────────────────────────
+  /controls:
+    get:
+      operationId: listControls
+      tags: [controls]
+      summary: List CMMC controls with optional filtering
+      parameters:
+        - name: domain
+          in: query
+          schema:
+            type: string
+          description: Filter by domain ID (e.g. AC, IA)
+        - name: level
+          in: query
+          schema:
+            type: string
+            enum: [L1, L2]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [not_started, in_progress, implemented, needs_review, assessor_ready, not_applicable, at_risk]
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by control_id, title, or description
+      responses:
+        "200":
+          description: List of controls
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ControlWithStatus"
+
+  /controls/{id}:
+    get:
+      operationId: getControl
+      tags: [controls]
+      summary: Get full control detail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Control detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ControlDetail"
+    patch:
+      operationId: updateControl
+      tags: [controls]
+      summary: Update control status and implementation narrative
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateControlBody"
+      responses:
+        "200":
+          description: Updated control
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ControlWithStatus"
+
+  /controls/{id}/evidence:
+    get:
+      operationId: getControlEvidence
+      tags: [controls]
+      summary: Get all evidence linked to a control
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Evidence items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EvidenceItem"
+
+  /controls/{id}/tasks:
+    get:
+      operationId: getControlTasks
+      tags: [controls]
+      summary: Get all tasks linked to a control
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+
+  /controls/{id}/poams:
+    get:
+      operationId: getControlPoams
+      tags: [controls]
+      summary: Get all POA&Ms linked to a control
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: POA&Ms
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Poam"
+
+  # ─── EVIDENCE ───────────────────────────────────────────────
+  /evidence:
+    get:
+      operationId: listEvidence
+      tags: [evidence]
+      summary: List evidence items with filtering
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, needs_classification, pending_review, approved, assessor_ready, rejected, stale, superseded, archived]
+        - name: evidenceType
+          in: query
+          schema:
+            type: string
+        - name: controlId
+          in: query
+          schema:
+            type: string
+        - name: domainId
+          in: query
+          schema:
+            type: string
+        - name: ownerId
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: expiringDays
+          in: query
+          schema:
+            type: integer
+          description: Filter evidence expiring within N days
+      responses:
+        "200":
+          description: Evidence items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EvidenceItem"
+
+  /evidence/upload:
+    post:
+      operationId: uploadEvidence
+      tags: [evidence]
+      summary: Upload a new evidence file with metadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadEvidenceBody"
+      responses:
+        "201":
+          description: Evidence created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvidenceItem"
+
+  /evidence/search:
+    get:
+      operationId: searchEvidence
+      tags: [evidence]
+      summary: Full-text search across evidence title, description, tags
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Matching evidence
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EvidenceItem"
+
+  /evidence/{id}:
+    get:
+      operationId: getEvidence
+      tags: [evidence]
+      summary: Get evidence detail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Evidence item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvidenceDetail"
+    patch:
+      operationId: updateEvidence
+      tags: [evidence]
+      summary: Update evidence metadata
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEvidenceBody"
+      responses:
+        "200":
+          description: Updated evidence
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvidenceItem"
+
+  /evidence/{id}/submit:
+    post:
+      operationId: submitEvidenceForReview
+      tags: [evidence]
+      summary: Submit evidence for reviewer approval
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitEvidenceBody"
+      responses:
+        "200":
+          description: Submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvidenceItem"
+
+  /evidence/{id}/approve:
+    post:
+      operationId: approveEvidence
+      tags: [evidence]
+      summary: Approve evidence (Reviewer/Compliance Manager only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApproveEvidenceBody"
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvidenceItem"
+
+  /evidence/{id}/reject:
+    post:
+      operationId: rejectEvidence
+      tags: [evidence]
+      summary: Reject evidence with required notes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectEvidenceBody"
+      responses:
+        "200":
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvidenceItem"
+
+  /evidence/{id}/mark-stale:
+    post:
+      operationId: markEvidenceStale
+      tags: [evidence]
+      summary: Manually mark evidence as stale
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Marked stale
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvidenceItem"
+
+  /evidence/{id}/supersede:
+    post:
+      operationId: supersedeEvidence
+      tags: [evidence]
+      summary: Supersede old evidence with a new version
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupersedeEvidenceBody"
+      responses:
+        "201":
+          description: New version created, old marked superseded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvidenceItem"
+
+  /evidence/{id}/link-controls:
+    post:
+      operationId: linkEvidenceToControls
+      tags: [evidence]
+      summary: Link evidence to one or more CMMC controls
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LinkControlsBody"
+      responses:
+        "200":
+          description: Links updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvidenceItem"
+
+  /evidence/{id}/audit:
+    get:
+      operationId: getEvidenceAuditLog
+      tags: [evidence]
+      summary: Get audit trail for a specific evidence item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Audit log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditLogEntry"
+
+  # ─── TASKS ──────────────────────────────────────────────────
+  /tasks:
+    get:
+      operationId: listTasks
+      tags: [tasks]
+      summary: List compliance tasks
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, in_progress, completed, overdue, cancelled, deferred]
+        - name: assigneeId
+          in: query
+          schema:
+            type: string
+        - name: controlId
+          in: query
+          schema:
+            type: string
+        - name: priority
+          in: query
+          schema:
+            type: string
+            enum: [critical, high, medium, low]
+        - name: dueBefore
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Task list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+    post:
+      operationId: createTask
+      tags: [tasks]
+      summary: Create a compliance task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaskBody"
+      responses:
+        "201":
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  /tasks/{id}:
+    get:
+      operationId: getTask
+      tags: [tasks]
+      summary: Get task detail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+    patch:
+      operationId: updateTask
+      tags: [tasks]
+      summary: Update a task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTaskBody"
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  /tasks/{id}/complete:
+    post:
+      operationId: completeTask
+      tags: [tasks]
+      summary: Mark a task complete (and auto-create next if recurring)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteTaskBody"
+      responses:
+        "200":
+          description: Task completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  /tasks/{id}/reopen:
+    post:
+      operationId: reopenTask
+      tags: [tasks]
+      summary: Reopen a completed or cancelled task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Task reopened
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  # ─── POA&M ──────────────────────────────────────────────────
+  /poams:
+    get:
+      operationId: listPoams
+      tags: [poams]
+      summary: List POA&M items
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, in_progress, waiting_on_vendor, mitigated, accepted_risk, closed]
+        - name: riskLevel
+          in: query
+          schema:
+            type: string
+            enum: [critical, high, medium, low]
+        - name: controlId
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: POA&M list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Poam"
+    post:
+      operationId: createPoam
+      tags: [poams]
+      summary: Create a POA&M item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePoamBody"
+      responses:
+        "201":
+          description: POA&M created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Poam"
+
+  /poams/{id}:
+    get:
+      operationId: getPoam
+      tags: [poams]
+      summary: Get POA&M detail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: POA&M
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Poam"
+    patch:
+      operationId: updatePoam
+      tags: [poams]
+      summary: Update a POA&M item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePoamBody"
+      responses:
+        "200":
+          description: Updated POA&M
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Poam"
+
+  /poams/{id}/close:
+    post:
+      operationId: closePoam
+      tags: [poams]
+      summary: Close a POA&M item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClosePoamBody"
+      responses:
+        "200":
+          description: POA&M closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Poam"
+
+  # ─── DASHBOARD ──────────────────────────────────────────────
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Overall readiness summary and KPIs
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/readiness-by-domain:
+    get:
+      operationId: getReadinessByDomain
+      tags: [dashboard]
+      summary: Readiness percentage broken down by security domain
+      responses:
+        "200":
+          description: Domain readiness list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DomainReadiness"
+
+  /dashboard/missing-evidence:
+    get:
+      operationId: getMissingEvidence
+      tags: [dashboard]
+      summary: Controls with no linked evidence
+      responses:
+        "200":
+          description: Controls missing evidence
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ControlWithStatus"
+
+  /dashboard/stale-evidence:
+    get:
+      operationId: getStaleEvidence
+      tags: [dashboard]
+      summary: Evidence items that are stale or expiring soon
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 30
+      responses:
+        "200":
+          description: Stale or expiring evidence
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EvidenceItem"
+
+  /dashboard/overdue-tasks:
+    get:
+      operationId: getOverdueTasks
+      tags: [dashboard]
+      summary: Tasks that are past their due date
+      responses:
+        "200":
+          description: Overdue tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+
+  /dashboard/upcoming-reviews:
+    get:
+      operationId: getUpcomingReviews
+      tags: [dashboard]
+      summary: Tasks and reviews due in the next 7, 30, and 60 days
+      responses:
+        "200":
+          description: Upcoming reviews
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpcomingReviews"
+
+  /dashboard/activity:
+    get:
+      operationId: getRecentActivity
+      tags: [dashboard]
+      summary: Recent compliance activity feed
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditLogEntry"
+
+  # ─── ASSESSOR ───────────────────────────────────────────────
+  /assessor/controls:
+    get:
+      operationId: listAssessorControls
+      tags: [assessor]
+      summary: List controls from assessor perspective (filtered to assessor-ready and implemented)
+      parameters:
+        - name: domain
+          in: query
+          schema:
+            type: string
+        - name: level
+          in: query
+          schema:
+            type: string
+            enum: [L1, L2]
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Controls for assessor
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ControlWithStatus"
+
+  /assessor/controls/{id}/package:
+    get:
+      operationId: getAssessorControlPackage
+      tags: [assessor]
+      summary: Full evidence package for a single control (assessor view)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Assessor control package
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssessorControlPackage"
+
+  /assessor/export/control/{id}:
+    post:
+      operationId: exportControlPackage
+      tags: [assessor]
+      summary: Export evidence package for a single control as JSON
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Exported package data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportResult"
+
+  /assessor/export/domain/{domainId}:
+    post:
+      operationId: exportDomainPackage
+      tags: [assessor]
+      summary: Export all evidence for a full domain
+      parameters:
+        - name: domainId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Domain export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportResult"
+
+  /assessor/export/full:
+    post:
+      operationId: exportFullPackage
+      tags: [assessor]
+      summary: Export complete assessment package
+      responses:
+        "200":
+          description: Full assessment export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportResult"
+
+  # ─── AUDIT ──────────────────────────────────────────────────
+  /audit-logs:
+    get:
+      operationId: listAuditLogs
+      tags: [audit]
+      summary: List audit log entries
+      parameters:
+        - name: entityType
+          in: query
+          schema:
+            type: string
+        - name: entityId
+          in: query
+          schema:
+            type: string
+        - name: userId
+          in: query
+          schema:
+            type: string
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Audit log
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditLogEntry"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +1164,1011 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required:
+        - error
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+      required:
+        - success
+
+    # ─── AUTH ─────────────────────────────────────────────────
+    LoginBody:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required:
+        - email
+        - password
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        token:
+          type: string
+      required:
+        - user
+        - token
+
+    # ─── USER ─────────────────────────────────────────────────
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, compliance_manager, it_contributor, reviewer, executive_viewer, assessor]
+        title:
+          type: string
+          nullable: true
+        department:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - email
+        - role
+        - isActive
+        - createdAt
+
+    CreateUserBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+          enum: [admin, compliance_manager, it_contributor, reviewer, executive_viewer, assessor]
+        title:
+          type: string
+        department:
+          type: string
+      required:
+        - name
+        - email
+        - password
+        - role
+
+    UpdateUserBody:
+      type: object
+      properties:
+        name:
+          type: string
+        role:
+          type: string
+          enum: [admin, compliance_manager, it_contributor, reviewer, executive_viewer, assessor]
+        title:
+          type: string
+        department:
+          type: string
+        isActive:
+          type: boolean
+
+    # ─── DOMAIN ───────────────────────────────────────────────
+    DomainWithStats:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        totalControls:
+          type: integer
+        implementedControls:
+          type: integer
+        assessorReadyControls:
+          type: integer
+        notStartedControls:
+          type: integer
+        readinessPercent:
+          type: number
+          format: float
+      required:
+        - id
+        - name
+        - description
+        - totalControls
+        - implementedControls
+        - assessorReadyControls
+        - notStartedControls
+        - readinessPercent
+
+    DomainReadiness:
+      type: object
+      properties:
+        domainId:
+          type: string
+        domainName:
+          type: string
+        readinessPercent:
+          type: number
+        totalControls:
+          type: integer
+        implementedCount:
+          type: integer
+        atRiskCount:
+          type: integer
+        statusColor:
+          type: string
+          enum: [green, yellow, red]
+      required:
+        - domainId
+        - domainName
+        - readinessPercent
+        - totalControls
+        - implementedCount
+        - atRiskCount
+        - statusColor
+
+    # ─── CONTROL ──────────────────────────────────────────────
+    ControlWithStatus:
+      type: object
+      properties:
+        id:
+          type: string
+        controlId:
+          type: string
+        domainId:
+          type: string
+        domainName:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        level:
+          type: string
+          enum: [L1, L2]
+        status:
+          type: string
+          enum: [not_started, in_progress, implemented, needs_review, assessor_ready, not_applicable, at_risk]
+        evidenceCount:
+          type: integer
+        approvedEvidenceCount:
+          type: integer
+        openTaskCount:
+          type: integer
+        openPoamCount:
+          type: integer
+        implementationNarrative:
+          type: string
+          nullable: true
+        lastReviewedAt:
+          type: string
+          format: date-time
+          nullable: true
+        reviewFrequency:
+          type: string
+      required:
+        - id
+        - controlId
+        - domainId
+        - domainName
+        - title
+        - description
+        - level
+        - status
+        - evidenceCount
+        - approvedEvidenceCount
+        - openTaskCount
+        - openPoamCount
+        - reviewFrequency
+
+    ControlDetail:
+      allOf:
+        - $ref: "#/components/schemas/ControlWithStatus"
+        - type: object
+          properties:
+            assessmentObjectives:
+              type: array
+              items:
+                type: string
+            expectedEvidenceTypes:
+              type: array
+              items:
+                type: string
+            implementationGuidance:
+              type: string
+              nullable: true
+            assessorNotes:
+              type: string
+              nullable: true
+            evidence:
+              type: array
+              items:
+                $ref: "#/components/schemas/EvidenceItem"
+            tasks:
+              type: array
+              items:
+                $ref: "#/components/schemas/Task"
+            poams:
+              type: array
+              items:
+                $ref: "#/components/schemas/Poam"
+
+    UpdateControlBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [not_started, in_progress, implemented, needs_review, assessor_ready, not_applicable, at_risk]
+        implementationNarrative:
+          type: string
+        assessorNotes:
+          type: string
+        isNotApplicable:
+          type: boolean
+        naJustification:
+          type: string
+
+    # ─── EVIDENCE ─────────────────────────────────────────────
+    EvidenceItem:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        evidenceType:
+          type: string
+          enum: [policy, procedure, screenshot, log, report, ticket, configuration_export, training_record, incident_record, risk_record, approval_record, network_diagram, scan_report, other]
+        status:
+          type: string
+          enum: [draft, needs_classification, pending_review, approved, assessor_ready, rejected, stale, superseded, archived]
+        fileName:
+          type: string
+          nullable: true
+        fileSize:
+          type: integer
+          nullable: true
+        sourceSystem:
+          type: string
+          nullable: true
+        confidentialityLevel:
+          type: string
+          nullable: true
+        version:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        ownerId:
+          type: string
+        ownerName:
+          type: string
+        reviewerId:
+          type: string
+          nullable: true
+        reviewerName:
+          type: string
+          nullable: true
+        approverId:
+          type: string
+          nullable: true
+        approverName:
+          type: string
+          nullable: true
+        collectedAt:
+          type: string
+          format: date-time
+          nullable: true
+        reviewDueDate:
+          type: string
+          format: date-time
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        approvedAt:
+          type: string
+          format: date-time
+          nullable: true
+        linkedControlIds:
+          type: array
+          items:
+            type: string
+        linkedControlLabels:
+          type: array
+          items:
+            type: string
+        assessorSummary:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - evidenceType
+        - status
+        - version
+        - tags
+        - ownerId
+        - ownerName
+        - linkedControlIds
+        - linkedControlLabels
+        - createdAt
+        - updatedAt
+
+    EvidenceDetail:
+      allOf:
+        - $ref: "#/components/schemas/EvidenceItem"
+        - type: object
+          properties:
+            internalNotes:
+              type: string
+              nullable: true
+            implementationStatement:
+              type: string
+              nullable: true
+            rejectionNotes:
+              type: string
+              nullable: true
+            previousVersionId:
+              type: string
+              nullable: true
+            auditTrail:
+              type: array
+              items:
+                $ref: "#/components/schemas/AuditLogEntry"
+
+    UploadEvidenceBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        evidenceType:
+          type: string
+          enum: [policy, procedure, screenshot, log, report, ticket, configuration_export, training_record, incident_record, risk_record, approval_record, network_diagram, scan_report, other]
+        fileName:
+          type: string
+        fileData:
+          type: string
+          description: Base64-encoded file content
+        linkedControlIds:
+          type: array
+          items:
+            type: string
+        sourceSystem:
+          type: string
+        confidentialityLevel:
+          type: string
+        collectedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        reviewDueDate:
+          type: string
+          format: date-time
+        tags:
+          type: array
+          items:
+            type: string
+        assessorSummary:
+          type: string
+        internalNotes:
+          type: string
+        implementationStatement:
+          type: string
+      required:
+        - title
+        - evidenceType
+
+    UpdateEvidenceBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        evidenceType:
+          type: string
+        sourceSystem:
+          type: string
+        confidentialityLevel:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        assessorSummary:
+          type: string
+        internalNotes:
+          type: string
+        implementationStatement:
+          type: string
+        reviewerId:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        reviewDueDate:
+          type: string
+          format: date-time
+        collectedAt:
+          type: string
+          format: date-time
+
+    SubmitEvidenceBody:
+      type: object
+      properties:
+        reviewerId:
+          type: string
+        notes:
+          type: string
+
+    ApproveEvidenceBody:
+      type: object
+      properties:
+        assessorSummary:
+          type: string
+        notes:
+          type: string
+
+    RejectEvidenceBody:
+      type: object
+      properties:
+        rejectionNotes:
+          type: string
+      required:
+        - rejectionNotes
+
+    SupersedeEvidenceBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        evidenceType:
+          type: string
+        fileName:
+          type: string
+        fileData:
+          type: string
+        notes:
+          type: string
+      required:
+        - title
+        - evidenceType
+
+    LinkControlsBody:
+      type: object
+      properties:
+        controlIds:
+          type: array
+          items:
+            type: string
+      required:
+        - controlIds
+
+    # ─── TASK ─────────────────────────────────────────────────
+    Task:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [open, in_progress, completed, overdue, cancelled, deferred]
+        priority:
+          type: string
+          enum: [critical, high, medium, low]
+        taskType:
+          type: string
+          enum: [access_review, policy_review, procedure_review, log_review, backup_review, incident_review, training_review, evidence_refresh, control_review, poam_followup, general]
+        dueDate:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        isRecurring:
+          type: boolean
+        recurrence:
+          type: string
+          nullable: true
+          enum: [daily, weekly, monthly, quarterly, semi_annually, annually]
+        assigneeId:
+          type: string
+          nullable: true
+        assigneeName:
+          type: string
+          nullable: true
+        linkedControlIds:
+          type: array
+          items:
+            type: string
+        tags:
+          type: array
+          items:
+            type: string
+        completionNotes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - status
+        - priority
+        - taskType
+        - isRecurring
+        - linkedControlIds
+        - tags
+        - createdAt
+        - updatedAt
+
+    CreateTaskBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        taskType:
+          type: string
+          enum: [access_review, policy_review, procedure_review, log_review, backup_review, incident_review, training_review, evidence_refresh, control_review, poam_followup, general]
+        priority:
+          type: string
+          enum: [critical, high, medium, low]
+        dueDate:
+          type: string
+          format: date-time
+        assigneeId:
+          type: string
+        linkedControlIds:
+          type: array
+          items:
+            type: string
+        isRecurring:
+          type: boolean
+        recurrence:
+          type: string
+          enum: [daily, weekly, monthly, quarterly, semi_annually, annually]
+        tags:
+          type: array
+          items:
+            type: string
+      required:
+        - title
+        - taskType
+
+    UpdateTaskBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [open, in_progress, completed, overdue, cancelled, deferred]
+        priority:
+          type: string
+          enum: [critical, high, medium, low]
+        dueDate:
+          type: string
+          format: date-time
+        assigneeId:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    CompleteTaskBody:
+      type: object
+      properties:
+        completionNotes:
+          type: string
+        linkedEvidenceIds:
+          type: array
+          items:
+            type: string
+
+    # ─── POA&M ────────────────────────────────────────────────
+    Poam:
+      type: object
+      properties:
+        id:
+          type: string
+        poamNumber:
+          type: string
+          nullable: true
+        title:
+          type: string
+        deficiencyDescription:
+          type: string
+        status:
+          type: string
+          enum: [open, in_progress, waiting_on_vendor, mitigated, accepted_risk, closed]
+        riskLevel:
+          type: string
+          enum: [critical, high, medium, low]
+        linkedControlId:
+          type: string
+          nullable: true
+        linkedControlLabel:
+          type: string
+          nullable: true
+        ownerId:
+          type: string
+          nullable: true
+        ownerName:
+          type: string
+          nullable: true
+        scheduledCompletionDate:
+          type: string
+          format: date-time
+          nullable: true
+        completedDate:
+          type: string
+          format: date-time
+          nullable: true
+        remediationPlan:
+          type: string
+          nullable: true
+        resourcesRequired:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - deficiencyDescription
+        - status
+        - riskLevel
+        - createdAt
+        - updatedAt
+
+    CreatePoamBody:
+      type: object
+      properties:
+        title:
+          type: string
+        deficiencyDescription:
+          type: string
+        riskLevel:
+          type: string
+          enum: [critical, high, medium, low]
+        linkedControlId:
+          type: string
+        ownerId:
+          type: string
+        scheduledCompletionDate:
+          type: string
+          format: date-time
+        remediationPlan:
+          type: string
+        resourcesRequired:
+          type: string
+        notes:
+          type: string
+      required:
+        - title
+        - deficiencyDescription
+        - riskLevel
+
+    UpdatePoamBody:
+      type: object
+      properties:
+        title:
+          type: string
+        deficiencyDescription:
+          type: string
+        status:
+          type: string
+          enum: [open, in_progress, waiting_on_vendor, mitigated, accepted_risk, closed]
+        riskLevel:
+          type: string
+          enum: [critical, high, medium, low]
+        ownerId:
+          type: string
+        scheduledCompletionDate:
+          type: string
+          format: date-time
+        remediationPlan:
+          type: string
+        resourcesRequired:
+          type: string
+        notes:
+          type: string
+
+    ClosePoamBody:
+      type: object
+      properties:
+        resolutionSummary:
+          type: string
+        linkedEvidenceIds:
+          type: array
+          items:
+            type: string
+
+    # ─── DASHBOARD ────────────────────────────────────────────
+    DashboardSummary:
+      type: object
+      properties:
+        overallReadinessPercent:
+          type: number
+          format: float
+        l1ReadinessPercent:
+          type: number
+          format: float
+        l2ReadinessPercent:
+          type: number
+          format: float
+        totalControls:
+          type: integer
+        implementedControls:
+          type: integer
+        assessorReadyControls:
+          type: integer
+        notStartedControls:
+          type: integer
+        atRiskControls:
+          type: integer
+        totalEvidenceItems:
+          type: integer
+        approvedEvidenceItems:
+          type: integer
+        staleEvidenceItems:
+          type: integer
+        pendingReviewItems:
+          type: integer
+        openTasks:
+          type: integer
+        overdueTasks:
+          type: integer
+        openPoams:
+          type: integer
+        criticalPoams:
+          type: integer
+        controlsWithNoEvidence:
+          type: integer
+        controlsWithNoPolicy:
+          type: integer
+        controlsWithNoProcedure:
+          type: integer
+      required:
+        - overallReadinessPercent
+        - l1ReadinessPercent
+        - l2ReadinessPercent
+        - totalControls
+        - implementedControls
+        - assessorReadyControls
+        - notStartedControls
+        - atRiskControls
+        - totalEvidenceItems
+        - approvedEvidenceItems
+        - staleEvidenceItems
+        - pendingReviewItems
+        - openTasks
+        - overdueTasks
+        - openPoams
+        - criticalPoams
+        - controlsWithNoEvidence
+        - controlsWithNoPolicy
+        - controlsWithNoProcedure
+
+    UpcomingReviews:
+      type: object
+      properties:
+        next7Days:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+        next30Days:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+        next60Days:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+      required:
+        - next7Days
+        - next30Days
+        - next60Days
+
+    # ─── ASSESSOR ─────────────────────────────────────────────
+    AssessorControlPackage:
+      type: object
+      properties:
+        control:
+          $ref: "#/components/schemas/ControlDetail"
+        policies:
+          type: array
+          items:
+            $ref: "#/components/schemas/EvidenceItem"
+        procedures:
+          type: array
+          items:
+            $ref: "#/components/schemas/EvidenceItem"
+        screenshots:
+          type: array
+          items:
+            $ref: "#/components/schemas/EvidenceItem"
+        logs:
+          type: array
+          items:
+            $ref: "#/components/schemas/EvidenceItem"
+        otherEvidence:
+          type: array
+          items:
+            $ref: "#/components/schemas/EvidenceItem"
+        completedReviews:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewRecord"
+        auditTimeline:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditLogEntry"
+        openPoams:
+          type: array
+          items:
+            $ref: "#/components/schemas/Poam"
+        packageCompleteness:
+          type: number
+          format: float
+      required:
+        - control
+        - policies
+        - procedures
+        - screenshots
+        - logs
+        - otherEvidence
+        - completedReviews
+        - auditTimeline
+        - openPoams
+        - packageCompleteness
+
+    ReviewRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        completedAt:
+          type: string
+          format: date-time
+        performedByName:
+          type: string
+        outcome:
+          type: string
+          nullable: true
+      required:
+        - id
+        - title
+        - completedAt
+        - performedByName
+
+    ExportResult:
+      type: object
+      properties:
+        exportId:
+          type: string
+        exportedAt:
+          type: string
+          format: date-time
+        controlCount:
+          type: integer
+        evidenceCount:
+          type: integer
+        exportData:
+          type: object
+          description: Full JSON export payload
+      required:
+        - exportId
+        - exportedAt
+        - controlCount
+        - evidenceCount
+        - exportData
+
+    # ─── AUDIT ────────────────────────────────────────────────
+    AuditLogEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+          nullable: true
+        userName:
+          type: string
+          nullable: true
+        action:
+          type: string
+        entityType:
+          type: string
+        entityId:
+          type: string
+        entityLabel:
+          type: string
+          nullable: true
+        previousValue:
+          type: object
+          nullable: true
+        newValue:
+          type: object
+          nullable: true
+        ipAddress:
+          type: string
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+      required:
+        - id
+        - action
+        - entityType
+        - entityId
+        - timestamp
