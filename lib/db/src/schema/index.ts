@@ -5,3 +5,4 @@ export * from "./evidence";
 export * from "./tasks";
 export * from "./poams";
 export * from "./audit";
+export * from "./documents";

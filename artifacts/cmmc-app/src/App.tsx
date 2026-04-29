@@ -22,6 +22,15 @@ import AssessorControl from "@/pages/assessor-control";
 import AuditLogs from "@/pages/audit-logs";
 import Users from "@/pages/users";
 import Settings from "@/pages/settings";
+import Documents from "@/pages/documents";
+import DocumentsList from "@/pages/documents-list";
+import DocumentTemplates from "@/pages/documents-templates";
+import DocumentsGenerate from "@/pages/documents-generate";
+import DocumentLogs from "@/pages/documents-logs";
+import DocumentChecklists from "@/pages/documents-checklists";
+import DocumentsMissing from "@/pages/documents-missing";
+import DocumentDetail from "@/pages/document-detail";
+import DocumentLogDetail from "@/pages/document-log-detail";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -84,6 +93,19 @@ function AppRoutes() {
               <Route path="/audit-logs" component={AuditLogs} />
               <Route path="/users" component={Users} />
               <Route path="/settings" component={Settings} />
+              <Route path="/documents" component={Documents} />
+              <Route path="/documents/list" component={DocumentsList} />
+              <Route path="/documents/templates" component={DocumentTemplates} />
+              <Route path="/documents/generate" component={DocumentsGenerate} />
+              <Route path="/documents/logs" component={DocumentLogs} />
+              <Route path="/documents/checklists" component={DocumentChecklists} />
+              <Route path="/documents/missing" component={DocumentsMissing} />
+              <Route path="/documents/logs/:id">
+                {(params: { id: string }) => <DocumentLogDetail id={params.id} />}
+              </Route>
+              <Route path="/documents/:id">
+                {(params: { id: string }) => <DocumentDetail id={params.id} />}
+              </Route>
               <Route component={NotFound} />
             </Switch>
           </Guard>

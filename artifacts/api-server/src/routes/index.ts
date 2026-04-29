@@ -10,6 +10,7 @@ import poamsRouter from "./poams";
 import dashboardRouter from "./dashboard";
 import assessorRouter from "./assessor";
 import auditRouter from "./auditlogs";
+import documentsRouter from "./documents";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(poamsRouter);
 router.use(dashboardRouter);
 router.use(assessorRouter);
 router.use(auditRouter);
+router.use(documentsRouter);
 
 export default router;

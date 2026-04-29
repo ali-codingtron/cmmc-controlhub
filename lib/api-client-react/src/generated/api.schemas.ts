@@ -685,6 +685,416 @@ export interface ExportResult {
   exportData: ExportResultExportData;
 }
 
+export type DocumentTemplateDocType =
+  (typeof DocumentTemplateDocType)[keyof typeof DocumentTemplateDocType];
+
+export const DocumentTemplateDocType = {
+  policy: "policy",
+  procedure: "procedure",
+  log: "log",
+  register: "register",
+  checklist: "checklist",
+  narrative: "narrative",
+  form: "form",
+  plan: "plan",
+} as const;
+
+export type DocumentTemplateCmmcLevel =
+  (typeof DocumentTemplateCmmcLevel)[keyof typeof DocumentTemplateCmmcLevel];
+
+export const DocumentTemplateCmmcLevel = {
+  L1: "L1",
+  L2: "L2",
+  both: "both",
+} as const;
+
+export type DocumentTemplateReviewFrequency =
+  (typeof DocumentTemplateReviewFrequency)[keyof typeof DocumentTemplateReviewFrequency];
+
+export const DocumentTemplateReviewFrequency = {
+  monthly: "monthly",
+  quarterly: "quarterly",
+  semi_annually: "semi_annually",
+  annually: "annually",
+  as_needed: "as_needed",
+} as const;
+
+export type DocumentTemplateChecklistItemsItem = {
+  itemText: string;
+  description?: string | null;
+  isRequired?: boolean;
+};
+
+export interface DocumentTemplate {
+  id: string;
+  title: string;
+  docType: DocumentTemplateDocType;
+  cmmcLevel: DocumentTemplateCmmcLevel;
+  domainAbbr?: string | null;
+  version: string;
+  ownerRole: string;
+  reviewFrequency: DocumentTemplateReviewFrequency;
+  description?: string | null;
+  bodyTemplate: string;
+  requiredFields: string[];
+  placeholders: string[];
+  linkedControlIds: string[];
+  requiresApproval: boolean;
+  isActive: boolean;
+  isSystemTemplate: boolean;
+  recurrenceRule?: string | null;
+  checklistItems?: DocumentTemplateChecklistItemsItem[] | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CreateDocumentTemplateBodyChecklistItemsItem = {
+  [key: string]: unknown;
+};
+
+export interface CreateDocumentTemplateBody {
+  title: string;
+  docType: string;
+  cmmcLevel?: string;
+  domainAbbr?: string;
+  ownerRole?: string;
+  reviewFrequency?: string;
+  description?: string;
+  bodyTemplate: string;
+  requiredFields?: string[];
+  linkedControlIds?: string[];
+  recurrenceRule?: string;
+  checklistItems?: CreateDocumentTemplateBodyChecklistItemsItem[];
+}
+
+export type UpdateDocumentTemplateBodyChecklistItemsItem = {
+  [key: string]: unknown;
+};
+
+export interface UpdateDocumentTemplateBody {
+  title?: string;
+  bodyTemplate?: string;
+  description?: string;
+  isActive?: boolean;
+  linkedControlIds?: string[];
+  checklistItems?: UpdateDocumentTemplateBodyChecklistItemsItem[];
+}
+
+export type DocumentDocType =
+  (typeof DocumentDocType)[keyof typeof DocumentDocType];
+
+export const DocumentDocType = {
+  policy: "policy",
+  procedure: "procedure",
+  log: "log",
+  register: "register",
+  checklist: "checklist",
+  narrative: "narrative",
+  form: "form",
+  plan: "plan",
+} as const;
+
+export type DocumentStatus =
+  (typeof DocumentStatus)[keyof typeof DocumentStatus];
+
+export const DocumentStatus = {
+  draft: "draft",
+  pending_review: "pending_review",
+  approved: "approved",
+  active: "active",
+  needs_update: "needs_update",
+  expired: "expired",
+  superseded: "superseded",
+  archived: "archived",
+} as const;
+
+export interface Document {
+  id: string;
+  templateId?: string | null;
+  templateTitle?: string | null;
+  title: string;
+  docType: DocumentDocType;
+  status: DocumentStatus;
+  cmmcLevel: string;
+  version: string;
+  organizationName?: string | null;
+  systemName?: string | null;
+  effectiveDate?: string | null;
+  nextReviewDate?: string | null;
+  expiresAt?: string | null;
+  ownerId: string;
+  ownerName?: string | null;
+  reviewerId?: string | null;
+  reviewerName?: string | null;
+  approverId?: string | null;
+  approverName?: string | null;
+  reviewedAt?: string | null;
+  approvedAt?: string | null;
+  activatedAt?: string | null;
+  rejectionNotes?: string | null;
+  reviewFrequency: string;
+  linkedControlIds: string[];
+  linkedControlLabels: string[];
+  isCurrentVersion: boolean;
+  previousVersionId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type DocumentDetailFieldValues = { [key: string]: unknown };
+
+export interface DocumentVersionRecord {
+  id: string;
+  documentId: string;
+  version: string;
+  status: string;
+  changedByName?: string | null;
+  changeNotes?: string | null;
+  createdAt: string;
+}
+
+export interface DocumentReview {
+  id: string;
+  documentId: string;
+  reviewerId: string;
+  reviewerName?: string | null;
+  action: string;
+  notes?: string | null;
+  version?: string | null;
+  reviewedAt: string;
+}
+
+export type DocumentDetail = Document & {
+  body?: string;
+  fieldValues?: DocumentDetailFieldValues;
+  internalNotes?: string | null;
+  comments?: string | null;
+  versionHistory?: DocumentVersionRecord[];
+  reviews?: DocumentReview[];
+};
+
+export type GenerateDocumentBodyFieldValues = { [key: string]: unknown };
+
+export interface GenerateDocumentBody {
+  templateId: string;
+  title?: string;
+  organizationName?: string;
+  systemName?: string;
+  policyOwner?: string;
+  reviewerId?: string;
+  effectiveDate?: string;
+  nextReviewDate?: string;
+  fieldValues?: GenerateDocumentBodyFieldValues;
+  linkedControlIds?: string[];
+}
+
+export type UpdateDocumentBodyFieldValues = { [key: string]: unknown };
+
+export interface UpdateDocumentBody {
+  title?: string;
+  body?: string;
+  organizationName?: string;
+  systemName?: string;
+  reviewerId?: string;
+  nextReviewDate?: string;
+  internalNotes?: string;
+  comments?: string;
+  fieldValues?: UpdateDocumentBodyFieldValues;
+  linkedControlIds?: string[];
+}
+
+export interface SubmitReviewBody {
+  reviewerId: string;
+  notes?: string;
+}
+
+export interface ApproveDocumentBody {
+  notes?: string;
+}
+
+export interface RejectDocumentBody {
+  rejectionNotes: string;
+}
+
+export type MissingDocReportControlsMissingPolicyItem = {
+  controlId: string;
+  controlLabel: string;
+  domainName: string;
+};
+
+export type MissingDocReportControlsMissingProcedureItem = {
+  controlId: string;
+  controlLabel: string;
+  domainName: string;
+};
+
+export interface MissingDocReport {
+  controlsMissingPolicy: MissingDocReportControlsMissingPolicyItem[];
+  controlsMissingProcedure: MissingDocReportControlsMissingProcedureItem[];
+  expiredDocuments: Document[];
+  documentsNeedingReview: Document[];
+  pendingApproval: Document[];
+  totalMissingPolicies: number;
+  totalMissingProcedures: number;
+  totalExpired: number;
+  totalNeedingReview: number;
+  totalPendingApproval: number;
+}
+
+export type GeneratedLogStatus =
+  (typeof GeneratedLogStatus)[keyof typeof GeneratedLogStatus];
+
+export const GeneratedLogStatus = {
+  draft: "draft",
+  pending_review: "pending_review",
+  approved: "approved",
+  active: "active",
+  needs_update: "needs_update",
+  expired: "expired",
+  superseded: "superseded",
+  archived: "archived",
+} as const;
+
+export interface GeneratedLog {
+  id: string;
+  templateId?: string | null;
+  templateTitle?: string | null;
+  title: string;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  status: GeneratedLogStatus;
+  responsibleUserId?: string | null;
+  responsibleUserName?: string | null;
+  reviewerId?: string | null;
+  reviewerName?: string | null;
+  completionNotes?: string | null;
+  reviewedAt?: string | null;
+  approvedAt?: string | null;
+  generatedEvidenceId?: string | null;
+  linkedControlIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type GeneratedLogDetailFieldValues = { [key: string]: unknown };
+
+export type GeneratedLogDetailEntriesItem = {
+  id: string;
+  entryText: string;
+  entryType: string;
+  isCompleted: boolean;
+  notes?: string | null;
+  sortOrder: number;
+};
+
+export type GeneratedLogDetail = GeneratedLog & {
+  fieldValues?: GeneratedLogDetailFieldValues;
+  entries?: GeneratedLogDetailEntriesItem[];
+};
+
+export type GenerateLogBodyFieldValues = { [key: string]: unknown };
+
+export interface GenerateLogBody {
+  templateId: string;
+  title?: string;
+  periodStart?: string;
+  periodEnd?: string;
+  responsibleUserId?: string;
+  linkedControlIds?: string[];
+  fieldValues?: GenerateLogBodyFieldValues;
+}
+
+export type UpdateLogBodyFieldValues = { [key: string]: unknown };
+
+export type UpdateLogBodyEntriesItem = { [key: string]: unknown };
+
+export interface UpdateLogBody {
+  completionNotes?: string;
+  fieldValues?: UpdateLogBodyFieldValues;
+  entries?: UpdateLogBodyEntriesItem[];
+}
+
+export type CompleteLogBodyEntriesItem = {
+  id: string;
+  isCompleted: boolean;
+  notes?: string;
+};
+
+export interface CompleteLogBody {
+  completionNotes: string;
+  entries?: CompleteLogBodyEntriesItem[];
+  generateEvidence?: boolean;
+}
+
+export type ChecklistTemplateItemsItem = {
+  id: string;
+  itemText: string;
+  description?: string | null;
+  isRequired: boolean;
+  sortOrder: number;
+};
+
+export interface ChecklistTemplate {
+  id: string;
+  title: string;
+  docType: string;
+  description?: string | null;
+  linkedControlIds: string[];
+  items: ChecklistTemplateItemsItem[];
+  createdAt: string;
+}
+
+export type CompleteChecklistBodyItemResultsItem = {
+  itemId: string;
+  isCompleted: boolean;
+  notes?: string;
+};
+
+export interface CompleteChecklistBody {
+  title: string;
+  notes?: string;
+  itemResults: CompleteChecklistBodyItemResultsItem[];
+  generateEvidence?: boolean;
+}
+
+export type ChecklistCompletionItemResultsItem = { [key: string]: unknown };
+
+export interface ChecklistCompletion {
+  id: string;
+  templateId: string;
+  title: string;
+  completedById: string;
+  completedByName?: string | null;
+  notes?: string | null;
+  itemResults?: ChecklistCompletionItemResultsItem[];
+  generatedEvidenceId?: string | null;
+  linkedControlIds: string[];
+  completedAt: string;
+}
+
+export interface DocAutomationStatus {
+  totalDocuments: number;
+  totalActive: number;
+  totalDraft: number;
+  totalPendingReview: number;
+  totalExpired: number;
+  totalNeedsUpdate: number;
+  totalTemplates: number;
+  controlsMissingPolicy: number;
+  controlsMissingProcedure: number;
+  logsCompletedThisMonth: number;
+  logsDue: number;
+  checklistsCompleted: number;
+  recentDocuments: Document[];
+}
+
+export interface DocCheckResult {
+  expiredDocuments: number;
+  tasksGenerated: number;
+  documentsMarkedNeedsUpdate: number;
+  message: string;
+}
+
 export type ListControlsParams = {
   /**
    * Filter by domain ID (e.g. AC, IA)
@@ -838,3 +1248,37 @@ export type ListAuditLogsParams = {
   action?: string;
   limit?: number;
 };
+
+export type ListDocumentTemplatesParams = {
+  docType?: string;
+  search?: string;
+  cmmcLevel?: string;
+};
+
+export type ListDocumentsParams = {
+  docType?: string;
+  status?: string;
+  controlId?: string;
+  search?: string;
+  dueForReview?: boolean;
+};
+
+export type ActivateDocumentBody = {
+  notes?: string;
+};
+
+export type ArchiveDocumentBody = {
+  notes?: string;
+};
+
+export type ListDocumentLogsParams = {
+  status?: string;
+  templateId?: string;
+  search?: string;
+};
+
+export type ApproveDocumentLogBody = {
+  notes?: string;
+};
+
+export type RunDocChecksBody = { [key: string]: unknown };

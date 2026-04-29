@@ -1,0 +1,362 @@
+Enhance the app with a Documentation Automation module.
+
+I do not only want to upload evidence. I want the app to generate, manage, review, approve, and refresh CMMC documentation such as policies, procedures, logs, review forms, checklists, and assessor-ready narratives.
+
+Add a new main navigation section called “Documentation”.
+
+Build these features:
+
+1. Document Templates
+Create reusable templates for:
+- Access Control Policy
+- Identification and Authentication Policy
+- Media Protection Policy
+- Incident Response Policy
+- Risk Assessment Policy
+- Security Awareness and Training Policy
+- System and Communications Protection Policy
+- System and Information Integrity Policy
+- Configuration Management Policy
+- Audit and Accountability Policy
+- Access Review Procedure
+- User Onboarding Procedure
+- User Offboarding Procedure
+- Log Review Procedure
+- Backup Review Procedure
+- Incident Response Procedure
+- Vulnerability Review Procedure
+- Security Awareness Training Procedure
+- Monthly Access Review Log
+- Monthly Log Review Log
+- Quarterly Vulnerability Review Log
+- Backup Verification Log
+- Incident Register
+- Training Register
+- System Inventory Register
+- Supplier Review Register
+
+2. Template Metadata
+Each template should have:
+- template_id
+- title
+- document_type
+- CMMC level
+- domain
+- linked controls
+- version
+- owner role
+- review frequency
+- required fields
+- approval requirements
+- output format
+
+3. Auto-Filled Documents
+Allow a user to generate documents from templates using existing app data.
+
+Auto-populate documents with:
+- organization name
+- system name
+- control IDs
+- security domain
+- policy owner
+- procedure owner
+- review frequency
+- current date
+- next review date
+- linked assets
+- linked users
+- linked evidence
+- related POA&M items
+- related procedures
+- approval history
+- reviewer name
+- approver name
+
+4. Document Editor
+Create an internal document editor where generated documents can be edited before approval.
+
+The editor should support:
+- title
+- document body
+- metadata panel
+- linked controls
+- linked evidence
+- version history
+- status
+- comments
+- reviewer
+- approver
+- review due date
+
+5. Document Status Workflow
+Use these statuses:
+- draft
+- pending_review
+- approved
+- active
+- needs_update
+- expired
+- superseded
+- archived
+
+Workflow:
+- generated documents start as draft
+- user can submit for review
+- reviewer can approve or reject
+- approved documents can become active
+- expired documents create reminder tasks
+- updated documents create new versions
+- superseded versions stay in history
+
+6. Generated Document Types
+Create pages and database models for:
+
+Policies:
+- formal written policy documents
+- mapped to CMMC domains and controls
+- reviewed annually
+
+Procedures:
+- step-by-step operational procedures
+- mapped to controls and recurring tasks
+- reviewed annually or semi-annually
+
+Logs:
+- recurring compliance logs
+- access review logs
+- log review logs
+- backup verification logs
+- vulnerability review logs
+- training logs
+- incident logs
+
+Checklists:
+- operational checklists for recurring compliance tasks
+- completion creates evidence automatically
+
+Registers:
+- asset register
+- user access register
+- supplier register
+- incident register
+- risk register
+- training register
+
+7. Recurring Log Automation
+For recurring logs, create generated log forms.
+
+Examples:
+- Monthly Access Review Log
+- Monthly Security Log Review
+- Backup Verification Log
+- Quarterly Vulnerability Review
+- User Access Change Log
+- Security Training Completion Log
+
+Each log form should:
+- auto-fill period start and end date
+- auto-fill responsible person
+- auto-fill related controls
+- include checklist items
+- allow attaching screenshots/files
+- require completion notes
+- require reviewer sign-off
+- create evidence automatically when completed
+- link evidence to the relevant controls
+- update dashboard status
+
+8. Procedure-to-Task Automation
+Procedures should be able to generate recurring tasks.
+
+Example:
+If the “Monthly Access Review Procedure” says access reviews are monthly, the app should automatically create a monthly access review task.
+
+Each procedure should support:
+- recurrence frequency
+- task owner
+- checklist steps
+- required evidence
+- completion form
+- linked controls
+- escalation owner
+
+When a procedure is active:
+- generate recurring tasks
+- remind owner before due date
+- mark overdue if missed
+- create evidence after completion
+- log the action in audit trail
+
+9. CMMC Mapping
+Every generated document should be mappable to:
+- CMMC level
+- security domain
+- control ID
+- assessment objective
+- evidence type
+- responsible role
+
+Add UI filters:
+- show documents by control
+- show documents by domain
+- show documents by document type
+- show documents by status
+- show documents due for review
+- show missing required documents
+
+10. Missing Documentation Detection
+Add logic to detect missing documentation.
+
+Show dashboard widgets for:
+- controls missing policies
+- controls missing procedures
+- controls missing logs
+- controls missing review records
+- expired documents
+- documents pending approval
+- documents due for review in 30/60/90 days
+
+11. Assessor Package Integration
+Approved documents should automatically appear in the assessor view.
+
+For each control package, show:
+- approved policy documents
+- approved procedures
+- completed logs
+- review records
+- screenshots
+- approvals
+- evidence generated from completed checklists
+- document version history
+- last review date
+- next review date
+
+12. Database Models
+Add or update Prisma models for:
+- DocumentTemplate
+- Document
+- DocumentVersion
+- DocumentControlMap
+- DocumentEvidenceMap
+- DocumentReview
+- DocumentApproval
+- DocumentFieldValue
+- GeneratedLog
+- LogEntry
+- Checklist
+- ChecklistItem
+- ChecklistCompletion
+- ProcedureTaskRule
+
+13. API Endpoints
+Add endpoints for:
+
+Templates:
+- GET /api/document-templates
+- GET /api/document-templates/:id
+- POST /api/document-templates
+- PATCH /api/document-templates/:id
+
+Documents:
+- POST /api/documents/generate
+- GET /api/documents
+- GET /api/documents/:id
+- PATCH /api/documents/:id
+- POST /api/documents/:id/submit-review
+- POST /api/documents/:id/approve
+- POST /api/documents/:id/reject
+- POST /api/documents/:id/activate
+- POST /api/documents/:id/supersede
+- GET /api/documents/:id/export
+
+Logs:
+- POST /api/logs/generate
+- GET /api/logs
+- GET /api/logs/:id
+- PATCH /api/logs/:id
+- POST /api/logs/:id/complete
+- POST /api/logs/:id/approve
+
+Checklists:
+- GET /api/checklists
+- POST /api/checklists
+- POST /api/checklists/:id/complete
+
+Automation:
+- POST /api/automation/run-document-checks
+- POST /api/automation/generate-recurring-tasks
+- POST /api/automation/check-expired-documents
+
+14. Seed Templates
+Seed the app with starter templates for:
+- CMMC Information Security Policy
+- Access Control Policy
+- Identification and Authentication Policy
+- Incident Response Policy
+- Configuration Management Policy
+- Risk Management Policy
+- Access Review Procedure
+- Log Review Procedure
+- Backup Review Procedure
+- Incident Response Procedure
+- User Onboarding Procedure
+- User Offboarding Procedure
+- Monthly Access Review Log
+- Monthly Log Review Log
+- Backup Verification Log
+- Quarterly Vulnerability Review Log
+- Incident Register
+- Asset Register
+- Training Register
+
+Each template should include real starter language with placeholders like:
+{{organization_name}}
+{{system_name}}
+{{policy_owner}}
+{{review_frequency}}
+{{control_ids}}
+{{effective_date}}
+{{next_review_date}}
+
+15. UI Pages
+Add these pages:
+- Documentation Dashboard
+- Document Templates
+- Generate Document
+- Document Library
+- Document Detail / Editor
+- Policies
+- Procedures
+- Logs
+- Registers
+- Checklists
+- Documents Due for Review
+- Missing Documentation
+- Completed Reviews
+
+16. Automation Behavior
+Implement these automation rules:
+
+- When a policy is generated, link it to its mapped controls
+- When a procedure is activated, create recurring task rules
+- When a recurring log is completed, create an evidence item automatically
+- When a document is approved, make it available in assessor view
+- When a document passes its review date, mark it needs_update
+- When a document expires, mark it expired and create a review task
+- When a control has no active policy, show it as missing documentation
+- When a control has no active procedure, show it as missing procedure
+- When a recurring compliance task is completed, generate a review log
+- When a checklist is completed, create evidence and link it to the correct controls
+- When a document is superseded, retain prior version history
+- When a document is edited, create a new document version
+- When a document is approved, record approver, approval date, and version
+- When a generated log is approved, update the linked control’s evidence status
+
+17. Important Requirements
+Do not remove the existing evidence upload functionality.
+
+Integrate documentation with the existing controls, evidence, tasks, assessor view, and dashboard modules.
+
+This should feel like a compliance documentation automation system, not just a file upload portal.
+
+Make it usable with sample data immediately.

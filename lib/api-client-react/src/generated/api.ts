@@ -17,24 +17,43 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  ActivateDocumentBody,
+  ApproveDocumentBody,
+  ApproveDocumentLogBody,
   ApproveEvidenceBody,
+  ArchiveDocumentBody,
   AssessorControlPackage,
   AuditLogEntry,
   AuthResponse,
+  ChecklistCompletion,
+  ChecklistTemplate,
   ClosePoamBody,
+  CompleteChecklistBody,
+  CompleteLogBody,
   CompleteTaskBody,
   ControlDetail,
   ControlWithStatus,
+  CreateDocumentTemplateBody,
   CreatePoamBody,
   CreateTaskBody,
   CreateUserBody,
   DashboardSummary,
+  DocAutomationStatus,
+  DocCheckResult,
+  Document,
+  DocumentDetail,
+  DocumentTemplate,
+  DocumentVersionRecord,
   DomainReadiness,
   DomainWithStats,
   ErrorResponse,
   EvidenceDetail,
   EvidenceItem,
   ExportResult,
+  GenerateDocumentBody,
+  GenerateLogBody,
+  GeneratedLog,
+  GeneratedLogDetail,
   GetRecentActivityParams,
   GetStaleEvidenceParams,
   HealthStatus,
@@ -42,20 +61,30 @@ import type {
   ListAssessorControlsParams,
   ListAuditLogsParams,
   ListControlsParams,
+  ListDocumentLogsParams,
+  ListDocumentTemplatesParams,
+  ListDocumentsParams,
   ListEvidenceParams,
   ListPoamsParams,
   ListTasksParams,
   LoginBody,
+  MissingDocReport,
   Poam,
+  RejectDocumentBody,
   RejectEvidenceBody,
+  RunDocChecksBody,
   SearchEvidenceParams,
   SubmitEvidenceBody,
+  SubmitReviewBody,
   SuccessResponse,
   SupersedeEvidenceBody,
   Task,
   UpcomingReviews,
   UpdateControlBody,
+  UpdateDocumentBody,
+  UpdateDocumentTemplateBody,
   UpdateEvidenceBody,
+  UpdateLogBody,
   UpdatePoamBody,
   UpdateTaskBody,
   UpdateUserBody,
@@ -4487,3 +4516,2172 @@ export function useListAuditLogs<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary List document templates
+ */
+export const getListDocumentTemplatesUrl = (
+  params?: ListDocumentTemplatesParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/document-templates?${stringifiedParams}`
+    : `/api/document-templates`;
+};
+
+export const listDocumentTemplates = async (
+  params?: ListDocumentTemplatesParams,
+  options?: RequestInit,
+): Promise<DocumentTemplate[]> => {
+  return customFetch<DocumentTemplate[]>(getListDocumentTemplatesUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListDocumentTemplatesQueryKey = (
+  params?: ListDocumentTemplatesParams,
+) => {
+  return [`/api/document-templates`, ...(params ? [params] : [])] as const;
+};
+
+export const getListDocumentTemplatesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listDocumentTemplates>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListDocumentTemplatesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listDocumentTemplates>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListDocumentTemplatesQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listDocumentTemplates>>
+  > = ({ signal }) =>
+    listDocumentTemplates(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listDocumentTemplates>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListDocumentTemplatesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listDocumentTemplates>>
+>;
+export type ListDocumentTemplatesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List document templates
+ */
+
+export function useListDocumentTemplates<
+  TData = Awaited<ReturnType<typeof listDocumentTemplates>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListDocumentTemplatesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listDocumentTemplates>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListDocumentTemplatesQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a document template
+ */
+export const getCreateDocumentTemplateUrl = () => {
+  return `/api/document-templates`;
+};
+
+export const createDocumentTemplate = async (
+  createDocumentTemplateBody: CreateDocumentTemplateBody,
+  options?: RequestInit,
+): Promise<DocumentTemplate> => {
+  return customFetch<DocumentTemplate>(getCreateDocumentTemplateUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createDocumentTemplateBody),
+  });
+};
+
+export const getCreateDocumentTemplateMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDocumentTemplate>>,
+    TError,
+    { data: BodyType<CreateDocumentTemplateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createDocumentTemplate>>,
+  TError,
+  { data: BodyType<CreateDocumentTemplateBody> },
+  TContext
+> => {
+  const mutationKey = ["createDocumentTemplate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createDocumentTemplate>>,
+    { data: BodyType<CreateDocumentTemplateBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createDocumentTemplate(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateDocumentTemplateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createDocumentTemplate>>
+>;
+export type CreateDocumentTemplateMutationBody =
+  BodyType<CreateDocumentTemplateBody>;
+export type CreateDocumentTemplateMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a document template
+ */
+export const useCreateDocumentTemplate = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDocumentTemplate>>,
+    TError,
+    { data: BodyType<CreateDocumentTemplateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createDocumentTemplate>>,
+  TError,
+  { data: BodyType<CreateDocumentTemplateBody> },
+  TContext
+> => {
+  return useMutation(getCreateDocumentTemplateMutationOptions(options));
+};
+
+/**
+ * @summary Get a document template by ID
+ */
+export const getGetDocumentTemplateUrl = (id: string) => {
+  return `/api/document-templates/${id}`;
+};
+
+export const getDocumentTemplate = async (
+  id: string,
+  options?: RequestInit,
+): Promise<DocumentTemplate> => {
+  return customFetch<DocumentTemplate>(getGetDocumentTemplateUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDocumentTemplateQueryKey = (id: string) => {
+  return [`/api/document-templates/${id}`] as const;
+};
+
+export const getGetDocumentTemplateQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDocumentTemplate>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDocumentTemplate>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDocumentTemplateQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getDocumentTemplate>>
+  > = ({ signal }) => getDocumentTemplate(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDocumentTemplate>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDocumentTemplateQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDocumentTemplate>>
+>;
+export type GetDocumentTemplateQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get a document template by ID
+ */
+
+export function useGetDocumentTemplate<
+  TData = Awaited<ReturnType<typeof getDocumentTemplate>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDocumentTemplate>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDocumentTemplateQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update a document template
+ */
+export const getUpdateDocumentTemplateUrl = (id: string) => {
+  return `/api/document-templates/${id}`;
+};
+
+export const updateDocumentTemplate = async (
+  id: string,
+  updateDocumentTemplateBody: UpdateDocumentTemplateBody,
+  options?: RequestInit,
+): Promise<DocumentTemplate> => {
+  return customFetch<DocumentTemplate>(getUpdateDocumentTemplateUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateDocumentTemplateBody),
+  });
+};
+
+export const getUpdateDocumentTemplateMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDocumentTemplate>>,
+    TError,
+    { id: string; data: BodyType<UpdateDocumentTemplateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateDocumentTemplate>>,
+  TError,
+  { id: string; data: BodyType<UpdateDocumentTemplateBody> },
+  TContext
+> => {
+  const mutationKey = ["updateDocumentTemplate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateDocumentTemplate>>,
+    { id: string; data: BodyType<UpdateDocumentTemplateBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateDocumentTemplate(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateDocumentTemplateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateDocumentTemplate>>
+>;
+export type UpdateDocumentTemplateMutationBody =
+  BodyType<UpdateDocumentTemplateBody>;
+export type UpdateDocumentTemplateMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a document template
+ */
+export const useUpdateDocumentTemplate = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDocumentTemplate>>,
+    TError,
+    { id: string; data: BodyType<UpdateDocumentTemplateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateDocumentTemplate>>,
+  TError,
+  { id: string; data: BodyType<UpdateDocumentTemplateBody> },
+  TContext
+> => {
+  return useMutation(getUpdateDocumentTemplateMutationOptions(options));
+};
+
+/**
+ * @summary List documents
+ */
+export const getListDocumentsUrl = (params?: ListDocumentsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/documents?${stringifiedParams}`
+    : `/api/documents`;
+};
+
+export const listDocuments = async (
+  params?: ListDocumentsParams,
+  options?: RequestInit,
+): Promise<Document[]> => {
+  return customFetch<Document[]>(getListDocumentsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListDocumentsQueryKey = (params?: ListDocumentsParams) => {
+  return [`/api/documents`, ...(params ? [params] : [])] as const;
+};
+
+export const getListDocumentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listDocuments>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListDocumentsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listDocuments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListDocumentsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listDocuments>>> = ({
+    signal,
+  }) => listDocuments(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listDocuments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListDocumentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listDocuments>>
+>;
+export type ListDocumentsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List documents
+ */
+
+export function useListDocuments<
+  TData = Awaited<ReturnType<typeof listDocuments>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListDocumentsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listDocuments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListDocumentsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Generate a document from a template
+ */
+export const getGenerateDocumentUrl = () => {
+  return `/api/documents/generate`;
+};
+
+export const generateDocument = async (
+  generateDocumentBody: GenerateDocumentBody,
+  options?: RequestInit,
+): Promise<Document> => {
+  return customFetch<Document>(getGenerateDocumentUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(generateDocumentBody),
+  });
+};
+
+export const getGenerateDocumentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateDocument>>,
+    TError,
+    { data: BodyType<GenerateDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof generateDocument>>,
+  TError,
+  { data: BodyType<GenerateDocumentBody> },
+  TContext
+> => {
+  const mutationKey = ["generateDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof generateDocument>>,
+    { data: BodyType<GenerateDocumentBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return generateDocument(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GenerateDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof generateDocument>>
+>;
+export type GenerateDocumentMutationBody = BodyType<GenerateDocumentBody>;
+export type GenerateDocumentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Generate a document from a template
+ */
+export const useGenerateDocument = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateDocument>>,
+    TError,
+    { data: BodyType<GenerateDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof generateDocument>>,
+  TError,
+  { data: BodyType<GenerateDocumentBody> },
+  TContext
+> => {
+  return useMutation(getGenerateDocumentMutationOptions(options));
+};
+
+/**
+ * @summary Get controls missing required documentation
+ */
+export const getGetMissingDocumentationUrl = () => {
+  return `/api/documents/missing`;
+};
+
+export const getMissingDocumentation = async (
+  options?: RequestInit,
+): Promise<MissingDocReport> => {
+  return customFetch<MissingDocReport>(getGetMissingDocumentationUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMissingDocumentationQueryKey = () => {
+  return [`/api/documents/missing`] as const;
+};
+
+export const getGetMissingDocumentationQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMissingDocumentation>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMissingDocumentation>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMissingDocumentationQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMissingDocumentation>>
+  > = ({ signal }) => getMissingDocumentation({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMissingDocumentation>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMissingDocumentationQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMissingDocumentation>>
+>;
+export type GetMissingDocumentationQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get controls missing required documentation
+ */
+
+export function useGetMissingDocumentation<
+  TData = Awaited<ReturnType<typeof getMissingDocumentation>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMissingDocumentation>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMissingDocumentationQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get document by ID
+ */
+export const getGetDocumentUrl = (id: string) => {
+  return `/api/documents/${id}`;
+};
+
+export const getDocument = async (
+  id: string,
+  options?: RequestInit,
+): Promise<DocumentDetail> => {
+  return customFetch<DocumentDetail>(getGetDocumentUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDocumentQueryKey = (id: string) => {
+  return [`/api/documents/${id}`] as const;
+};
+
+export const getGetDocumentQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDocument>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDocument>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDocumentQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDocument>>> = ({
+    signal,
+  }) => getDocument(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDocument>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDocumentQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDocument>>
+>;
+export type GetDocumentQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get document by ID
+ */
+
+export function useGetDocument<
+  TData = Awaited<ReturnType<typeof getDocument>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDocument>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDocumentQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update a document
+ */
+export const getUpdateDocumentUrl = (id: string) => {
+  return `/api/documents/${id}`;
+};
+
+export const updateDocument = async (
+  id: string,
+  updateDocumentBody: UpdateDocumentBody,
+  options?: RequestInit,
+): Promise<Document> => {
+  return customFetch<Document>(getUpdateDocumentUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateDocumentBody),
+  });
+};
+
+export const getUpdateDocumentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDocument>>,
+    TError,
+    { id: string; data: BodyType<UpdateDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateDocument>>,
+  TError,
+  { id: string; data: BodyType<UpdateDocumentBody> },
+  TContext
+> => {
+  const mutationKey = ["updateDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateDocument>>,
+    { id: string; data: BodyType<UpdateDocumentBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateDocument(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateDocument>>
+>;
+export type UpdateDocumentMutationBody = BodyType<UpdateDocumentBody>;
+export type UpdateDocumentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a document
+ */
+export const useUpdateDocument = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDocument>>,
+    TError,
+    { id: string; data: BodyType<UpdateDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateDocument>>,
+  TError,
+  { id: string; data: BodyType<UpdateDocumentBody> },
+  TContext
+> => {
+  return useMutation(getUpdateDocumentMutationOptions(options));
+};
+
+/**
+ * @summary Submit document for review
+ */
+export const getSubmitDocumentForReviewUrl = (id: string) => {
+  return `/api/documents/${id}/submit-review`;
+};
+
+export const submitDocumentForReview = async (
+  id: string,
+  submitReviewBody: SubmitReviewBody,
+  options?: RequestInit,
+): Promise<Document> => {
+  return customFetch<Document>(getSubmitDocumentForReviewUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(submitReviewBody),
+  });
+};
+
+export const getSubmitDocumentForReviewMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitDocumentForReview>>,
+    TError,
+    { id: string; data: BodyType<SubmitReviewBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof submitDocumentForReview>>,
+  TError,
+  { id: string; data: BodyType<SubmitReviewBody> },
+  TContext
+> => {
+  const mutationKey = ["submitDocumentForReview"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof submitDocumentForReview>>,
+    { id: string; data: BodyType<SubmitReviewBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return submitDocumentForReview(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SubmitDocumentForReviewMutationResult = NonNullable<
+  Awaited<ReturnType<typeof submitDocumentForReview>>
+>;
+export type SubmitDocumentForReviewMutationBody = BodyType<SubmitReviewBody>;
+export type SubmitDocumentForReviewMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Submit document for review
+ */
+export const useSubmitDocumentForReview = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitDocumentForReview>>,
+    TError,
+    { id: string; data: BodyType<SubmitReviewBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof submitDocumentForReview>>,
+  TError,
+  { id: string; data: BodyType<SubmitReviewBody> },
+  TContext
+> => {
+  return useMutation(getSubmitDocumentForReviewMutationOptions(options));
+};
+
+/**
+ * @summary Approve a document
+ */
+export const getApproveDocumentUrl = (id: string) => {
+  return `/api/documents/${id}/approve`;
+};
+
+export const approveDocument = async (
+  id: string,
+  approveDocumentBody: ApproveDocumentBody,
+  options?: RequestInit,
+): Promise<Document> => {
+  return customFetch<Document>(getApproveDocumentUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(approveDocumentBody),
+  });
+};
+
+export const getApproveDocumentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof approveDocument>>,
+    TError,
+    { id: string; data: BodyType<ApproveDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof approveDocument>>,
+  TError,
+  { id: string; data: BodyType<ApproveDocumentBody> },
+  TContext
+> => {
+  const mutationKey = ["approveDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof approveDocument>>,
+    { id: string; data: BodyType<ApproveDocumentBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return approveDocument(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ApproveDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof approveDocument>>
+>;
+export type ApproveDocumentMutationBody = BodyType<ApproveDocumentBody>;
+export type ApproveDocumentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Approve a document
+ */
+export const useApproveDocument = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof approveDocument>>,
+    TError,
+    { id: string; data: BodyType<ApproveDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof approveDocument>>,
+  TError,
+  { id: string; data: BodyType<ApproveDocumentBody> },
+  TContext
+> => {
+  return useMutation(getApproveDocumentMutationOptions(options));
+};
+
+/**
+ * @summary Reject a document
+ */
+export const getRejectDocumentUrl = (id: string) => {
+  return `/api/documents/${id}/reject`;
+};
+
+export const rejectDocument = async (
+  id: string,
+  rejectDocumentBody: RejectDocumentBody,
+  options?: RequestInit,
+): Promise<Document> => {
+  return customFetch<Document>(getRejectDocumentUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(rejectDocumentBody),
+  });
+};
+
+export const getRejectDocumentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rejectDocument>>,
+    TError,
+    { id: string; data: BodyType<RejectDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof rejectDocument>>,
+  TError,
+  { id: string; data: BodyType<RejectDocumentBody> },
+  TContext
+> => {
+  const mutationKey = ["rejectDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof rejectDocument>>,
+    { id: string; data: BodyType<RejectDocumentBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return rejectDocument(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RejectDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof rejectDocument>>
+>;
+export type RejectDocumentMutationBody = BodyType<RejectDocumentBody>;
+export type RejectDocumentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Reject a document
+ */
+export const useRejectDocument = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rejectDocument>>,
+    TError,
+    { id: string; data: BodyType<RejectDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof rejectDocument>>,
+  TError,
+  { id: string; data: BodyType<RejectDocumentBody> },
+  TContext
+> => {
+  return useMutation(getRejectDocumentMutationOptions(options));
+};
+
+/**
+ * @summary Activate an approved document
+ */
+export const getActivateDocumentUrl = (id: string) => {
+  return `/api/documents/${id}/activate`;
+};
+
+export const activateDocument = async (
+  id: string,
+  activateDocumentBody: ActivateDocumentBody,
+  options?: RequestInit,
+): Promise<Document> => {
+  return customFetch<Document>(getActivateDocumentUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(activateDocumentBody),
+  });
+};
+
+export const getActivateDocumentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof activateDocument>>,
+    TError,
+    { id: string; data: BodyType<ActivateDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof activateDocument>>,
+  TError,
+  { id: string; data: BodyType<ActivateDocumentBody> },
+  TContext
+> => {
+  const mutationKey = ["activateDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof activateDocument>>,
+    { id: string; data: BodyType<ActivateDocumentBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return activateDocument(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ActivateDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof activateDocument>>
+>;
+export type ActivateDocumentMutationBody = BodyType<ActivateDocumentBody>;
+export type ActivateDocumentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Activate an approved document
+ */
+export const useActivateDocument = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof activateDocument>>,
+    TError,
+    { id: string; data: BodyType<ActivateDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof activateDocument>>,
+  TError,
+  { id: string; data: BodyType<ActivateDocumentBody> },
+  TContext
+> => {
+  return useMutation(getActivateDocumentMutationOptions(options));
+};
+
+/**
+ * @summary Archive a document
+ */
+export const getArchiveDocumentUrl = (id: string) => {
+  return `/api/documents/${id}/archive`;
+};
+
+export const archiveDocument = async (
+  id: string,
+  archiveDocumentBody: ArchiveDocumentBody,
+  options?: RequestInit,
+): Promise<Document> => {
+  return customFetch<Document>(getArchiveDocumentUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(archiveDocumentBody),
+  });
+};
+
+export const getArchiveDocumentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof archiveDocument>>,
+    TError,
+    { id: string; data: BodyType<ArchiveDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof archiveDocument>>,
+  TError,
+  { id: string; data: BodyType<ArchiveDocumentBody> },
+  TContext
+> => {
+  const mutationKey = ["archiveDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof archiveDocument>>,
+    { id: string; data: BodyType<ArchiveDocumentBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return archiveDocument(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ArchiveDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof archiveDocument>>
+>;
+export type ArchiveDocumentMutationBody = BodyType<ArchiveDocumentBody>;
+export type ArchiveDocumentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Archive a document
+ */
+export const useArchiveDocument = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof archiveDocument>>,
+    TError,
+    { id: string; data: BodyType<ArchiveDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof archiveDocument>>,
+  TError,
+  { id: string; data: BodyType<ArchiveDocumentBody> },
+  TContext
+> => {
+  return useMutation(getArchiveDocumentMutationOptions(options));
+};
+
+/**
+ * @summary Get version history of a document
+ */
+export const getGetDocumentVersionsUrl = (id: string) => {
+  return `/api/documents/${id}/versions`;
+};
+
+export const getDocumentVersions = async (
+  id: string,
+  options?: RequestInit,
+): Promise<DocumentVersionRecord[]> => {
+  return customFetch<DocumentVersionRecord[]>(getGetDocumentVersionsUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDocumentVersionsQueryKey = (id: string) => {
+  return [`/api/documents/${id}/versions`] as const;
+};
+
+export const getGetDocumentVersionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDocumentVersions>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDocumentVersions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDocumentVersionsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getDocumentVersions>>
+  > = ({ signal }) => getDocumentVersions(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDocumentVersions>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDocumentVersionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDocumentVersions>>
+>;
+export type GetDocumentVersionsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get version history of a document
+ */
+
+export function useGetDocumentVersions<
+  TData = Awaited<ReturnType<typeof getDocumentVersions>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDocumentVersions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDocumentVersionsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List generated compliance logs
+ */
+export const getListDocumentLogsUrl = (params?: ListDocumentLogsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/document-logs?${stringifiedParams}`
+    : `/api/document-logs`;
+};
+
+export const listDocumentLogs = async (
+  params?: ListDocumentLogsParams,
+  options?: RequestInit,
+): Promise<GeneratedLog[]> => {
+  return customFetch<GeneratedLog[]>(getListDocumentLogsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListDocumentLogsQueryKey = (
+  params?: ListDocumentLogsParams,
+) => {
+  return [`/api/document-logs`, ...(params ? [params] : [])] as const;
+};
+
+export const getListDocumentLogsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listDocumentLogs>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListDocumentLogsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listDocumentLogs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListDocumentLogsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listDocumentLogs>>
+  > = ({ signal }) => listDocumentLogs(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listDocumentLogs>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListDocumentLogsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listDocumentLogs>>
+>;
+export type ListDocumentLogsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List generated compliance logs
+ */
+
+export function useListDocumentLogs<
+  TData = Awaited<ReturnType<typeof listDocumentLogs>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListDocumentLogsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listDocumentLogs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListDocumentLogsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Generate a new log instance from a template
+ */
+export const getGenerateLogUrl = () => {
+  return `/api/document-logs/generate`;
+};
+
+export const generateLog = async (
+  generateLogBody: GenerateLogBody,
+  options?: RequestInit,
+): Promise<GeneratedLog> => {
+  return customFetch<GeneratedLog>(getGenerateLogUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(generateLogBody),
+  });
+};
+
+export const getGenerateLogMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateLog>>,
+    TError,
+    { data: BodyType<GenerateLogBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof generateLog>>,
+  TError,
+  { data: BodyType<GenerateLogBody> },
+  TContext
+> => {
+  const mutationKey = ["generateLog"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof generateLog>>,
+    { data: BodyType<GenerateLogBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return generateLog(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GenerateLogMutationResult = NonNullable<
+  Awaited<ReturnType<typeof generateLog>>
+>;
+export type GenerateLogMutationBody = BodyType<GenerateLogBody>;
+export type GenerateLogMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Generate a new log instance from a template
+ */
+export const useGenerateLog = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateLog>>,
+    TError,
+    { data: BodyType<GenerateLogBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof generateLog>>,
+  TError,
+  { data: BodyType<GenerateLogBody> },
+  TContext
+> => {
+  return useMutation(getGenerateLogMutationOptions(options));
+};
+
+/**
+ * @summary Get a generated log by ID
+ */
+export const getGetDocumentLogUrl = (id: string) => {
+  return `/api/document-logs/${id}`;
+};
+
+export const getDocumentLog = async (
+  id: string,
+  options?: RequestInit,
+): Promise<GeneratedLogDetail> => {
+  return customFetch<GeneratedLogDetail>(getGetDocumentLogUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDocumentLogQueryKey = (id: string) => {
+  return [`/api/document-logs/${id}`] as const;
+};
+
+export const getGetDocumentLogQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDocumentLog>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDocumentLog>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDocumentLogQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDocumentLog>>> = ({
+    signal,
+  }) => getDocumentLog(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDocumentLog>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDocumentLogQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDocumentLog>>
+>;
+export type GetDocumentLogQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get a generated log by ID
+ */
+
+export function useGetDocumentLog<
+  TData = Awaited<ReturnType<typeof getDocumentLog>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDocumentLog>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDocumentLogQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update a generated log
+ */
+export const getUpdateDocumentLogUrl = (id: string) => {
+  return `/api/document-logs/${id}`;
+};
+
+export const updateDocumentLog = async (
+  id: string,
+  updateLogBody: UpdateLogBody,
+  options?: RequestInit,
+): Promise<GeneratedLog> => {
+  return customFetch<GeneratedLog>(getUpdateDocumentLogUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateLogBody),
+  });
+};
+
+export const getUpdateDocumentLogMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDocumentLog>>,
+    TError,
+    { id: string; data: BodyType<UpdateLogBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateDocumentLog>>,
+  TError,
+  { id: string; data: BodyType<UpdateLogBody> },
+  TContext
+> => {
+  const mutationKey = ["updateDocumentLog"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateDocumentLog>>,
+    { id: string; data: BodyType<UpdateLogBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateDocumentLog(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateDocumentLogMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateDocumentLog>>
+>;
+export type UpdateDocumentLogMutationBody = BodyType<UpdateLogBody>;
+export type UpdateDocumentLogMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a generated log
+ */
+export const useUpdateDocumentLog = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDocumentLog>>,
+    TError,
+    { id: string; data: BodyType<UpdateLogBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateDocumentLog>>,
+  TError,
+  { id: string; data: BodyType<UpdateLogBody> },
+  TContext
+> => {
+  return useMutation(getUpdateDocumentLogMutationOptions(options));
+};
+
+/**
+ * @summary Mark a log as complete and generate evidence
+ */
+export const getCompleteDocumentLogUrl = (id: string) => {
+  return `/api/document-logs/${id}/complete`;
+};
+
+export const completeDocumentLog = async (
+  id: string,
+  completeLogBody: CompleteLogBody,
+  options?: RequestInit,
+): Promise<GeneratedLog> => {
+  return customFetch<GeneratedLog>(getCompleteDocumentLogUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(completeLogBody),
+  });
+};
+
+export const getCompleteDocumentLogMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof completeDocumentLog>>,
+    TError,
+    { id: string; data: BodyType<CompleteLogBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof completeDocumentLog>>,
+  TError,
+  { id: string; data: BodyType<CompleteLogBody> },
+  TContext
+> => {
+  const mutationKey = ["completeDocumentLog"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof completeDocumentLog>>,
+    { id: string; data: BodyType<CompleteLogBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return completeDocumentLog(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CompleteDocumentLogMutationResult = NonNullable<
+  Awaited<ReturnType<typeof completeDocumentLog>>
+>;
+export type CompleteDocumentLogMutationBody = BodyType<CompleteLogBody>;
+export type CompleteDocumentLogMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Mark a log as complete and generate evidence
+ */
+export const useCompleteDocumentLog = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof completeDocumentLog>>,
+    TError,
+    { id: string; data: BodyType<CompleteLogBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof completeDocumentLog>>,
+  TError,
+  { id: string; data: BodyType<CompleteLogBody> },
+  TContext
+> => {
+  return useMutation(getCompleteDocumentLogMutationOptions(options));
+};
+
+/**
+ * @summary Approve a completed log
+ */
+export const getApproveDocumentLogUrl = (id: string) => {
+  return `/api/document-logs/${id}/approve`;
+};
+
+export const approveDocumentLog = async (
+  id: string,
+  approveDocumentLogBody: ApproveDocumentLogBody,
+  options?: RequestInit,
+): Promise<GeneratedLog> => {
+  return customFetch<GeneratedLog>(getApproveDocumentLogUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(approveDocumentLogBody),
+  });
+};
+
+export const getApproveDocumentLogMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof approveDocumentLog>>,
+    TError,
+    { id: string; data: BodyType<ApproveDocumentLogBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof approveDocumentLog>>,
+  TError,
+  { id: string; data: BodyType<ApproveDocumentLogBody> },
+  TContext
+> => {
+  const mutationKey = ["approveDocumentLog"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof approveDocumentLog>>,
+    { id: string; data: BodyType<ApproveDocumentLogBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return approveDocumentLog(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ApproveDocumentLogMutationResult = NonNullable<
+  Awaited<ReturnType<typeof approveDocumentLog>>
+>;
+export type ApproveDocumentLogMutationBody = BodyType<ApproveDocumentLogBody>;
+export type ApproveDocumentLogMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Approve a completed log
+ */
+export const useApproveDocumentLog = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof approveDocumentLog>>,
+    TError,
+    { id: string; data: BodyType<ApproveDocumentLogBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof approveDocumentLog>>,
+  TError,
+  { id: string; data: BodyType<ApproveDocumentLogBody> },
+  TContext
+> => {
+  return useMutation(getApproveDocumentLogMutationOptions(options));
+};
+
+/**
+ * @summary List checklist templates
+ */
+export const getListChecklistsUrl = () => {
+  return `/api/checklists`;
+};
+
+export const listChecklists = async (
+  options?: RequestInit,
+): Promise<ChecklistTemplate[]> => {
+  return customFetch<ChecklistTemplate[]>(getListChecklistsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListChecklistsQueryKey = () => {
+  return [`/api/checklists`] as const;
+};
+
+export const getListChecklistsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listChecklists>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listChecklists>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListChecklistsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listChecklists>>> = ({
+    signal,
+  }) => listChecklists({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listChecklists>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListChecklistsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listChecklists>>
+>;
+export type ListChecklistsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List checklist templates
+ */
+
+export function useListChecklists<
+  TData = Awaited<ReturnType<typeof listChecklists>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listChecklists>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListChecklistsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Complete a checklist and generate evidence
+ */
+export const getCompleteChecklistUrl = (id: string) => {
+  return `/api/checklists/${id}/complete`;
+};
+
+export const completeChecklist = async (
+  id: string,
+  completeChecklistBody: CompleteChecklistBody,
+  options?: RequestInit,
+): Promise<ChecklistCompletion> => {
+  return customFetch<ChecklistCompletion>(getCompleteChecklistUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(completeChecklistBody),
+  });
+};
+
+export const getCompleteChecklistMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof completeChecklist>>,
+    TError,
+    { id: string; data: BodyType<CompleteChecklistBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof completeChecklist>>,
+  TError,
+  { id: string; data: BodyType<CompleteChecklistBody> },
+  TContext
+> => {
+  const mutationKey = ["completeChecklist"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof completeChecklist>>,
+    { id: string; data: BodyType<CompleteChecklistBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return completeChecklist(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CompleteChecklistMutationResult = NonNullable<
+  Awaited<ReturnType<typeof completeChecklist>>
+>;
+export type CompleteChecklistMutationBody = BodyType<CompleteChecklistBody>;
+export type CompleteChecklistMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Complete a checklist and generate evidence
+ */
+export const useCompleteChecklist = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof completeChecklist>>,
+    TError,
+    { id: string; data: BodyType<CompleteChecklistBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof completeChecklist>>,
+  TError,
+  { id: string; data: BodyType<CompleteChecklistBody> },
+  TContext
+> => {
+  return useMutation(getCompleteChecklistMutationOptions(options));
+};
+
+/**
+ * @summary Get documentation automation status summary
+ */
+export const getGetDocAutomationStatusUrl = () => {
+  return `/api/automation/doc-status`;
+};
+
+export const getDocAutomationStatus = async (
+  options?: RequestInit,
+): Promise<DocAutomationStatus> => {
+  return customFetch<DocAutomationStatus>(getGetDocAutomationStatusUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDocAutomationStatusQueryKey = () => {
+  return [`/api/automation/doc-status`] as const;
+};
+
+export const getGetDocAutomationStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDocAutomationStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDocAutomationStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetDocAutomationStatusQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getDocAutomationStatus>>
+  > = ({ signal }) => getDocAutomationStatus({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDocAutomationStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDocAutomationStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDocAutomationStatus>>
+>;
+export type GetDocAutomationStatusQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get documentation automation status summary
+ */
+
+export function useGetDocAutomationStatus<
+  TData = Awaited<ReturnType<typeof getDocAutomationStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDocAutomationStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDocAutomationStatusQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Run automated documentation checks (expire, generate tasks)
+ */
+export const getRunDocChecksUrl = () => {
+  return `/api/automation/run-doc-checks`;
+};
+
+export const runDocChecks = async (
+  runDocChecksBody: RunDocChecksBody,
+  options?: RequestInit,
+): Promise<DocCheckResult> => {
+  return customFetch<DocCheckResult>(getRunDocChecksUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(runDocChecksBody),
+  });
+};
+
+export const getRunDocChecksMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runDocChecks>>,
+    TError,
+    { data: BodyType<RunDocChecksBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof runDocChecks>>,
+  TError,
+  { data: BodyType<RunDocChecksBody> },
+  TContext
+> => {
+  const mutationKey = ["runDocChecks"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof runDocChecks>>,
+    { data: BodyType<RunDocChecksBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return runDocChecks(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RunDocChecksMutationResult = NonNullable<
+  Awaited<ReturnType<typeof runDocChecks>>
+>;
+export type RunDocChecksMutationBody = BodyType<RunDocChecksBody>;
+export type RunDocChecksMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Run automated documentation checks (expire, generate tasks)
+ */
+export const useRunDocChecks = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runDocChecks>>,
+    TError,
+    { data: BodyType<RunDocChecksBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof runDocChecks>>,
+  TError,
+  { data: BodyType<RunDocChecksBody> },
+  TContext
+> => {
+  return useMutation(getRunDocChecksMutationOptions(options));
+};

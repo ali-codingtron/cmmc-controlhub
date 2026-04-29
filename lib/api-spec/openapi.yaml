@@ -30,6 +30,16 @@ tags:
     description: Assessor-facing views and exports
   - name: audit
     description: Audit Trail
+  - name: documents
+    description: Documentation Automation - Policies, Procedures, Logs, Registers
+  - name: document-templates
+    description: Document Templates
+  - name: document-logs
+    description: Generated Compliance Logs
+  - name: checklists
+    description: Compliance Checklists
+  - name: automation
+    description: Documentation Automation Rules
 paths:
   /healthz:
     get:
@@ -1154,6 +1164,574 @@ paths:
                 items:
                   $ref: "#/components/schemas/AuditLogEntry"
 
+  # ─── DOCUMENT TEMPLATES ────────────────────────────────────
+  /document-templates:
+    get:
+      operationId: listDocumentTemplates
+      tags: [document-templates]
+      summary: List document templates
+      parameters:
+        - in: query
+          name: docType
+          schema:
+            type: string
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: cmmcLevel
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DocumentTemplate"
+    post:
+      operationId: createDocumentTemplate
+      tags: [document-templates]
+      summary: Create a document template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDocumentTemplateBody"
+      responses:
+        "201":
+          description: Created template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentTemplate"
+
+  /document-templates/{id}:
+    get:
+      operationId: getDocumentTemplate
+      tags: [document-templates]
+      summary: Get a document template by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Document template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentTemplate"
+    patch:
+      operationId: updateDocumentTemplate
+      tags: [document-templates]
+      summary: Update a document template
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDocumentTemplateBody"
+      responses:
+        "200":
+          description: Updated template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentTemplate"
+
+  # ─── DOCUMENTS ─────────────────────────────────────────────
+  /documents:
+    get:
+      operationId: listDocuments
+      tags: [documents]
+      summary: List documents
+      parameters:
+        - in: query
+          name: docType
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: controlId
+          schema:
+            type: string
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: dueForReview
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Document"
+
+  /documents/generate:
+    post:
+      operationId: generateDocument
+      tags: [documents]
+      summary: Generate a document from a template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateDocumentBody"
+      responses:
+        "201":
+          description: Generated document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+
+  /documents/missing:
+    get:
+      operationId: getMissingDocumentation
+      tags: [documents]
+      summary: Get controls missing required documentation
+      responses:
+        "200":
+          description: Missing documentation report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MissingDocReport"
+
+  /documents/{id}:
+    get:
+      operationId: getDocument
+      tags: [documents]
+      summary: Get document by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Document detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentDetail"
+    patch:
+      operationId: updateDocument
+      tags: [documents]
+      summary: Update a document
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDocumentBody"
+      responses:
+        "200":
+          description: Updated document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+
+  /documents/{id}/submit-review:
+    post:
+      operationId: submitDocumentForReview
+      tags: [documents]
+      summary: Submit document for review
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitReviewBody"
+      responses:
+        "200":
+          description: Document submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+
+  /documents/{id}/approve:
+    post:
+      operationId: approveDocument
+      tags: [documents]
+      summary: Approve a document
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApproveDocumentBody"
+      responses:
+        "200":
+          description: Document approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+
+  /documents/{id}/reject:
+    post:
+      operationId: rejectDocument
+      tags: [documents]
+      summary: Reject a document
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectDocumentBody"
+      responses:
+        "200":
+          description: Document rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+
+  /documents/{id}/activate:
+    post:
+      operationId: activateDocument
+      tags: [documents]
+      summary: Activate an approved document
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes:
+                  type: string
+      responses:
+        "200":
+          description: Document activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+
+  /documents/{id}/archive:
+    post:
+      operationId: archiveDocument
+      tags: [documents]
+      summary: Archive a document
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes:
+                  type: string
+      responses:
+        "200":
+          description: Document archived
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+
+  /documents/{id}/versions:
+    get:
+      operationId: getDocumentVersions
+      tags: [documents]
+      summary: Get version history of a document
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Document versions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DocumentVersionRecord"
+
+  # ─── DOCUMENT LOGS ─────────────────────────────────────────
+  /document-logs:
+    get:
+      operationId: listDocumentLogs
+      tags: [document-logs]
+      summary: List generated compliance logs
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: templateId
+          schema:
+            type: string
+        - in: query
+          name: search
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of generated logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GeneratedLog"
+
+  /document-logs/generate:
+    post:
+      operationId: generateLog
+      tags: [document-logs]
+      summary: Generate a new log instance from a template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateLogBody"
+      responses:
+        "201":
+          description: Generated log
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneratedLog"
+
+  /document-logs/{id}:
+    get:
+      operationId: getDocumentLog
+      tags: [document-logs]
+      summary: Get a generated log by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Generated log detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneratedLogDetail"
+    patch:
+      operationId: updateDocumentLog
+      tags: [document-logs]
+      summary: Update a generated log
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLogBody"
+      responses:
+        "200":
+          description: Updated log
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneratedLog"
+
+  /document-logs/{id}/complete:
+    post:
+      operationId: completeDocumentLog
+      tags: [document-logs]
+      summary: Mark a log as complete and generate evidence
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteLogBody"
+      responses:
+        "200":
+          description: Completed log
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneratedLog"
+
+  /document-logs/{id}/approve:
+    post:
+      operationId: approveDocumentLog
+      tags: [document-logs]
+      summary: Approve a completed log
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes:
+                  type: string
+      responses:
+        "200":
+          description: Approved log
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneratedLog"
+
+  # ─── CHECKLISTS ────────────────────────────────────────────
+  /checklists:
+    get:
+      operationId: listChecklists
+      tags: [checklists]
+      summary: List checklist templates
+      responses:
+        "200":
+          description: List of checklist templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChecklistTemplate"
+
+  /checklists/{id}/complete:
+    post:
+      operationId: completeChecklist
+      tags: [checklists]
+      summary: Complete a checklist and generate evidence
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteChecklistBody"
+      responses:
+        "200":
+          description: Checklist completion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChecklistCompletion"
+
+  # ─── AUTOMATION ────────────────────────────────────────────
+  /automation/doc-status:
+    get:
+      operationId: getDocAutomationStatus
+      tags: [automation]
+      summary: Get documentation automation status summary
+      responses:
+        "200":
+          description: Doc automation status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocAutomationStatus"
+
+  /automation/run-doc-checks:
+    post:
+      operationId: runDocChecks
+      tags: [automation]
+      summary: Run automated documentation checks (expire, generate tasks)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Check results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocCheckResult"
+
 components:
   schemas:
     HealthStatus:
@@ -2172,3 +2750,805 @@ components:
         - entityType
         - entityId
         - timestamp
+
+    # ─── DOCUMENTATION ─────────────────────────────────────────
+    DocumentTemplate:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        docType:
+          type: string
+          enum: [policy, procedure, log, register, checklist, narrative, form, plan]
+        cmmcLevel:
+          type: string
+          enum: [L1, L2, both]
+        domainAbbr:
+          type: string
+          nullable: true
+        version:
+          type: string
+        ownerRole:
+          type: string
+        reviewFrequency:
+          type: string
+          enum: [monthly, quarterly, semi_annually, annually, as_needed]
+        description:
+          type: string
+          nullable: true
+        bodyTemplate:
+          type: string
+        requiredFields:
+          type: array
+          items:
+            type: string
+        placeholders:
+          type: array
+          items:
+            type: string
+        linkedControlIds:
+          type: array
+          items:
+            type: string
+        requiresApproval:
+          type: boolean
+        isActive:
+          type: boolean
+        isSystemTemplate:
+          type: boolean
+        recurrenceRule:
+          type: string
+          nullable: true
+        checklistItems:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              itemText:
+                type: string
+              description:
+                type: string
+                nullable: true
+              isRequired:
+                type: boolean
+            required: [itemText]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - docType
+        - cmmcLevel
+        - version
+        - ownerRole
+        - reviewFrequency
+        - bodyTemplate
+        - requiredFields
+        - placeholders
+        - linkedControlIds
+        - requiresApproval
+        - isActive
+        - isSystemTemplate
+        - createdAt
+        - updatedAt
+
+    CreateDocumentTemplateBody:
+      type: object
+      properties:
+        title:
+          type: string
+        docType:
+          type: string
+        cmmcLevel:
+          type: string
+        domainAbbr:
+          type: string
+        ownerRole:
+          type: string
+        reviewFrequency:
+          type: string
+        description:
+          type: string
+        bodyTemplate:
+          type: string
+        requiredFields:
+          type: array
+          items:
+            type: string
+        linkedControlIds:
+          type: array
+          items:
+            type: string
+        recurrenceRule:
+          type: string
+        checklistItems:
+          type: array
+          items:
+            type: object
+      required:
+        - title
+        - docType
+        - bodyTemplate
+
+    UpdateDocumentTemplateBody:
+      type: object
+      properties:
+        title:
+          type: string
+        bodyTemplate:
+          type: string
+        description:
+          type: string
+        isActive:
+          type: boolean
+        linkedControlIds:
+          type: array
+          items:
+            type: string
+        checklistItems:
+          type: array
+          items:
+            type: object
+
+    Document:
+      type: object
+      properties:
+        id:
+          type: string
+        templateId:
+          type: string
+          nullable: true
+        templateTitle:
+          type: string
+          nullable: true
+        title:
+          type: string
+        docType:
+          type: string
+          enum: [policy, procedure, log, register, checklist, narrative, form, plan]
+        status:
+          type: string
+          enum: [draft, pending_review, approved, active, needs_update, expired, superseded, archived]
+        cmmcLevel:
+          type: string
+        version:
+          type: string
+        organizationName:
+          type: string
+          nullable: true
+        systemName:
+          type: string
+          nullable: true
+        effectiveDate:
+          type: string
+          format: date-time
+          nullable: true
+        nextReviewDate:
+          type: string
+          format: date-time
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        ownerId:
+          type: string
+        ownerName:
+          type: string
+          nullable: true
+        reviewerId:
+          type: string
+          nullable: true
+        reviewerName:
+          type: string
+          nullable: true
+        approverId:
+          type: string
+          nullable: true
+        approverName:
+          type: string
+          nullable: true
+        reviewedAt:
+          type: string
+          format: date-time
+          nullable: true
+        approvedAt:
+          type: string
+          format: date-time
+          nullable: true
+        activatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        rejectionNotes:
+          type: string
+          nullable: true
+        reviewFrequency:
+          type: string
+        linkedControlIds:
+          type: array
+          items:
+            type: string
+        linkedControlLabels:
+          type: array
+          items:
+            type: string
+        isCurrentVersion:
+          type: boolean
+        previousVersionId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - docType
+        - status
+        - cmmcLevel
+        - version
+        - ownerId
+        - reviewFrequency
+        - linkedControlIds
+        - linkedControlLabels
+        - isCurrentVersion
+        - createdAt
+        - updatedAt
+
+    DocumentDetail:
+      allOf:
+        - $ref: "#/components/schemas/Document"
+        - type: object
+          properties:
+            body:
+              type: string
+            fieldValues:
+              type: object
+            internalNotes:
+              type: string
+              nullable: true
+            comments:
+              type: string
+              nullable: true
+            versionHistory:
+              type: array
+              items:
+                $ref: "#/components/schemas/DocumentVersionRecord"
+            reviews:
+              type: array
+              items:
+                $ref: "#/components/schemas/DocumentReview"
+
+    DocumentVersionRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        documentId:
+          type: string
+        version:
+          type: string
+        status:
+          type: string
+        changedByName:
+          type: string
+          nullable: true
+        changeNotes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - documentId
+        - version
+        - status
+        - createdAt
+
+    DocumentReview:
+      type: object
+      properties:
+        id:
+          type: string
+        documentId:
+          type: string
+        reviewerId:
+          type: string
+        reviewerName:
+          type: string
+          nullable: true
+        action:
+          type: string
+        notes:
+          type: string
+          nullable: true
+        version:
+          type: string
+          nullable: true
+        reviewedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - documentId
+        - reviewerId
+        - action
+        - reviewedAt
+
+    GenerateDocumentBody:
+      type: object
+      properties:
+        templateId:
+          type: string
+        title:
+          type: string
+        organizationName:
+          type: string
+        systemName:
+          type: string
+        policyOwner:
+          type: string
+        reviewerId:
+          type: string
+        effectiveDate:
+          type: string
+          format: date-time
+        nextReviewDate:
+          type: string
+          format: date-time
+        fieldValues:
+          type: object
+        linkedControlIds:
+          type: array
+          items:
+            type: string
+      required:
+        - templateId
+
+    UpdateDocumentBody:
+      type: object
+      properties:
+        title:
+          type: string
+        body:
+          type: string
+        organizationName:
+          type: string
+        systemName:
+          type: string
+        reviewerId:
+          type: string
+        nextReviewDate:
+          type: string
+          format: date-time
+        internalNotes:
+          type: string
+        comments:
+          type: string
+        fieldValues:
+          type: object
+        linkedControlIds:
+          type: array
+          items:
+            type: string
+
+    SubmitReviewBody:
+      type: object
+      properties:
+        reviewerId:
+          type: string
+        notes:
+          type: string
+      required:
+        - reviewerId
+
+    ApproveDocumentBody:
+      type: object
+      properties:
+        notes:
+          type: string
+
+    RejectDocumentBody:
+      type: object
+      properties:
+        rejectionNotes:
+          type: string
+      required:
+        - rejectionNotes
+
+    MissingDocReport:
+      type: object
+      properties:
+        controlsMissingPolicy:
+          type: array
+          items:
+            type: object
+            properties:
+              controlId:
+                type: string
+              controlLabel:
+                type: string
+              domainName:
+                type: string
+            required: [controlId, controlLabel, domainName]
+        controlsMissingProcedure:
+          type: array
+          items:
+            type: object
+            properties:
+              controlId:
+                type: string
+              controlLabel:
+                type: string
+              domainName:
+                type: string
+            required: [controlId, controlLabel, domainName]
+        expiredDocuments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Document"
+        documentsNeedingReview:
+          type: array
+          items:
+            $ref: "#/components/schemas/Document"
+        pendingApproval:
+          type: array
+          items:
+            $ref: "#/components/schemas/Document"
+        totalMissingPolicies:
+          type: integer
+        totalMissingProcedures:
+          type: integer
+        totalExpired:
+          type: integer
+        totalNeedingReview:
+          type: integer
+        totalPendingApproval:
+          type: integer
+      required:
+        - controlsMissingPolicy
+        - controlsMissingProcedure
+        - expiredDocuments
+        - documentsNeedingReview
+        - pendingApproval
+        - totalMissingPolicies
+        - totalMissingProcedures
+        - totalExpired
+        - totalNeedingReview
+        - totalPendingApproval
+
+    GeneratedLog:
+      type: object
+      properties:
+        id:
+          type: string
+        templateId:
+          type: string
+          nullable: true
+        templateTitle:
+          type: string
+          nullable: true
+        title:
+          type: string
+        periodStart:
+          type: string
+          format: date-time
+          nullable: true
+        periodEnd:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          enum: [draft, pending_review, approved, active, needs_update, expired, superseded, archived]
+        responsibleUserId:
+          type: string
+          nullable: true
+        responsibleUserName:
+          type: string
+          nullable: true
+        reviewerId:
+          type: string
+          nullable: true
+        reviewerName:
+          type: string
+          nullable: true
+        completionNotes:
+          type: string
+          nullable: true
+        reviewedAt:
+          type: string
+          format: date-time
+          nullable: true
+        approvedAt:
+          type: string
+          format: date-time
+          nullable: true
+        generatedEvidenceId:
+          type: string
+          nullable: true
+        linkedControlIds:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - status
+        - linkedControlIds
+        - createdAt
+        - updatedAt
+
+    GeneratedLogDetail:
+      allOf:
+        - $ref: "#/components/schemas/GeneratedLog"
+        - type: object
+          properties:
+            fieldValues:
+              type: object
+            entries:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  entryText:
+                    type: string
+                  entryType:
+                    type: string
+                  isCompleted:
+                    type: boolean
+                  notes:
+                    type: string
+                    nullable: true
+                  sortOrder:
+                    type: integer
+                required: [id, entryText, entryType, isCompleted, sortOrder]
+
+    GenerateLogBody:
+      type: object
+      properties:
+        templateId:
+          type: string
+        title:
+          type: string
+        periodStart:
+          type: string
+          format: date-time
+        periodEnd:
+          type: string
+          format: date-time
+        responsibleUserId:
+          type: string
+        linkedControlIds:
+          type: array
+          items:
+            type: string
+        fieldValues:
+          type: object
+      required:
+        - templateId
+
+    UpdateLogBody:
+      type: object
+      properties:
+        completionNotes:
+          type: string
+        fieldValues:
+          type: object
+        entries:
+          type: array
+          items:
+            type: object
+
+    CompleteLogBody:
+      type: object
+      properties:
+        completionNotes:
+          type: string
+        entries:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              isCompleted:
+                type: boolean
+              notes:
+                type: string
+            required: [id, isCompleted]
+        generateEvidence:
+          type: boolean
+      required:
+        - completionNotes
+
+    ChecklistTemplate:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        docType:
+          type: string
+        description:
+          type: string
+          nullable: true
+        linkedControlIds:
+          type: array
+          items:
+            type: string
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              itemText:
+                type: string
+              description:
+                type: string
+                nullable: true
+              isRequired:
+                type: boolean
+              sortOrder:
+                type: integer
+            required: [id, itemText, isRequired, sortOrder]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - docType
+        - linkedControlIds
+        - items
+        - createdAt
+
+    CompleteChecklistBody:
+      type: object
+      properties:
+        title:
+          type: string
+        notes:
+          type: string
+        itemResults:
+          type: array
+          items:
+            type: object
+            properties:
+              itemId:
+                type: string
+              isCompleted:
+                type: boolean
+              notes:
+                type: string
+            required: [itemId, isCompleted]
+        generateEvidence:
+          type: boolean
+      required:
+        - title
+        - itemResults
+
+    ChecklistCompletion:
+      type: object
+      properties:
+        id:
+          type: string
+        templateId:
+          type: string
+        title:
+          type: string
+        completedById:
+          type: string
+        completedByName:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        itemResults:
+          type: array
+          items:
+            type: object
+        generatedEvidenceId:
+          type: string
+          nullable: true
+        linkedControlIds:
+          type: array
+          items:
+            type: string
+        completedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - templateId
+        - title
+        - completedById
+        - linkedControlIds
+        - completedAt
+
+    DocAutomationStatus:
+      type: object
+      properties:
+        totalDocuments:
+          type: integer
+        totalActive:
+          type: integer
+        totalDraft:
+          type: integer
+        totalPendingReview:
+          type: integer
+        totalExpired:
+          type: integer
+        totalNeedsUpdate:
+          type: integer
+        totalTemplates:
+          type: integer
+        controlsMissingPolicy:
+          type: integer
+        controlsMissingProcedure:
+          type: integer
+        logsCompletedThisMonth:
+          type: integer
+        logsDue:
+          type: integer
+        checklistsCompleted:
+          type: integer
+        recentDocuments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Document"
+      required:
+        - totalDocuments
+        - totalActive
+        - totalDraft
+        - totalPendingReview
+        - totalExpired
+        - totalNeedsUpdate
+        - totalTemplates
+        - controlsMissingPolicy
+        - controlsMissingProcedure
+        - logsCompletedThisMonth
+        - logsDue
+        - checklistsCompleted
+        - recentDocuments
+
+    DocCheckResult:
+      type: object
+      properties:
+        expiredDocuments:
+          type: integer
+        tasksGenerated:
+          type: integer
+        documentsMarkedNeedsUpdate:
+          type: integer
+        message:
+          type: string
+      required:
+        - expiredDocuments
+        - tasksGenerated
+        - documentsMarkedNeedsUpdate
+        - message

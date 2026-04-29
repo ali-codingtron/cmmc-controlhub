@@ -62,6 +62,15 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 | /audit-logs | AuditLogs | System-wide audit trail |
 | /users | Users | User management (admin only) |
 | /settings | Settings | User settings |
+| /documents | Documents | Documentation automation overview/stats |
+| /documents/list | DocumentsList | All documents with search/filter |
+| /documents/templates | DocumentTemplates | 22 seeded templates, generate modal |
+| /documents/generate | DocumentsGenerate | Generate document from template |
+| /documents/logs | DocumentLogs | Compliance log instances |
+| /documents/checklists | DocumentChecklists | Checklist tracking |
+| /documents/missing | DocumentsMissing | Gap analysis: missing policies/procedures |
+| /documents/:id | DocumentDetail | Document detail + workflow actions |
+| /documents/logs/:id | DocumentLogDetail | Log detail + complete/approve actions |
 
 ### API Routes
 
@@ -76,6 +85,14 @@ All routes under `/api` prefix, JWT-authenticated:
 - `/api/dashboard/*` — summary, domain readiness, recent activity, overdue items
 - `/api/assessor/*` — assessor control list, control packages, exports
 - `/api/audit-logs` — audit trail
+- `/api/documents/templates` — template CRUD (22 system templates seeded)
+- `/api/documents` — document CRUD + workflow (submit/approve/reject/activate/archive)
+- `/api/documents/generate` — generate a document from a template
+- `/api/documents/missing` — gap analysis (controls missing policy/procedure coverage)
+- `/api/document-logs` — compliance log instances (generate, complete, approve)
+- `/api/checklists` — checklist completion tracking
+- `/api/automation/doc-status` — overview stats (totalDocuments, totalTemplates, controlsMissingPolicy, etc.)
+- `/api/automation/run-doc-checks` — mark expired docs, generate overdue tasks
 
 ### Important Technical Notes
 
@@ -88,3 +105,5 @@ All routes under `/api` prefix, JWT-authenticated:
 4. **API client hooks**: Params are passed directly (e.g., `useListControls({ search })`) NOT via `{ query: { search } }`.
 
 5. **Orval config**: Uses `mode: "single"` for Zod output. The `lib/api-zod/src/index.ts` only exports `./generated/api`.
+
+6. **Documentation schema**: `documentsTable` has NO `linkedControlIds` column — control links use the `documentControlMapsTable` junction table (`documentId`, `controlId`). Only `documentTemplatesTable` and `generatedLogsTable` have `linkedControlIds` as a direct array column. Always query the junction table when getting control links for a document.

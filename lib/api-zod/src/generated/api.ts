@@ -2882,3 +2882,1330 @@ export const ListAuditLogsResponseItem = zod.object({
   timestamp: zod.coerce.date(),
 });
 export const ListAuditLogsResponse = zod.array(ListAuditLogsResponseItem);
+
+/**
+ * @summary List document templates
+ */
+export const ListDocumentTemplatesQueryParams = zod.object({
+  docType: zod.coerce.string().optional(),
+  search: zod.coerce.string().optional(),
+  cmmcLevel: zod.coerce.string().optional(),
+});
+
+export const ListDocumentTemplatesResponseItem = zod.object({
+  id: zod.string(),
+  title: zod.string(),
+  docType: zod.enum([
+    "policy",
+    "procedure",
+    "log",
+    "register",
+    "checklist",
+    "narrative",
+    "form",
+    "plan",
+  ]),
+  cmmcLevel: zod.enum(["L1", "L2", "both"]),
+  domainAbbr: zod.string().nullish(),
+  version: zod.string(),
+  ownerRole: zod.string(),
+  reviewFrequency: zod.enum([
+    "monthly",
+    "quarterly",
+    "semi_annually",
+    "annually",
+    "as_needed",
+  ]),
+  description: zod.string().nullish(),
+  bodyTemplate: zod.string(),
+  requiredFields: zod.array(zod.string()),
+  placeholders: zod.array(zod.string()),
+  linkedControlIds: zod.array(zod.string()),
+  requiresApproval: zod.boolean(),
+  isActive: zod.boolean(),
+  isSystemTemplate: zod.boolean(),
+  recurrenceRule: zod.string().nullish(),
+  checklistItems: zod
+    .array(
+      zod.object({
+        itemText: zod.string(),
+        description: zod.string().nullish(),
+        isRequired: zod.boolean().optional(),
+      }),
+    )
+    .nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListDocumentTemplatesResponse = zod.array(
+  ListDocumentTemplatesResponseItem,
+);
+
+/**
+ * @summary Create a document template
+ */
+export const CreateDocumentTemplateBody = zod.object({
+  title: zod.string(),
+  docType: zod.string(),
+  cmmcLevel: zod.string().optional(),
+  domainAbbr: zod.string().optional(),
+  ownerRole: zod.string().optional(),
+  reviewFrequency: zod.string().optional(),
+  description: zod.string().optional(),
+  bodyTemplate: zod.string(),
+  requiredFields: zod.array(zod.string()).optional(),
+  linkedControlIds: zod.array(zod.string()).optional(),
+  recurrenceRule: zod.string().optional(),
+  checklistItems: zod.array(zod.object({}).passthrough()).optional(),
+});
+
+/**
+ * @summary Get a document template by ID
+ */
+export const GetDocumentTemplateParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const GetDocumentTemplateResponse = zod.object({
+  id: zod.string(),
+  title: zod.string(),
+  docType: zod.enum([
+    "policy",
+    "procedure",
+    "log",
+    "register",
+    "checklist",
+    "narrative",
+    "form",
+    "plan",
+  ]),
+  cmmcLevel: zod.enum(["L1", "L2", "both"]),
+  domainAbbr: zod.string().nullish(),
+  version: zod.string(),
+  ownerRole: zod.string(),
+  reviewFrequency: zod.enum([
+    "monthly",
+    "quarterly",
+    "semi_annually",
+    "annually",
+    "as_needed",
+  ]),
+  description: zod.string().nullish(),
+  bodyTemplate: zod.string(),
+  requiredFields: zod.array(zod.string()),
+  placeholders: zod.array(zod.string()),
+  linkedControlIds: zod.array(zod.string()),
+  requiresApproval: zod.boolean(),
+  isActive: zod.boolean(),
+  isSystemTemplate: zod.boolean(),
+  recurrenceRule: zod.string().nullish(),
+  checklistItems: zod
+    .array(
+      zod.object({
+        itemText: zod.string(),
+        description: zod.string().nullish(),
+        isRequired: zod.boolean().optional(),
+      }),
+    )
+    .nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Update a document template
+ */
+export const UpdateDocumentTemplateParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const UpdateDocumentTemplateBody = zod.object({
+  title: zod.string().optional(),
+  bodyTemplate: zod.string().optional(),
+  description: zod.string().optional(),
+  isActive: zod.boolean().optional(),
+  linkedControlIds: zod.array(zod.string()).optional(),
+  checklistItems: zod.array(zod.object({}).passthrough()).optional(),
+});
+
+export const UpdateDocumentTemplateResponse = zod.object({
+  id: zod.string(),
+  title: zod.string(),
+  docType: zod.enum([
+    "policy",
+    "procedure",
+    "log",
+    "register",
+    "checklist",
+    "narrative",
+    "form",
+    "plan",
+  ]),
+  cmmcLevel: zod.enum(["L1", "L2", "both"]),
+  domainAbbr: zod.string().nullish(),
+  version: zod.string(),
+  ownerRole: zod.string(),
+  reviewFrequency: zod.enum([
+    "monthly",
+    "quarterly",
+    "semi_annually",
+    "annually",
+    "as_needed",
+  ]),
+  description: zod.string().nullish(),
+  bodyTemplate: zod.string(),
+  requiredFields: zod.array(zod.string()),
+  placeholders: zod.array(zod.string()),
+  linkedControlIds: zod.array(zod.string()),
+  requiresApproval: zod.boolean(),
+  isActive: zod.boolean(),
+  isSystemTemplate: zod.boolean(),
+  recurrenceRule: zod.string().nullish(),
+  checklistItems: zod
+    .array(
+      zod.object({
+        itemText: zod.string(),
+        description: zod.string().nullish(),
+        isRequired: zod.boolean().optional(),
+      }),
+    )
+    .nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary List documents
+ */
+export const ListDocumentsQueryParams = zod.object({
+  docType: zod.coerce.string().optional(),
+  status: zod.coerce.string().optional(),
+  controlId: zod.coerce.string().optional(),
+  search: zod.coerce.string().optional(),
+  dueForReview: zod.coerce.boolean().optional(),
+});
+
+export const ListDocumentsResponseItem = zod.object({
+  id: zod.string(),
+  templateId: zod.string().nullish(),
+  templateTitle: zod.string().nullish(),
+  title: zod.string(),
+  docType: zod.enum([
+    "policy",
+    "procedure",
+    "log",
+    "register",
+    "checklist",
+    "narrative",
+    "form",
+    "plan",
+  ]),
+  status: zod.enum([
+    "draft",
+    "pending_review",
+    "approved",
+    "active",
+    "needs_update",
+    "expired",
+    "superseded",
+    "archived",
+  ]),
+  cmmcLevel: zod.string(),
+  version: zod.string(),
+  organizationName: zod.string().nullish(),
+  systemName: zod.string().nullish(),
+  effectiveDate: zod.coerce.date().nullish(),
+  nextReviewDate: zod.coerce.date().nullish(),
+  expiresAt: zod.coerce.date().nullish(),
+  ownerId: zod.string(),
+  ownerName: zod.string().nullish(),
+  reviewerId: zod.string().nullish(),
+  reviewerName: zod.string().nullish(),
+  approverId: zod.string().nullish(),
+  approverName: zod.string().nullish(),
+  reviewedAt: zod.coerce.date().nullish(),
+  approvedAt: zod.coerce.date().nullish(),
+  activatedAt: zod.coerce.date().nullish(),
+  rejectionNotes: zod.string().nullish(),
+  reviewFrequency: zod.string(),
+  linkedControlIds: zod.array(zod.string()),
+  linkedControlLabels: zod.array(zod.string()),
+  isCurrentVersion: zod.boolean(),
+  previousVersionId: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListDocumentsResponse = zod.array(ListDocumentsResponseItem);
+
+/**
+ * @summary Generate a document from a template
+ */
+export const GenerateDocumentBody = zod.object({
+  templateId: zod.string(),
+  title: zod.string().optional(),
+  organizationName: zod.string().optional(),
+  systemName: zod.string().optional(),
+  policyOwner: zod.string().optional(),
+  reviewerId: zod.string().optional(),
+  effectiveDate: zod.coerce.date().optional(),
+  nextReviewDate: zod.coerce.date().optional(),
+  fieldValues: zod.object({}).passthrough().optional(),
+  linkedControlIds: zod.array(zod.string()).optional(),
+});
+
+/**
+ * @summary Get controls missing required documentation
+ */
+export const GetMissingDocumentationResponse = zod.object({
+  controlsMissingPolicy: zod.array(
+    zod.object({
+      controlId: zod.string(),
+      controlLabel: zod.string(),
+      domainName: zod.string(),
+    }),
+  ),
+  controlsMissingProcedure: zod.array(
+    zod.object({
+      controlId: zod.string(),
+      controlLabel: zod.string(),
+      domainName: zod.string(),
+    }),
+  ),
+  expiredDocuments: zod.array(
+    zod.object({
+      id: zod.string(),
+      templateId: zod.string().nullish(),
+      templateTitle: zod.string().nullish(),
+      title: zod.string(),
+      docType: zod.enum([
+        "policy",
+        "procedure",
+        "log",
+        "register",
+        "checklist",
+        "narrative",
+        "form",
+        "plan",
+      ]),
+      status: zod.enum([
+        "draft",
+        "pending_review",
+        "approved",
+        "active",
+        "needs_update",
+        "expired",
+        "superseded",
+        "archived",
+      ]),
+      cmmcLevel: zod.string(),
+      version: zod.string(),
+      organizationName: zod.string().nullish(),
+      systemName: zod.string().nullish(),
+      effectiveDate: zod.coerce.date().nullish(),
+      nextReviewDate: zod.coerce.date().nullish(),
+      expiresAt: zod.coerce.date().nullish(),
+      ownerId: zod.string(),
+      ownerName: zod.string().nullish(),
+      reviewerId: zod.string().nullish(),
+      reviewerName: zod.string().nullish(),
+      approverId: zod.string().nullish(),
+      approverName: zod.string().nullish(),
+      reviewedAt: zod.coerce.date().nullish(),
+      approvedAt: zod.coerce.date().nullish(),
+      activatedAt: zod.coerce.date().nullish(),
+      rejectionNotes: zod.string().nullish(),
+      reviewFrequency: zod.string(),
+      linkedControlIds: zod.array(zod.string()),
+      linkedControlLabels: zod.array(zod.string()),
+      isCurrentVersion: zod.boolean(),
+      previousVersionId: zod.string().nullish(),
+      createdAt: zod.coerce.date(),
+      updatedAt: zod.coerce.date(),
+    }),
+  ),
+  documentsNeedingReview: zod.array(
+    zod.object({
+      id: zod.string(),
+      templateId: zod.string().nullish(),
+      templateTitle: zod.string().nullish(),
+      title: zod.string(),
+      docType: zod.enum([
+        "policy",
+        "procedure",
+        "log",
+        "register",
+        "checklist",
+        "narrative",
+        "form",
+        "plan",
+      ]),
+      status: zod.enum([
+        "draft",
+        "pending_review",
+        "approved",
+        "active",
+        "needs_update",
+        "expired",
+        "superseded",
+        "archived",
+      ]),
+      cmmcLevel: zod.string(),
+      version: zod.string(),
+      organizationName: zod.string().nullish(),
+      systemName: zod.string().nullish(),
+      effectiveDate: zod.coerce.date().nullish(),
+      nextReviewDate: zod.coerce.date().nullish(),
+      expiresAt: zod.coerce.date().nullish(),
+      ownerId: zod.string(),
+      ownerName: zod.string().nullish(),
+      reviewerId: zod.string().nullish(),
+      reviewerName: zod.string().nullish(),
+      approverId: zod.string().nullish(),
+      approverName: zod.string().nullish(),
+      reviewedAt: zod.coerce.date().nullish(),
+      approvedAt: zod.coerce.date().nullish(),
+      activatedAt: zod.coerce.date().nullish(),
+      rejectionNotes: zod.string().nullish(),
+      reviewFrequency: zod.string(),
+      linkedControlIds: zod.array(zod.string()),
+      linkedControlLabels: zod.array(zod.string()),
+      isCurrentVersion: zod.boolean(),
+      previousVersionId: zod.string().nullish(),
+      createdAt: zod.coerce.date(),
+      updatedAt: zod.coerce.date(),
+    }),
+  ),
+  pendingApproval: zod.array(
+    zod.object({
+      id: zod.string(),
+      templateId: zod.string().nullish(),
+      templateTitle: zod.string().nullish(),
+      title: zod.string(),
+      docType: zod.enum([
+        "policy",
+        "procedure",
+        "log",
+        "register",
+        "checklist",
+        "narrative",
+        "form",
+        "plan",
+      ]),
+      status: zod.enum([
+        "draft",
+        "pending_review",
+        "approved",
+        "active",
+        "needs_update",
+        "expired",
+        "superseded",
+        "archived",
+      ]),
+      cmmcLevel: zod.string(),
+      version: zod.string(),
+      organizationName: zod.string().nullish(),
+      systemName: zod.string().nullish(),
+      effectiveDate: zod.coerce.date().nullish(),
+      nextReviewDate: zod.coerce.date().nullish(),
+      expiresAt: zod.coerce.date().nullish(),
+      ownerId: zod.string(),
+      ownerName: zod.string().nullish(),
+      reviewerId: zod.string().nullish(),
+      reviewerName: zod.string().nullish(),
+      approverId: zod.string().nullish(),
+      approverName: zod.string().nullish(),
+      reviewedAt: zod.coerce.date().nullish(),
+      approvedAt: zod.coerce.date().nullish(),
+      activatedAt: zod.coerce.date().nullish(),
+      rejectionNotes: zod.string().nullish(),
+      reviewFrequency: zod.string(),
+      linkedControlIds: zod.array(zod.string()),
+      linkedControlLabels: zod.array(zod.string()),
+      isCurrentVersion: zod.boolean(),
+      previousVersionId: zod.string().nullish(),
+      createdAt: zod.coerce.date(),
+      updatedAt: zod.coerce.date(),
+    }),
+  ),
+  totalMissingPolicies: zod.number(),
+  totalMissingProcedures: zod.number(),
+  totalExpired: zod.number(),
+  totalNeedingReview: zod.number(),
+  totalPendingApproval: zod.number(),
+});
+
+/**
+ * @summary Get document by ID
+ */
+export const GetDocumentParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const GetDocumentResponse = zod
+  .object({
+    id: zod.string(),
+    templateId: zod.string().nullish(),
+    templateTitle: zod.string().nullish(),
+    title: zod.string(),
+    docType: zod.enum([
+      "policy",
+      "procedure",
+      "log",
+      "register",
+      "checklist",
+      "narrative",
+      "form",
+      "plan",
+    ]),
+    status: zod.enum([
+      "draft",
+      "pending_review",
+      "approved",
+      "active",
+      "needs_update",
+      "expired",
+      "superseded",
+      "archived",
+    ]),
+    cmmcLevel: zod.string(),
+    version: zod.string(),
+    organizationName: zod.string().nullish(),
+    systemName: zod.string().nullish(),
+    effectiveDate: zod.coerce.date().nullish(),
+    nextReviewDate: zod.coerce.date().nullish(),
+    expiresAt: zod.coerce.date().nullish(),
+    ownerId: zod.string(),
+    ownerName: zod.string().nullish(),
+    reviewerId: zod.string().nullish(),
+    reviewerName: zod.string().nullish(),
+    approverId: zod.string().nullish(),
+    approverName: zod.string().nullish(),
+    reviewedAt: zod.coerce.date().nullish(),
+    approvedAt: zod.coerce.date().nullish(),
+    activatedAt: zod.coerce.date().nullish(),
+    rejectionNotes: zod.string().nullish(),
+    reviewFrequency: zod.string(),
+    linkedControlIds: zod.array(zod.string()),
+    linkedControlLabels: zod.array(zod.string()),
+    isCurrentVersion: zod.boolean(),
+    previousVersionId: zod.string().nullish(),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date(),
+  })
+  .and(
+    zod.object({
+      body: zod.string().optional(),
+      fieldValues: zod.object({}).passthrough().optional(),
+      internalNotes: zod.string().nullish(),
+      comments: zod.string().nullish(),
+      versionHistory: zod
+        .array(
+          zod.object({
+            id: zod.string(),
+            documentId: zod.string(),
+            version: zod.string(),
+            status: zod.string(),
+            changedByName: zod.string().nullish(),
+            changeNotes: zod.string().nullish(),
+            createdAt: zod.coerce.date(),
+          }),
+        )
+        .optional(),
+      reviews: zod
+        .array(
+          zod.object({
+            id: zod.string(),
+            documentId: zod.string(),
+            reviewerId: zod.string(),
+            reviewerName: zod.string().nullish(),
+            action: zod.string(),
+            notes: zod.string().nullish(),
+            version: zod.string().nullish(),
+            reviewedAt: zod.coerce.date(),
+          }),
+        )
+        .optional(),
+    }),
+  );
+
+/**
+ * @summary Update a document
+ */
+export const UpdateDocumentParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const UpdateDocumentBody = zod.object({
+  title: zod.string().optional(),
+  body: zod.string().optional(),
+  organizationName: zod.string().optional(),
+  systemName: zod.string().optional(),
+  reviewerId: zod.string().optional(),
+  nextReviewDate: zod.coerce.date().optional(),
+  internalNotes: zod.string().optional(),
+  comments: zod.string().optional(),
+  fieldValues: zod.object({}).passthrough().optional(),
+  linkedControlIds: zod.array(zod.string()).optional(),
+});
+
+export const UpdateDocumentResponse = zod.object({
+  id: zod.string(),
+  templateId: zod.string().nullish(),
+  templateTitle: zod.string().nullish(),
+  title: zod.string(),
+  docType: zod.enum([
+    "policy",
+    "procedure",
+    "log",
+    "register",
+    "checklist",
+    "narrative",
+    "form",
+    "plan",
+  ]),
+  status: zod.enum([
+    "draft",
+    "pending_review",
+    "approved",
+    "active",
+    "needs_update",
+    "expired",
+    "superseded",
+    "archived",
+  ]),
+  cmmcLevel: zod.string(),
+  version: zod.string(),
+  organizationName: zod.string().nullish(),
+  systemName: zod.string().nullish(),
+  effectiveDate: zod.coerce.date().nullish(),
+  nextReviewDate: zod.coerce.date().nullish(),
+  expiresAt: zod.coerce.date().nullish(),
+  ownerId: zod.string(),
+  ownerName: zod.string().nullish(),
+  reviewerId: zod.string().nullish(),
+  reviewerName: zod.string().nullish(),
+  approverId: zod.string().nullish(),
+  approverName: zod.string().nullish(),
+  reviewedAt: zod.coerce.date().nullish(),
+  approvedAt: zod.coerce.date().nullish(),
+  activatedAt: zod.coerce.date().nullish(),
+  rejectionNotes: zod.string().nullish(),
+  reviewFrequency: zod.string(),
+  linkedControlIds: zod.array(zod.string()),
+  linkedControlLabels: zod.array(zod.string()),
+  isCurrentVersion: zod.boolean(),
+  previousVersionId: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Submit document for review
+ */
+export const SubmitDocumentForReviewParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const SubmitDocumentForReviewBody = zod.object({
+  reviewerId: zod.string(),
+  notes: zod.string().optional(),
+});
+
+export const SubmitDocumentForReviewResponse = zod.object({
+  id: zod.string(),
+  templateId: zod.string().nullish(),
+  templateTitle: zod.string().nullish(),
+  title: zod.string(),
+  docType: zod.enum([
+    "policy",
+    "procedure",
+    "log",
+    "register",
+    "checklist",
+    "narrative",
+    "form",
+    "plan",
+  ]),
+  status: zod.enum([
+    "draft",
+    "pending_review",
+    "approved",
+    "active",
+    "needs_update",
+    "expired",
+    "superseded",
+    "archived",
+  ]),
+  cmmcLevel: zod.string(),
+  version: zod.string(),
+  organizationName: zod.string().nullish(),
+  systemName: zod.string().nullish(),
+  effectiveDate: zod.coerce.date().nullish(),
+  nextReviewDate: zod.coerce.date().nullish(),
+  expiresAt: zod.coerce.date().nullish(),
+  ownerId: zod.string(),
+  ownerName: zod.string().nullish(),
+  reviewerId: zod.string().nullish(),
+  reviewerName: zod.string().nullish(),
+  approverId: zod.string().nullish(),
+  approverName: zod.string().nullish(),
+  reviewedAt: zod.coerce.date().nullish(),
+  approvedAt: zod.coerce.date().nullish(),
+  activatedAt: zod.coerce.date().nullish(),
+  rejectionNotes: zod.string().nullish(),
+  reviewFrequency: zod.string(),
+  linkedControlIds: zod.array(zod.string()),
+  linkedControlLabels: zod.array(zod.string()),
+  isCurrentVersion: zod.boolean(),
+  previousVersionId: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Approve a document
+ */
+export const ApproveDocumentParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ApproveDocumentBody = zod.object({
+  notes: zod.string().optional(),
+});
+
+export const ApproveDocumentResponse = zod.object({
+  id: zod.string(),
+  templateId: zod.string().nullish(),
+  templateTitle: zod.string().nullish(),
+  title: zod.string(),
+  docType: zod.enum([
+    "policy",
+    "procedure",
+    "log",
+    "register",
+    "checklist",
+    "narrative",
+    "form",
+    "plan",
+  ]),
+  status: zod.enum([
+    "draft",
+    "pending_review",
+    "approved",
+    "active",
+    "needs_update",
+    "expired",
+    "superseded",
+    "archived",
+  ]),
+  cmmcLevel: zod.string(),
+  version: zod.string(),
+  organizationName: zod.string().nullish(),
+  systemName: zod.string().nullish(),
+  effectiveDate: zod.coerce.date().nullish(),
+  nextReviewDate: zod.coerce.date().nullish(),
+  expiresAt: zod.coerce.date().nullish(),
+  ownerId: zod.string(),
+  ownerName: zod.string().nullish(),
+  reviewerId: zod.string().nullish(),
+  reviewerName: zod.string().nullish(),
+  approverId: zod.string().nullish(),
+  approverName: zod.string().nullish(),
+  reviewedAt: zod.coerce.date().nullish(),
+  approvedAt: zod.coerce.date().nullish(),
+  activatedAt: zod.coerce.date().nullish(),
+  rejectionNotes: zod.string().nullish(),
+  reviewFrequency: zod.string(),
+  linkedControlIds: zod.array(zod.string()),
+  linkedControlLabels: zod.array(zod.string()),
+  isCurrentVersion: zod.boolean(),
+  previousVersionId: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Reject a document
+ */
+export const RejectDocumentParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const RejectDocumentBody = zod.object({
+  rejectionNotes: zod.string(),
+});
+
+export const RejectDocumentResponse = zod.object({
+  id: zod.string(),
+  templateId: zod.string().nullish(),
+  templateTitle: zod.string().nullish(),
+  title: zod.string(),
+  docType: zod.enum([
+    "policy",
+    "procedure",
+    "log",
+    "register",
+    "checklist",
+    "narrative",
+    "form",
+    "plan",
+  ]),
+  status: zod.enum([
+    "draft",
+    "pending_review",
+    "approved",
+    "active",
+    "needs_update",
+    "expired",
+    "superseded",
+    "archived",
+  ]),
+  cmmcLevel: zod.string(),
+  version: zod.string(),
+  organizationName: zod.string().nullish(),
+  systemName: zod.string().nullish(),
+  effectiveDate: zod.coerce.date().nullish(),
+  nextReviewDate: zod.coerce.date().nullish(),
+  expiresAt: zod.coerce.date().nullish(),
+  ownerId: zod.string(),
+  ownerName: zod.string().nullish(),
+  reviewerId: zod.string().nullish(),
+  reviewerName: zod.string().nullish(),
+  approverId: zod.string().nullish(),
+  approverName: zod.string().nullish(),
+  reviewedAt: zod.coerce.date().nullish(),
+  approvedAt: zod.coerce.date().nullish(),
+  activatedAt: zod.coerce.date().nullish(),
+  rejectionNotes: zod.string().nullish(),
+  reviewFrequency: zod.string(),
+  linkedControlIds: zod.array(zod.string()),
+  linkedControlLabels: zod.array(zod.string()),
+  isCurrentVersion: zod.boolean(),
+  previousVersionId: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Activate an approved document
+ */
+export const ActivateDocumentParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ActivateDocumentBody = zod.object({
+  notes: zod.string().optional(),
+});
+
+export const ActivateDocumentResponse = zod.object({
+  id: zod.string(),
+  templateId: zod.string().nullish(),
+  templateTitle: zod.string().nullish(),
+  title: zod.string(),
+  docType: zod.enum([
+    "policy",
+    "procedure",
+    "log",
+    "register",
+    "checklist",
+    "narrative",
+    "form",
+    "plan",
+  ]),
+  status: zod.enum([
+    "draft",
+    "pending_review",
+    "approved",
+    "active",
+    "needs_update",
+    "expired",
+    "superseded",
+    "archived",
+  ]),
+  cmmcLevel: zod.string(),
+  version: zod.string(),
+  organizationName: zod.string().nullish(),
+  systemName: zod.string().nullish(),
+  effectiveDate: zod.coerce.date().nullish(),
+  nextReviewDate: zod.coerce.date().nullish(),
+  expiresAt: zod.coerce.date().nullish(),
+  ownerId: zod.string(),
+  ownerName: zod.string().nullish(),
+  reviewerId: zod.string().nullish(),
+  reviewerName: zod.string().nullish(),
+  approverId: zod.string().nullish(),
+  approverName: zod.string().nullish(),
+  reviewedAt: zod.coerce.date().nullish(),
+  approvedAt: zod.coerce.date().nullish(),
+  activatedAt: zod.coerce.date().nullish(),
+  rejectionNotes: zod.string().nullish(),
+  reviewFrequency: zod.string(),
+  linkedControlIds: zod.array(zod.string()),
+  linkedControlLabels: zod.array(zod.string()),
+  isCurrentVersion: zod.boolean(),
+  previousVersionId: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Archive a document
+ */
+export const ArchiveDocumentParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ArchiveDocumentBody = zod.object({
+  notes: zod.string().optional(),
+});
+
+export const ArchiveDocumentResponse = zod.object({
+  id: zod.string(),
+  templateId: zod.string().nullish(),
+  templateTitle: zod.string().nullish(),
+  title: zod.string(),
+  docType: zod.enum([
+    "policy",
+    "procedure",
+    "log",
+    "register",
+    "checklist",
+    "narrative",
+    "form",
+    "plan",
+  ]),
+  status: zod.enum([
+    "draft",
+    "pending_review",
+    "approved",
+    "active",
+    "needs_update",
+    "expired",
+    "superseded",
+    "archived",
+  ]),
+  cmmcLevel: zod.string(),
+  version: zod.string(),
+  organizationName: zod.string().nullish(),
+  systemName: zod.string().nullish(),
+  effectiveDate: zod.coerce.date().nullish(),
+  nextReviewDate: zod.coerce.date().nullish(),
+  expiresAt: zod.coerce.date().nullish(),
+  ownerId: zod.string(),
+  ownerName: zod.string().nullish(),
+  reviewerId: zod.string().nullish(),
+  reviewerName: zod.string().nullish(),
+  approverId: zod.string().nullish(),
+  approverName: zod.string().nullish(),
+  reviewedAt: zod.coerce.date().nullish(),
+  approvedAt: zod.coerce.date().nullish(),
+  activatedAt: zod.coerce.date().nullish(),
+  rejectionNotes: zod.string().nullish(),
+  reviewFrequency: zod.string(),
+  linkedControlIds: zod.array(zod.string()),
+  linkedControlLabels: zod.array(zod.string()),
+  isCurrentVersion: zod.boolean(),
+  previousVersionId: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Get version history of a document
+ */
+export const GetDocumentVersionsParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const GetDocumentVersionsResponseItem = zod.object({
+  id: zod.string(),
+  documentId: zod.string(),
+  version: zod.string(),
+  status: zod.string(),
+  changedByName: zod.string().nullish(),
+  changeNotes: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+export const GetDocumentVersionsResponse = zod.array(
+  GetDocumentVersionsResponseItem,
+);
+
+/**
+ * @summary List generated compliance logs
+ */
+export const ListDocumentLogsQueryParams = zod.object({
+  status: zod.coerce.string().optional(),
+  templateId: zod.coerce.string().optional(),
+  search: zod.coerce.string().optional(),
+});
+
+export const ListDocumentLogsResponseItem = zod.object({
+  id: zod.string(),
+  templateId: zod.string().nullish(),
+  templateTitle: zod.string().nullish(),
+  title: zod.string(),
+  periodStart: zod.coerce.date().nullish(),
+  periodEnd: zod.coerce.date().nullish(),
+  status: zod.enum([
+    "draft",
+    "pending_review",
+    "approved",
+    "active",
+    "needs_update",
+    "expired",
+    "superseded",
+    "archived",
+  ]),
+  responsibleUserId: zod.string().nullish(),
+  responsibleUserName: zod.string().nullish(),
+  reviewerId: zod.string().nullish(),
+  reviewerName: zod.string().nullish(),
+  completionNotes: zod.string().nullish(),
+  reviewedAt: zod.coerce.date().nullish(),
+  approvedAt: zod.coerce.date().nullish(),
+  generatedEvidenceId: zod.string().nullish(),
+  linkedControlIds: zod.array(zod.string()),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListDocumentLogsResponse = zod.array(ListDocumentLogsResponseItem);
+
+/**
+ * @summary Generate a new log instance from a template
+ */
+export const GenerateLogBody = zod.object({
+  templateId: zod.string(),
+  title: zod.string().optional(),
+  periodStart: zod.coerce.date().optional(),
+  periodEnd: zod.coerce.date().optional(),
+  responsibleUserId: zod.string().optional(),
+  linkedControlIds: zod.array(zod.string()).optional(),
+  fieldValues: zod.object({}).passthrough().optional(),
+});
+
+/**
+ * @summary Get a generated log by ID
+ */
+export const GetDocumentLogParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const GetDocumentLogResponse = zod
+  .object({
+    id: zod.string(),
+    templateId: zod.string().nullish(),
+    templateTitle: zod.string().nullish(),
+    title: zod.string(),
+    periodStart: zod.coerce.date().nullish(),
+    periodEnd: zod.coerce.date().nullish(),
+    status: zod.enum([
+      "draft",
+      "pending_review",
+      "approved",
+      "active",
+      "needs_update",
+      "expired",
+      "superseded",
+      "archived",
+    ]),
+    responsibleUserId: zod.string().nullish(),
+    responsibleUserName: zod.string().nullish(),
+    reviewerId: zod.string().nullish(),
+    reviewerName: zod.string().nullish(),
+    completionNotes: zod.string().nullish(),
+    reviewedAt: zod.coerce.date().nullish(),
+    approvedAt: zod.coerce.date().nullish(),
+    generatedEvidenceId: zod.string().nullish(),
+    linkedControlIds: zod.array(zod.string()),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date(),
+  })
+  .and(
+    zod.object({
+      fieldValues: zod.object({}).passthrough().optional(),
+      entries: zod
+        .array(
+          zod.object({
+            id: zod.string(),
+            entryText: zod.string(),
+            entryType: zod.string(),
+            isCompleted: zod.boolean(),
+            notes: zod.string().nullish(),
+            sortOrder: zod.number(),
+          }),
+        )
+        .optional(),
+    }),
+  );
+
+/**
+ * @summary Update a generated log
+ */
+export const UpdateDocumentLogParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const UpdateDocumentLogBody = zod.object({
+  completionNotes: zod.string().optional(),
+  fieldValues: zod.object({}).passthrough().optional(),
+  entries: zod.array(zod.object({}).passthrough()).optional(),
+});
+
+export const UpdateDocumentLogResponse = zod.object({
+  id: zod.string(),
+  templateId: zod.string().nullish(),
+  templateTitle: zod.string().nullish(),
+  title: zod.string(),
+  periodStart: zod.coerce.date().nullish(),
+  periodEnd: zod.coerce.date().nullish(),
+  status: zod.enum([
+    "draft",
+    "pending_review",
+    "approved",
+    "active",
+    "needs_update",
+    "expired",
+    "superseded",
+    "archived",
+  ]),
+  responsibleUserId: zod.string().nullish(),
+  responsibleUserName: zod.string().nullish(),
+  reviewerId: zod.string().nullish(),
+  reviewerName: zod.string().nullish(),
+  completionNotes: zod.string().nullish(),
+  reviewedAt: zod.coerce.date().nullish(),
+  approvedAt: zod.coerce.date().nullish(),
+  generatedEvidenceId: zod.string().nullish(),
+  linkedControlIds: zod.array(zod.string()),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Mark a log as complete and generate evidence
+ */
+export const CompleteDocumentLogParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const CompleteDocumentLogBody = zod.object({
+  completionNotes: zod.string(),
+  entries: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        isCompleted: zod.boolean(),
+        notes: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  generateEvidence: zod.boolean().optional(),
+});
+
+export const CompleteDocumentLogResponse = zod.object({
+  id: zod.string(),
+  templateId: zod.string().nullish(),
+  templateTitle: zod.string().nullish(),
+  title: zod.string(),
+  periodStart: zod.coerce.date().nullish(),
+  periodEnd: zod.coerce.date().nullish(),
+  status: zod.enum([
+    "draft",
+    "pending_review",
+    "approved",
+    "active",
+    "needs_update",
+    "expired",
+    "superseded",
+    "archived",
+  ]),
+  responsibleUserId: zod.string().nullish(),
+  responsibleUserName: zod.string().nullish(),
+  reviewerId: zod.string().nullish(),
+  reviewerName: zod.string().nullish(),
+  completionNotes: zod.string().nullish(),
+  reviewedAt: zod.coerce.date().nullish(),
+  approvedAt: zod.coerce.date().nullish(),
+  generatedEvidenceId: zod.string().nullish(),
+  linkedControlIds: zod.array(zod.string()),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Approve a completed log
+ */
+export const ApproveDocumentLogParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ApproveDocumentLogBody = zod.object({
+  notes: zod.string().optional(),
+});
+
+export const ApproveDocumentLogResponse = zod.object({
+  id: zod.string(),
+  templateId: zod.string().nullish(),
+  templateTitle: zod.string().nullish(),
+  title: zod.string(),
+  periodStart: zod.coerce.date().nullish(),
+  periodEnd: zod.coerce.date().nullish(),
+  status: zod.enum([
+    "draft",
+    "pending_review",
+    "approved",
+    "active",
+    "needs_update",
+    "expired",
+    "superseded",
+    "archived",
+  ]),
+  responsibleUserId: zod.string().nullish(),
+  responsibleUserName: zod.string().nullish(),
+  reviewerId: zod.string().nullish(),
+  reviewerName: zod.string().nullish(),
+  completionNotes: zod.string().nullish(),
+  reviewedAt: zod.coerce.date().nullish(),
+  approvedAt: zod.coerce.date().nullish(),
+  generatedEvidenceId: zod.string().nullish(),
+  linkedControlIds: zod.array(zod.string()),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary List checklist templates
+ */
+export const ListChecklistsResponseItem = zod.object({
+  id: zod.string(),
+  title: zod.string(),
+  docType: zod.string(),
+  description: zod.string().nullish(),
+  linkedControlIds: zod.array(zod.string()),
+  items: zod.array(
+    zod.object({
+      id: zod.string(),
+      itemText: zod.string(),
+      description: zod.string().nullish(),
+      isRequired: zod.boolean(),
+      sortOrder: zod.number(),
+    }),
+  ),
+  createdAt: zod.coerce.date(),
+});
+export const ListChecklistsResponse = zod.array(ListChecklistsResponseItem);
+
+/**
+ * @summary Complete a checklist and generate evidence
+ */
+export const CompleteChecklistParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const CompleteChecklistBody = zod.object({
+  title: zod.string(),
+  notes: zod.string().optional(),
+  itemResults: zod.array(
+    zod.object({
+      itemId: zod.string(),
+      isCompleted: zod.boolean(),
+      notes: zod.string().optional(),
+    }),
+  ),
+  generateEvidence: zod.boolean().optional(),
+});
+
+export const CompleteChecklistResponse = zod.object({
+  id: zod.string(),
+  templateId: zod.string(),
+  title: zod.string(),
+  completedById: zod.string(),
+  completedByName: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  itemResults: zod.array(zod.object({}).passthrough()).optional(),
+  generatedEvidenceId: zod.string().nullish(),
+  linkedControlIds: zod.array(zod.string()),
+  completedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Get documentation automation status summary
+ */
+export const GetDocAutomationStatusResponse = zod.object({
+  totalDocuments: zod.number(),
+  totalActive: zod.number(),
+  totalDraft: zod.number(),
+  totalPendingReview: zod.number(),
+  totalExpired: zod.number(),
+  totalNeedsUpdate: zod.number(),
+  totalTemplates: zod.number(),
+  controlsMissingPolicy: zod.number(),
+  controlsMissingProcedure: zod.number(),
+  logsCompletedThisMonth: zod.number(),
+  logsDue: zod.number(),
+  checklistsCompleted: zod.number(),
+  recentDocuments: zod.array(
+    zod.object({
+      id: zod.string(),
+      templateId: zod.string().nullish(),
+      templateTitle: zod.string().nullish(),
+      title: zod.string(),
+      docType: zod.enum([
+        "policy",
+        "procedure",
+        "log",
+        "register",
+        "checklist",
+        "narrative",
+        "form",
+        "plan",
+      ]),
+      status: zod.enum([
+        "draft",
+        "pending_review",
+        "approved",
+        "active",
+        "needs_update",
+        "expired",
+        "superseded",
+        "archived",
+      ]),
+      cmmcLevel: zod.string(),
+      version: zod.string(),
+      organizationName: zod.string().nullish(),
+      systemName: zod.string().nullish(),
+      effectiveDate: zod.coerce.date().nullish(),
+      nextReviewDate: zod.coerce.date().nullish(),
+      expiresAt: zod.coerce.date().nullish(),
+      ownerId: zod.string(),
+      ownerName: zod.string().nullish(),
+      reviewerId: zod.string().nullish(),
+      reviewerName: zod.string().nullish(),
+      approverId: zod.string().nullish(),
+      approverName: zod.string().nullish(),
+      reviewedAt: zod.coerce.date().nullish(),
+      approvedAt: zod.coerce.date().nullish(),
+      activatedAt: zod.coerce.date().nullish(),
+      rejectionNotes: zod.string().nullish(),
+      reviewFrequency: zod.string(),
+      linkedControlIds: zod.array(zod.string()),
+      linkedControlLabels: zod.array(zod.string()),
+      isCurrentVersion: zod.boolean(),
+      previousVersionId: zod.string().nullish(),
+      createdAt: zod.coerce.date(),
+      updatedAt: zod.coerce.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary Run automated documentation checks (expire, generate tasks)
+ */
+export const RunDocChecksBody = zod.object({}).passthrough();
+
+export const RunDocChecksResponse = zod.object({
+  expiredDocuments: zod.number(),
+  tasksGenerated: zod.number(),
+  documentsMarkedNeedsUpdate: zod.number(),
+  message: zod.string(),
+});

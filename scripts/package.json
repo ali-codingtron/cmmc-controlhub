@@ -6,6 +6,7 @@
   "scripts": {
     "hello": "tsx ./src/hello.ts",
     "seed-cmmc": "tsx ./src/seed-cmmc.ts",
+    "seed-doc-templates": "tsx ./src/seed-document-templates.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
