@@ -1,0 +1,459 @@
+You are a senior product architect, compliance engineer, and full-stack SaaS builder. I want you to help me design and then iteratively build an application that helps a small business achieve and maintain CMMC Level 1 and Level 2 compliance readiness.
+
+Your job is to act like a product owner, security architect, UX designer, database designer, and implementation lead all at once.
+
+I do NOT want a vague answer. I want a concrete, implementation-ready blueprint for an app that I could actually build.
+
+## Primary Goal
+
+Design an application that lets me:
+
+1. Track CMMC compliance progress visually with dashboards
+2. Maintain a structured evidence and document repository
+3. Tag every document, screenshot, log, policy, procedure, and artifact properly
+4. Map evidence to CMMC practices / control numbers / domains / assessment objectives
+5. Present everything clearly to a C3PAO assessor
+6. Automate as much recurring compliance work as possible
+7. Generate reminders for required periodic reviews, procedures, attestations, and evidence refreshes
+8. Maintain an audit trail showing who uploaded, reviewed, approved, or changed evidence
+9. Make it easy to prove implementation, not just store files
+10. Support ongoing compliance operations, not just one-time certification prep
+
+## Important Context
+
+Assume I need a practical compliance operations platform focused on CMMC L1 and L2 readiness and evidence management.
+
+The app should be built around these realities:
+
+- Assessors need to find documentation quickly
+- Evidence needs metadata and traceability
+- Policies, procedures, screenshots, logs, tickets, exports, and system settings all need to be tied to the right controls
+- Some controls need recurring review cycles
+- Evidence can expire or become stale
+- There needs to be clear status tracking such as not started / in progress / implemented / needs review / assessor-ready
+- I need dashboards to show overall progress, domain-level progress, control-level progress, overdue items, missing evidence, stale evidence, and upcoming reviews
+- I need reminders and workflows for recurring tasks
+- I need a clean way to show all evidence for a specific control to an assessor
+- I need a clean way to show the whole system security posture at a glance
+
+## What I Want From You
+
+I want you to produce a full product blueprint with the following sections.
+
+### 1. Product Vision
+Describe the app in plain business language:
+- what it does
+- who uses it
+- why it is better than a shared drive and spreadsheets
+- how it helps during a C3PAO assessment
+- how it helps between assessments
+
+### 2. Core User Roles
+Define detailed user roles and permissions, such as:
+- System Owner
+- Compliance Manager
+- Security Officer
+- IT Administrator
+- Evidence Contributor
+- Internal Reviewer
+- Executive Viewer
+- External Assessor / C3PAO Read-Only Portal User
+
+For each role, explain:
+- what they can see
+- what they can edit
+- what they can approve
+- what they can export
+- what they can assign
+
+### 3. Compliance Data Model
+Design the core data model and entities for the app.
+
+I want a detailed schema for objects such as:
+- Organizations
+- Users
+- Roles
+- CMMC Levels
+- Security Domains
+- Controls / Practices
+- Assessment Objectives
+- Evidence Items
+- Documents
+- Screenshots
+- Logs
+- Policies
+- Procedures
+- Tasks
+- Review Schedules
+- Reminders
+- Findings / Gaps
+- POA&M Items
+- Comments
+- Audit Trail Entries
+- Approval Records
+- System Inventory
+- Asset Inventory
+- Suppliers / External Service Providers
+- Training Records
+- Incidents
+- Risks
+- Exceptions / Compensating Controls
+- Assessment Packages
+
+For each entity, define:
+- required fields
+- optional fields
+- suggested status values
+- relationships to other entities
+- timestamps
+- owner / reviewer / approver fields
+- retention / expiration concepts where relevant
+
+### 4. Evidence Repository Design
+Design the document and evidence repository in detail.
+
+I need a repository that can classify and label artifacts with metadata such as:
+- title
+- evidence type
+- source system
+- control number
+- CMMC level
+- security domain
+- assessment objective
+- implementation statement
+- owner
+- reviewer
+- approver
+- collection date
+- review date
+- expiration date
+- version
+- confidentiality classification
+- system / asset / location
+- related policy / related procedure
+- related ticket / related incident / related change
+- tags
+- notes
+- assessor-facing summary
+
+Explain:
+- folderless metadata-driven repository design
+- how tagging should work
+- how versioning should work
+- how to prevent duplicate or orphaned evidence
+- how to mark evidence as current, stale, superseded, rejected, draft, approved, assessor-ready
+- how an assessor should browse evidence by control or domain
+
+### 5. Dashboard Requirements
+Define a complete dashboard strategy.
+
+I want specific dashboard widgets and views, such as:
+- overall CMMC readiness score
+- readiness by level
+- readiness by domain
+- readiness by control
+- missing evidence
+- stale evidence
+- overdue reviews
+- upcoming reviews due in 7 / 30 / 60 days
+- open POA&M items
+- evidence awaiting approval
+- controls with insufficient coverage
+- controls with no linked procedure
+- controls with no linked evidence
+- assessor-ready package completion
+- recent activity feed
+- monthly compliance operations summary
+
+For each dashboard, define:
+- purpose
+- audience
+- KPI definitions
+- filters
+- drill-down behavior
+
+### 6. Workflow Automation
+I need maximum automation.
+
+Design workflows for:
+- evidence collection
+- evidence review
+- evidence approval
+- recurring control review
+- periodic procedure review
+- log review reminders
+- user access review reminders
+- policy review reminders
+- backup review reminders
+- incident review reminders
+- training renewal reminders
+- stale evidence detection
+- gap finding creation
+- POA&M creation from failed controls
+- recurring task generation
+- escalation when tasks become overdue
+- evidence expiration notifications
+- assessor package assembly
+
+For each workflow, define:
+- trigger
+- conditions
+- actions
+- notifications
+- escalation path
+- completion criteria
+- audit trail output
+
+### 7. Assessor Experience
+Design a special C3PAO assessor-facing experience.
+
+I want the app to make an assessor’s job easy.
+
+Define:
+- read-only assessor portal
+- evidence package per control
+- domain-based navigation
+- search by control number / keyword / document title / artifact type
+- assessor notes capability
+- evidence summary pages
+- control narrative pages
+- interview / observation / examination support
+- exportable package for each control
+- exportable package for whole assessment
+- chronological evidence timeline
+- proof that recurring reviews happened on schedule
+- chain of custody / who uploaded and approved evidence
+
+Include sample UI flows showing how an assessor would:
+1. open a control
+2. review implementation narrative
+3. see linked policies and procedures
+4. review screenshots and logs
+5. verify review cadence
+6. see approvals and timestamps
+7. export the package
+
+### 8. UX / UI Requirements
+Design a clean, enterprise-style UX.
+
+I want:
+- left nav with domains / controls / repository / tasks / dashboards / assessor portal / settings
+- strong search
+- saved filters
+- evidence cards and detail pages
+- timeline views
+- kanban and table views for tasks
+- visual status indicators
+- minimal clicks to get from control to evidence
+- mobile-friendly reminders view
+- executive summary view
+- assessor-specific navigation mode
+
+Give a recommended information architecture and screen list.
+
+### 9. Technical Architecture
+Recommend the technical architecture for this app.
+
+Include:
+- frontend stack
+- backend stack
+- database choice
+- file/object storage
+- search/indexing engine
+- background job system
+- notification system
+- authentication / RBAC
+- audit logging architecture
+- API structure
+- reporting/export engine
+- deployment model
+- tenant model if applicable
+- security controls for the app itself
+
+Prefer practical technologies suitable for a modern web app.
+
+### 10. Integrations
+Recommend integrations that would add automation value.
+
+Potential examples:
+- Microsoft 365 / Entra ID
+- SharePoint / OneDrive
+- Google Workspace
+- Jira / ticketing systems
+- PSA / RMM tools
+- SIEM / log sources
+- endpoint protection tools
+- vulnerability scanners
+- HR / training systems
+- email / calendar reminders
+- e-signature for approvals
+
+For each integration, explain:
+- what data to pull
+- what controls it supports
+- whether sync should be manual, scheduled, or event-driven
+- risks / limitations
+
+### 11. Notification and Reminder Engine
+Design a reminder engine for compliance operations.
+
+I need the system to detect when recurring actions have not been done and notify the right person.
+
+Examples:
+- “Monthly access review has not been completed”
+- “Policy review is due in 14 days”
+- “Evidence for control AC.L2-3.1.1 is stale”
+- “No approved artifact exists for this control”
+- “Firewall log review overdue by 5 days”
+
+Define:
+- reminder rules
+- recurrence patterns
+- grace periods
+- escalation rules
+- snooze behavior
+- proof-of-completion logic
+- dashboard surfacing
+- email / in-app / optional SMS notification strategy
+
+### 12. Compliance Logic
+Define how the app should determine and display status.
+
+I want a rules engine or logic model for determining:
+- whether a control is implemented
+- whether a control is only partially supported
+- whether evidence is sufficient
+- whether evidence is stale
+- whether a control is assessor-ready
+- whether a domain is green / yellow / red
+- how POA&M items affect readiness
+- how missing procedures affect readiness
+- how overdue reviews affect readiness
+
+Be explicit and practical.
+
+### 13. Reporting and Exports
+Define the reports this app should produce.
+
+I want reports such as:
+- executive readiness report
+- domain readiness report
+- control evidence report
+- stale evidence report
+- overdue activity report
+- POA&M report
+- assessor-ready package
+- evidence inventory report
+- audit trail report
+- review completion history
+- user accountability report
+
+For each report, define:
+- audience
+- fields
+- filters
+- export format
+- frequency / generation options
+
+### 14. MVP Scope
+Define a realistic MVP.
+
+Tell me:
+- which features are absolutely required for version 1
+- which features should wait for version 2
+- which features are optional / nice to have
+- how to launch quickly without undermining credibility with assessors
+
+### 15. Database Schema
+Give a proposed relational database schema with tables, key columns, and relationships.
+
+I want:
+- table names
+- primary keys
+- foreign keys
+- major indexes
+- status enums
+- audit fields
+- notes on file storage vs metadata storage
+
+### 16. API Design
+Give a proposed REST or GraphQL API structure.
+
+Include example endpoints for:
+- controls
+- evidence
+- tasks
+- reminders
+- dashboard summaries
+- assessor packages
+- approvals
+- comments
+- search
+- exports
+- audit trail
+
+### 17. Automation Rules Examples
+Give me at least 20 specific automation rules in plain English.
+
+Examples:
+- When evidence is uploaded without a linked control, mark it unclassified and assign triage
+- When evidence passes expiration date, mark stale and notify owner
+- When a recurring review task is not completed by due date, escalate to compliance manager
+- When all required artifacts exist and are approved for a control, mark control candidate-ready
+- When POA&M closes and all evidence is current, re-score the control
+
+### 18. Example Screens
+Describe the top 12 screens in detail, including:
+- what the user sees
+- what actions they can take
+- what tables/cards/widgets appear
+- what filters exist
+- what status colors/icons mean
+
+### 19. Build Plan
+Give me a phased implementation plan:
+- Phase 0: discovery / data model / UX
+- Phase 1: core repository and controls mapping
+- Phase 2: dashboards and reminder engine
+- Phase 3: assessor portal and exports
+- Phase 4: integrations and advanced automation
+
+For each phase include:
+- scope
+- dependencies
+- risks
+- estimated complexity
+- what “done” looks like
+
+### 20. Deliverables Format
+At the end, provide the answer in this structure:
+1. Executive Summary
+2. Product Blueprint
+3. Data Model
+4. Workflows
+5. Assessor Portal Design
+6. Technical Architecture
+7. MVP vs Future Roadmap
+8. Database Schema
+9. API Outline
+10. 20+ Automation Rules
+11. Screen Inventory
+12. Build Plan
+
+## Additional Instructions
+
+- Do not give me generic compliance advice
+- Do not tell me to hire a consultant
+- Do not stay high level
+- Make reasonable assumptions and proceed
+- Be opinionated and specific
+- Optimize for real-world usability during an actual C3PAO assessment
+- Assume the app must support strong traceability and defensible evidence organization
+- Emphasize automation, reminders, auditability, and assessor usability
+- If there are tradeoffs, explain the recommended approach and why
+- Where useful, use tables
+- Where useful, provide sample statuses, enums, and field names
+- Where useful, provide example workflows and pseudologic
+- Design this as if I may actually hand the output to a development team
+
+Now generate the complete blueprint.

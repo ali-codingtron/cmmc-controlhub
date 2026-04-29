@@ -1,0 +1,862 @@
+// CMMC Compliance Operations Platform
+// Prisma Schema
+// Compatible with PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────────
+
+enum CMMCLevel {
+  L1
+  L2
+}
+
+enum ControlStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  IMPLEMENTED
+  NEEDS_REVIEW
+  ASSESSOR_READY
+  NOT_APPLICABLE
+}
+
+enum EvidenceStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  STALE
+  SUPERSEDED
+  ASSESSOR_READY
+}
+
+enum EvidenceType {
+  POLICY
+  PROCEDURE
+  SCREENSHOT
+  LOG
+  CONFIGURATION_EXPORT
+  NETWORK_DIAGRAM
+  DATA_FLOW_DIAGRAM
+  TRAINING_RECORD
+  AUDIT_REPORT
+  SCAN_REPORT
+  PATCH_RECORD
+  INCIDENT_RECORD
+  ACCESS_LIST
+  ROLE_MATRIX
+  APPROVAL_RECORD
+  CERTIFICATE
+  ATTESTATION
+  INTERVIEW_NOTES
+  TEST_RESULT
+  VENDOR_DOCUMENTATION
+  PHYSICAL_EVIDENCE_PHOTO
+  CONTRACT
+  OTHER
+}
+
+enum ReviewFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  SEMI_ANNUALLY
+  ANNUALLY
+  AS_NEEDED
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+  CANCELLED
+  DEFERRED
+}
+
+enum TaskPriority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum POAMStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  ACCEPTED_RISK
+  CANCELLED
+}
+
+enum RiskLevel {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  INFORMATIONAL
+}
+
+enum ReviewStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+  SKIPPED
+}
+
+enum UserRole {
+  SYSTEM_OWNER
+  COMPLIANCE_MANAGER
+  SECURITY_OFFICER
+  IT_ADMINISTRATOR
+  EVIDENCE_CONTRIBUTOR
+  INTERNAL_REVIEWER
+  EXECUTIVE_VIEWER
+  ASSESSOR
+  READ_ONLY
+}
+
+enum AuditAction {
+  CREATED
+  UPDATED
+  DELETED
+  APPROVED
+  REJECTED
+  SUBMITTED
+  REVIEWED
+  ASSIGNED
+  UPLOADED
+  DOWNLOADED
+  EXPORTED
+  STATUS_CHANGED
+  COMMENT_ADDED
+  LINK_ADDED
+  LINK_REMOVED
+  ESCALATED
+}
+
+enum NotificationChannel {
+  EMAIL
+  IN_APP
+  SMS
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  READ
+  DISMISSED
+  FAILED
+}
+
+// ─────────────────────────────────────────────────────────────
+// CORE TENANT AND USER MANAGEMENT
+// ─────────────────────────────────────────────────────────────
+
+model Organization {
+  id               String   @id @default(cuid())
+  name             String
+  slug             String   @unique
+  contractNumber   String?
+  cageCode         String?
+  duns             String?
+  website          String?
+  primaryContact   String?
+  phone            String?
+  address          Json?
+  targetCMMCLevel  CMMCLevel @default(L2)
+  targetCertDate   DateTime?
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  users            User[]
+  controlStatuses  ControlAssessment[]
+  evidenceItems    EvidenceItem[]
+  tasks            Task[]
+  reviews          Review[]
+  poams            POAM[]
+  auditLogs        AuditLog[]
+  notifications    Notification[]
+  reviewSchedules  ReviewSchedule[]
+  assets           Asset[]
+  vendors          Vendor[]
+  assessmentPkgs   AssessmentPackage[]
+  incidents        Incident[]
+  risks            Risk[]
+  gaps             Gap[]
+  comments         Comment[]
+}
+
+model User {
+  id               String   @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email            String
+  name             String
+  role             UserRole
+  title            String?
+  department       String?
+  phone            String?
+  isActive         Boolean  @default(true)
+  lastLoginAt      DateTime?
+  mfaEnabled       Boolean  @default(false)
+  avatarUrl        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  ownedEvidence         EvidenceItem[]     @relation("EvidenceOwner")
+  reviewedEvidence      EvidenceItem[]     @relation("EvidenceReviewer")
+  approvedEvidence      EvidenceItem[]     @relation("EvidenceApprover")
+  assignedTasks         Task[]             @relation("TaskAssignee")
+  createdTasks          Task[]             @relation("TaskCreator")
+  controlAssessments    ControlAssessment[]
+  poamOwned             POAM[]             @relation("POAMOwner")
+  reviewsOwned          Review[]           @relation("ReviewOwner")
+  reviewsPerformed      Review[]           @relation("ReviewPerformer")
+  auditLogs             AuditLog[]
+  notifications         Notification[]
+  comments              Comment[]
+
+  @@unique([organizationId, email])
+  @@index([organizationId, role])
+}
+
+// ─────────────────────────────────────────────────────────────
+// CMMC CONTROL CATALOG
+// ─────────────────────────────────────────────────────────────
+
+model Domain {
+  id          String   @id // e.g. "AC", "IA", "SI"
+  name        String   // e.g. "Access Control"
+  description String
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  controls    Control[]
+}
+
+model Control {
+  id                        String          @id @default(cuid())
+  controlId                 String          @unique // e.g. "AC.L1-3.1.1"
+  domainId                  String
+  domain                    Domain          @relation(fields: [domainId], references: [id])
+  title                     String
+  description               String
+  level                     CMMCLevel
+  nistRef                   String?         // e.g. "3.1.1"
+  implementationGuidance    String?
+  recommendedReviewFrequency ReviewFrequency @default(ANNUALLY)
+  isActive                  Boolean         @default(true)
+  sortOrder                 Int             @default(0)
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @updatedAt
+
+  assessmentObjectives      AssessmentObjective[]
+  expectedEvidenceTypes     ControlEvidenceType[]
+  controlAssessments        ControlAssessment[]
+  evidenceLinks             EvidenceControlLink[]
+  taskLinks                 TaskControlLink[]
+  reviewSchedules           ReviewSchedule[]
+  poams                     POAM[]
+  gaps                      Gap[]
+  assessmentPackageControls AssessmentPackageControl[]
+
+  @@index([domainId, level])
+  @@index([controlId])
+}
+
+model AssessmentObjective {
+  id          String   @id @default(cuid())
+  controlId   String
+  control     Control  @relation(fields: [controlId], references: [id], onDelete: Cascade)
+  text        String
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([controlId])
+}
+
+model ControlEvidenceType {
+  id            String        @id @default(cuid())
+  controlId     String
+  control       Control       @relation(fields: [controlId], references: [id], onDelete: Cascade)
+  evidenceType  EvidenceType
+  isRequired    Boolean       @default(false)
+
+  @@unique([controlId, evidenceType])
+}
+
+// ─────────────────────────────────────────────────────────────
+// CONTROL ASSESSMENT — per organization per control
+// ─────────────────────────────────────────────────────────────
+
+model ControlAssessment {
+  id                  String        @id @default(cuid())
+  organizationId      String
+  organization        Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  controlId           String
+  control             Control       @relation(fields: [controlId], references: [id])
+  status              ControlStatus @default(NOT_STARTED)
+  implementationNarrative String?   // The "how we implemented this" statement
+  assessorNotes       String?
+  isNotApplicable     Boolean       @default(false)
+  naJustification     String?       // Required if isNotApplicable = true
+  lastAssessedAt      DateTime?
+  assessedById        String?
+  assessedBy          User?         @relation(fields: [assessedById], references: [id])
+  candidateReadyAt    DateTime?     // When marked assessor-ready
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  @@unique([organizationId, controlId])
+  @@index([organizationId, status])
+  @@index([organizationId, controlId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// EVIDENCE REPOSITORY
+// ─────────────────────────────────────────────────────────────
+
+model EvidenceItem {
+  id                    String         @id @default(cuid())
+  organizationId        String
+  organization          Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title                 String
+  description           String?
+  evidenceType          EvidenceType
+  status                EvidenceStatus @default(DRAFT)
+
+  // File storage
+  fileKey               String?        // Object storage key (S3, R2, etc.)
+  fileName              String?
+  fileSize              Int?           // bytes
+  mimeType              String?
+  fileHash              String?        // SHA-256 for integrity
+
+  // Classification
+  cmmcLevel             CMMCLevel?
+  domainId              String?
+  sourceSystem          String?        // e.g. "Azure AD", "CrowdStrike"
+  confidentialityClass  String?        // e.g. "CUI", "Internal", "Public"
+  version               String         @default("1.0")
+
+  // Dates
+  collectedAt           DateTime?      // When was the evidence collected/generated
+  reviewedAt            DateTime?
+  approvedAt            DateTime?
+  expiresAt             DateTime?      // Evidence expiration date
+  reviewDueDate         DateTime?      // Next review due date
+
+  // Ownership
+  ownerId               String
+  owner                 User           @relation("EvidenceOwner", fields: [ownerId], references: [id])
+  reviewerId            String?
+  reviewer              User?          @relation("EvidenceReviewer", fields: [reviewerId], references: [id])
+  approverId            String?
+  approver              User?          @relation("EvidenceApprover", fields: [approverId], references: [id])
+
+  // Linkages
+  relatedPolicyId       String?
+  relatedIncidentId     String?
+  relatedAssetId        String?
+  externalTicketRef     String?        // Jira ticket, ServiceNow, etc.
+
+  // Assessor-facing
+  assessorSummary       String?
+  implementationStatement String?
+
+  // Metadata
+  tags                  String[]
+  notes                 String?
+  isCurrentVersion      Boolean        @default(true)
+  previousVersionId     String?        // Self-referential chain for versioning
+
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  controlLinks          EvidenceControlLink[]
+  comments              Comment[]
+  auditTrail            AuditLog[]     @relation("EvidenceAuditLog")
+  previousVersion       EvidenceItem?  @relation("EvidenceVersions", fields: [previousVersionId], references: [id])
+  newerVersions         EvidenceItem[] @relation("EvidenceVersions")
+
+  @@index([organizationId, status])
+  @@index([organizationId, evidenceType])
+  @@index([organizationId, expiresAt])
+  @@index([ownerId])
+  @@index([tags])
+}
+
+model EvidenceControlLink {
+  id              String        @id @default(cuid())
+  evidenceId      String
+  evidence        EvidenceItem  @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+  controlId       String
+  control         Control       @relation(fields: [controlId], references: [id])
+  objectiveText   String?       // Which specific assessment objective this covers
+  linkedAt        DateTime      @default(now())
+  linkedById      String?
+
+  @@unique([evidenceId, controlId])
+  @@index([controlId])
+  @@index([evidenceId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// TASKS
+// ─────────────────────────────────────────────────────────────
+
+model Task {
+  id               String       @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title            String
+  description      String?
+  status           TaskStatus   @default(OPEN)
+  priority         TaskPriority @default(MEDIUM)
+  dueDate          DateTime?
+  completedAt      DateTime?
+  isRecurring      Boolean      @default(false)
+  recurrence       ReviewFrequency?
+  nextDueDate      DateTime?    // Computed for recurring tasks
+  parentTaskId     String?      // For subtasks
+  tags             String[]
+  notes            String?
+
+  assigneeId       String?
+  assignee         User?        @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdById      String
+  createdBy        User         @relation("TaskCreator", fields: [createdById], references: [id])
+
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  controlLinks     TaskControlLink[]
+  parentTask       Task?        @relation("SubTasks", fields: [parentTaskId], references: [id])
+  subTasks         Task[]       @relation("SubTasks")
+  comments         Comment[]
+  auditTrail       AuditLog[]   @relation("TaskAuditLog")
+
+  @@index([organizationId, status])
+  @@index([organizationId, dueDate])
+  @@index([assigneeId])
+}
+
+model TaskControlLink {
+  id         String   @id @default(cuid())
+  taskId     String
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  controlId  String
+  control    Control  @relation(fields: [controlId], references: [id])
+  linkedAt   DateTime @default(now())
+
+  @@unique([taskId, controlId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// REVIEW SCHEDULES & REVIEWS
+// ─────────────────────────────────────────────────────────────
+
+model ReviewSchedule {
+  id               String          @id @default(cuid())
+  organizationId   String
+  organization     Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  controlId        String?
+  control          Control?        @relation(fields: [controlId], references: [id])
+  name             String          // e.g. "Monthly Access Review"
+  description      String?
+  frequency        ReviewFrequency
+  ownerId          String?
+  gracePeriorDays  Int             @default(7)
+  isActive         Boolean         @default(true)
+  lastReviewDate   DateTime?
+  nextDueDate      DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  reviews          Review[]
+
+  @@index([organizationId, nextDueDate])
+}
+
+model Review {
+  id               String        @id @default(cuid())
+  organizationId   String
+  organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  scheduleId       String?
+  schedule         ReviewSchedule? @relation(fields: [scheduleId], references: [id])
+  title            String
+  description      String?
+  status           ReviewStatus  @default(PENDING)
+  dueDate          DateTime
+  completedAt      DateTime?
+  outcome          String?       // Summary of review findings
+  findings         String?       // Detailed findings
+
+  ownerId          String?
+  owner            User?         @relation("ReviewOwner", fields: [ownerId], references: [id])
+  performedById    String?
+  performedBy      User?         @relation("ReviewPerformer", fields: [performedById], references: [id])
+
+  evidenceIds      String[]      // Evidence items created/linked for this review
+
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  comments         Comment[]
+  auditTrail       AuditLog[]   @relation("ReviewAuditLog")
+
+  @@index([organizationId, status])
+  @@index([organizationId, dueDate])
+}
+
+// ─────────────────────────────────────────────────────────────
+// POA&M — Plan of Action and Milestones
+// ─────────────────────────────────────────────────────────────
+
+model POAM {
+  id                  String       @id @default(cuid())
+  organizationId      String
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  controlId           String?
+  control             Control?     @relation(fields: [controlId], references: [id])
+  poamNumber          String?      // Human-readable identifier
+  title               String
+  deficiencyDescription String
+  status              POAMStatus   @default(OPEN)
+  riskLevel           RiskLevel    @default(MEDIUM)
+  resourcesRequired   String?
+  scheduledCompletionDate DateTime?
+  completedDate       DateTime?
+  milestones          Json?        // Array of {milestone, targetDate, completedDate, status}
+  acceptedRiskRationale String?
+  originatingAssessment String?    // Reference to assessment that identified the gap
+
+  ownerId             String?
+  owner               User?        @relation("POAMOwner", fields: [ownerId], references: [id])
+
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  comments            Comment[]
+  auditTrail          AuditLog[]   @relation("POAMAuditLog")
+
+  @@index([organizationId, status])
+  @@index([organizationId, riskLevel])
+  @@index([controlId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// GAPS
+// ─────────────────────────────────────────────────────────────
+
+model Gap {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  controlId      String
+  control        Control      @relation(fields: [controlId], references: [id])
+  title          String
+  description    String
+  riskLevel      RiskLevel    @default(MEDIUM)
+  isResolved     Boolean      @default(false)
+  resolvedAt     DateTime?
+  resolution     String?
+  detectedAt     DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId, isResolved])
+  @@index([controlId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// ASSESSOR PACKAGES
+// ─────────────────────────────────────────────────────────────
+
+model AssessmentPackage {
+  id               String       @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name             String
+  description      String?
+  cmmcLevel        CMMCLevel
+  assessorName     String?
+  assessorOrg      String?
+  assessmentDate   DateTime?
+  status           String       @default("DRAFT") // DRAFT, IN_PROGRESS, SUBMITTED, COMPLETE
+  exportedAt       DateTime?
+  exportFileKey    String?      // S3 key of exported package
+  notes            String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  controls         AssessmentPackageControl[]
+
+  @@index([organizationId])
+}
+
+model AssessmentPackageControl {
+  id                  String            @id @default(cuid())
+  packageId           String
+  package             AssessmentPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  controlId           String
+  control             Control           @relation(fields: [controlId], references: [id])
+  controlStatus       ControlStatus
+  narrativeSummary    String?
+  assessorFinding     String?           // Assessor's recorded finding
+  evidenceSnapshotIds String[]          // Snapshot of linked evidence IDs at time of package creation
+
+  @@unique([packageId, controlId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// ASSET INVENTORY
+// ─────────────────────────────────────────────────────────────
+
+model Asset {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name            String
+  assetType       String       // workstation, server, network_device, mobile, cloud_service, application
+  ipAddress       String?
+  macAddress      String?
+  operatingSystem String?
+  osVersion       String?
+  location        String?
+  department      String?
+  owner           String?
+  custodian       String?
+  containsCUI     Boolean      @default(false)
+  isInScope       Boolean      @default(true)
+  serialNumber    String?
+  manufacturer    String?
+  model           String?
+  purchaseDate    DateTime?
+  endOfLifeDate   DateTime?
+  notes           String?
+  tags            String[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([organizationId, containsCUI])
+  @@index([organizationId, assetType])
+}
+
+// ─────────────────────────────────────────────────────────────
+// VENDORS / EXTERNAL SERVICE PROVIDERS
+// ─────────────────────────────────────────────────────────────
+
+model Vendor {
+  id                  String       @id @default(cuid())
+  organizationId      String
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name                String
+  serviceDescription  String?
+  accessesCUI         Boolean      @default(false)
+  cmmcLevel           CMMCLevel?   // Their stated or required CMMC level
+  contractNumber      String?
+  primaryContact      String?
+  contactEmail        String?
+  cageCode            String?
+  assessmentStatus    String?      // Assessed, Pending, Not Required
+  lastAssessedDate    DateTime?
+  nextAssessmentDate  DateTime?
+  riskLevel           RiskLevel    @default(MEDIUM)
+  notes               String?
+  tags                String[]
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  @@index([organizationId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// INCIDENTS
+// ─────────────────────────────────────────────────────────────
+
+model Incident {
+  id                 String       @id @default(cuid())
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title              String
+  description        String
+  incidentDate       DateTime
+  detectedDate       DateTime
+  containedDate      DateTime?
+  resolvedDate       DateTime?
+  severity           RiskLevel
+  status             String       @default("OPEN") // OPEN, CONTAINED, RESOLVED, CLOSED
+  affectedSystems    String[]
+  rootCause          String?
+  remediation        String?
+  lessonsLearned     String?
+  reportedToDoD      Boolean      @default(false)
+  doDReportDate      DateTime?
+  reportedById       String?
+  assignedToId       String?
+  tags               String[]
+  notes              String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@index([organizationId, status])
+  @@index([organizationId, incidentDate])
+}
+
+// ─────────────────────────────────────────────────────────────
+// RISKS
+// ─────────────────────────────────────────────────────────────
+
+model Risk {
+  id               String       @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title            String
+  description      String
+  riskCategory     String?      // Operational, Technical, Compliance, Strategic
+  likelihood       Int          // 1-5
+  impact           Int          // 1-5
+  riskScore        Int          // Computed: likelihood * impact
+  riskLevel        RiskLevel
+  treatmentStrategy String?     // Accept, Mitigate, Transfer, Avoid
+  treatmentPlan    String?
+  residualRisk     Int?         // Post-treatment risk score
+  status           String       @default("OPEN")
+  dueDate          DateTime?
+  resolvedAt       DateTime?
+  ownerId          String?
+  tags             String[]
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([organizationId, riskLevel])
+  @@index([organizationId, status])
+}
+
+// ─────────────────────────────────────────────────────────────
+// AUDIT LOG
+// ─────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id             String      @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String?
+  user           User?       @relation(fields: [userId], references: [id])
+  action         AuditAction
+  entityType     String      // "EvidenceItem", "ControlAssessment", "Task", etc.
+  entityId       String
+  entityLabel    String?     // Human-readable reference
+  previousValue  Json?       // Snapshot of old state
+  newValue       Json?       // Snapshot of new state
+  ipAddress      String?
+  userAgent      String?
+  sessionId      String?
+  notes          String?
+  timestamp      DateTime    @default(now())
+
+  evidenceItem   EvidenceItem? @relation("EvidenceAuditLog", fields: [entityId], references: [id], map: "AuditLog_evidenceId")
+  task           Task?         @relation("TaskAuditLog", fields: [entityId], references: [id], map: "AuditLog_taskId")
+  review         Review?       @relation("ReviewAuditLog", fields: [entityId], references: [id], map: "AuditLog_reviewId")
+  poam           POAM?         @relation("POAMAuditLog", fields: [entityId], references: [id], map: "AuditLog_poamId")
+
+  @@index([organizationId, timestamp])
+  @@index([organizationId, entityType, entityId])
+  @@index([userId, timestamp])
+}
+
+// ─────────────────────────────────────────────────────────────
+// COMMENTS
+// ─────────────────────────────────────────────────────────────
+
+model Comment {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  authorId       String
+  author         User         @relation(fields: [authorId], references: [id])
+  body           String
+  isInternal     Boolean      @default(true)  // false = visible to assessor
+  entityType     String       // "EvidenceItem", "Task", "Review", "POAM"
+  entityId       String
+
+  evidenceItem   EvidenceItem? @relation(fields: [entityId], references: [id], map: "Comment_evidenceId")
+  task           Task?         @relation(fields: [entityId], references: [id], map: "Comment_taskId")
+  review         Review?       @relation(fields: [entityId], references: [id], map: "Comment_reviewId")
+  poam           POAM?         @relation(fields: [entityId], references: [id], map: "Comment_poamId")
+
+  parentId       String?
+  parent         Comment?     @relation("CommentReplies", fields: [parentId], references: [id])
+  replies        Comment[]    @relation("CommentReplies")
+
+  editedAt       DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([entityType, entityId])
+  @@index([authorId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────────────────────────
+
+model Notification {
+  id             String             @id @default(cuid())
+  organizationId String
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User               @relation(fields: [userId], references: [id])
+  title          String
+  body           String
+  channel        NotificationChannel
+  status         NotificationStatus @default(PENDING)
+  entityType     String?
+  entityId       String?
+  actionUrl      String?
+  sentAt         DateTime?
+  readAt         DateTime?
+  snoozedUntil   DateTime?
+  createdAt      DateTime           @default(now())
+
+  @@index([userId, status])
+  @@index([organizationId, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// NOTIFICATION / REMINDER RULES
+// ─────────────────────────────────────────────────────────────
+
+model NotificationRule {
+  id              String          @id @default(cuid())
+  organizationId  String
+  name            String
+  description     String?
+  trigger         String          // e.g. "EVIDENCE_EXPIRING", "REVIEW_OVERDUE", "CONTROL_NO_EVIDENCE"
+  conditions      Json?           // Flexible condition config
+  advanceNoticeDays Int           @default(14)
+  gracePeriorDays  Int            @default(7)
+  recurrence      ReviewFrequency @default(WEEKLY)
+  channels        NotificationChannel[]
+  recipientRoles  UserRole[]
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([organizationId])
+}
