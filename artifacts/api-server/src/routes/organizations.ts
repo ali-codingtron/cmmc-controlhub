@@ -330,6 +330,31 @@ router.post("/organizations/:id/users", requireAuth, requireAdmin, async (req, r
   res.json({ organizationId: req.params.id, userId, role });
 });
 
+router.delete("/organizations/:id", requireAuth, requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const [existing] = await db
+    .select()
+    .from(organizationsTable)
+    .where(eq(organizationsTable.id, id))
+    .limit(1);
+
+  if (!existing) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  await db
+    .delete(organizationUsersTable)
+    .where(eq(organizationUsersTable.organizationId, id));
+
+  await db
+    .delete(organizationsTable)
+    .where(eq(organizationsTable.id, id));
+
+  req.log.info({ orgId: id, orgName: existing.name }, "Organization deleted");
+  res.json({ success: true });
+});
+
 router.delete("/organizations/:id/users/:userId", requireAuth, requireAdmin, async (req, res) => {
   await db
     .update(organizationUsersTable)

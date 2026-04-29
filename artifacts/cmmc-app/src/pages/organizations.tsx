@@ -4,14 +4,11 @@ import { Link } from "wouter";
 import {
   Building2,
   Plus,
-  Users,
-  ShieldCheck,
   AlertTriangle,
   CheckSquare,
   FileText,
-  MoreHorizontal,
-  ExternalLink,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useOrg } from "@/context/OrgContext";
@@ -67,18 +64,25 @@ function ReadinessRing({ percent, size = 56 }: { percent: number; size?: number 
   );
 }
 
-function OrgCard({ org, onSwitch }: { org: OrgStats; onSwitch: (id: string) => void }) {
+function OrgCard({ org, onSwitch, onDelete }: { org: OrgStats; onSwitch: (id: string) => void; onDelete: (id: string, name: string) => void }) {
   const { activeOrg } = useOrg();
   const isActive = activeOrg?.id === org.id;
   const levelColor = org.cmmcTargetLevel === "L1" ? "bg-blue-500/10 text-blue-600 border-blue-200 dark:text-blue-400" : "bg-purple-500/10 text-purple-600 border-purple-200 dark:text-purple-400";
 
   return (
     <Card className={cn("hover:shadow-md transition-shadow relative", isActive && "ring-2 ring-primary")}>
-      {isActive && (
-        <div className="absolute top-3 right-3">
-          <Badge variant="default" className="text-xs">Active</Badge>
-        </div>
-      )}
+      <div className="absolute top-3 right-3 flex items-center gap-1.5">
+        {isActive && <Badge variant="default" className="text-xs">Active</Badge>}
+        {!isActive && (
+          <button
+            onClick={() => onDelete(org.id, org.name)}
+            className="p-1.5 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+            title="Delete organization"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
       <CardHeader className="pb-3">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
@@ -262,6 +266,8 @@ export default function Organizations() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showNew, setShowNew] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const { data: stats = [], isLoading, refetch } = useQuery<OrgStats[]>({
     queryKey: ["global-stats"],
@@ -282,6 +288,26 @@ export default function Organizations() {
       setActiveOrg(org);
       toast({ title: `Switched to ${org.name}` });
       queryClient.invalidateQueries();
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch(`/api/organizations/${deleteTarget.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to delete organization");
+      toast({ title: `"${deleteTarget.name}" deleted` });
+      queryClient.invalidateQueries({ queryKey: ["global-stats"] });
+      setDeleteTarget(null);
+    } catch {
+      toast({ title: "Error", description: "Could not delete organization", variant: "destructive" });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -368,7 +394,7 @@ export default function Organizations() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {stats.map((org) => (
-            <OrgCard key={org.id} org={org} onSwitch={handleSwitch} />
+            <OrgCard key={org.id} org={org} onSwitch={handleSwitch} onDelete={(id, name) => setDeleteTarget({ id, name })} />
           ))}
         </div>
       )}
@@ -434,6 +460,27 @@ export default function Organizations() {
       )}
 
       <NewOrgDialog open={showNew} onClose={() => setShowNew(false)} />
+
+      <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" />
+              Delete Organization
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-2 text-sm text-muted-foreground">
+            Are you sure you want to permanently delete <span className="font-semibold text-foreground">"{deleteTarget?.name}"</span>?
+            This will remove the organization and all its memberships. All org-scoped data (controls, evidence, tasks, POA&Ms) will be retained in the database but will no longer be accessible through this org.
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteConfirm} disabled={deleting}>
+              {deleting ? "Deleting..." : "Delete Organization"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

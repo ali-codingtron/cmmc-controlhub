@@ -97,4 +97,83 @@ router.get("/auth/me", requireAuth, async (req, res) => {
   });
 });
 
+router.post("/auth/change-password", requireAuth, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) {
+    res.status(400).json({ error: "currentPassword and newPassword are required" });
+    return;
+  }
+  if (newPassword.length < 8) {
+    res.status(400).json({ error: "New password must be at least 8 characters" });
+    return;
+  }
+
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, req.authUser!.id))
+    .limit(1);
+
+  if (!user) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!valid) {
+    res.status(400).json({ error: "Current password is incorrect" });
+    return;
+  }
+
+  const hash = await bcrypt.hash(newPassword, 10);
+  await db
+    .update(usersTable)
+    .set({ passwordHash: hash, updatedAt: new Date() })
+    .where(eq(usersTable.id, user.id));
+
+  await db.insert(auditLogsTable).values({
+    id: randomUUID(),
+    userId: user.id,
+    userName: user.name,
+    action: "password_changed",
+    entityType: "user",
+    entityId: user.id,
+    entityLabel: user.email,
+    ipAddress: req.ip,
+    userAgent: req.headers["user-agent"],
+    timestamp: new Date(),
+  });
+
+  res.json({ success: true });
+});
+
+router.patch("/auth/profile", requireAuth, async (req, res) => {
+  const { name, title, department } = req.body;
+
+  await db
+    .update(usersTable)
+    .set({
+      name: name ?? undefined,
+      title: title !== undefined ? title : undefined,
+      department: department !== undefined ? department : undefined,
+      updatedAt: new Date(),
+    })
+    .where(eq(usersTable.id, req.authUser!.id));
+
+  const [updated] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, req.authUser!.id))
+    .limit(1);
+
+  res.json({
+    id: updated.id,
+    name: updated.name,
+    email: updated.email,
+    role: updated.role,
+    title: updated.title,
+    department: updated.department,
+  });
+});
+
 export default router;
