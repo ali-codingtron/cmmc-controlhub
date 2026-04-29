@@ -1,0 +1,172 @@
+import { randomUUID } from "crypto";
+import { readFileSync } from "fs";
+import { join } from "path";
+import bcrypt from "bcryptjs";
+import {
+  db,
+  domainsTable,
+  controlsTable,
+  usersTable,
+  documentTemplatesTable,
+  checklistItemsTable,
+} from "@workspace/db";
+import { count } from "drizzle-orm";
+import { logger } from "./lib/logger";
+import { DOCUMENT_TEMPLATES } from "./data/document-templates-data";
+
+// __dirname is injected by the esbuild build banner and points to dist/ at runtime
+const cmmcData = JSON.parse(
+  readFileSync(join(__dirname, "data", "cmmc-controls.json"), "utf-8")
+) as {
+  domains: Array<{ id: string; name: string; description: string }>;
+  controls: Array<{
+    control_id: string;
+    title: string;
+    description: string;
+    level: string;
+    domain: string;
+    nist_ref?: string;
+    implementation_guidance?: string;
+    recommended_review_frequency?: string;
+  }>;
+};
+
+async function seedDomainControls() {
+  const [{ value: existing }] = await db.select({ value: count() }).from(domainsTable);
+  if (existing > 0) return;
+
+  logger.info("Seeding CMMC domains and controls...");
+
+  const domainIdMap: Record<string, string> = {};
+  for (let i = 0; i < cmmcData.domains.length; i++) {
+    const d = cmmcData.domains[i];
+    const id = randomUUID();
+    domainIdMap[d.id] = id;
+    await db.insert(domainsTable).values({
+      id,
+      name: d.name,
+      description: d.description,
+      sortOrder: i,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).onConflictDoNothing();
+  }
+
+  const validFreqs = ["daily", "weekly", "monthly", "quarterly", "semi_annually", "annually", "as_needed"];
+  let controlCount = 0;
+  for (let i = 0; i < cmmcData.controls.length; i++) {
+    const ctrl = cmmcData.controls[i];
+    const domainId = domainIdMap[ctrl.domain];
+    if (!domainId) continue;
+
+    const rawFreq = ctrl.recommended_review_frequency?.replace(/-/g, "_") ?? "annually";
+    const freq = validFreqs.includes(rawFreq) ? rawFreq : "annually";
+
+    await db.insert(controlsTable).values({
+      id: randomUUID(),
+      controlId: ctrl.control_id,
+      domainId,
+      title: ctrl.title,
+      description: ctrl.description,
+      level: ctrl.level as "L1" | "L2",
+      nistRef: ctrl.nist_ref,
+      implementationGuidance: ctrl.implementation_guidance,
+      recommendedReviewFrequency: freq as any,
+      isActive: true,
+      sortOrder: i,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).onConflictDoNothing();
+    controlCount++;
+  }
+
+  logger.info({ domains: cmmcData.domains.length, controls: controlCount }, "CMMC controls seeded");
+}
+
+async function seedInitialAdmin() {
+  const [{ value: existing }] = await db.select({ value: count() }).from(usersTable);
+  if (existing > 0) return;
+
+  logger.info("No users found — creating initial admin account...");
+
+  const hash = await bcrypt.hash("Admin1234!", 10);
+  await db.insert(usersTable).values({
+    id: randomUUID(),
+    name: "System Administrator",
+    email: "admin@example.com",
+    passwordHash: hash,
+    role: "admin",
+    title: "IT Administrator",
+    department: "Information Technology",
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }).onConflictDoNothing();
+
+  logger.info("Initial admin created: admin@example.com / Admin1234! — change this password immediately");
+}
+
+async function seedDocumentTemplates() {
+  const [{ value: existing }] = await db.select({ value: count() }).from(documentTemplatesTable);
+  if (existing > 0) return;
+
+  logger.info("Seeding document templates...");
+  let seeded = 0;
+
+  for (const tmpl of DOCUMENT_TEMPLATES) {
+    const id = randomUUID();
+    const extractedPlaceholders = [...(tmpl.bodyTemplate?.match(/\{\{(\w+)\}\}/g) ?? [])]
+      .map((p: string) => p.replace(/\{\{|\}\}/g, ""));
+    const uniquePlaceholders = [...new Set([...(tmpl.requiredFields ?? []), ...extractedPlaceholders])];
+
+    const checklistItems = (tmpl as any).checklistItems as Array<{
+      itemText: string;
+      description?: string;
+      isRequired: boolean;
+    }> | undefined;
+
+    await db.insert(documentTemplatesTable).values({
+      id,
+      title: tmpl.title,
+      docType: tmpl.docType,
+      cmmcLevel: tmpl.cmmcLevel,
+      domainAbbr: (tmpl as any).domainAbbr ?? null,
+      ownerRole: tmpl.ownerRole,
+      reviewFrequency: tmpl.reviewFrequency,
+      description: tmpl.description,
+      bodyTemplate: tmpl.bodyTemplate,
+      requiredFields: tmpl.requiredFields,
+      placeholders: uniquePlaceholders,
+      linkedControlIds: [],
+      requiresApproval: tmpl.requiresApproval,
+      isSystemTemplate: tmpl.isSystemTemplate,
+      recurrenceRule: (tmpl as any).recurrenceRule ?? null,
+    }).onConflictDoNothing();
+
+    if (checklistItems?.length) {
+      await db.insert(checklistItemsTable).values(
+        checklistItems.map((item, i) => ({
+          id: randomUUID(),
+          templateId: id,
+          itemText: item.itemText,
+          description: item.description ?? null,
+          isRequired: item.isRequired,
+          sortOrder: i,
+        }))
+      ).onConflictDoNothing();
+    }
+    seeded++;
+  }
+
+  logger.info({ count: seeded }, "Document templates seeded");
+}
+
+export async function runStartupSeed() {
+  try {
+    await seedDomainControls();
+    await seedInitialAdmin();
+    await seedDocumentTemplates();
+  } catch (err) {
+    logger.error({ err }, "Startup seed failed — app will continue but may lack reference data");
+  }
+}

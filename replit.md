@@ -25,8 +25,17 @@ pnpm workspace monorepo using TypeScript. CMMC Compliance Readiness & Evidence M
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
-- `pnpm --filter @workspace/scripts run seed-cmmc` — re-seed CMMC controls (110 controls, 14 domains, 4 users)
-- `pnpm --filter @workspace/scripts run seed-organizations` — re-seed 3 organizations + org-specific data
+- `pnpm --filter @workspace/scripts run seed-cmmc` — re-seed CMMC controls (110 controls, 14 domains, 4 users) in dev
+- `pnpm --filter @workspace/scripts run seed-organizations` — re-seed 3 demo organizations + org-specific data in dev
+
+### Automatic Production Seeding
+
+On every startup, `artifacts/api-server/src/startup-seed.ts` runs **before** `app.listen()`. It checks each table with a `count()` query and skips any that already have data (fully idempotent).
+
+- **Empty database (production first boot)**: Seeds 14 CMMC domains, 110 controls, 22 document templates, and one initial admin user (`admin@example.com` / `Admin1234!` — must be changed immediately)
+- **Populated database (all subsequent starts)**: All checks pass instantly with no DB writes
+
+The `cmmc-controls.json` data file is copied to `dist/data/` during the esbuild build step (`build.mjs`). The document templates are embedded directly in `src/data/document-templates-data.ts`.
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
 

@@ -1,0 +1,1714 @@
+{
+  "domains": [
+    { "id": "AC", "name": "Access Control", "description": "Limit system access to authorized users, processes, and devices, and to the types of transactions and functions authorized users are permitted to exercise." },
+    { "id": "AT", "name": "Awareness and Training", "description": "Ensure personnel are aware of security risks and are trained to carry out assigned responsibilities." },
+    { "id": "AU", "name": "Audit and Accountability", "description": "Create and retain system audit logs to enable monitoring, analysis, investigation, and reporting of unlawful or unauthorized activity." },
+    { "id": "CM", "name": "Configuration Management", "description": "Establish and maintain baseline configurations and inventories of organizational systems and enforce security configuration settings." },
+    { "id": "IA", "name": "Identification and Authentication", "description": "Identify system users, processes, and devices, and authenticate their identities before allowing access." },
+    { "id": "IR", "name": "Incident Response", "description": "Establish an operational incident-handling capability including preparation, detection, analysis, containment, recovery, and response activities." },
+    { "id": "MA", "name": "Maintenance", "description": "Perform maintenance on organizational systems and provide controls on tools, techniques, mechanisms, and personnel for maintenance." },
+    { "id": "MP", "name": "Media Protection", "description": "Protect system media containing CUI, both paper and digital, and limit access to authorized users." },
+    { "id": "PE", "name": "Physical Protection", "description": "Limit physical access to organizational systems, equipment, and operating environments to authorized individuals." },
+    { "id": "PS", "name": "Personnel Security", "description": "Screen individuals prior to authorizing access and ensure CUI is protected during and after personnel actions." },
+    { "id": "RA", "name": "Risk Assessment", "description": "Assess risk to operations, assets, and individuals resulting from the operation of systems and the processing of CUI." },
+    { "id": "CA", "name": "Security Assessment", "description": "Periodically assess security controls, develop and implement plans of action, and monitor controls on an ongoing basis." },
+    { "id": "SC", "name": "System and Communications Protection", "description": "Monitor, control, and protect communications at external boundaries and key internal boundaries of organizational systems." },
+    { "id": "SI", "name": "System and Information Integrity", "description": "Identify, report, and correct information and system flaws in a timely manner and protect systems from malicious code." }
+  ],
+  "controls": [
+    {
+      "control_id": "AC.L1-3.1.1",
+      "title": "Authorized Access Control",
+      "description": "Limit information system access to authorized users, processes acting on behalf of authorized users, or devices (including other information systems) and to the types of transactions and functions that authorized users are permitted to exercise.",
+      "level": "L1",
+      "domain": "AC",
+      "nist_ref": "3.1.1",
+      "assessment_objectives": [
+        "Identify authorized users, processes, and devices",
+        "Verify that access is limited to authorized users only",
+        "Confirm types of transactions and functions permitted by role"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "screenshot", "configuration_export", "user_access_list"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Define all user account types in Active Directory or IAM system. Document role-based access control policy. Export user access lists quarterly and review for appropriateness. Capture screenshots of access control settings in your systems. Maintain a formal access request and approval record."
+    },
+    {
+      "control_id": "AC.L1-3.1.2",
+      "title": "Transaction and Function Control",
+      "description": "Limit information system access to the types of transactions and functions that authorized users are permitted to exercise.",
+      "level": "L1",
+      "domain": "AC",
+      "nist_ref": "3.1.2",
+      "assessment_objectives": [
+        "Identify permitted transaction types per role",
+        "Confirm system enforces function-level restrictions",
+        "Document how privilege separation is implemented"
+      ],
+      "expected_evidence_types": ["policy", "screenshot", "configuration_export", "role_matrix"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Create a role-to-permission matrix mapping each user role to allowed system functions. Capture configuration screenshots from your applications showing role assignments. Document least-privilege enforcement in policy."
+    },
+    {
+      "control_id": "AC.L1-3.1.20",
+      "title": "External Connections",
+      "description": "Verify and control/limit connections to external information systems.",
+      "level": "L1",
+      "domain": "AC",
+      "nist_ref": "3.1.20",
+      "assessment_objectives": [
+        "Identify all external information system connections",
+        "Verify controls exist to limit or monitor those connections",
+        "Confirm approval process for external connections"
+      ],
+      "expected_evidence_types": ["policy", "network_diagram", "firewall_rule_export", "approval_record"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Maintain a network diagram showing all external connections. Document a formal approval process for any new external system connections. Export firewall rules and annotate which connections are approved. Review quarterly."
+    },
+    {
+      "control_id": "AC.L1-3.1.22",
+      "title": "Control Public Information",
+      "description": "Control information posted or processed on publicly accessible information systems.",
+      "level": "L1",
+      "domain": "AC",
+      "nist_ref": "3.1.22",
+      "assessment_objectives": [
+        "Identify publicly accessible systems",
+        "Confirm designated individuals review and approve public content",
+        "Verify CUI is not posted to public systems"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "approval_record", "screenshot"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Document which systems are publicly accessible. Establish a content review procedure requiring designated individual sign-off before posting. Perform periodic sweeps to confirm no CUI is present on public-facing systems. Keep approval records."
+    },
+    {
+      "control_id": "AC.L2-3.1.3",
+      "title": "CUI Flow Control",
+      "description": "Control the flow of CUI in accordance with approved authorizations.",
+      "level": "L2",
+      "domain": "AC",
+      "nist_ref": "3.1.3",
+      "assessment_objectives": [
+        "Identify information flows of CUI within and between systems",
+        "Verify flow control mechanisms are in place",
+        "Confirm flow policy is documented and enforced"
+      ],
+      "expected_evidence_types": ["policy", "data_flow_diagram", "configuration_export", "screenshot"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Create a CUI data flow diagram showing all paths CUI takes through systems, networks, and to external parties. Implement DLP controls or network segmentation that enforces the approved flows. Document configuration in a policy and capture screenshots of enforcement mechanisms."
+    },
+    {
+      "control_id": "AC.L2-3.1.4",
+      "title": "Separation of Duties",
+      "description": "Separate the duties of individuals to reduce the risk of malevolent activity without collusion.",
+      "level": "L2",
+      "domain": "AC",
+      "nist_ref": "3.1.4",
+      "assessment_objectives": [
+        "Identify duties requiring separation",
+        "Verify conflicting duties are assigned to different individuals",
+        "Confirm separation is technically enforced where possible"
+      ],
+      "expected_evidence_types": ["policy", "role_matrix", "screenshot", "procedure"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Document a separation of duties matrix identifying conflicting roles (e.g., developer vs. approver, user admin vs. auditor). Show that system permissions technically prevent a single user from holding conflicting roles. Capture screenshots of IAM configurations."
+    },
+    {
+      "control_id": "AC.L2-3.1.5",
+      "title": "Least Privilege",
+      "description": "Employ the principle of least privilege, including for specific security functions and privileged accounts.",
+      "level": "L2",
+      "domain": "AC",
+      "nist_ref": "3.1.5",
+      "assessment_objectives": [
+        "Identify all privileged accounts",
+        "Verify access is limited to least necessary privileges",
+        "Confirm review of privileged account assignments"
+      ],
+      "expected_evidence_types": ["policy", "privileged_account_list", "screenshot", "access_review_record"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Maintain an inventory of all privileged accounts. Conduct quarterly reviews to verify privileges remain necessary. Use just-in-time access or PAM tools where feasible. Document the approval rationale for each privileged account."
+    },
+    {
+      "control_id": "AC.L2-3.1.6",
+      "title": "Non-Privileged Account Use",
+      "description": "Use non-privileged accounts or roles when accessing non-security functions.",
+      "level": "L2",
+      "domain": "AC",
+      "nist_ref": "3.1.6",
+      "assessment_objectives": [
+        "Verify privileged users have separate accounts for privileged and non-privileged functions",
+        "Confirm privileged accounts are not used for email, browsing, or routine tasks"
+      ],
+      "expected_evidence_types": ["policy", "screenshot", "procedure", "user_account_inventory"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Require all privileged users to have two accounts: a standard account for daily work and a privileged account for administrative tasks. Document this requirement in policy. Verify with screenshots of account configurations showing admin accounts without email or internet access."
+    },
+    {
+      "control_id": "AC.L2-3.1.7",
+      "title": "Privileged Function Auditing",
+      "description": "Prevent non-privileged users from executing privileged functions and capture the execution of such functions in audit logs.",
+      "level": "L2",
+      "domain": "AC",
+      "nist_ref": "3.1.7",
+      "assessment_objectives": [
+        "Verify privileged functions are restricted to privileged accounts",
+        "Confirm privileged function executions are captured in audit logs",
+        "Review audit logs for completeness"
+      ],
+      "expected_evidence_types": ["policy", "log", "screenshot", "configuration_export"],
+      "recommended_review_frequency": "monthly",
+      "implementation_guidance": "Configure systems to log all privileged function executions (sudo, admin logins, elevated actions). Capture sample audit log exports showing privileged operations. Demonstrate that non-privileged accounts cannot execute administrative commands."
+    },
+    {
+      "control_id": "AC.L2-3.1.8",
+      "title": "Unsuccessful Login Attempts",
+      "description": "Limit unsuccessful logon attempts.",
+      "level": "L2",
+      "domain": "AC",
+      "nist_ref": "3.1.8",
+      "assessment_objectives": [
+        "Verify account lockout is configured",
+        "Confirm lockout threshold is defined and applied",
+        "Confirm lockout duration or manual unlock requirement"
+      ],
+      "expected_evidence_types": ["policy", "screenshot", "configuration_export"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Configure account lockout policy in Active Directory or IAM (recommended: 5-10 failed attempts, 15-30 minute lockout). Export and document the policy setting. Capture screenshots of the account lockout policy configuration in Group Policy or equivalent."
+    },
+    {
+      "control_id": "AC.L2-3.1.9",
+      "title": "Privacy and Security Notices",
+      "description": "Provide privacy and security notices consistent with CUI rules.",
+      "level": "L2",
+      "domain": "AC",
+      "nist_ref": "3.1.9",
+      "assessment_objectives": [
+        "Confirm system use banners are displayed at login",
+        "Verify banner content includes required privacy and security language"
+      ],
+      "expected_evidence_types": ["screenshot", "policy", "banner_text"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Configure login banners on all systems (workstations, servers, VPN, remote access). The banner should state that the system is for authorized users only, activity may be monitored, and unauthorized use is prohibited. Capture screenshots of banners at the login screen."
+    },
+    {
+      "control_id": "AC.L2-3.1.10",
+      "title": "Session Lock",
+      "description": "Use session lock with pattern-hiding displays after a period of inactivity.",
+      "level": "L2",
+      "domain": "AC",
+      "nist_ref": "3.1.10",
+      "assessment_objectives": [
+        "Verify session lock is configured after inactivity",
+        "Confirm inactivity period meets policy requirements",
+        "Verify pattern-hiding display is used"
+      ],
+      "expected_evidence_types": ["policy", "screenshot", "configuration_export"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Configure screensaver/session lock policies via Group Policy or MDM for all workstations (recommended: 15-minute inactivity). Verify pattern-hiding (blank screen or screensaver) is enforced, not just a locked but visible screen. Export GPO settings and capture screenshots."
+    },
+    {
+      "control_id": "AC.L2-3.1.11",
+      "title": "Session Termination",
+      "description": "Terminate (automatically) a user session after a defined condition.",
+      "level": "L2",
+      "domain": "AC",
+      "nist_ref": "3.1.11",
+      "assessment_objectives": [
+        "Confirm session termination conditions are defined",
+        "Verify sessions are automatically terminated after defined conditions"
+      ],
+      "expected_evidence_types": ["policy", "screenshot", "configuration_export"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Define session termination conditions in policy (e.g., idle timeout, end of business hours, logout trigger). Configure applications, VPN, and remote desktop sessions to enforce termination. Capture configuration screenshots. Document exceptions with compensating controls."
+    },
+    {
+      "control_id": "AC.L2-3.1.12",
+      "title": "Remote Access Monitoring",
+      "description": "Monitor and control remote access sessions.",
+      "level": "L2",
+      "domain": "AC",
+      "nist_ref": "3.1.12",
+      "assessment_objectives": [
+        "Identify all remote access methods in use",
+        "Verify monitoring mechanisms are in place for remote sessions",
+        "Confirm remote access is authorized and logged"
+      ],
+      "expected_evidence_types": ["policy", "log", "screenshot", "network_diagram", "configuration_export"],
+      "recommended_review_frequency": "monthly",
+      "implementation_guidance": "Inventory all remote access methods (VPN, RDP, Citrix, SSH). Enable logging for all remote sessions. Review logs monthly for anomalies. Document authorization requirements for remote access in policy. Capture screenshots of remote access server logging configurations."
+    },
+    {
+      "control_id": "AC.L2-3.1.13",
+      "title": "Remote Access Encryption",
+      "description": "Employ cryptographic mechanisms to protect the confidentiality of remote access sessions.",
+      "level": "L2",
+      "domain": "AC",
+      "nist_ref": "3.1.13",
+      "assessment_objectives": [
+        "Verify encryption is applied to all remote access sessions",
+        "Confirm encryption mechanisms meet minimum standards (FIPS-validated or equivalent)"
+      ],
+      "expected_evidence_types": ["policy", "screenshot", "configuration_export", "certificate_evidence"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Ensure VPN, RDP, and remote tools use TLS 1.2+ or equivalent strong encryption. Disable older protocols (SSLv3, TLS 1.0, 1.1). Capture VPN configuration showing encryption settings. Export SSL/TLS configuration from web-based remote access tools."
+    },
+    {
+      "control_id": "AC.L2-3.1.14",
+      "title": "Remote Access Routing",
+      "description": "Route remote access via managed access control points.",
+      "level": "L2",
+      "domain": "AC",
+      "nist_ref": "3.1.14",
+      "assessment_objectives": [
+        "Verify all remote access is routed through controlled access points",
+        "Confirm split tunneling is restricted or eliminated for CUI systems"
+      ],
+      "expected_evidence_types": ["policy", "network_diagram", "configuration_export", "screenshot"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Configure VPN to route all traffic (including internet) through the corporate gateway rather than split tunneling. Show network diagrams demonstrating the access path. Capture VPN configuration showing full-tunnel enforcement."
+    },
+    {
+      "control_id": "AC.L2-3.1.15",
+      "title": "Remote Access Authorizations",
+      "description": "Authorize remote execution of privileged commands and access to security-relevant information via remote access only for documented operational needs.",
+      "level": "L2",
+      "domain": "AC",
+      "nist_ref": "3.1.15",
+      "assessment_objectives": [
+        "Identify any privileged commands executed remotely",
+        "Verify documented approval exists for remote privileged access",
+        "Confirm restrictions are technically enforced"
+      ],
+      "expected_evidence_types": ["policy", "approval_record", "log", "screenshot"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Document operational justifications for any remote privileged access. Require management approval for accounts that can execute privileged commands remotely. Log all remote privileged command executions and review logs regularly."
+    },
+    {
+      "control_id": "AC.L2-3.1.16",
+      "title": "Wireless Access Authorization",
+      "description": "Authorize wireless access prior to allowing such connections.",
+      "level": "L2",
+      "domain": "AC",
+      "nist_ref": "3.1.16",
+      "assessment_objectives": [
+        "Verify wireless access requires formal authorization",
+        "Confirm wireless authorization is documented and maintained"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "approval_record", "screenshot"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Require formal approval before any device connects to wireless networks. Implement 802.1X or equivalent network access control. Maintain a list of approved wireless devices. Document the authorization process in procedure."
+    },
+    {
+      "control_id": "AC.L2-3.1.17",
+      "title": "Wireless Access Protection",
+      "description": "Protect wireless access using authentication and encryption.",
+      "level": "L2",
+      "domain": "AC",
+      "nist_ref": "3.1.17",
+      "assessment_objectives": [
+        "Verify wireless uses strong authentication",
+        "Confirm wireless traffic is encrypted",
+        "Verify wireless security standard meets WPA2/WPA3 or equivalent"
+      ],
+      "expected_evidence_types": ["policy", "screenshot", "configuration_export"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Configure all wireless access points to use WPA2-Enterprise or WPA3 with AES encryption. Disable WEP and WPA. Require authentication via 802.1X or pre-shared keys of sufficient complexity. Capture wireless configuration screenshots from the access point management console."
+    },
+    {
+      "control_id": "AC.L2-3.1.18",
+      "title": "Mobile Device Connection",
+      "description": "Control connection of mobile devices.",
+      "level": "L2",
+      "domain": "AC",
+      "nist_ref": "3.1.18",
+      "assessment_objectives": [
+        "Identify all mobile devices with access to CUI systems",
+        "Verify controls are in place to manage mobile device connections",
+        "Confirm mobile device policy exists and is enforced"
+      ],
+      "expected_evidence_types": ["policy", "mdm_screenshot", "device_inventory", "configuration_export"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Deploy a Mobile Device Management (MDM) solution for all mobile devices accessing CUI. Enforce encryption, PIN, remote wipe capability, and app restrictions through MDM policy. Capture MDM compliance reports and policy configuration screenshots."
+    },
+    {
+      "control_id": "AC.L2-3.1.19",
+      "title": "Encrypt CUI on Mobile",
+      "description": "Encrypt CUI on mobile devices and mobile computing platforms.",
+      "level": "L2",
+      "domain": "AC",
+      "nist_ref": "3.1.19",
+      "assessment_objectives": [
+        "Verify full-device or container encryption is enforced on mobile devices",
+        "Confirm encryption is validated through MDM compliance reporting"
+      ],
+      "expected_evidence_types": ["policy", "mdm_screenshot", "configuration_export"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Require device-level encryption on all mobile devices (iOS and Android both support this natively when a passcode is set). Enforce through MDM policy and generate compliance reports showing devices meeting encryption requirements."
+    },
+    {
+      "control_id": "AC.L2-3.1.21",
+      "title": "Portable Storage Use",
+      "description": "Limit use of portable storage devices on external systems.",
+      "level": "L2",
+      "domain": "AC",
+      "nist_ref": "3.1.21",
+      "assessment_objectives": [
+        "Verify policy restricts or controls use of portable storage on external systems",
+        "Confirm technical controls enforce portable storage restrictions"
+      ],
+      "expected_evidence_types": ["policy", "configuration_export", "screenshot"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Use Group Policy or endpoint DLP to block or restrict USB storage on company-managed devices when connected to external networks. Document the policy. Capture screenshots of endpoint protection configuration restricting removable media."
+    },
+    {
+      "control_id": "AT.L2-3.2.1",
+      "title": "Literacy Training and Awareness",
+      "description": "Ensure that managers, systems administrators, and users of organizational systems are made aware of the security risks associated with their activities and of the applicable policies, standards, and procedures related to the security of those systems.",
+      "level": "L2",
+      "domain": "AT",
+      "nist_ref": "3.2.1",
+      "assessment_objectives": [
+        "Verify security awareness training program exists",
+        "Confirm all relevant personnel have completed training",
+        "Verify training covers security risks and applicable policies"
+      ],
+      "expected_evidence_types": ["policy", "training_record", "procedure", "training_materials"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Implement an annual security awareness training program for all personnel who access CUI systems. Track completion records by name and date. Include modules on phishing, social engineering, CUI handling, acceptable use, and incident reporting. Keep training records for at least three years."
+    },
+    {
+      "control_id": "AT.L2-3.2.2",
+      "title": "Role-Based Risk Awareness",
+      "description": "Ensure that organizational personnel are adequately trained to carry out their assigned responsibilities related to system security.",
+      "level": "L2",
+      "domain": "AT",
+      "nist_ref": "3.2.2",
+      "assessment_objectives": [
+        "Identify role-specific security training requirements",
+        "Verify personnel receive role-appropriate security training",
+        "Confirm training records are maintained"
+      ],
+      "expected_evidence_types": ["policy", "training_record", "training_materials", "role_matrix"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Identify security-sensitive roles (system administrators, privileged users, incident responders) and assign role-specific training beyond general awareness. Document training completion with dates. For IT administrators, include OS hardening, patch management, and incident handling training."
+    },
+    {
+      "control_id": "AT.L2-3.2.3",
+      "title": "Insider Threat Awareness",
+      "description": "Provide security awareness training on recognizing and reporting potential threats, including those from insiders.",
+      "level": "L2",
+      "domain": "AT",
+      "nist_ref": "3.2.3",
+      "assessment_objectives": [
+        "Verify training includes insider threat recognition",
+        "Confirm reporting mechanisms for insider threats are communicated in training"
+      ],
+      "expected_evidence_types": ["training_record", "training_materials", "policy"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Include an insider threat module in annual security awareness training. Cover behavioral indicators of insider threats, reporting procedures, and consequences. Document in training materials and track completion."
+    },
+    {
+      "control_id": "AU.L2-3.3.1",
+      "title": "System Auditing",
+      "description": "Create and retain system audit logs and records to the extent needed to enable the monitoring, analysis, investigation, and reporting of unlawful or unauthorized system activity.",
+      "level": "L2",
+      "domain": "AU",
+      "nist_ref": "3.3.1",
+      "assessment_objectives": [
+        "Verify audit logging is enabled on all relevant systems",
+        "Confirm audit logs capture required event types",
+        "Verify log retention meets policy requirements"
+      ],
+      "expected_evidence_types": ["policy", "log", "screenshot", "configuration_export", "retention_policy"],
+      "recommended_review_frequency": "monthly",
+      "implementation_guidance": "Enable audit logging on all servers, network devices, and critical applications. Capture events including logins, logoffs, privilege escalations, object access, policy changes, and system events. Retain logs for at least 90 days online and 1 year total. Send logs to a centralized SIEM or log management system."
+    },
+    {
+      "control_id": "AU.L2-3.3.2",
+      "title": "User Accountability",
+      "description": "Ensure that the actions of individual system users can be uniquely traced to those users so they can be held accountable for their actions.",
+      "level": "L2",
+      "domain": "AU",
+      "nist_ref": "3.3.2",
+      "assessment_objectives": [
+        "Verify shared accounts are not used or are mitigated",
+        "Confirm individual user actions are traceable in logs",
+        "Verify unique identifiers are assigned to all users"
+      ],
+      "expected_evidence_types": ["policy", "log", "screenshot", "user_account_inventory"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Eliminate or minimize shared accounts. Each user must have a unique account. Configure logging to capture the unique user identifier for all actions. Document the policy prohibiting shared accounts and show log samples demonstrating individual traceability."
+    },
+    {
+      "control_id": "AU.L2-3.3.3",
+      "title": "Event Review",
+      "description": "Review and update logged events.",
+      "level": "L2",
+      "domain": "AU",
+      "nist_ref": "3.3.3",
+      "assessment_objectives": [
+        "Verify a process exists for reviewing audit events",
+        "Confirm logging configuration is periodically reviewed and updated",
+        "Verify event types are appropriate and comprehensive"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "review_record", "screenshot"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Establish a formal procedure for reviewing and updating the types of events logged. Conduct at least annual review of event log configuration to ensure all relevant activities are captured. Document review outcomes and any changes made."
+    },
+    {
+      "control_id": "AU.L2-3.3.4",
+      "title": "Audit Failure Alerting",
+      "description": "Alert in the event of an audit logging process failure.",
+      "level": "L2",
+      "domain": "AU",
+      "nist_ref": "3.3.4",
+      "assessment_objectives": [
+        "Verify alerting is configured for audit system failures",
+        "Confirm personnel receive alerts when logging fails"
+      ],
+      "expected_evidence_types": ["screenshot", "configuration_export", "alert_record", "policy"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Configure SIEM or log management system to alert when log collection fails, disk space for logs is exhausted, or log agents stop sending data. Show alert configuration screenshots and document who receives alerts and escalation path."
+    },
+    {
+      "control_id": "AU.L2-3.3.5",
+      "title": "Audit Correlation",
+      "description": "Correlate audit record review, analysis, and reporting processes for investigation and response to indications of unlawful, unauthorized, suspicious, or unusual activity.",
+      "level": "L2",
+      "domain": "AU",
+      "nist_ref": "3.3.5",
+      "assessment_objectives": [
+        "Verify a process for correlating audit records exists",
+        "Confirm correlation supports investigation and incident response"
+      ],
+      "expected_evidence_types": ["policy", "screenshot", "procedure", "siem_configuration"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Use a SIEM to correlate events across systems. Define correlation rules for common threat scenarios (multiple failed logins followed by success, off-hours privileged access, data exfiltration patterns). Document correlation procedures and capture SIEM correlation rule screenshots."
+    },
+    {
+      "control_id": "AU.L2-3.3.6",
+      "title": "Reduction and Reporting",
+      "description": "Provide audit record reduction and report generation to support on-demand analysis and reporting.",
+      "level": "L2",
+      "domain": "AU",
+      "nist_ref": "3.3.6",
+      "assessment_objectives": [
+        "Verify capability to reduce and filter audit records",
+        "Confirm on-demand reporting capability exists"
+      ],
+      "expected_evidence_types": ["screenshot", "procedure", "policy", "log"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Demonstrate audit record querying, filtering, and report generation from your SIEM or log management tool. Show how you can query by time range, user, event type, and system. Produce a sample audit report as evidence."
+    },
+    {
+      "control_id": "AU.L2-3.3.7",
+      "title": "Authoritative Time Source",
+      "description": "Provide a system capability that compares and synchronizes internal system clocks with an authoritative source to generate time stamps for audit records.",
+      "level": "L2",
+      "domain": "AU",
+      "nist_ref": "3.3.7",
+      "assessment_objectives": [
+        "Verify all systems are configured to sync time to an authoritative NTP source",
+        "Confirm time zone and synchronization settings are consistent"
+      ],
+      "expected_evidence_types": ["policy", "configuration_export", "screenshot"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Configure all servers, workstations, and network devices to synchronize time with a known-good NTP source (e.g., pool.ntp.org, time.windows.com, or internal NTP server syncing to a stratum-2 source). Export NTP configuration and capture screenshots. Ensure all systems use the same time zone for logs."
+    },
+    {
+      "control_id": "AU.L2-3.3.8",
+      "title": "Audit Protection",
+      "description": "Protect audit information and audit tools from unauthorized access, modification, and deletion.",
+      "level": "L2",
+      "domain": "AU",
+      "nist_ref": "3.3.8",
+      "assessment_objectives": [
+        "Verify audit logs are protected from unauthorized modification",
+        "Confirm access to audit tools is restricted to authorized personnel",
+        "Verify log integrity mechanisms are in place"
+      ],
+      "expected_evidence_types": ["policy", "configuration_export", "screenshot", "access_control_record"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Restrict write access to audit logs to logging processes only. Forward logs to a separate, protected SIEM system where even administrators cannot modify records. Implement log signing or hashing to detect tampering. Document access controls on audit systems."
+    },
+    {
+      "control_id": "AU.L2-3.3.9",
+      "title": "Audit Management",
+      "description": "Limit management of audit logging to a subset of privileged users.",
+      "level": "L2",
+      "domain": "AU",
+      "nist_ref": "3.3.9",
+      "assessment_objectives": [
+        "Verify audit management is restricted to specific privileged roles",
+        "Confirm separation between audit managers and general administrators"
+      ],
+      "expected_evidence_types": ["policy", "screenshot", "role_matrix", "user_access_list"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Create a dedicated audit administrator role with permissions limited to managing logging systems. Prevent general system administrators from modifying audit configurations without audit administrator involvement. Document role separation in your access control policy."
+    },
+    {
+      "control_id": "CM.L2-3.4.1",
+      "title": "System Baselining",
+      "description": "Establish and maintain baseline configurations and inventories of organizational systems (including hardware, software, firmware, and documentation) throughout the respective system development life cycles.",
+      "level": "L2",
+      "domain": "CM",
+      "nist_ref": "3.4.1",
+      "assessment_objectives": [
+        "Verify baseline configurations are documented for all systems",
+        "Confirm system inventory exists and is maintained",
+        "Verify baselines are updated as systems change"
+      ],
+      "expected_evidence_types": ["policy", "baseline_document", "system_inventory", "procedure"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Create documented baseline configurations for each system type (workstations, servers, network devices). Use a CMDB or spreadsheet to maintain hardware and software inventory. Review and update baselines quarterly or after significant changes. Export inventory reports as evidence."
+    },
+    {
+      "control_id": "CM.L2-3.4.2",
+      "title": "Security Configuration Enforcement",
+      "description": "Establish and enforce security configuration settings for information technology products employed in organizational systems.",
+      "level": "L2",
+      "domain": "CM",
+      "nist_ref": "3.4.2",
+      "assessment_objectives": [
+        "Verify security configuration settings are defined based on recognized standards",
+        "Confirm settings are enforced and deviations are documented"
+      ],
+      "expected_evidence_types": ["policy", "configuration_export", "screenshot", "hardening_standard", "scan_report"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Adopt a recognized security baseline such as CIS Benchmarks or DISA STIGs. Implement settings via Group Policy, MDM, or configuration management tools. Conduct quarterly configuration scans to detect drift. Document approved deviations with compensating controls."
+    },
+    {
+      "control_id": "CM.L2-3.4.3",
+      "title": "System Change Control",
+      "description": "Track, review, approve, and log changes to organizational systems.",
+      "level": "L2",
+      "domain": "CM",
+      "nist_ref": "3.4.3",
+      "assessment_objectives": [
+        "Verify a change management process exists",
+        "Confirm changes are reviewed and approved before implementation",
+        "Verify changes are logged with details"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "change_record", "approval_record"],
+      "recommended_review_frequency": "monthly",
+      "implementation_guidance": "Implement a formal change management process (ticketing system, change advisory board). Require documented requests, risk assessments, approvals, implementation plans, and test results for all changes to CUI systems. Retain change records as evidence."
+    },
+    {
+      "control_id": "CM.L2-3.4.4",
+      "title": "Security Impact Analysis",
+      "description": "Analyze the security impact of changes prior to implementation.",
+      "level": "L2",
+      "domain": "CM",
+      "nist_ref": "3.4.4",
+      "assessment_objectives": [
+        "Verify security impact analysis is performed before system changes",
+        "Confirm analysis results inform approval decisions"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "change_record", "security_review_record"],
+      "recommended_review_frequency": "monthly",
+      "implementation_guidance": "Add a security review step to the change management process. For each change request, document a security impact assessment covering: what CUI systems are affected, what security controls may be impacted, and what mitigations are required. Archive these assessments with change records."
+    },
+    {
+      "control_id": "CM.L2-3.4.5",
+      "title": "Access Restrictions for Change",
+      "description": "Define, document, approve, and enforce physical and logical access restrictions associated with changes to organizational systems.",
+      "level": "L2",
+      "domain": "CM",
+      "nist_ref": "3.4.5",
+      "assessment_objectives": [
+        "Verify access to make system changes is restricted",
+        "Confirm access restrictions are documented and enforced"
+      ],
+      "expected_evidence_types": ["policy", "screenshot", "role_matrix", "configuration_export"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Restrict change-making access to designated personnel only. Enforce through role-based access controls in your systems. Maintain and review a list of personnel authorized to make system changes. Document restrictions in access control policy."
+    },
+    {
+      "control_id": "CM.L2-3.4.6",
+      "title": "Least Functionality",
+      "description": "Employ the principle of least functionality by configuring organizational systems to provide only essential capabilities.",
+      "level": "L2",
+      "domain": "CM",
+      "nist_ref": "3.4.6",
+      "assessment_objectives": [
+        "Verify unnecessary services, ports, and features are disabled",
+        "Confirm systems are configured to provide only necessary functionality"
+      ],
+      "expected_evidence_types": ["policy", "configuration_export", "screenshot", "scan_report"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Disable unnecessary services, ports, and protocols on all systems. Use port/service scanning tools to identify and disable unused network services. Document approved services and exceptions. Conduct quarterly scans to detect unauthorized services."
+    },
+    {
+      "control_id": "CM.L2-3.4.7",
+      "title": "Nonessential Functionality",
+      "description": "Restrict, disable, or prevent the use of nonessential programs, functions, ports, protocols, and services.",
+      "level": "L2",
+      "domain": "CM",
+      "nist_ref": "3.4.7",
+      "assessment_objectives": [
+        "Verify application whitelisting or equivalent controls restrict unauthorized software",
+        "Confirm unnecessary ports and protocols are blocked at the network level"
+      ],
+      "expected_evidence_types": ["policy", "firewall_rule_export", "screenshot", "configuration_export"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Implement application whitelisting or application control policies (Windows Defender Application Control, AppLocker) to prevent unauthorized programs. Configure host-based and network firewalls to block unused ports and protocols. Export firewall rules and application control policies as evidence."
+    },
+    {
+      "control_id": "CM.L2-3.4.8",
+      "title": "Application Execution Policy",
+      "description": "Apply deny-by-exception (blacklisting) policy to prevent the use of unauthorized software or deny-all, permit-by-exception (whitelisting) policy to allow the execution of authorized software.",
+      "level": "L2",
+      "domain": "CM",
+      "nist_ref": "3.4.8",
+      "assessment_objectives": [
+        "Verify an application execution policy (whitelist or blacklist) is implemented",
+        "Confirm the policy is enforced technically"
+      ],
+      "expected_evidence_types": ["policy", "configuration_export", "screenshot"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Choose and implement either application whitelisting (preferred) or blacklisting. Document the chosen approach in policy. Export the whitelist/blacklist configuration. Test enforcement by attempting to run unauthorized software and capturing the result."
+    },
+    {
+      "control_id": "CM.L2-3.4.9",
+      "title": "User-Installed Software",
+      "description": "Control and monitor user-installed software.",
+      "level": "L2",
+      "domain": "CM",
+      "nist_ref": "3.4.9",
+      "assessment_objectives": [
+        "Verify policy restricts user-installed software",
+        "Confirm monitoring exists to detect unauthorized software installation"
+      ],
+      "expected_evidence_types": ["policy", "screenshot", "configuration_export", "scan_report"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Restrict standard users from installing software by removing local administrator rights. Monitor for software installation via endpoint management tools. Conduct quarterly software inventory scans and review for unauthorized applications. Document unauthorized software findings and remediation."
+    },
+    {
+      "control_id": "IA.L1-3.5.1",
+      "title": "User Identification",
+      "description": "Identify information system users, processes acting on behalf of users, or devices.",
+      "level": "L1",
+      "domain": "IA",
+      "nist_ref": "3.5.1",
+      "assessment_objectives": [
+        "Verify each user has a unique identifier",
+        "Confirm processes and devices are identified",
+        "Verify shared accounts are not permitted or are mitigated"
+      ],
+      "expected_evidence_types": ["policy", "user_account_inventory", "screenshot"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Assign unique identifiers to all users, processes, and devices. Maintain a user account inventory. Prohibit shared accounts in policy. Export user lists from Active Directory, cloud IAM, or application systems as evidence."
+    },
+    {
+      "control_id": "IA.L1-3.5.2",
+      "title": "User Authentication",
+      "description": "Authenticate (or verify) the identities of those users, processes, or devices as a prerequisite to allowing access to organizational information systems.",
+      "level": "L1",
+      "domain": "IA",
+      "nist_ref": "3.5.2",
+      "assessment_objectives": [
+        "Verify authentication is required before system access",
+        "Confirm authentication mechanisms are properly configured"
+      ],
+      "expected_evidence_types": ["policy", "screenshot", "configuration_export"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Ensure all systems require authentication before granting access. Capture screenshots of login prompts and authentication configurations. Document password policy or authentication standards in policy. Verify no systems allow anonymous or unauthenticated access to CUI."
+    },
+    {
+      "control_id": "IA.L2-3.5.3",
+      "title": "Multifactor Authentication",
+      "description": "Use multifactor authentication for local and network access to privileged accounts and for network access to non-privileged accounts.",
+      "level": "L2",
+      "domain": "IA",
+      "nist_ref": "3.5.3",
+      "assessment_objectives": [
+        "Verify MFA is enforced for all privileged accounts",
+        "Confirm MFA is enforced for non-privileged network access",
+        "Verify MFA meets two-factor criteria (something you know + something you have or are)"
+      ],
+      "expected_evidence_types": ["policy", "screenshot", "configuration_export", "mfa_enrollment_record"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Enable MFA on all privileged accounts immediately. Enforce MFA for all remote access (VPN, RDP, cloud console). Configure MFA through Active Directory, Azure AD, Okta, or equivalent. Capture MFA configuration screenshots and conditional access policies. Generate MFA enrollment reports."
+    },
+    {
+      "control_id": "IA.L2-3.5.4",
+      "title": "Replay-Resistant Authentication",
+      "description": "Employ replay-resistant authentication mechanisms for network access to privileged and non-privileged accounts.",
+      "level": "L2",
+      "domain": "IA",
+      "nist_ref": "3.5.4",
+      "assessment_objectives": [
+        "Verify authentication protocols are resistant to replay attacks",
+        "Confirm Kerberos, TLS mutual auth, or equivalent mechanisms are used"
+      ],
+      "expected_evidence_types": ["policy", "configuration_export", "screenshot"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Use modern authentication protocols (Kerberos, OAuth 2.0 with PKCE, SAML with signed assertions) that include nonces or timestamps to prevent replay attacks. Disable legacy authentication protocols (NTLM, basic auth over non-TLS). Document protocol configurations."
+    },
+    {
+      "control_id": "IA.L2-3.5.5",
+      "title": "Identifier Reuse",
+      "description": "Employ replay-resistant authentication mechanisms for network access to privileged and non-privileged accounts.",
+      "level": "L2",
+      "domain": "IA",
+      "nist_ref": "3.5.5",
+      "assessment_objectives": [
+        "Verify identifiers are not reused for a defined period after account termination",
+        "Confirm identifier management procedures prevent premature reuse"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "screenshot", "configuration_export"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Configure IAM systems to prevent reuse of user IDs for a defined period (typically 1-2 years) after the account is disabled or deleted. Document the identifier reuse policy. Show configuration or procedural controls preventing reuse."
+    },
+    {
+      "control_id": "IA.L2-3.5.6",
+      "title": "Identifier Handling",
+      "description": "Disable identifiers after a defined inactivity period.",
+      "level": "L2",
+      "domain": "IA",
+      "nist_ref": "3.5.6",
+      "assessment_objectives": [
+        "Verify inactive accounts are disabled after a defined period",
+        "Confirm automated or procedural controls enforce inactivity policy"
+      ],
+      "expected_evidence_types": ["policy", "screenshot", "configuration_export", "account_review_record"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Configure Active Directory or IAM to automatically disable accounts inactive for 30-90 days. Set this via Group Policy or IAM automation. Run quarterly inactive account reviews and document results. Capture configuration screenshots showing the inactivity threshold."
+    },
+    {
+      "control_id": "IA.L2-3.5.7",
+      "title": "Password Complexity and Change",
+      "description": "Enforce a minimum password complexity and change of characters when new passwords are created.",
+      "level": "L2",
+      "domain": "IA",
+      "nist_ref": "3.5.7",
+      "assessment_objectives": [
+        "Verify password complexity requirements are enforced",
+        "Confirm minimum password length and character requirements meet policy"
+      ],
+      "expected_evidence_types": ["policy", "screenshot", "configuration_export"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Configure password policy to require minimum 12-character passwords with complexity (or use passphrases of 15+ characters). Export Group Policy or IAM password policy configuration. Align with NIST SP 800-63B guidance (complexity optional if length is sufficient)."
+    },
+    {
+      "control_id": "IA.L2-3.5.8",
+      "title": "Password Reuse",
+      "description": "Prohibit password reuse for a specified number of generations.",
+      "level": "L2",
+      "domain": "IA",
+      "nist_ref": "3.5.8",
+      "assessment_objectives": [
+        "Verify password history is enforced preventing reuse",
+        "Confirm the number of remembered passwords meets policy"
+      ],
+      "expected_evidence_types": ["policy", "screenshot", "configuration_export"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Configure password history setting to retain at least 24 previous passwords (or more). Export Group Policy or IAM password history configuration. Capture screenshot showing the setting. Document the requirement in password policy."
+    },
+    {
+      "control_id": "IA.L2-3.5.9",
+      "title": "Temporary Passwords",
+      "description": "Allow temporary password use with an immediate change requirement.",
+      "level": "L2",
+      "domain": "IA",
+      "nist_ref": "3.5.9",
+      "assessment_objectives": [
+        "Verify temporary passwords require immediate change on first use",
+        "Confirm this is enforced technically"
+      ],
+      "expected_evidence_types": ["policy", "screenshot", "configuration_export"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Configure IAM to force password change at next login when issuing temporary or reset passwords. Capture screenshots showing the 'must change password at next login' setting. Document the procedure for issuing temporary credentials."
+    },
+    {
+      "control_id": "IA.L2-3.5.10",
+      "title": "Cryptographically Protected Passwords",
+      "description": "Store and transmit only cryptographically protected passwords.",
+      "level": "L2",
+      "domain": "IA",
+      "nist_ref": "3.5.10",
+      "assessment_objectives": [
+        "Verify passwords are stored using strong one-way hashing (bcrypt, Argon2, or equivalent)",
+        "Confirm passwords are transmitted only over encrypted channels"
+      ],
+      "expected_evidence_types": ["policy", "screenshot", "configuration_export", "developer_documentation"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Verify all applications store passwords as salted hashes using strong algorithms (bcrypt, Argon2, PBKDF2). Ensure password transmission uses TLS 1.2+. Capture configuration or code evidence. Never store plaintext passwords. Conduct periodic checks of credential storage mechanisms."
+    },
+    {
+      "control_id": "IA.L2-3.5.11",
+      "title": "Obscure Feedback",
+      "description": "Obscure feedback of authentication information.",
+      "level": "L2",
+      "domain": "IA",
+      "nist_ref": "3.5.11",
+      "assessment_objectives": [
+        "Verify password fields obscure entered characters",
+        "Confirm authentication error messages do not reveal sensitive information"
+      ],
+      "expected_evidence_types": ["screenshot", "policy"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Verify all login forms use password masking (asterisks or dots). Capture screenshots showing password field masking. Ensure authentication failure messages are generic ('invalid credentials') rather than revealing whether the username or password was incorrect."
+    },
+    {
+      "control_id": "IR.L2-3.6.1",
+      "title": "Incident Handling",
+      "description": "Establish an operational incident-handling capability for organizational systems that includes preparation, detection, analysis, containment, recovery, and user response activities.",
+      "level": "L2",
+      "domain": "IR",
+      "nist_ref": "3.6.1",
+      "assessment_objectives": [
+        "Verify an incident response plan is documented",
+        "Confirm incident response covers all required phases",
+        "Verify IR capability has been tested"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "ir_plan", "tabletop_record", "test_record"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Develop a formal Incident Response Plan covering preparation, identification, containment, eradication, recovery, and lessons learned. Conduct annual tabletop exercises and document results. Assign an IR team with defined roles. Keep the plan updated and tested."
+    },
+    {
+      "control_id": "IR.L2-3.6.2",
+      "title": "Incident Reporting",
+      "description": "Track, document, and report incidents to designated officials and/or authorities both internal and external as required.",
+      "level": "L2",
+      "domain": "IR",
+      "nist_ref": "3.6.2",
+      "assessment_objectives": [
+        "Verify incident tracking and documentation process exists",
+        "Confirm reporting requirements to internal and external parties are defined",
+        "Verify incidents are documented with required fields"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "incident_record", "reporting_template"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Use a ticketing system to track all incidents with required fields: date/time, description, systems affected, severity, responders, containment actions, resolution, and lessons learned. Document DoD reporting requirements (72-hour rule for CUI incidents). Keep incident records for at least 3 years."
+    },
+    {
+      "control_id": "IR.L2-3.6.3",
+      "title": "Incident Response Testing",
+      "description": "Test the organizational incident response capability.",
+      "level": "L2",
+      "domain": "IR",
+      "nist_ref": "3.6.3",
+      "assessment_objectives": [
+        "Verify IR capability is periodically tested",
+        "Confirm test results are documented and used to improve the plan"
+      ],
+      "expected_evidence_types": ["policy", "tabletop_record", "test_record", "after_action_report"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Conduct at least one annual tabletop exercise or simulation. Document the scenario, participants, timeline, decisions made, and lessons learned. Use outcomes to update the IR plan. Keep after-action reports as evidence of testing."
+    },
+    {
+      "control_id": "MA.L2-3.7.1",
+      "title": "Controlled Maintenance",
+      "description": "Perform maintenance on organizational systems.",
+      "level": "L2",
+      "domain": "MA",
+      "nist_ref": "3.7.1",
+      "assessment_objectives": [
+        "Verify maintenance activities are controlled and documented",
+        "Confirm maintenance is performed by authorized personnel or vendors"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "maintenance_record"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Document all maintenance activities on systems that process or store CUI. Maintain maintenance logs including date, personnel, system, actions taken, and authorization. Include vendor maintenance activities. Implement a formal maintenance request and approval process."
+    },
+    {
+      "control_id": "MA.L2-3.7.2",
+      "title": "Controlled Maintenance Tools",
+      "description": "Provide controls on the tools, techniques, mechanisms, and personnel for the maintenance of organizational systems.",
+      "level": "L2",
+      "domain": "MA",
+      "nist_ref": "3.7.2",
+      "assessment_objectives": [
+        "Verify maintenance tools are controlled and approved",
+        "Confirm maintenance personnel are authorized",
+        "Verify maintenance tools are inspected for tampering"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "tool_inventory", "maintenance_record"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Maintain an approved list of maintenance tools and personnel. Inspect tools used for maintenance to prevent introduction of malicious software. Require vendor technicians to be escorted or supervised. Document tool checks in maintenance records."
+    },
+    {
+      "control_id": "MA.L2-3.7.3",
+      "title": "Equipment Sanitization",
+      "description": "Ensure equipment removed for off-site maintenance is sanitized of any CUI.",
+      "level": "L2",
+      "domain": "MA",
+      "nist_ref": "3.7.3",
+      "assessment_objectives": [
+        "Verify CUI is removed or sanitized before equipment leaves premises for maintenance",
+        "Confirm sanitization procedures are documented"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "sanitization_record"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Establish a procedure requiring sanitization of all storage media before equipment is sent offsite. Document sanitization method used (overwrite, encryption, physical removal of drive). Keep sanitization records for all offsite maintenance events."
+    },
+    {
+      "control_id": "MA.L2-3.7.4",
+      "title": "Media Inspection",
+      "description": "Check media containing diagnostic and test programs for malicious code before the media are used in organizational systems.",
+      "level": "L2",
+      "domain": "MA",
+      "nist_ref": "3.7.4",
+      "assessment_objectives": [
+        "Verify maintenance media is scanned for malware before use",
+        "Confirm scanning procedure is documented"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "scan_record"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Require all maintenance media (USB drives, diagnostic tools) to be scanned for malware before being connected to CUI systems. Document the scanning requirement in policy. Keep scan records for each maintenance event. Use an up-to-date AV/EDR solution for scanning."
+    },
+    {
+      "control_id": "MA.L2-3.7.5",
+      "title": "Nonlocal Maintenance",
+      "description": "Require MFA to establish nonlocal maintenance sessions via external network connections and terminate such connections when nonlocal maintenance is complete.",
+      "level": "L2",
+      "domain": "MA",
+      "nist_ref": "3.7.5",
+      "assessment_objectives": [
+        "Verify remote maintenance sessions require MFA",
+        "Confirm remote sessions are terminated after maintenance",
+        "Verify remote maintenance sessions are logged"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "log", "screenshot"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Require MFA for all remote maintenance sessions (vendor remote access, admin remote desktop). Log all remote maintenance sessions with start/end times. Terminate sessions immediately after maintenance is complete. Capture session logs and MFA configuration as evidence."
+    },
+    {
+      "control_id": "MA.L2-3.7.6",
+      "title": "Maintenance Personnel",
+      "description": "Supervise the maintenance activities of maintenance personnel without required access authorization.",
+      "level": "L2",
+      "domain": "MA",
+      "nist_ref": "3.7.6",
+      "assessment_objectives": [
+        "Verify unauthorized maintenance personnel are supervised",
+        "Confirm procedures exist for managing maintenance personnel without clearance"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "maintenance_record"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Require an authorized escort for all vendor or contractor maintenance personnel who do not have background screening equivalent to your organization's requirements. Document escort assignments in maintenance records. Capture vendor access logs."
+    },
+    {
+      "control_id": "MP.L1-3.8.3",
+      "title": "Media Disposal",
+      "description": "Sanitize or destroy information system media before disposal or reuse.",
+      "level": "L1",
+      "domain": "MP",
+      "nist_ref": "3.8.3",
+      "assessment_objectives": [
+        "Verify media sanitization or destruction procedures are in place",
+        "Confirm media is sanitized before disposal or reuse",
+        "Verify sanitization records are maintained"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "sanitization_record", "destruction_certificate"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Implement a documented media sanitization and destruction procedure. Use NIST 800-88-compliant methods (Clear, Purge, or Destroy) based on media type. Maintain records of all media disposed of or reused, including method used, date, and personnel. Use a third-party certificate of destruction for physical media sent to vendors."
+    },
+    {
+      "control_id": "MP.L2-3.8.1",
+      "title": "Media Protection",
+      "description": "Protect (i.e., physically control and securely store) system media containing CUI, both paper and digital.",
+      "level": "L2",
+      "domain": "MP",
+      "nist_ref": "3.8.1",
+      "assessment_objectives": [
+        "Verify physical and digital media containing CUI is protected",
+        "Confirm media is stored in controlled areas with access restrictions"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "screenshot", "physical_inspection_record"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Store removable media and paper documents containing CUI in locked cabinets or secured rooms with access controls. Encrypt digital media. Implement check-out procedures for sensitive media. Conduct periodic physical inspection to verify compliance."
+    },
+    {
+      "control_id": "MP.L2-3.8.2",
+      "title": "Media Access",
+      "description": "Limit access to CUI on system media to authorized users.",
+      "level": "L2",
+      "domain": "MP",
+      "nist_ref": "3.8.2",
+      "assessment_objectives": [
+        "Verify access to CUI media is restricted to authorized users",
+        "Confirm access controls are technically or procedurally enforced"
+      ],
+      "expected_evidence_types": ["policy", "access_control_record", "screenshot"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Implement file-level permissions or encryption on all digital media containing CUI. Maintain an authorized user list for physical media access. Review access lists quarterly."
+    },
+    {
+      "control_id": "MP.L2-3.8.4",
+      "title": "Media Marking",
+      "description": "Mark media with necessary CUI markings and distribution limitations.",
+      "level": "L2",
+      "domain": "MP",
+      "nist_ref": "3.8.4",
+      "assessment_objectives": [
+        "Verify CUI media is properly marked",
+        "Confirm marking procedures are documented and followed"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "physical_evidence_photo", "screenshot"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Establish a marking standard for all physical and digital media containing CUI. Apply 'CUI' labels to physical media. Add CUI headers/footers to documents. Include distribution limitation statements. Capture photos of marked physical media and screenshots of digitally marked documents."
+    },
+    {
+      "control_id": "MP.L2-3.8.5",
+      "title": "Media Accountability",
+      "description": "Control access to media containing CUI and maintain accountability for media during transport.",
+      "level": "L2",
+      "domain": "MP",
+      "nist_ref": "3.8.5",
+      "assessment_objectives": [
+        "Verify accountability is maintained for media containing CUI",
+        "Confirm chain of custody exists for media transport"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "media_log", "chain_of_custody_record"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Maintain a media inventory log tracking location, custodian, and status of all physical media containing CUI. Document chain of custody for any media transport. Use tamper-evident packaging for media shipped externally."
+    },
+    {
+      "control_id": "MP.L2-3.8.6",
+      "title": "Portable Storage Encryption",
+      "description": "Implement cryptographic mechanisms to protect the confidentiality of CUI stored on digital media during transport unless otherwise protected by alternative physical safeguards.",
+      "level": "L2",
+      "domain": "MP",
+      "nist_ref": "3.8.6",
+      "assessment_objectives": [
+        "Verify portable media is encrypted when used to store CUI",
+        "Confirm encryption meets minimum standards"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "screenshot", "configuration_export"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Require encryption of all removable media used to store CUI (BitLocker To Go, VeraCrypt, or hardware-encrypted drives). Block use of unencrypted USB drives via endpoint controls. Capture screenshots of encryption configuration and endpoint controls."
+    },
+    {
+      "control_id": "MP.L2-3.8.7",
+      "title": "Removable Media",
+      "description": "Control the use of removable media on system components.",
+      "level": "L2",
+      "domain": "MP",
+      "nist_ref": "3.8.7",
+      "assessment_objectives": [
+        "Verify removable media use is controlled and limited",
+        "Confirm policy and technical controls govern removable media"
+      ],
+      "expected_evidence_types": ["policy", "configuration_export", "screenshot"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Block unauthorized removable media via Group Policy or endpoint protection. Implement a formal approval process for removable media use. Log removable media connection events. Capture GPO or MDM configuration restricting removable media."
+    },
+    {
+      "control_id": "MP.L2-3.8.8",
+      "title": "Shared Media",
+      "description": "Prohibit the use of portable storage devices when such devices have no identifiable owner.",
+      "level": "L2",
+      "domain": "MP",
+      "nist_ref": "3.8.8",
+      "assessment_objectives": [
+        "Verify policy prohibits use of unidentified portable storage",
+        "Confirm technical controls or procedures enforce this prohibition"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "screenshot"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Establish policy explicitly prohibiting use of found or unidentified USB drives or storage devices. Train users on social engineering risks from unidentified media. Configure endpoint controls to block non-whitelisted USB devices by serial number or device class."
+    },
+    {
+      "control_id": "MP.L2-3.8.9",
+      "title": "Protect CUI Backups",
+      "description": "Protect the confidentiality of backup CUI at storage locations.",
+      "level": "L2",
+      "domain": "MP",
+      "nist_ref": "3.8.9",
+      "assessment_objectives": [
+        "Verify backup media or locations containing CUI are protected",
+        "Confirm backups are encrypted and access-controlled"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "screenshot", "configuration_export", "backup_record"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Enable encryption for all backups containing CUI. Restrict access to backup storage locations to authorized personnel only. Capture backup encryption configuration screenshots. Document backup storage location security controls."
+    },
+    {
+      "control_id": "PE.L1-3.10.1",
+      "title": "Physical Access Authorizations",
+      "description": "Limit physical access to organizational information systems, equipment, and the respective operating environments to authorized individuals.",
+      "level": "L1",
+      "domain": "PE",
+      "nist_ref": "3.10.1",
+      "assessment_objectives": [
+        "Verify physical access to CUI systems is restricted to authorized individuals",
+        "Confirm access authorization process exists"
+      ],
+      "expected_evidence_types": ["policy", "access_list", "physical_inspection_record", "badge_system_screenshot"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Maintain an authorized physical access list for areas containing CUI systems. Use badge access, key locks, or mantraps to enforce physical access controls. Review the access list quarterly. Capture badge system reports or physical access logs as evidence."
+    },
+    {
+      "control_id": "PE.L1-3.10.3",
+      "title": "Visitor Escorts",
+      "description": "Escort visitors and monitor visitor activity.",
+      "level": "L1",
+      "domain": "PE",
+      "nist_ref": "3.10.3",
+      "assessment_objectives": [
+        "Verify visitors are escorted in areas containing CUI systems",
+        "Confirm visitor activity is monitored"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "visitor_log"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Implement a visitor management process requiring escort for all non-authorized visitors in secure areas. Maintain a visitor sign-in log including name, date, time, purpose, and escort name. Review logs periodically."
+    },
+    {
+      "control_id": "PE.L1-3.10.4",
+      "title": "Physical Access Logs",
+      "description": "Maintain audit logs of physical access.",
+      "level": "L1",
+      "domain": "PE",
+      "nist_ref": "3.10.4",
+      "assessment_objectives": [
+        "Verify physical access is logged",
+        "Confirm logs are reviewed periodically"
+      ],
+      "expected_evidence_types": ["policy", "access_log", "badge_system_screenshot"],
+      "recommended_review_frequency": "monthly",
+      "implementation_guidance": "Configure badge access systems to log all entry and exit events. Alternatively, maintain manual entry logs if badge systems are not used. Review access logs monthly for anomalies (after-hours access, unusual frequency). Retain logs for at least one year."
+    },
+    {
+      "control_id": "PE.L1-3.10.5",
+      "title": "Physical Access Control",
+      "description": "Control and manage physical access devices.",
+      "level": "L1",
+      "domain": "PE",
+      "nist_ref": "3.10.5",
+      "assessment_objectives": [
+        "Verify physical access devices (keys, badges, cards) are managed",
+        "Confirm access device issuance and revocation are documented"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "access_device_inventory", "revocation_record"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Maintain an inventory of all physical access devices (badges, keys, access cards). Document issuance and return for each device. Revoke and document revocation immediately upon termination. Conduct quarterly audits of the device inventory."
+    },
+    {
+      "control_id": "PE.L2-3.10.2",
+      "title": "Physical Access Monitoring",
+      "description": "Protect and monitor the physical facility and support infrastructure for organizational systems.",
+      "level": "L2",
+      "domain": "PE",
+      "nist_ref": "3.10.2",
+      "assessment_objectives": [
+        "Verify physical facility is protected and monitored",
+        "Confirm monitoring covers critical infrastructure"
+      ],
+      "expected_evidence_types": ["policy", "screenshot", "camera_configuration", "monitoring_record"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Install physical security monitoring (CCTV, intrusion detection) covering server rooms, network equipment areas, and entry points. Review camera coverage and retention settings annually. Document monitoring procedures and alarm response protocols."
+    },
+    {
+      "control_id": "PE.L2-3.10.6",
+      "title": "Alternative Work Sites",
+      "description": "Enforce safeguards to protect CUI at alternate work sites.",
+      "level": "L2",
+      "domain": "PE",
+      "nist_ref": "3.10.6",
+      "assessment_objectives": [
+        "Verify safeguards for CUI at remote or alternate work sites are defined",
+        "Confirm remote workers receive guidance and acknowledgment of requirements"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "acknowledgment_record", "training_record"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Document CUI handling requirements for remote workers (secure workspace, screen privacy, VPN use, no family access to work systems). Require annual acknowledgment of remote work security requirements. Provide training specific to home office security."
+    },
+    {
+      "control_id": "PS.L2-3.9.1",
+      "title": "Screen Individuals",
+      "description": "Screen individuals prior to authorizing access to organizational systems containing CUI.",
+      "level": "L2",
+      "domain": "PS",
+      "nist_ref": "3.9.1",
+      "assessment_objectives": [
+        "Verify personnel screening is performed before access is granted",
+        "Confirm screening criteria are documented"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "background_check_record"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Perform background checks on all personnel who will have access to CUI systems. Document minimum screening criteria (criminal, employment history, reference checks). Retain screening documentation. Require re-screening for personnel moving to higher-trust roles."
+    },
+    {
+      "control_id": "PS.L2-3.9.2",
+      "title": "Personnel Termination",
+      "description": "Ensure that CUI and organizational systems are protected during and after personnel actions such as terminations and transfers.",
+      "level": "L2",
+      "domain": "PS",
+      "nist_ref": "3.9.2",
+      "assessment_objectives": [
+        "Verify termination procedures include access revocation",
+        "Confirm transfers result in appropriate access modification",
+        "Verify termination checklist includes CUI-related actions"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "termination_record", "access_revocation_record"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Maintain a formal employee termination checklist that includes: immediate account disablement, badge revocation, equipment return, and CUI document retrieval. Track completion of each checklist item. For transfers, review and adjust access within 24 hours of the effective date."
+    },
+    {
+      "control_id": "RA.L2-3.11.1",
+      "title": "Risk Assessment",
+      "description": "Periodically assess the risk to organizational operations, organizational assets, and individuals resulting from the operation of organizational systems and the associated processing, storage, or transmission of CUI.",
+      "level": "L2",
+      "domain": "RA",
+      "nist_ref": "3.11.1",
+      "assessment_objectives": [
+        "Verify a formal risk assessment process exists",
+        "Confirm risk assessments are performed periodically",
+        "Verify risk assessment results are documented"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "risk_assessment_report"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Conduct a formal risk assessment at least annually or following significant changes. Document threats, vulnerabilities, likelihood, impact, and risk level. Produce a risk register or risk assessment report. Use results to prioritize security investments and remediation activities."
+    },
+    {
+      "control_id": "RA.L2-3.11.2",
+      "title": "Vulnerability Scan",
+      "description": "Scan for vulnerabilities in organizational systems and applications periodically and when new vulnerabilities affecting those systems are identified.",
+      "level": "L2",
+      "domain": "RA",
+      "nist_ref": "3.11.2",
+      "assessment_objectives": [
+        "Verify vulnerability scanning is performed periodically",
+        "Confirm scans cover all CUI systems",
+        "Verify scan findings are tracked and remediated"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "scan_report", "remediation_record"],
+      "recommended_review_frequency": "monthly",
+      "implementation_guidance": "Run authenticated vulnerability scans at least monthly on all systems in the CUI environment. Use a recognized tool (Tenable Nessus, Qualys, OpenVAS). Generate scan reports and track findings to remediation. Document vulnerability management procedures and SLAs for remediation by severity."
+    },
+    {
+      "control_id": "RA.L2-3.11.3",
+      "title": "Vulnerability Remediation",
+      "description": "Remediate vulnerabilities in accordance with risk assessments.",
+      "level": "L2",
+      "domain": "RA",
+      "nist_ref": "3.11.3",
+      "assessment_objectives": [
+        "Verify a remediation process exists based on risk",
+        "Confirm vulnerabilities are remediated within defined timeframes",
+        "Verify remediation is tracked to completion"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "remediation_record", "patch_record", "scan_report"],
+      "recommended_review_frequency": "monthly",
+      "implementation_guidance": "Define remediation SLAs based on CVSS severity: Critical (15 days), High (30 days), Medium (90 days), Low (180 days). Track vulnerabilities in a remediation register. Compare before/after scans to verify remediation. Document accepted risk for vulnerabilities that cannot be immediately remediated."
+    },
+    {
+      "control_id": "CA.L2-3.12.1",
+      "title": "Security Control Assessment",
+      "description": "Periodically assess the security controls in organizational systems to determine if the controls are effective in their application.",
+      "level": "L2",
+      "domain": "CA",
+      "nist_ref": "3.12.1",
+      "assessment_objectives": [
+        "Verify security controls are periodically assessed",
+        "Confirm assessment results are documented",
+        "Verify deficiencies are tracked for remediation"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "assessment_report", "finding_record"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Conduct an annual internal security control assessment or self-assessment against CMMC/NIST 800-171 requirements. Document control effectiveness determinations with evidence. Track deficiencies as POA&M items. Use findings to drive remediation priorities."
+    },
+    {
+      "control_id": "CA.L2-3.12.2",
+      "title": "Plan of Action",
+      "description": "Develop and implement plans of action designed to correct deficiencies and reduce or eliminate vulnerabilities in organizational systems.",
+      "level": "L2",
+      "domain": "CA",
+      "nist_ref": "3.12.2",
+      "assessment_objectives": [
+        "Verify a POA&M process exists for identified deficiencies",
+        "Confirm POA&M items are tracked with milestones and responsible parties",
+        "Verify POA&M is updated regularly"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "poam_document", "remediation_record"],
+      "recommended_review_frequency": "monthly",
+      "implementation_guidance": "Maintain a formal POA&M document or tracker with: control, deficiency description, responsible party, planned completion date, milestones, and current status. Update monthly. Senior leadership should review POA&M status quarterly. Close items only when evidence of remediation is verified."
+    },
+    {
+      "control_id": "CA.L2-3.12.3",
+      "title": "Security Control Monitoring",
+      "description": "Monitor security controls on an ongoing basis to ensure the continued effectiveness of the controls.",
+      "level": "L2",
+      "domain": "CA",
+      "nist_ref": "3.12.3",
+      "assessment_objectives": [
+        "Verify continuous monitoring activities are defined",
+        "Confirm monitoring activities are performed on schedule",
+        "Verify monitoring results inform risk management decisions"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "monitoring_record", "report"],
+      "recommended_review_frequency": "monthly",
+      "implementation_guidance": "Define an ongoing authorization and continuous monitoring strategy. Assign monitoring frequencies to each control based on volatility and risk. Track monitoring completion. Use automated tools (SIEM, vulnerability scanners, configuration management) to provide continuous visibility."
+    },
+    {
+      "control_id": "CA.L2-3.12.4",
+      "title": "System Security Plan",
+      "description": "Develop, document, and periodically update system security plans that describe system boundaries, system environments of operation, how security requirements are implemented, and the relationships with or connections to other systems.",
+      "level": "L2",
+      "domain": "CA",
+      "nist_ref": "3.12.4",
+      "assessment_objectives": [
+        "Verify an SSP is developed and maintained",
+        "Confirm SSP describes system boundaries, environments, and control implementations",
+        "Verify SSP is reviewed and updated periodically"
+      ],
+      "expected_evidence_types": ["ssp_document", "policy", "network_diagram"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Develop a System Security Plan (SSP) that documents: system name and description, system boundary, data types including CUI, user roles, network connections, implementation status of each NIST 800-171 control. Review and update the SSP at least annually and after significant changes."
+    },
+    {
+      "control_id": "SC.L1-3.13.1",
+      "title": "Boundary Protection",
+      "description": "Monitor, control, and protect organizational communications (i.e., information transmitted or received by organizational information systems) at the external boundaries and key internal boundaries of the information systems.",
+      "level": "L1",
+      "domain": "SC",
+      "nist_ref": "3.13.1",
+      "assessment_objectives": [
+        "Verify boundary protection devices (firewalls, routers) are in place",
+        "Confirm monitoring of traffic at system boundaries",
+        "Verify communications are controlled at external and key internal boundaries"
+      ],
+      "expected_evidence_types": ["policy", "network_diagram", "firewall_rule_export", "screenshot"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Deploy and configure firewalls at all external network boundaries. Segment internal networks to protect CUI environments. Document the network architecture with data flow. Export firewall rules and review quarterly. Capture screenshots of firewall management console showing boundary protection configuration."
+    },
+    {
+      "control_id": "SC.L1-3.13.5",
+      "title": "Public Access Separation",
+      "description": "Implement subnetworks for publicly accessible system components that are physically or logically separated from internal networks.",
+      "level": "L1",
+      "domain": "SC",
+      "nist_ref": "3.13.5",
+      "assessment_objectives": [
+        "Verify publicly accessible systems are separated from internal networks",
+        "Confirm DMZ or equivalent separation is implemented"
+      ],
+      "expected_evidence_types": ["policy", "network_diagram", "firewall_rule_export", "screenshot"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Place all public-facing systems (web servers, email gateways) in a DMZ or separate network segment isolated from the internal CUI network. Show the separation in network diagrams. Export firewall rules demonstrating that the DMZ cannot directly reach the internal CUI network."
+    },
+    {
+      "control_id": "SC.L2-3.13.2",
+      "title": "Security Engineering Principles",
+      "description": "Employ security engineering principles in the specification, design, development, implementation, and modification of the organizational system.",
+      "level": "L2",
+      "domain": "SC",
+      "nist_ref": "3.13.2",
+      "assessment_objectives": [
+        "Verify security engineering principles are applied during system design and development",
+        "Confirm security requirements are identified early in the development lifecycle"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "design_document", "review_record"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Adopt a Secure Development Lifecycle (SDLC) that includes security requirements at each phase. Document security design reviews, threat modeling, and code reviews for systems that handle CUI. Capture review records and design documentation."
+    },
+    {
+      "control_id": "SC.L2-3.13.3",
+      "title": "Role Separation",
+      "description": "Separate user functionality from system management functionality.",
+      "level": "L2",
+      "domain": "SC",
+      "nist_ref": "3.13.3",
+      "assessment_objectives": [
+        "Verify user functions are separated from administrative/management functions",
+        "Confirm separation is technically enforced"
+      ],
+      "expected_evidence_types": ["policy", "screenshot", "configuration_export", "architecture_document"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Ensure management interfaces (admin consoles, APIs, management ports) are accessible only from designated management networks or accounts. Isolate management functions from user interfaces. Capture architecture diagrams and configuration showing the separation."
+    },
+    {
+      "control_id": "SC.L2-3.13.4",
+      "title": "Shared Resource Control",
+      "description": "Prevent unauthorized and unintended information transfer via shared system resources.",
+      "level": "L2",
+      "domain": "SC",
+      "nist_ref": "3.13.4",
+      "assessment_objectives": [
+        "Verify controls prevent information leakage through shared resources",
+        "Confirm memory isolation and resource cleanup are enforced"
+      ],
+      "expected_evidence_types": ["policy", "configuration_export", "architecture_document"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Use operating systems and hypervisors that provide strong memory isolation between processes and virtual machines. Enable features like address space layout randomization (ASLR). For shared storage systems, enforce strict access controls to prevent cross-tenant data access."
+    },
+    {
+      "control_id": "SC.L2-3.13.6",
+      "title": "Network Communication by Exception",
+      "description": "Deny network communications traffic by default and allow network communications traffic by exception (i.e., deny all, permit by exception).",
+      "level": "L2",
+      "domain": "SC",
+      "nist_ref": "3.13.6",
+      "assessment_objectives": [
+        "Verify default-deny firewall rules are implemented",
+        "Confirm only explicitly permitted traffic is allowed"
+      ],
+      "expected_evidence_types": ["policy", "firewall_rule_export", "screenshot"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Configure all firewalls with a default-deny rule at the bottom of each rule set. Document and justify each permit rule. Conduct quarterly firewall rule reviews to remove unnecessary rules. Export firewall configurations as evidence."
+    },
+    {
+      "control_id": "SC.L2-3.13.7",
+      "title": "Split Tunneling",
+      "description": "Prevent remote devices from simultaneously establishing non-remote connections with the system and communicating via some other connection to resources in external networks (i.e., split tunneling).",
+      "level": "L2",
+      "domain": "SC",
+      "nist_ref": "3.13.7",
+      "assessment_objectives": [
+        "Verify split tunneling is disabled or restricted for remote access to CUI systems",
+        "Confirm all remote device traffic routes through controlled access points"
+      ],
+      "expected_evidence_types": ["policy", "configuration_export", "screenshot"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Disable split tunneling in VPN client configurations to force all traffic through the corporate gateway. Capture VPN configuration screenshots showing full-tunnel enforcement. Test that internet traffic routes through the corporate connection when VPN is active."
+    },
+    {
+      "control_id": "SC.L2-3.13.8",
+      "title": "Data in Transit Encryption",
+      "description": "Implement cryptographic mechanisms to prevent unauthorized disclosure of CUI during transmission unless otherwise protected by alternative physical safeguards.",
+      "level": "L2",
+      "domain": "SC",
+      "nist_ref": "3.13.8",
+      "assessment_objectives": [
+        "Verify CUI is encrypted in transit using strong protocols",
+        "Confirm encryption is applied across all transmission paths"
+      ],
+      "expected_evidence_types": ["policy", "configuration_export", "screenshot", "certificate_evidence", "scan_report"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Enforce TLS 1.2 or 1.3 for all CUI transmission. Disable older protocols (SSLv3, TLS 1.0, 1.1). Use SSL Labs or equivalent to scan public-facing endpoints for TLS configuration. Encrypt email containing CUI using S/MIME or TLS enforcement. Document encryption standards in policy."
+    },
+    {
+      "control_id": "SC.L2-3.13.9",
+      "title": "Network Disconnect",
+      "description": "Terminate network connections associated with communications sessions at the end of the sessions or after a defined period of inactivity.",
+      "level": "L2",
+      "domain": "SC",
+      "nist_ref": "3.13.9",
+      "assessment_objectives": [
+        "Verify network connections are terminated after inactivity or session end",
+        "Confirm timeout values are configured"
+      ],
+      "expected_evidence_types": ["policy", "configuration_export", "screenshot"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Configure VPN, remote access, and application session timeouts to terminate inactive connections. Set appropriate timeouts (e.g., 30 minutes for VPN, 15 minutes for web applications). Capture configuration screenshots from VPN and application servers."
+    },
+    {
+      "control_id": "SC.L2-3.13.10",
+      "title": "Key Management",
+      "description": "Establish and manage cryptographic keys for required cryptography employed in organizational systems.",
+      "level": "L2",
+      "domain": "SC",
+      "nist_ref": "3.13.10",
+      "assessment_objectives": [
+        "Verify cryptographic key management procedures exist",
+        "Confirm keys are generated, stored, distributed, and revoked securely"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "key_management_record", "screenshot"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Document a key management policy covering key generation, distribution, storage, rotation, and revocation. Use dedicated key management systems (HSM, AWS KMS, Azure Key Vault) where possible. Rotate encryption keys periodically. Document key custodian responsibilities."
+    },
+    {
+      "control_id": "SC.L2-3.13.11",
+      "title": "FIPS-Validated Cryptography",
+      "description": "Employ FIPS-validated cryptography when used to protect the confidentiality of CUI.",
+      "level": "L2",
+      "domain": "SC",
+      "nist_ref": "3.13.11",
+      "assessment_objectives": [
+        "Verify FIPS 140-2 or 140-3 validated modules are used for CUI encryption",
+        "Confirm cryptographic implementations meet FIPS validation requirements"
+      ],
+      "expected_evidence_types": ["policy", "configuration_export", "screenshot", "fips_certificate"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Enable FIPS mode on Windows systems via Group Policy. Use FIPS-validated encryption for VPN, file encryption, and application encryption. Verify vendor FIPS certificates from NIST CMVP. Capture FIPS mode configuration screenshots and document FIPS certificate numbers."
+    },
+    {
+      "control_id": "SC.L2-3.13.12",
+      "title": "Collaborative Device Control",
+      "description": "Prohibit remote activation of collaborative computing devices and provide indication of use to users present at the device.",
+      "level": "L2",
+      "domain": "SC",
+      "nist_ref": "3.13.12",
+      "assessment_objectives": [
+        "Verify remote activation of cameras and microphones is restricted",
+        "Confirm users are visually indicated when collaborative devices are active"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "configuration_export", "screenshot"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Disable remote activation of cameras and microphones via Group Policy or MDM. Cover cameras not in use in secure areas. Require indicator lights to show when cameras or microphones are active. Document control in policy."
+    },
+    {
+      "control_id": "SC.L2-3.13.13",
+      "title": "Mobile Code",
+      "description": "Control and monitor the use of mobile code.",
+      "level": "L2",
+      "domain": "SC",
+      "nist_ref": "3.13.13",
+      "assessment_objectives": [
+        "Verify mobile code policies are established",
+        "Confirm mobile code is monitored and controlled"
+      ],
+      "expected_evidence_types": ["policy", "configuration_export", "screenshot"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Define acceptable and prohibited forms of mobile code (JavaScript, Java, ActiveX). Configure web filtering and endpoint protection to control execution of mobile code from untrusted sources. Document controls in policy."
+    },
+    {
+      "control_id": "SC.L2-3.13.14",
+      "title": "VoIP Control",
+      "description": "Control and monitor the use of Voice over Internet Protocol (VoIP) technologies.",
+      "level": "L2",
+      "domain": "SC",
+      "nist_ref": "3.13.14",
+      "assessment_objectives": [
+        "Verify VoIP is controlled and monitored if in use",
+        "Confirm VoIP traffic is encrypted and separated from data networks"
+      ],
+      "expected_evidence_types": ["policy", "configuration_export", "network_diagram"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "If VoIP is used, segment VoIP traffic on a dedicated VLAN separate from CUI data networks. Enable SRTP encryption for VoIP calls. Document VoIP security controls in policy. If VoIP is not used, document that explicitly."
+    },
+    {
+      "control_id": "SC.L2-3.13.15",
+      "title": "Communications Authenticity",
+      "description": "Protect the authenticity of communications sessions.",
+      "level": "L2",
+      "domain": "SC",
+      "nist_ref": "3.13.15",
+      "assessment_objectives": [
+        "Verify mechanisms are in place to authenticate communications sessions",
+        "Confirm session integrity is protected"
+      ],
+      "expected_evidence_types": ["policy", "configuration_export", "screenshot"],
+      "recommended_review_frequency": "annually",
+      "implementation_guidance": "Implement TLS mutual authentication for sensitive services. Use HTTPS with valid certificates. Implement DNSSEC where feasible. Enable email authentication standards (SPF, DKIM, DMARC). Capture configuration evidence."
+    },
+    {
+      "control_id": "SC.L2-3.13.16",
+      "title": "Data at Rest",
+      "description": "Protect the confidentiality of CUI at rest.",
+      "level": "L2",
+      "domain": "SC",
+      "nist_ref": "3.13.16",
+      "assessment_objectives": [
+        "Verify CUI at rest is encrypted",
+        "Confirm encryption covers all storage locations containing CUI"
+      ],
+      "expected_evidence_types": ["policy", "configuration_export", "screenshot"],
+      "recommended_review_frequency": "quarterly",
+      "implementation_guidance": "Enable full-disk encryption (BitLocker, FileVault) on all workstations and laptops. Encrypt databases and file shares containing CUI. Encrypt cloud storage buckets. Capture encryption configuration screenshots for each storage type. Document encryption standards."
+    },
+    {
+      "control_id": "SI.L1-3.14.1",
+      "title": "Flaw Remediation",
+      "description": "Identify, report, and correct information and information system flaws in a timely manner.",
+      "level": "L1",
+      "domain": "SI",
+      "nist_ref": "3.14.1",
+      "assessment_objectives": [
+        "Verify a patch management process exists",
+        "Confirm flaws are identified and corrected in a timely manner",
+        "Verify patch status is tracked"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "patch_record", "scan_report"],
+      "recommended_review_frequency": "monthly",
+      "implementation_guidance": "Implement a patch management process with defined timelines by severity. Use Windows Update, WSUS, or a patch management tool. Generate monthly patch compliance reports. Track critical and high patches to remediation within defined SLAs. Keep patch records as evidence."
+    },
+    {
+      "control_id": "SI.L1-3.14.2",
+      "title": "Malicious Code Protection",
+      "description": "Provide protection from malicious code at appropriate locations within organizational information systems.",
+      "level": "L1",
+      "domain": "SI",
+      "nist_ref": "3.14.2",
+      "assessment_objectives": [
+        "Verify anti-malware is deployed on all systems",
+        "Confirm anti-malware is configured for real-time scanning and automatic updates",
+        "Verify coverage includes entry and exit points"
+      ],
+      "expected_evidence_types": ["policy", "screenshot", "configuration_export", "deployment_report"],
+      "recommended_review_frequency": "monthly",
+      "implementation_guidance": "Deploy endpoint detection and response (EDR) or antivirus on all workstations, servers, and email gateways. Configure real-time protection and automatic signature updates. Generate deployment and compliance reports showing coverage. Capture management console screenshots showing all endpoints protected."
+    },
+    {
+      "control_id": "SI.L1-3.14.4",
+      "title": "Update Malicious Code Protection",
+      "description": "Update malicious code protection mechanisms when new releases are available.",
+      "level": "L1",
+      "domain": "SI",
+      "nist_ref": "3.14.4",
+      "assessment_objectives": [
+        "Verify malware definitions are automatically updated",
+        "Confirm update frequency meets requirements",
+        "Verify coverage report shows current signatures"
+      ],
+      "expected_evidence_types": ["policy", "screenshot", "configuration_export", "report"],
+      "recommended_review_frequency": "monthly",
+      "implementation_guidance": "Configure AV/EDR to automatically update signatures at least daily. Set up management console alerts for endpoints that fall behind on updates. Capture update configuration screenshots and generate reports showing signature currency across all endpoints."
+    },
+    {
+      "control_id": "SI.L1-3.14.5",
+      "title": "System and File Scanning",
+      "description": "Perform periodic scans of the information system and real-time scans of files from external sources as files are downloaded, opened, or executed.",
+      "level": "L1",
+      "domain": "SI",
+      "nist_ref": "3.14.5",
+      "assessment_objectives": [
+        "Verify periodic full system scans are scheduled",
+        "Confirm real-time scanning is enabled for files from external sources",
+        "Verify scan results are reviewed"
+      ],
+      "expected_evidence_types": ["policy", "screenshot", "configuration_export", "scan_record"],
+      "recommended_review_frequency": "monthly",
+      "implementation_guidance": "Configure weekly full system scans and real-time protection for all endpoints. Show scan schedule configuration in management console. Review scan logs monthly for detections and missed scans. Document any exclusions with justification."
+    },
+    {
+      "control_id": "SI.L2-3.14.3",
+      "title": "Security Alerts",
+      "description": "Monitor information system security alerts and advisories and take appropriate actions in response.",
+      "level": "L2",
+      "domain": "SI",
+      "nist_ref": "3.14.3",
+      "assessment_objectives": [
+        "Verify a process exists to receive and act on security alerts",
+        "Confirm alerts from trusted sources are monitored",
+        "Verify responses to alerts are documented"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "alert_subscription_record", "response_record"],
+      "recommended_review_frequency": "monthly",
+      "implementation_guidance": "Subscribe to US-CERT (CISA), vendor security advisories, and ISAC feeds. Assign responsibility for monitoring and triaging alerts. Document the process for evaluating and responding to relevant alerts. Keep records of alerts received and actions taken."
+    },
+    {
+      "control_id": "SI.L2-3.14.6",
+      "title": "Security Monitoring",
+      "description": "Monitor organizational systems, including inbound and outbound communications traffic, to detect attacks and indicators of potential attacks.",
+      "level": "L2",
+      "domain": "SI",
+      "nist_ref": "3.14.6",
+      "assessment_objectives": [
+        "Verify security monitoring is implemented for inbound and outbound traffic",
+        "Confirm monitoring detects attack patterns and indicators of compromise",
+        "Verify monitoring alerts are reviewed"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "siem_configuration", "screenshot", "alert_record"],
+      "recommended_review_frequency": "monthly",
+      "implementation_guidance": "Deploy a SIEM or security monitoring platform to collect and analyze network and system logs. Configure IDS/IPS rules to detect known attack signatures. Implement network flow monitoring. Establish a process for reviewing and responding to security alerts daily."
+    },
+    {
+      "control_id": "SI.L2-3.14.7",
+      "title": "Identify Unauthorized Use",
+      "description": "Identify unauthorized use of organizational systems.",
+      "level": "L2",
+      "domain": "SI",
+      "nist_ref": "3.14.7",
+      "assessment_objectives": [
+        "Verify mechanisms exist to detect unauthorized system use",
+        "Confirm anomalous activity is investigated"
+      ],
+      "expected_evidence_types": ["policy", "procedure", "siem_configuration", "alert_record", "investigation_record"],
+      "recommended_review_frequency": "monthly",
+      "implementation_guidance": "Configure behavioral analytics or SIEM rules to detect anomalous access patterns (off-hours logins, access to unusual resources, large data transfers). Document the unauthorized use detection process. Keep records of anomalies investigated and outcomes."
+    }
+  ]
+}
