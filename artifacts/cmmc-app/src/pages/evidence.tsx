@@ -1,7 +1,12 @@
 import { useState, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useListEvidence, getListEvidenceQueryKey } from "@workspace/api-client-react";
-import type { EvidenceItem } from "@workspace/api-client-react";
+import {
+  useListEvidence,
+  getListEvidenceQueryKey,
+  useListControls,
+  useListUsers,
+} from "@workspace/api-client-react";
+import type { EvidenceItem, ControlWithStatus, User } from "@workspace/api-client-react";
 import { useOrg } from "@/context/OrgContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,6 +27,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from "@/components/ui/command";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,7 +69,12 @@ import {
   Download,
   Filter,
   X,
+  Check,
+  ChevronDown,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+// ─── Constants ───────────────────────────────────────────────────────────────
 
 const EVIDENCE_TYPES = [
   { value: "policy", label: "Policy" },
@@ -83,6 +107,8 @@ const EVIDENCE_STATUSES = [
 
 const CMMC_LEVELS = ["L1", "L2"];
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 function formatDate(d: string | Date | null | undefined) {
   if (!d) return "—";
   return new Date(d).toLocaleDateString();
@@ -101,6 +127,249 @@ function normalizeStr(s: string) {
   return s.toLowerCase();
 }
 
+// ─── Multi-select control combobox ───────────────────────────────────────────
+
+interface MultiControlComboboxProps {
+  controls: ControlWithStatus[];
+  selected: string[];
+  onChange: (ids: string[]) => void;
+}
+
+function MultiControlCombobox({ controls, selected, onChange }: MultiControlComboboxProps) {
+  const [open, setOpen] = useState(false);
+
+  const toggle = (id: string) => {
+    onChange(
+      selected.includes(id)
+        ? selected.filter((s) => s !== id)
+        : [...selected, id]
+    );
+  };
+
+  const clearAll = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange([]);
+  };
+
+  const label = useMemo(() => {
+    if (selected.length === 0) return null;
+    if (selected.length === 1) {
+      const ctrl = controls.find((c) => c.id === selected[0]);
+      return ctrl ? ctrl.controlId : "1 selected";
+    }
+    return `${selected.length} Controls`;
+  }, [selected, controls]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn(
+            "h-8 text-sm px-3 gap-1.5 min-w-[11rem] max-w-[16rem] justify-between font-normal",
+            selected.length > 0 && "border-primary/60 bg-primary/5"
+          )}
+        >
+          <span className="truncate text-left flex-1">
+            {label ?? (
+              <span className="text-muted-foreground">All Controls</span>
+            )}
+          </span>
+          {selected.length > 0 ? (
+            <X
+              className="h-3 w-3 shrink-0 text-muted-foreground hover:text-foreground"
+              onClick={clearAll}
+            />
+          ) : (
+            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="p-0 w-[22rem]"
+        align="start"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        <Command>
+          <CommandInput placeholder="Search controls…" />
+          <CommandList>
+            <CommandEmpty>No controls found.</CommandEmpty>
+            {selected.length > 0 && (
+              <>
+                <CommandGroup heading="Selected">
+                  {controls
+                    .filter((c) => selected.includes(c.id))
+                    .map((ctrl) => (
+                      <CommandItem
+                        key={ctrl.id}
+                        value={`${ctrl.controlId} ${ctrl.title}`}
+                        onSelect={() => toggle(ctrl.id)}
+                        className="gap-2"
+                      >
+                        <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+                        <span className="font-mono text-xs shrink-0">{ctrl.controlId}</span>
+                        <span className="text-xs text-muted-foreground truncate">{ctrl.title}</span>
+                      </CommandItem>
+                    ))}
+                </CommandGroup>
+                <CommandSeparator />
+              </>
+            )}
+            <CommandGroup heading="All Controls">
+              {controls.map((ctrl) => {
+                const isSelected = selected.includes(ctrl.id);
+                return (
+                  <CommandItem
+                    key={ctrl.id}
+                    value={`${ctrl.controlId} ${ctrl.title}`}
+                    onSelect={() => toggle(ctrl.id)}
+                    className="gap-2"
+                  >
+                    <div
+                      className={cn(
+                        "h-3.5 w-3.5 shrink-0 rounded-sm border border-muted-foreground/40 flex items-center justify-center",
+                        isSelected && "bg-primary border-primary"
+                      )}
+                    >
+                      {isSelected && (
+                        <Check className="h-2.5 w-2.5 text-primary-foreground" />
+                      )}
+                    </div>
+                    <span className="font-mono text-xs shrink-0 text-primary">{ctrl.controlId}</span>
+                    <span className="text-xs text-muted-foreground truncate">{ctrl.title}</span>
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          </CommandList>
+          {selected.length > 0 && (
+            <div className="border-t p-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full h-7 text-xs text-muted-foreground"
+                onClick={() => onChange([])}
+              >
+                Clear all ({selected.length} selected)
+              </Button>
+            </div>
+          )}
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ─── Single-select owner combobox ─────────────────────────────────────────────
+
+interface SingleOwnerComboboxProps {
+  users: User[];
+  selected: string | null;
+  onChange: (id: string | null) => void;
+}
+
+function SingleOwnerCombobox({ users, selected, onChange }: SingleOwnerComboboxProps) {
+  const [open, setOpen] = useState(false);
+
+  const selectedUser = useMemo(
+    () => users.find((u) => u.id === selected) ?? null,
+    [users, selected]
+  );
+
+  const clearOwner = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange(null);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn(
+            "h-8 text-sm px-3 gap-1.5 min-w-[9rem] max-w-[14rem] justify-between font-normal",
+            selected && "border-primary/60 bg-primary/5"
+          )}
+        >
+          <span className="truncate text-left flex-1">
+            {selectedUser ? (
+              selectedUser.name
+            ) : (
+              <span className="text-muted-foreground">All Owners</span>
+            )}
+          </span>
+          {selected ? (
+            <X
+              className="h-3 w-3 shrink-0 text-muted-foreground hover:text-foreground"
+              onClick={clearOwner}
+            />
+          ) : (
+            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="p-0 w-[16rem]"
+        align="start"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        <Command>
+          <CommandInput placeholder="Search owners…" />
+          <CommandList>
+            <CommandEmpty>No users found.</CommandEmpty>
+            <CommandGroup>
+              {selected && (
+                <CommandItem
+                  value="__clear__"
+                  onSelect={() => {
+                    onChange(null);
+                    setOpen(false);
+                  }}
+                  className="gap-2 text-muted-foreground italic"
+                >
+                  <X className="h-3.5 w-3.5 shrink-0" />
+                  Clear filter
+                </CommandItem>
+              )}
+              {users.map((user) => {
+                const isSelected = user.id === selected;
+                return (
+                  <CommandItem
+                    key={user.id}
+                    value={`${user.name} ${user.email}`}
+                    onSelect={() => {
+                      onChange(isSelected ? null : user.id);
+                      setOpen(false);
+                    }}
+                    className="gap-2"
+                  >
+                    <Check
+                      className={cn(
+                        "h-3.5 w-3.5 shrink-0",
+                        isSelected ? "text-primary" : "opacity-0"
+                      )}
+                    />
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-sm truncate">{user.name}</span>
+                      <span className="text-[10px] text-muted-foreground capitalize">{user.role?.replace(/_/g, " ")}</span>
+                    </div>
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+
 export default function Evidence() {
   const { activeOrg } = useOrg();
   const { toast } = useToast();
@@ -111,12 +380,12 @@ export default function Evidence() {
   const [filterType, setFilterType] = useState("all");
   const [showArchived, setShowArchived] = useState(false);
 
-  // Client-side filters (applied on already-fetched data)
+  // Client-side filters
   const [search, setSearch] = useState("");
   const [filterDomain, setFilterDomain] = useState("all");
   const [filterLevel, setFilterLevel] = useState("all");
-  const [filterControl, setFilterControl] = useState("");
-  const [filterOwner, setFilterOwner] = useState("");
+  const [selectedControlIds, setSelectedControlIds] = useState<string[]>([]);
+  const [selectedOwnerId, setSelectedOwnerId] = useState<string | null>(null);
 
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -128,8 +397,10 @@ export default function Evidence() {
   };
 
   const { data: evidenceRaw = [], isLoading, refetch } = useListEvidence(queryParams as any);
+  const { data: allControls = [] } = useListControls();
+  const { data: allUsers = [] } = useListUsers();
 
-  // Build unique security domain options from currently fetched data
+  // Build unique security domain options from fetched evidence data
   const domainOptions = useMemo(() => {
     const seen = new Map<string, string>();
     for (const item of evidenceRaw) {
@@ -142,10 +413,11 @@ export default function Evidence() {
       .sort((a, b) => a.code.localeCompare(b.code));
   }, [evidenceRaw]);
 
-  // Client-side filtering (search, domain, level, control label, owner)
+  // Client-side filtering
   const evidence = useMemo(() => {
     let items = evidenceRaw as EvidenceItem[];
 
+    // Full-text search across multiple fields
     const sq = normalizeStr(search.trim());
     if (sq) {
       items = items.filter((item) => {
@@ -159,44 +431,42 @@ export default function Evidence() {
       });
     }
 
+    // Security domain filter
     if (filterDomain !== "all") {
       items = items.filter((item) =>
         (item.domains ?? []).some((d) => d.code === filterDomain)
       );
     }
 
+    // CMMC level filter
     if (filterLevel !== "all") {
       items = items.filter((item) =>
         (item.cmmcLevels ?? []).includes(filterLevel)
       );
     }
 
-    const fc = filterControl.trim();
-    if (fc) {
-      const fcn = normalizeStr(fc);
+    // Control multi-select filter — item must link to at least one selected control
+    if (selectedControlIds.length > 0) {
       items = items.filter((item) =>
-        (item.linkedControlLabels ?? []).some((l) => normalizeStr(l).includes(fcn))
+        (item.linkedControlIds ?? []).some((id) => selectedControlIds.includes(id))
       );
     }
 
-    const fo = filterOwner.trim();
-    if (fo) {
-      const fon = normalizeStr(fo);
-      items = items.filter((item) =>
-        item.ownerName ? normalizeStr(item.ownerName).includes(fon) : false
-      );
+    // Owner single-select filter
+    if (selectedOwnerId) {
+      items = items.filter((item) => item.ownerId === selectedOwnerId);
     }
 
     return items;
-  }, [evidenceRaw, search, filterDomain, filterLevel, filterControl, filterOwner]);
+  }, [evidenceRaw, search, filterDomain, filterLevel, selectedControlIds, selectedOwnerId]);
 
   const activeFilterCount = [
     filterStatus !== "all",
     filterType !== "all",
     filterDomain !== "all",
     filterLevel !== "all",
-    filterControl.trim() !== "",
-    filterOwner.trim() !== "",
+    selectedControlIds.length > 0,
+    selectedOwnerId !== null,
     showArchived,
     search.trim() !== "",
   ].filter(Boolean).length;
@@ -206,8 +476,8 @@ export default function Evidence() {
     setFilterType("all");
     setFilterDomain("all");
     setFilterLevel("all");
-    setFilterControl("");
-    setFilterOwner("");
+    setSelectedControlIds([]);
+    setSelectedOwnerId(null);
     setShowArchived(false);
     setSearch("");
   };
@@ -376,20 +646,18 @@ export default function Evidence() {
               </SelectContent>
             </Select>
 
-            {/* Linked Control text search */}
-            <Input
-              placeholder="Control (e.g. AC.L1)"
-              value={filterControl}
-              onChange={(e) => setFilterControl(e.target.value)}
-              className="h-8 text-sm w-40 font-mono"
+            {/* Control multi-select combobox */}
+            <MultiControlCombobox
+              controls={allControls}
+              selected={selectedControlIds}
+              onChange={setSelectedControlIds}
             />
 
-            {/* Owner text search */}
-            <Input
-              placeholder="Owner name…"
-              value={filterOwner}
-              onChange={(e) => setFilterOwner(e.target.value)}
-              className="h-8 text-sm w-36"
+            {/* Owner single-select combobox */}
+            <SingleOwnerCombobox
+              users={allUsers}
+              selected={selectedOwnerId}
+              onChange={setSelectedOwnerId}
             />
 
             {/* Show Archived toggle */}
@@ -415,6 +683,29 @@ export default function Evidence() {
               </Button>
             )}
           </div>
+
+          {/* Selected control badges */}
+          {selectedControlIds.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 items-center pt-0.5">
+              <span className="text-xs text-muted-foreground">Controls:</span>
+              {selectedControlIds.map((cid) => {
+                const ctrl = allControls.find((c) => c.id === cid);
+                return ctrl ? (
+                  <Badge
+                    key={cid}
+                    variant="secondary"
+                    className="text-xs gap-1 pl-2 pr-1 font-mono cursor-pointer"
+                    onClick={() =>
+                      setSelectedControlIds((prev) => prev.filter((id) => id !== cid))
+                    }
+                  >
+                    {ctrl.controlId}
+                    <X className="h-2.5 w-2.5" />
+                  </Badge>
+                ) : null;
+              })}
+            </div>
+          )}
 
           {/* Result count */}
           {!isLoading && (
@@ -525,7 +816,17 @@ export default function Evidence() {
                               <Badge
                                 key={c.id}
                                 variant="outline"
-                                className="text-[10px] font-mono px-1.5 py-0"
+                                className={cn(
+                                  "text-[10px] font-mono px-1.5 py-0 cursor-pointer transition-colors",
+                                  selectedControlIds.includes(c.id) && "bg-primary/10 border-primary/40"
+                                )}
+                                onClick={() => {
+                                  setSelectedControlIds((prev) =>
+                                    prev.includes(c.id)
+                                      ? prev.filter((id) => id !== c.id)
+                                      : [...prev, c.id]
+                                  );
+                                }}
                               >
                                 {c.label}
                               </Badge>
@@ -580,7 +881,24 @@ export default function Evidence() {
 
                       {/* Owner */}
                       <TableCell className="text-sm text-muted-foreground whitespace-nowrap align-top">
-                        {item.ownerName ?? "—"}
+                        {item.ownerName ? (
+                          <button
+                            className={cn(
+                              "hover:text-foreground transition-colors",
+                              selectedOwnerId === item.ownerId && "text-primary font-medium"
+                            )}
+                            onClick={() =>
+                              setSelectedOwnerId((prev) =>
+                                prev === item.ownerId ? null : item.ownerId
+                              )
+                            }
+                            title="Filter by this owner"
+                          >
+                            {item.ownerName}
+                          </button>
+                        ) : (
+                          "—"
+                        )}
                       </TableCell>
 
                       {/* Uploaded date */}
