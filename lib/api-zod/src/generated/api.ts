@@ -906,12 +906,25 @@ export const GetEvidenceResponse = zod
             userId: zod.string().nullish(),
             userName: zod.string().nullish(),
             action: zod.string(),
+            actionLabel: zod
+              .string()
+              .optional()
+              .describe("Human-readable action verb"),
             entityType: zod.string(),
+            entityTypeLabel: zod
+              .string()
+              .optional()
+              .describe("Human-readable entity type label"),
             entityId: zod.string(),
             entityLabel: zod.string().nullish(),
+            description: zod
+              .string()
+              .optional()
+              .describe("Formatted human-readable activity description"),
             previousValue: zod.object({}).passthrough().nullish(),
             newValue: zod.object({}).passthrough().nullish(),
             ipAddress: zod.string().nullish(),
+            organizationId: zod.string().nullish(),
             timestamp: zod.coerce.date(),
           }),
         )
@@ -1347,12 +1360,22 @@ export const GetEvidenceAuditLogResponseItem = zod.object({
   userId: zod.string().nullish(),
   userName: zod.string().nullish(),
   action: zod.string(),
+  actionLabel: zod.string().optional().describe("Human-readable action verb"),
   entityType: zod.string(),
+  entityTypeLabel: zod
+    .string()
+    .optional()
+    .describe("Human-readable entity type label"),
   entityId: zod.string(),
   entityLabel: zod.string().nullish(),
+  description: zod
+    .string()
+    .optional()
+    .describe("Formatted human-readable activity description"),
   previousValue: zod.object({}).passthrough().nullish(),
   newValue: zod.object({}).passthrough().nullish(),
   ipAddress: zod.string().nullish(),
+  organizationId: zod.string().nullish(),
   timestamp: zod.coerce.date(),
 });
 export const GetEvidenceAuditLogResponse = zod.array(
@@ -1928,12 +1951,25 @@ export const GetDashboardSummaryResponse = zod.object({
  */
 export const GetReadinessByDomainResponseItem = zod.object({
   domainId: zod.string(),
+  domainCode: zod
+    .string()
+    .describe("CMMC domain abbreviation (e.g. AC, AT, AU)"),
   domainName: zod.string(),
   readinessPercent: zod.number(),
   totalControls: zod.number(),
-  implementedCount: zod.number(),
-  atRiskCount: zod.number(),
-  statusColor: zod.enum(["green", "yellow", "red"]),
+  readyControls: zod
+    .number()
+    .describe("Controls with status implemented or assessor_ready"),
+  implementedControls: zod
+    .number()
+    .optional()
+    .describe("Alias for readyControls"),
+  implementedCount: zod
+    .number()
+    .optional()
+    .describe("Legacy alias for readyControls"),
+  atRiskCount: zod.number().optional(),
+  statusColor: zod.enum(["green", "yellow", "red"]).optional(),
 });
 export const GetReadinessByDomainResponse = zod.array(
   GetReadinessByDomainResponseItem,
@@ -2254,12 +2290,22 @@ export const GetRecentActivityResponseItem = zod.object({
   userId: zod.string().nullish(),
   userName: zod.string().nullish(),
   action: zod.string(),
+  actionLabel: zod.string().optional().describe("Human-readable action verb"),
   entityType: zod.string(),
+  entityTypeLabel: zod
+    .string()
+    .optional()
+    .describe("Human-readable entity type label"),
   entityId: zod.string(),
   entityLabel: zod.string().nullish(),
+  description: zod
+    .string()
+    .optional()
+    .describe("Formatted human-readable activity description"),
   previousValue: zod.object({}).passthrough().nullish(),
   newValue: zod.object({}).passthrough().nullish(),
   ipAddress: zod.string().nullish(),
+  organizationId: zod.string().nullish(),
   timestamp: zod.coerce.date(),
 });
 export const GetRecentActivityResponse = zod.array(
@@ -2774,12 +2820,25 @@ export const GetAssessorControlPackageResponse = zod.object({
       userId: zod.string().nullish(),
       userName: zod.string().nullish(),
       action: zod.string(),
+      actionLabel: zod
+        .string()
+        .optional()
+        .describe("Human-readable action verb"),
       entityType: zod.string(),
+      entityTypeLabel: zod
+        .string()
+        .optional()
+        .describe("Human-readable entity type label"),
       entityId: zod.string(),
       entityLabel: zod.string().nullish(),
+      description: zod
+        .string()
+        .optional()
+        .describe("Formatted human-readable activity description"),
       previousValue: zod.object({}).passthrough().nullish(),
       newValue: zod.object({}).passthrough().nullish(),
       ipAddress: zod.string().nullish(),
+      organizationId: zod.string().nullish(),
       timestamp: zod.coerce.date(),
     }),
   ),
@@ -2873,12 +2932,22 @@ export const ListAuditLogsResponseItem = zod.object({
   userId: zod.string().nullish(),
   userName: zod.string().nullish(),
   action: zod.string(),
+  actionLabel: zod.string().optional().describe("Human-readable action verb"),
   entityType: zod.string(),
+  entityTypeLabel: zod
+    .string()
+    .optional()
+    .describe("Human-readable entity type label"),
   entityId: zod.string(),
   entityLabel: zod.string().nullish(),
+  description: zod
+    .string()
+    .optional()
+    .describe("Formatted human-readable activity description"),
   previousValue: zod.object({}).passthrough().nullish(),
   newValue: zod.object({}).passthrough().nullish(),
   ipAddress: zod.string().nullish(),
+  organizationId: zod.string().nullish(),
   timestamp: zod.coerce.date(),
 });
 export const ListAuditLogsResponse = zod.array(ListAuditLogsResponseItem);

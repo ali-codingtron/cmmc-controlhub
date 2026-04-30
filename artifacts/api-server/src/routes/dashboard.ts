@@ -143,11 +143,30 @@ router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
   });
 });
 
+// Standard CMMC domain abbreviations keyed by full name
+const DOMAIN_CODE_MAP: Record<string, string> = {
+  "Access Control": "AC",
+  "Awareness and Training": "AT",
+  "Audit and Accountability": "AU",
+  "Configuration Management": "CM",
+  "Identification and Authentication": "IA",
+  "Incident Response": "IR",
+  "Maintenance": "MA",
+  "Media Protection": "MP",
+  "Personnel Security": "PS",
+  "Physical Protection": "PE",
+  "Risk Assessment": "RA",
+  "Security Assessment": "CA",
+  "System and Communications Protection": "SC",
+  "System and Information Integrity": "SI",
+};
+
 router.get("/dashboard/readiness-by-domain", requireAuth, requireOrg, async (req, res) => {
   const orgId = req.orgId;
 
   const domains = await db.select().from(domainsTable).orderBy(domainsTable.sortOrder);
 
+  // Left join so controls with no org assessment row are counted as not_started
   const assessments = await db
     .select({
       domainId: controlsTable.domainId,
@@ -171,20 +190,32 @@ router.get("/dashboard/readiness-by-domain", requireAuth, requireOrg, async (req
     .where(eq(controlsTable.isActive, true))
     .groupBy(controlsTable.domainId);
 
-  const result = domains.map((d) => {
-    const domainAssessments = assessments.filter((a) => a.domainId === d.id);
-    const total = Number(totalByDomain.find((t) => t.domainId === d.id)?.cnt ?? 0);
-    const implemented = domainAssessments
-      .filter((a) => a.status === "implemented" || a.status === "assessor_ready")
-      .reduce((sum, a) => sum + Number(a.cnt), 0);
-    return {
-      id: d.id,
-      name: d.name,
-      totalControls: total,
-      implementedControls: implemented,
-      readinessPercent: total > 0 ? Math.round((implemented / total) * 100) : 0,
-    };
-  });
+  const result = domains
+    .filter((d) => {
+      // Only include domains that have at least one active control
+      return (totalByDomain.find((t) => t.domainId === d.id)?.cnt ?? 0) > 0;
+    })
+    .map((d) => {
+      const domainAssessments = assessments.filter((a) => a.domainId === d.id);
+      const total = Number(totalByDomain.find((t) => t.domainId === d.id)?.cnt ?? 0);
+      // "Ready" = implemented or assessor_ready
+      const readyControls = domainAssessments
+        .filter((a) => a.status === "implemented" || a.status === "assessor_ready")
+        .reduce((sum, a) => sum + Number(a.cnt), 0);
+      const code = DOMAIN_CODE_MAP[d.name] ?? d.name.split(" ").map((w) => w[0]).join("");
+      return {
+        domainId: d.id,
+        domainCode: code,
+        domainName: d.name,
+        readyControls,
+        totalControls: total,
+        readinessPercent: total > 0 ? Math.round((readyControls / total) * 100) : 0,
+        // legacy aliases for backwards compat
+        id: d.id,
+        name: d.name,
+        implementedControls: readyControls,
+      };
+    });
 
   res.json(result);
 });
@@ -288,13 +319,96 @@ router.get("/dashboard/recent-activity", requireAuth, requireOrg, async (req, re
   const orgId = req.orgId;
 
   const logs = await db
-    .select()
+    .select({
+      id: auditLogsTable.id,
+      action: auditLogsTable.action,
+      entityType: auditLogsTable.entityType,
+      entityId: auditLogsTable.entityId,
+      entityLabel: auditLogsTable.entityLabel,
+      previousValue: auditLogsTable.previousValue,
+      newValue: auditLogsTable.newValue,
+      userId: auditLogsTable.userId,
+      userName: auditLogsTable.userName,
+      timestamp: auditLogsTable.timestamp,
+      organizationId: auditLogsTable.organizationId,
+    })
     .from(auditLogsTable)
-    .where(orgId ? eq(auditLogsTable.organizationId, orgId) : undefined)
+    .where(
+      and(
+        orgId ? eq(auditLogsTable.organizationId, orgId) : undefined,
+        // Exclude login/logout noise from the dashboard feed
+        sql`${auditLogsTable.action} NOT IN ('logged_in', 'logged_out')`
+      )
+    )
     .orderBy(desc(auditLogsTable.timestamp))
     .limit(parseInt(limit ?? "20"));
 
-  res.json(logs);
+  // Format each log into a readable activity description
+  const activity = logs.map((log) => {
+    const actionLabel = (() => {
+      switch (log.action) {
+        case "uploaded": return "uploaded";
+        case "created": return "created";
+        case "updated": return "updated";
+        case "deleted": return "deleted";
+        case "approved": return "approved";
+        case "rejected": return "rejected";
+        case "submitted": return "submitted";
+        case "status_changed": return "changed status of";
+        case "link_added": return "linked";
+        case "link_removed": return "unlinked";
+        case "completed": return "completed";
+        case "closed": return "closed";
+        case "superseded": return "superseded";
+        case "marked_stale": return "marked stale";
+        case "exported": return "exported";
+        case "downloaded": return "downloaded";
+        case "reopened": return "reopened";
+        case "reviewed": return "reviewed";
+        case "assigned": return "assigned";
+        default: return log.action;
+      }
+    })();
+
+    const entityTypeLabel = (() => {
+      switch (log.entityType) {
+        case "evidence": return "Evidence";
+        case "control": return "Control";
+        case "task": return "Task";
+        case "poam": return "POA&M";
+        case "document": return "Document";
+        case "user": return "User";
+        default: return log.entityType;
+      }
+    })();
+
+    let description = `${actionLabel} ${entityTypeLabel}`;
+    if (log.entityLabel) description += `: ${log.entityLabel}`;
+
+    // Append status change info
+    if (log.action === "status_changed" && log.newValue) {
+      const nv = String(log.newValue).replace(/_/g, " ");
+      description += ` → ${nv}`;
+    }
+
+    return {
+      id: log.id,
+      action: log.action,
+      actionLabel,
+      entityType: log.entityType,
+      entityTypeLabel,
+      entityId: log.entityId,
+      entityLabel: log.entityLabel,
+      description,
+      previousValue: log.previousValue,
+      newValue: log.newValue,
+      userId: log.userId,
+      userName: log.userName,
+      timestamp: log.timestamp,
+    };
+  });
+
+  res.json(activity);
 });
 
 export default router;

@@ -1005,7 +1005,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/UpcomingReviews"
 
-  /dashboard/activity:
+  /dashboard/recent-activity:
     get:
       operationId: getRecentActivity
       tags: [dashboard]
@@ -1889,14 +1889,24 @@ components:
       properties:
         domainId:
           type: string
+        domainCode:
+          type: string
+          description: CMMC domain abbreviation (e.g. AC, AT, AU)
         domainName:
           type: string
         readinessPercent:
           type: number
         totalControls:
           type: integer
+        readyControls:
+          type: integer
+          description: Controls with status implemented or assessor_ready
+        implementedControls:
+          type: integer
+          description: Alias for readyControls
         implementedCount:
           type: integer
+          description: Legacy alias for readyControls
         atRiskCount:
           type: integer
         statusColor:
@@ -1904,12 +1914,11 @@ components:
           enum: [green, yellow, red]
       required:
         - domainId
+        - domainCode
         - domainName
         - readinessPercent
         - totalControls
-        - implementedCount
-        - atRiskCount
-        - statusColor
+        - readyControls
 
     # ─── CONTROL ──────────────────────────────────────────────
     ControlWithStatus:
@@ -2725,13 +2734,22 @@ components:
           nullable: true
         action:
           type: string
+        actionLabel:
+          type: string
+          description: Human-readable action verb
         entityType:
           type: string
+        entityTypeLabel:
+          type: string
+          description: Human-readable entity type label
         entityId:
           type: string
         entityLabel:
           type: string
           nullable: true
+        description:
+          type: string
+          description: Formatted human-readable activity description
         previousValue:
           type: object
           nullable: true
@@ -2739,6 +2757,9 @@ components:
           type: object
           nullable: true
         ipAddress:
+          type: string
+          nullable: true
+        organizationId:
           type: string
           nullable: true
         timestamp:

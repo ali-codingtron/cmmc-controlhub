@@ -1,0 +1,155 @@
+Fix the Dashboard page.
+
+Current issues:
+1. Recent Activity is blank even though I uploaded evidence and changed data.
+2. Domain Readiness shows progress bars and percentages, but it does not show the domain names.
+
+Fix requirements:
+
+1. Recent Activity
+The Recent Activity widget must show the latest organization-specific audit/activity events.
+
+Show events such as:
+- evidence uploaded
+- evidence status changed
+- evidence linked to control
+- evidence removed/unlinked
+- task created
+- task completed
+- POA&M created
+- control implementation updated
+- document generated
+- document approved
+- assessor package exported
+
+Each activity item should show:
+- action label
+- entity type
+- entity title/name
+- related control ID if applicable
+- user
+- timestamp
+- status change if applicable
+
+Example:
+“Evidence uploaded: R-01 linked to AC.L1-3.1.1 by System Administrator — 5 minutes ago”
+
+If there are no events, show:
+“No recent activity yet.”
+
+Do not leave the card blank.
+
+2. Audit Log / Activity Source
+Use the AuditLog table as the source of truth.
+
+If the app is not currently writing audit logs, add audit log writes for:
+- evidence upload
+- evidence edit
+- evidence status change
+- evidence linked/unlinked to control
+- task creation/update/completion
+- POA&M creation/update/closure
+- implementation narrative save
+- document creation/update/approval
+
+Make all audit logs organization-specific using organization_id.
+
+3. Domain Readiness
+The Domain Readiness widget must display the security domain name next to each progress bar.
+
+Show:
+- domain abbreviation
+- domain full name
+- readiness percentage
+- completed controls / total controls
+
+Example:
+Access Control (AC)
+1 of 22 controls ready
+5%
+
+4. Domain List
+Use the seeded global CMMC domains.
+
+Display all relevant domains for the selected organization’s target level:
+- Access Control (AC)
+- Awareness and Training (AT)
+- Audit and Accountability (AU)
+- Configuration Management (CM)
+- Identification and Authentication (IA)
+- Incident Response (IR)
+- Maintenance (MA)
+- Media Protection (MP)
+- Personnel Security (PS)
+- Physical Protection (PE)
+- Risk Assessment (RA)
+- Security Assessment (CA)
+- System and Communications Protection (SC)
+- System and Information Integrity (SI)
+
+If the organization is CMMC Level 1 only, show domains that contain L1 controls, but still label them clearly.
+
+5. Readiness Calculation
+For each domain:
+- total controls = controls in that domain for the organization’s target level
+- ready controls = controls with status Approved, Implemented, or Assessor Ready
+- percentage = ready controls / total controls
+
+If no organization-specific OrganizationControl record exists yet:
+- treat that control as Not Started
+- include it in total count
+
+6. Dashboard API
+Fix or create:
+GET /api/organizations/:organizationId/dashboard
+
+Return:
+- overallReadiness
+- atRiskControls
+- pendingEvidence
+- overdueTasks
+- domainReadiness array with:
+  - domainId
+  - domainCode
+  - domainName
+  - readyControls
+  - totalControls
+  - percentage
+- recentActivity array with:
+  - id
+  - action
+  - entityType
+  - entityTitle
+  - controlId
+  - userName
+  - timestamp
+  - details
+
+7. UI
+Update Dashboard UI so:
+- Domain readiness rows are clearly labeled
+- Recent activity shows a list of recent events
+- Empty states are friendly and visible
+- Nothing appears as unlabeled progress bars
+
+8. Acceptance Tests
+Verify:
+
+Test A:
+- Upload evidence to AC.L1-3.1.1
+- Go to Dashboard
+- Recent Activity shows the evidence upload event
+
+Test B:
+- Change evidence status
+- Go to Dashboard
+- Recent Activity shows the status change event
+
+Test C:
+- Domain Readiness shows “Access Control (AC)” instead of an unlabeled progress bar
+
+Test D:
+- Domain Readiness shows completed/total control counts and percentage
+
+Test E:
+- Brand-new organization still shows all relevant domain names with 0% readiness

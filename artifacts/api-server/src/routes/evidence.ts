@@ -509,7 +509,7 @@ router.post("/evidence/:id/archive", requireAuth, requireOrg, async (req, res) =
     .set({ status: "archived", updatedAt: new Date() })
     .where(eq(evidenceItemsTable.id, req.params.id));
 
-  await logAudit(req, "archived", "evidence", req.params.id, { entityLabel: item.title, previousValue: item.status, newValue: "archived" });
+  await logAudit(req, "status_changed", "evidence", req.params.id, { entityLabel: item.title, previousValue: item.status, newValue: "archived" });
   res.json({ id: req.params.id, status: "archived" });
 });
 
@@ -569,7 +569,7 @@ router.delete("/evidence/:id/controls/:controlId", requireAuth, requireOrg, asyn
     )
   );
 
-  await logAudit(req, "unlinked", "evidence", req.params.id, {
+  await logAudit(req, "link_removed", "evidence", req.params.id, {
     entityLabel: item.title,
     newValue: `Removed from control ${req.params.controlId}`,
   });

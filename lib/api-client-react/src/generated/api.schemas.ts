@@ -113,12 +113,19 @@ export const DomainReadinessStatusColor = {
 
 export interface DomainReadiness {
   domainId: string;
+  /** CMMC domain abbreviation (e.g. AC, AT, AU) */
+  domainCode: string;
   domainName: string;
   readinessPercent: number;
   totalControls: number;
-  implementedCount: number;
-  atRiskCount: number;
-  statusColor: DomainReadinessStatusColor;
+  /** Controls with status implemented or assessor_ready */
+  readyControls: number;
+  /** Alias for readyControls */
+  implementedControls?: number;
+  /** Legacy alias for readyControls */
+  implementedCount?: number;
+  atRiskCount?: number;
+  statusColor?: DomainReadinessStatusColor;
 }
 
 export type ControlWithStatusLevel =
@@ -373,12 +380,19 @@ export interface AuditLogEntry {
   userId?: string | null;
   userName?: string | null;
   action: string;
+  /** Human-readable action verb */
+  actionLabel?: string;
   entityType: string;
+  /** Human-readable entity type label */
+  entityTypeLabel?: string;
   entityId: string;
   entityLabel?: string | null;
+  /** Formatted human-readable activity description */
+  description?: string;
   previousValue?: AuditLogEntryPreviousValue;
   newValue?: AuditLogEntryNewValue;
   ipAddress?: string | null;
+  organizationId?: string | null;
   timestamp: string;
 }
 

@@ -3900,8 +3900,8 @@ export const getGetRecentActivityUrl = (params?: GetRecentActivityParams) => {
   const stringifiedParams = normalizedParams.toString();
 
   return stringifiedParams.length > 0
-    ? `/api/dashboard/activity?${stringifiedParams}`
-    : `/api/dashboard/activity`;
+    ? `/api/dashboard/recent-activity?${stringifiedParams}`
+    : `/api/dashboard/recent-activity`;
 };
 
 export const getRecentActivity = async (
@@ -3917,7 +3917,10 @@ export const getRecentActivity = async (
 export const getGetRecentActivityQueryKey = (
   params?: GetRecentActivityParams,
 ) => {
-  return [`/api/dashboard/activity`, ...(params ? [params] : [])] as const;
+  return [
+    `/api/dashboard/recent-activity`,
+    ...(params ? [params] : []),
+  ] as const;
 };
 
 export const getGetRecentActivityQueryOptions = <
