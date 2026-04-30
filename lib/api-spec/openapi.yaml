@@ -375,7 +375,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [draft, needs_classification, pending_review, approved, assessor_ready, rejected, stale, superseded, archived]
+            enum: [draft, needs_classification, pending_review, approved, active, assessor_ready, rejected, stale, superseded, archived]
         - name: evidenceType
           in: query
           schema:
@@ -396,6 +396,12 @@ paths:
           in: query
           schema:
             type: string
+          description: Search by title, filename, assessor summary, tags, or control label
+        - name: showArchived
+          in: query
+          schema:
+            type: string
+          description: Pass "true" to include archived evidence
         - name: expiringDays
           in: query
           schema:
@@ -2078,7 +2084,7 @@ components:
           enum: [policy, procedure, screenshot, log, report, ticket, configuration_export, training_record, incident_record, risk_record, approval_record, network_diagram, scan_report, other]
         status:
           type: string
-          enum: [draft, needs_classification, pending_review, approved, assessor_ready, rejected, stale, superseded, archived]
+          enum: [draft, needs_classification, pending_review, approved, active, assessor_ready, rejected, stale, superseded, archived]
         fileName:
           type: string
           nullable: true
@@ -2137,6 +2143,43 @@ components:
           type: array
           items:
             type: string
+        linkedControls:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              label:
+                type: string
+              domainName:
+                type: string
+              domainCode:
+                type: string
+              level:
+                type: string
+            required:
+              - id
+              - label
+              - domainName
+              - domainCode
+              - level
+        domains:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              code:
+                type: string
+            required:
+              - name
+              - code
+        cmmcLevels:
+          type: array
+          items:
+            type: string
         assessorSummary:
           type: string
           nullable: true
@@ -2157,6 +2200,9 @@ components:
         - ownerName
         - linkedControlIds
         - linkedControlLabels
+        - linkedControls
+        - domains
+        - cmmcLevels
         - createdAt
         - updatedAt
 

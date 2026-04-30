@@ -195,12 +195,26 @@ export const EvidenceItemStatus = {
   needs_classification: "needs_classification",
   pending_review: "pending_review",
   approved: "approved",
+  active: "active",
   assessor_ready: "assessor_ready",
   rejected: "rejected",
   stale: "stale",
   superseded: "superseded",
   archived: "archived",
 } as const;
+
+export type EvidenceItemLinkedControlsItem = {
+  id: string;
+  label: string;
+  domainName: string;
+  domainCode: string;
+  level: string;
+};
+
+export type EvidenceItemDomainsItem = {
+  name: string;
+  code: string;
+};
 
 export interface EvidenceItem {
   id: string;
@@ -226,6 +240,9 @@ export interface EvidenceItem {
   approvedAt?: string | null;
   linkedControlIds: string[];
   linkedControlLabels: string[];
+  linkedControls: EvidenceItemLinkedControlsItem[];
+  domains: EvidenceItemDomainsItem[];
+  cmmcLevels: string[];
   assessorSummary?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -1221,7 +1238,14 @@ export type ListEvidenceParams = {
   controlId?: string;
   domainId?: string;
   ownerId?: string;
+  /**
+   * Search by title, filename, assessor summary, tags, or control label
+   */
   search?: string;
+  /**
+   * Pass "true" to include archived evidence
+   */
+  showArchived?: string;
   /**
    * Filter evidence expiring within N days
    */
@@ -1236,6 +1260,7 @@ export const ListEvidenceStatus = {
   needs_classification: "needs_classification",
   pending_review: "pending_review",
   approved: "approved",
+  active: "active",
   assessor_ready: "assessor_ready",
   rejected: "rejected",
   stale: "stale",

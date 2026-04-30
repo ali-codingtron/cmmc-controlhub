@@ -7,6 +7,7 @@ import {
   evidenceItemsTable,
   evidenceControlLinksTable,
   controlsTable,
+  domainsTable,
   usersTable,
   auditLogsTable,
 } from "@workspace/db";
@@ -21,6 +22,7 @@ import {
   lte,
   gte,
   ne,
+  sql,
 } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
@@ -85,9 +87,25 @@ const evidenceSelect = {
   updatedAt: evidenceItemsTable.updatedAt,
 };
 
-// Helper: fetch linked controls for a list of evidence IDs and attach to items
-async function attachLinkedControls<T extends { id: string }>(items: T[]): Promise<(T & { linkedControlIds: string[]; linkedControlLabels: string[] })[]> {
-  if (items.length === 0) return items.map(i => ({ ...i, linkedControlIds: [], linkedControlLabels: [] }));
+interface LinkedControlInfo {
+  id: string;
+  label: string;
+  domainName: string;
+  domainCode: string;
+  level: string;
+}
+
+// Helper: fetch linked controls for a list of evidence IDs and attach enriched info
+async function attachLinkedControls<T extends { id: string }>(items: T[]): Promise<(T & {
+  linkedControlIds: string[];
+  linkedControlLabels: string[];
+  linkedControls: LinkedControlInfo[];
+  domains: Array<{ name: string; code: string }>;
+  cmmcLevels: string[];
+})[]> {
+  if (items.length === 0) {
+    return items.map(i => ({ ...i, linkedControlIds: [], linkedControlLabels: [], linkedControls: [], domains: [], cmmcLevels: [] }));
+  }
 
   const ids = items.map(i => i.id);
   const links = await db
@@ -95,24 +113,41 @@ async function attachLinkedControls<T extends { id: string }>(items: T[]): Promi
       evidenceId: evidenceControlLinksTable.evidenceId,
       controlId: evidenceControlLinksTable.controlId,
       controlLabel: controlsTable.controlId,
-      controlTitle: controlsTable.title,
+      level: controlsTable.level,
+      domainName: domainsTable.name,
     })
     .from(evidenceControlLinksTable)
     .innerJoin(controlsTable, eq(controlsTable.id, evidenceControlLinksTable.controlId))
+    .leftJoin(domainsTable, eq(domainsTable.id, controlsTable.domainId))
     .where(inArray(evidenceControlLinksTable.evidenceId, ids));
 
-  const linkMap = new Map<string, { ids: string[]; labels: string[] }>();
+  type LinkEntry = { ids: string[]; labels: string[]; controls: LinkedControlInfo[] };
+  const linkMap = new Map<string, LinkEntry>();
   for (const l of links) {
-    if (!linkMap.has(l.evidenceId)) linkMap.set(l.evidenceId, { ids: [], labels: [] });
-    linkMap.get(l.evidenceId)!.ids.push(l.controlId);
-    linkMap.get(l.evidenceId)!.labels.push(l.controlLabel);
+    if (!linkMap.has(l.evidenceId)) linkMap.set(l.evidenceId, { ids: [], labels: [], controls: [] });
+    const label = l.controlLabel ?? l.controlId;
+    const domainCode = label.split(".")[0] ?? "";
+    const entry = linkMap.get(l.evidenceId)!;
+    entry.ids.push(l.controlId);
+    entry.labels.push(label);
+    entry.controls.push({ id: l.controlId, label, domainName: l.domainName ?? "", domainCode, level: l.level ?? "" });
   }
 
-  return items.map(i => ({
-    ...i,
-    linkedControlIds: linkMap.get(i.id)?.ids ?? [],
-    linkedControlLabels: linkMap.get(i.id)?.labels ?? [],
-  }));
+  return items.map(i => {
+    const entry = linkMap.get(i.id) ?? { ids: [], labels: [], controls: [] };
+    const uniqueDomains = Array.from(
+      new Map(entry.controls.map(c => [c.domainCode, { name: c.domainName, code: c.domainCode }])).values()
+    );
+    const uniqueLevels = [...new Set(entry.controls.map(c => c.level).filter(Boolean))];
+    return {
+      ...i,
+      linkedControlIds: entry.ids,
+      linkedControlLabels: entry.labels,
+      linkedControls: entry.controls,
+      domains: uniqueDomains,
+      cmmcLevels: uniqueLevels,
+    };
+  });
 }
 
 // ── List evidence ──────────────────────────────────────────────────────────
@@ -123,6 +158,16 @@ router.get("/evidence", requireAuth, requireOrg, async (req, res) => {
 
   // Default: exclude archived. Pass showArchived=true to include them.
   const excludeArchived = showArchived !== "true";
+
+  // Build expanded search condition across multiple text fields
+  const searchCond = search
+    ? or(
+        ilike(evidenceItemsTable.title, `%${search}%`),
+        ilike(evidenceItemsTable.fileName, `%${search}%`),
+        ilike(evidenceItemsTable.assessorSummary, `%${search}%`),
+        sql`array_to_string(${evidenceItemsTable.tags}, ',') ILIKE ${"%" + search + "%"}`
+      )
+    : undefined;
 
   let items;
   if (controlId) {
@@ -137,7 +182,8 @@ router.get("/evidence", requireAuth, requireOrg, async (req, res) => {
           orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined,
           status ? eq(evidenceItemsTable.status, status as any) : excludeArchived ? ne(evidenceItemsTable.status, "archived") : undefined,
           evidenceType ? eq(evidenceItemsTable.evidenceType, evidenceType as any) : undefined,
-          ownerId ? eq(evidenceItemsTable.ownerId, ownerId) : undefined
+          ownerId ? eq(evidenceItemsTable.ownerId, ownerId) : undefined,
+          searchCond
         )
       )
       .orderBy(desc(evidenceItemsTable.updatedAt));
@@ -152,7 +198,7 @@ router.get("/evidence", requireAuth, requireOrg, async (req, res) => {
           status ? eq(evidenceItemsTable.status, status as any) : excludeArchived ? ne(evidenceItemsTable.status, "archived") : undefined,
           evidenceType ? eq(evidenceItemsTable.evidenceType, evidenceType as any) : undefined,
           ownerId ? eq(evidenceItemsTable.ownerId, ownerId) : undefined,
-          search ? ilike(evidenceItemsTable.title, `%${search}%`) : undefined,
+          searchCond,
           expiringDays
             ? and(
                 lte(evidenceItemsTable.expiresAt, new Date(Date.now() + parseInt(expiringDays) * 86400000)),

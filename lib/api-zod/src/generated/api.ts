@@ -331,6 +331,7 @@ export const GetControlResponse = zod
               "needs_classification",
               "pending_review",
               "approved",
+              "active",
               "assessor_ready",
               "rejected",
               "stale",
@@ -355,6 +356,22 @@ export const GetControlResponse = zod
             approvedAt: zod.coerce.date().nullish(),
             linkedControlIds: zod.array(zod.string()),
             linkedControlLabels: zod.array(zod.string()),
+            linkedControls: zod.array(
+              zod.object({
+                id: zod.string(),
+                label: zod.string(),
+                domainName: zod.string(),
+                domainCode: zod.string(),
+                level: zod.string(),
+              }),
+            ),
+            domains: zod.array(
+              zod.object({
+                name: zod.string(),
+                code: zod.string(),
+              }),
+            ),
+            cmmcLevels: zod.array(zod.string()),
             assessorSummary: zod.string().nullish(),
             createdAt: zod.coerce.date(),
             updatedAt: zod.coerce.date(),
@@ -528,6 +545,7 @@ export const GetControlEvidenceResponseItem = zod.object({
     "needs_classification",
     "pending_review",
     "approved",
+    "active",
     "assessor_ready",
     "rejected",
     "stale",
@@ -552,6 +570,22 @@ export const GetControlEvidenceResponseItem = zod.object({
   approvedAt: zod.coerce.date().nullish(),
   linkedControlIds: zod.array(zod.string()),
   linkedControlLabels: zod.array(zod.string()),
+  linkedControls: zod.array(
+    zod.object({
+      id: zod.string(),
+      label: zod.string(),
+      domainName: zod.string(),
+      domainCode: zod.string(),
+      level: zod.string(),
+    }),
+  ),
+  domains: zod.array(
+    zod.object({
+      name: zod.string(),
+      code: zod.string(),
+    }),
+  ),
+  cmmcLevels: zod.array(zod.string()),
   assessorSummary: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
@@ -661,6 +695,7 @@ export const ListEvidenceQueryParams = zod.object({
       "needs_classification",
       "pending_review",
       "approved",
+      "active",
       "assessor_ready",
       "rejected",
       "stale",
@@ -672,7 +707,16 @@ export const ListEvidenceQueryParams = zod.object({
   controlId: zod.coerce.string().optional(),
   domainId: zod.coerce.string().optional(),
   ownerId: zod.coerce.string().optional(),
-  search: zod.coerce.string().optional(),
+  search: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      "Search by title, filename, assessor summary, tags, or control label",
+    ),
+  showArchived: zod.coerce
+    .string()
+    .optional()
+    .describe('Pass \"true\" to include archived evidence'),
   expiringDays: zod.coerce
     .number()
     .optional()
@@ -704,6 +748,7 @@ export const ListEvidenceResponseItem = zod.object({
     "needs_classification",
     "pending_review",
     "approved",
+    "active",
     "assessor_ready",
     "rejected",
     "stale",
@@ -728,6 +773,22 @@ export const ListEvidenceResponseItem = zod.object({
   approvedAt: zod.coerce.date().nullish(),
   linkedControlIds: zod.array(zod.string()),
   linkedControlLabels: zod.array(zod.string()),
+  linkedControls: zod.array(
+    zod.object({
+      id: zod.string(),
+      label: zod.string(),
+      domainName: zod.string(),
+      domainCode: zod.string(),
+      level: zod.string(),
+    }),
+  ),
+  domains: zod.array(
+    zod.object({
+      name: zod.string(),
+      code: zod.string(),
+    }),
+  ),
+  cmmcLevels: zod.array(zod.string()),
   assessorSummary: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
@@ -802,6 +863,7 @@ export const SearchEvidenceResponseItem = zod.object({
     "needs_classification",
     "pending_review",
     "approved",
+    "active",
     "assessor_ready",
     "rejected",
     "stale",
@@ -826,6 +888,22 @@ export const SearchEvidenceResponseItem = zod.object({
   approvedAt: zod.coerce.date().nullish(),
   linkedControlIds: zod.array(zod.string()),
   linkedControlLabels: zod.array(zod.string()),
+  linkedControls: zod.array(
+    zod.object({
+      id: zod.string(),
+      label: zod.string(),
+      domainName: zod.string(),
+      domainCode: zod.string(),
+      level: zod.string(),
+    }),
+  ),
+  domains: zod.array(
+    zod.object({
+      name: zod.string(),
+      code: zod.string(),
+    }),
+  ),
+  cmmcLevels: zod.array(zod.string()),
   assessorSummary: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
@@ -865,6 +943,7 @@ export const GetEvidenceResponse = zod
       "needs_classification",
       "pending_review",
       "approved",
+      "active",
       "assessor_ready",
       "rejected",
       "stale",
@@ -889,6 +968,22 @@ export const GetEvidenceResponse = zod
     approvedAt: zod.coerce.date().nullish(),
     linkedControlIds: zod.array(zod.string()),
     linkedControlLabels: zod.array(zod.string()),
+    linkedControls: zod.array(
+      zod.object({
+        id: zod.string(),
+        label: zod.string(),
+        domainName: zod.string(),
+        domainCode: zod.string(),
+        level: zod.string(),
+      }),
+    ),
+    domains: zod.array(
+      zod.object({
+        name: zod.string(),
+        code: zod.string(),
+      }),
+    ),
+    cmmcLevels: zod.array(zod.string()),
     assessorSummary: zod.string().nullish(),
     createdAt: zod.coerce.date(),
     updatedAt: zod.coerce.date(),
@@ -980,6 +1075,7 @@ export const UpdateEvidenceResponse = zod.object({
     "needs_classification",
     "pending_review",
     "approved",
+    "active",
     "assessor_ready",
     "rejected",
     "stale",
@@ -1004,6 +1100,22 @@ export const UpdateEvidenceResponse = zod.object({
   approvedAt: zod.coerce.date().nullish(),
   linkedControlIds: zod.array(zod.string()),
   linkedControlLabels: zod.array(zod.string()),
+  linkedControls: zod.array(
+    zod.object({
+      id: zod.string(),
+      label: zod.string(),
+      domainName: zod.string(),
+      domainCode: zod.string(),
+      level: zod.string(),
+    }),
+  ),
+  domains: zod.array(
+    zod.object({
+      name: zod.string(),
+      code: zod.string(),
+    }),
+  ),
+  cmmcLevels: zod.array(zod.string()),
   assessorSummary: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
@@ -1046,6 +1158,7 @@ export const SubmitEvidenceForReviewResponse = zod.object({
     "needs_classification",
     "pending_review",
     "approved",
+    "active",
     "assessor_ready",
     "rejected",
     "stale",
@@ -1070,6 +1183,22 @@ export const SubmitEvidenceForReviewResponse = zod.object({
   approvedAt: zod.coerce.date().nullish(),
   linkedControlIds: zod.array(zod.string()),
   linkedControlLabels: zod.array(zod.string()),
+  linkedControls: zod.array(
+    zod.object({
+      id: zod.string(),
+      label: zod.string(),
+      domainName: zod.string(),
+      domainCode: zod.string(),
+      level: zod.string(),
+    }),
+  ),
+  domains: zod.array(
+    zod.object({
+      name: zod.string(),
+      code: zod.string(),
+    }),
+  ),
+  cmmcLevels: zod.array(zod.string()),
   assessorSummary: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
@@ -1112,6 +1241,7 @@ export const ApproveEvidenceResponse = zod.object({
     "needs_classification",
     "pending_review",
     "approved",
+    "active",
     "assessor_ready",
     "rejected",
     "stale",
@@ -1136,6 +1266,22 @@ export const ApproveEvidenceResponse = zod.object({
   approvedAt: zod.coerce.date().nullish(),
   linkedControlIds: zod.array(zod.string()),
   linkedControlLabels: zod.array(zod.string()),
+  linkedControls: zod.array(
+    zod.object({
+      id: zod.string(),
+      label: zod.string(),
+      domainName: zod.string(),
+      domainCode: zod.string(),
+      level: zod.string(),
+    }),
+  ),
+  domains: zod.array(
+    zod.object({
+      name: zod.string(),
+      code: zod.string(),
+    }),
+  ),
+  cmmcLevels: zod.array(zod.string()),
   assessorSummary: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
@@ -1177,6 +1323,7 @@ export const RejectEvidenceResponse = zod.object({
     "needs_classification",
     "pending_review",
     "approved",
+    "active",
     "assessor_ready",
     "rejected",
     "stale",
@@ -1201,6 +1348,22 @@ export const RejectEvidenceResponse = zod.object({
   approvedAt: zod.coerce.date().nullish(),
   linkedControlIds: zod.array(zod.string()),
   linkedControlLabels: zod.array(zod.string()),
+  linkedControls: zod.array(
+    zod.object({
+      id: zod.string(),
+      label: zod.string(),
+      domainName: zod.string(),
+      domainCode: zod.string(),
+      level: zod.string(),
+    }),
+  ),
+  domains: zod.array(
+    zod.object({
+      name: zod.string(),
+      code: zod.string(),
+    }),
+  ),
+  cmmcLevels: zod.array(zod.string()),
   assessorSummary: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
@@ -1238,6 +1401,7 @@ export const MarkEvidenceStaleResponse = zod.object({
     "needs_classification",
     "pending_review",
     "approved",
+    "active",
     "assessor_ready",
     "rejected",
     "stale",
@@ -1262,6 +1426,22 @@ export const MarkEvidenceStaleResponse = zod.object({
   approvedAt: zod.coerce.date().nullish(),
   linkedControlIds: zod.array(zod.string()),
   linkedControlLabels: zod.array(zod.string()),
+  linkedControls: zod.array(
+    zod.object({
+      id: zod.string(),
+      label: zod.string(),
+      domainName: zod.string(),
+      domainCode: zod.string(),
+      level: zod.string(),
+    }),
+  ),
+  domains: zod.array(
+    zod.object({
+      name: zod.string(),
+      code: zod.string(),
+    }),
+  ),
+  cmmcLevels: zod.array(zod.string()),
   assessorSummary: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
@@ -1319,6 +1499,7 @@ export const LinkEvidenceToControlsResponse = zod.object({
     "needs_classification",
     "pending_review",
     "approved",
+    "active",
     "assessor_ready",
     "rejected",
     "stale",
@@ -1343,6 +1524,22 @@ export const LinkEvidenceToControlsResponse = zod.object({
   approvedAt: zod.coerce.date().nullish(),
   linkedControlIds: zod.array(zod.string()),
   linkedControlLabels: zod.array(zod.string()),
+  linkedControls: zod.array(
+    zod.object({
+      id: zod.string(),
+      label: zod.string(),
+      domainName: zod.string(),
+      domainCode: zod.string(),
+      level: zod.string(),
+    }),
+  ),
+  domains: zod.array(
+    zod.object({
+      name: zod.string(),
+      code: zod.string(),
+    }),
+  ),
+  cmmcLevels: zod.array(zod.string()),
   assessorSummary: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
@@ -2041,6 +2238,7 @@ export const GetStaleEvidenceResponseItem = zod.object({
     "needs_classification",
     "pending_review",
     "approved",
+    "active",
     "assessor_ready",
     "rejected",
     "stale",
@@ -2065,6 +2263,22 @@ export const GetStaleEvidenceResponseItem = zod.object({
   approvedAt: zod.coerce.date().nullish(),
   linkedControlIds: zod.array(zod.string()),
   linkedControlLabels: zod.array(zod.string()),
+  linkedControls: zod.array(
+    zod.object({
+      id: zod.string(),
+      label: zod.string(),
+      domainName: zod.string(),
+      domainCode: zod.string(),
+      level: zod.string(),
+    }),
+  ),
+  domains: zod.array(
+    zod.object({
+      name: zod.string(),
+      code: zod.string(),
+    }),
+  ),
+  cmmcLevels: zod.array(zod.string()),
   assessorSummary: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
@@ -2417,6 +2631,7 @@ export const GetAssessorControlPackageResponse = zod.object({
                 "needs_classification",
                 "pending_review",
                 "approved",
+                "active",
                 "assessor_ready",
                 "rejected",
                 "stale",
@@ -2441,6 +2656,22 @@ export const GetAssessorControlPackageResponse = zod.object({
               approvedAt: zod.coerce.date().nullish(),
               linkedControlIds: zod.array(zod.string()),
               linkedControlLabels: zod.array(zod.string()),
+              linkedControls: zod.array(
+                zod.object({
+                  id: zod.string(),
+                  label: zod.string(),
+                  domainName: zod.string(),
+                  domainCode: zod.string(),
+                  level: zod.string(),
+                }),
+              ),
+              domains: zod.array(
+                zod.object({
+                  name: zod.string(),
+                  code: zod.string(),
+                }),
+              ),
+              cmmcLevels: zod.array(zod.string()),
               assessorSummary: zod.string().nullish(),
               createdAt: zod.coerce.date(),
               updatedAt: zod.coerce.date(),
@@ -2556,6 +2787,7 @@ export const GetAssessorControlPackageResponse = zod.object({
         "needs_classification",
         "pending_review",
         "approved",
+        "active",
         "assessor_ready",
         "rejected",
         "stale",
@@ -2580,6 +2812,22 @@ export const GetAssessorControlPackageResponse = zod.object({
       approvedAt: zod.coerce.date().nullish(),
       linkedControlIds: zod.array(zod.string()),
       linkedControlLabels: zod.array(zod.string()),
+      linkedControls: zod.array(
+        zod.object({
+          id: zod.string(),
+          label: zod.string(),
+          domainName: zod.string(),
+          domainCode: zod.string(),
+          level: zod.string(),
+        }),
+      ),
+      domains: zod.array(
+        zod.object({
+          name: zod.string(),
+          code: zod.string(),
+        }),
+      ),
+      cmmcLevels: zod.array(zod.string()),
       assessorSummary: zod.string().nullish(),
       createdAt: zod.coerce.date(),
       updatedAt: zod.coerce.date(),
@@ -2611,6 +2859,7 @@ export const GetAssessorControlPackageResponse = zod.object({
         "needs_classification",
         "pending_review",
         "approved",
+        "active",
         "assessor_ready",
         "rejected",
         "stale",
@@ -2635,6 +2884,22 @@ export const GetAssessorControlPackageResponse = zod.object({
       approvedAt: zod.coerce.date().nullish(),
       linkedControlIds: zod.array(zod.string()),
       linkedControlLabels: zod.array(zod.string()),
+      linkedControls: zod.array(
+        zod.object({
+          id: zod.string(),
+          label: zod.string(),
+          domainName: zod.string(),
+          domainCode: zod.string(),
+          level: zod.string(),
+        }),
+      ),
+      domains: zod.array(
+        zod.object({
+          name: zod.string(),
+          code: zod.string(),
+        }),
+      ),
+      cmmcLevels: zod.array(zod.string()),
       assessorSummary: zod.string().nullish(),
       createdAt: zod.coerce.date(),
       updatedAt: zod.coerce.date(),
@@ -2666,6 +2931,7 @@ export const GetAssessorControlPackageResponse = zod.object({
         "needs_classification",
         "pending_review",
         "approved",
+        "active",
         "assessor_ready",
         "rejected",
         "stale",
@@ -2690,6 +2956,22 @@ export const GetAssessorControlPackageResponse = zod.object({
       approvedAt: zod.coerce.date().nullish(),
       linkedControlIds: zod.array(zod.string()),
       linkedControlLabels: zod.array(zod.string()),
+      linkedControls: zod.array(
+        zod.object({
+          id: zod.string(),
+          label: zod.string(),
+          domainName: zod.string(),
+          domainCode: zod.string(),
+          level: zod.string(),
+        }),
+      ),
+      domains: zod.array(
+        zod.object({
+          name: zod.string(),
+          code: zod.string(),
+        }),
+      ),
+      cmmcLevels: zod.array(zod.string()),
       assessorSummary: zod.string().nullish(),
       createdAt: zod.coerce.date(),
       updatedAt: zod.coerce.date(),
@@ -2721,6 +3003,7 @@ export const GetAssessorControlPackageResponse = zod.object({
         "needs_classification",
         "pending_review",
         "approved",
+        "active",
         "assessor_ready",
         "rejected",
         "stale",
@@ -2745,6 +3028,22 @@ export const GetAssessorControlPackageResponse = zod.object({
       approvedAt: zod.coerce.date().nullish(),
       linkedControlIds: zod.array(zod.string()),
       linkedControlLabels: zod.array(zod.string()),
+      linkedControls: zod.array(
+        zod.object({
+          id: zod.string(),
+          label: zod.string(),
+          domainName: zod.string(),
+          domainCode: zod.string(),
+          level: zod.string(),
+        }),
+      ),
+      domains: zod.array(
+        zod.object({
+          name: zod.string(),
+          code: zod.string(),
+        }),
+      ),
+      cmmcLevels: zod.array(zod.string()),
       assessorSummary: zod.string().nullish(),
       createdAt: zod.coerce.date(),
       updatedAt: zod.coerce.date(),
@@ -2776,6 +3075,7 @@ export const GetAssessorControlPackageResponse = zod.object({
         "needs_classification",
         "pending_review",
         "approved",
+        "active",
         "assessor_ready",
         "rejected",
         "stale",
@@ -2800,6 +3100,22 @@ export const GetAssessorControlPackageResponse = zod.object({
       approvedAt: zod.coerce.date().nullish(),
       linkedControlIds: zod.array(zod.string()),
       linkedControlLabels: zod.array(zod.string()),
+      linkedControls: zod.array(
+        zod.object({
+          id: zod.string(),
+          label: zod.string(),
+          domainName: zod.string(),
+          domainCode: zod.string(),
+          level: zod.string(),
+        }),
+      ),
+      domains: zod.array(
+        zod.object({
+          name: zod.string(),
+          code: zod.string(),
+        }),
+      ),
+      cmmcLevels: zod.array(zod.string()),
       assessorSummary: zod.string().nullish(),
       createdAt: zod.coerce.date(),
       updatedAt: zod.coerce.date(),
