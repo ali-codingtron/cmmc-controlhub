@@ -1,0 +1,153 @@
+Fix the All Documents page so uploaded policy/procedure evidence appears there too.
+
+Current issue:
+I uploaded a Policy file as evidence linked to a control, but All Documents shows 0 documents.
+
+Expected behavior:
+All Documents should show both:
+1. Documents generated from templates
+2. Uploaded evidence items that are document-like, such as Policy, Procedure, Log, Report, Checklist, Register, Training Record, Incident Record, Risk Record, Supplier Review, Backup Verification, Vulnerability Scan, etc.
+
+Do not keep uploaded policy/procedure evidence hidden only in Evidence Repository.
+
+Requirements:
+
+1. Unified Documents View
+Update All Documents to include:
+- records from Document table
+- uploaded Evidence records where evidence_type is document-like
+
+At minimum include evidence types:
+- Policy
+- Procedure
+- Log
+- Report
+- Access Review
+- Training Record
+- Incident Record
+- Risk Record
+- Approval Record
+- System Inventory
+- Asset Inventory
+- Supplier Review
+- Backup Verification
+- Vulnerability Scan
+
+2. Display Columns
+All Documents table/cards should show:
+- Title
+- Type
+- Status
+- Linked Controls
+- Security Domain
+- CMMC Level
+- Owner
+- Uploaded/Created Date
+- Review/Expiration Date
+- Source: Generated Document or Uploaded Evidence
+- Actions
+
+3. Security Domain Tagging
+When evidence is linked to a control, automatically tag it with:
+- security domain code
+- security domain name
+- CMMC level
+- control ID
+- organization ID
+
+Example:
+If policy evidence is linked to AC.L1-3.1.1, show tags:
+- Access Control
+- AC
+- L1
+- AC.L1-3.1.1
+- Policy
+
+4. Add/Edit Evidence Tagging
+On Add/Edit Evidence, show metadata fields:
+- Evidence Type dropdown
+- Linked Control dropdown/multi-select
+- Security Domain auto-filled from linked control
+- CMMC Level auto-filled from linked control
+- Tags field
+- Owner
+- Review Date
+- Expiration Date
+- Assessor Summary
+
+If multiple controls are selected, show all related domains and levels.
+
+5. Document Detail Page
+If the item is uploaded evidence, clicking it from All Documents should open either:
+- the Evidence Detail page
+or
+- a unified Document Detail page that clearly says Source = Uploaded Evidence
+
+It must show:
+- uploaded file link
+- linked controls
+- security domains
+- level
+- status
+- owner
+- review/expiration dates
+- tags
+- audit history
+
+6. Gap Analysis Integration
+Uploaded evidence of type Policy or Procedure must count toward documentation gap analysis once status is Approved, Active, or Assessor Ready.
+
+Draft policy/procedure evidence should show as:
+“Policy exists but not active”
+or
+“Procedure exists but not active.”
+
+7. API
+Fix or create an endpoint:
+GET /api/organizations/:organizationId/documents/all
+
+It should return a unified list of generated documents and document-like evidence.
+
+Each item should include:
+- id
+- source_type: document or evidence
+- title
+- type
+- status
+- linked_controls
+- domains
+- cmmc_levels
+- owner
+- created_at
+- review_date
+- expiration_date
+- tags
+- file_url if applicable
+
+8. Acceptance Tests
+Verify:
+
+Test A:
+- Upload evidence type Policy to AC.L1-3.1.1
+- Go to Documentation > All Documents
+- The policy appears
+
+Test B:
+- The policy row shows:
+  - Type = Policy
+  - Linked Controls = AC.L1-3.1.1
+  - Security Domain = Access Control / AC
+  - Level = L1
+  - Source = Uploaded Evidence
+
+Test C:
+- Change policy status to Approved
+- Gap Analysis removes AC.L1-3.1.1 from Missing Active Policy
+
+Test D:
+- Upload evidence type Procedure to AC.L1-3.1.1
+- Go to All Documents
+- Procedure appears with linked domain/control tags
+
+Test E:
+- Search and filter by Policy, Procedure, Security Domain, Status, and Control ID all work

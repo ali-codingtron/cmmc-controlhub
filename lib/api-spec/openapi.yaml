@@ -1289,6 +1289,47 @@ paths:
                 items:
                   $ref: "#/components/schemas/Document"
 
+  /documents/all:
+    get:
+      operationId: getAllDocuments
+      tags: [documents]
+      summary: Unified list of documents and document-like evidence
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: type
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: domain
+          schema:
+            type: string
+        - in: query
+          name: controlId
+          schema:
+            type: string
+        - in: query
+          name: sourceType
+          schema:
+            type: string
+            enum: [document, evidence]
+      responses:
+        "200":
+          description: Unified document list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UnifiedDocItem"
+
   /documents/generate:
     post:
       operationId: generateDocument
@@ -3188,6 +3229,92 @@ components:
           type: string
       required:
         - rejectionNotes
+
+    UnifiedDocItem:
+      type: object
+      description: A unified document item from either the documents table or evidence (document-like types)
+      properties:
+        id:
+          type: string
+        sourceType:
+          type: string
+          enum: [document, evidence]
+        title:
+          type: string
+        type:
+          type: string
+          description: Document type or evidence type
+        status:
+          type: string
+        version:
+          type: string
+        cmmcLevel:
+          type: string
+          nullable: true
+        ownerName:
+          type: string
+          nullable: true
+        nextReviewDate:
+          type: string
+          format: date-time
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        tags:
+          type: array
+          items:
+            type: string
+        linkedControls:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              label:
+                type: string
+            required: [id, label]
+        domains:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              code:
+                type: string
+            required: [name, code]
+        cmmcLevels:
+          type: array
+          items:
+            type: string
+        fileKey:
+          type: string
+          nullable: true
+        fileName:
+          type: string
+          nullable: true
+      required:
+        - id
+        - sourceType
+        - title
+        - type
+        - status
+        - version
+        - createdAt
+        - updatedAt
+        - tags
+        - linkedControls
+        - domains
+        - cmmcLevels
 
     ControlDocItem:
       type: object

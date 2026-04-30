@@ -930,6 +930,49 @@ export interface RejectDocumentBody {
   rejectionNotes: string;
 }
 
+export type UnifiedDocItemSourceType =
+  (typeof UnifiedDocItemSourceType)[keyof typeof UnifiedDocItemSourceType];
+
+export const UnifiedDocItemSourceType = {
+  document: "document",
+  evidence: "evidence",
+} as const;
+
+export type UnifiedDocItemLinkedControlsItem = {
+  id: string;
+  label: string;
+};
+
+export type UnifiedDocItemDomainsItem = {
+  name: string;
+  code: string;
+};
+
+/**
+ * A unified document item from either the documents table or evidence (document-like types)
+ */
+export interface UnifiedDocItem {
+  id: string;
+  sourceType: UnifiedDocItemSourceType;
+  title: string;
+  /** Document type or evidence type */
+  type: string;
+  status: string;
+  version: string;
+  cmmcLevel?: string | null;
+  ownerName?: string | null;
+  nextReviewDate?: string | null;
+  expiresAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  tags: string[];
+  linkedControls: UnifiedDocItemLinkedControlsItem[];
+  domains: UnifiedDocItemDomainsItem[];
+  cmmcLevels: string[];
+  fileKey?: string | null;
+  fileName?: string | null;
+}
+
 export type ControlDocItemExistingSource =
   | (typeof ControlDocItemExistingSource)[keyof typeof ControlDocItemExistingSource]
   | null;
@@ -1305,6 +1348,23 @@ export type ListDocumentsParams = {
   search?: string;
   dueForReview?: boolean;
 };
+
+export type GetAllDocumentsParams = {
+  search?: string;
+  type?: string;
+  status?: string;
+  domain?: string;
+  controlId?: string;
+  sourceType?: GetAllDocumentsSourceType;
+};
+
+export type GetAllDocumentsSourceType =
+  (typeof GetAllDocumentsSourceType)[keyof typeof GetAllDocumentsSourceType];
+
+export const GetAllDocumentsSourceType = {
+  document: "document",
+  evidence: "evidence",
+} as const;
 
 export type ActivateDocumentBody = {
   notes?: string;

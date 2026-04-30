@@ -277,6 +277,228 @@ router.get("/documents", requireAuth, requireOrg, async (req, res) => {
   res.json(enriched);
 });
 
+// Document-like evidence types to surface in the unified documents view
+const DOCUMENT_LIKE_EVIDENCE_TYPES = [
+  "policy", "procedure", "log", "report", "access_review", "training_record",
+  "incident_record", "risk_record", "approval_record", "system_inventory",
+  "asset_inventory", "supplier_review", "backup_verification", "scan_report",
+] as const;
+
+router.get("/documents/all", requireAuth, requireOrg, async (req, res) => {
+  const { search, type, status, domain, controlId, sourceType } = req.query as Record<string, string>;
+  const orgId = req.orgId;
+
+  // ── 1. Fetch formal documents ──────────────────────────────────────────────
+  const docRows = (sourceType === "evidence") ? [] : await db
+    .select({
+      id: documentsTable.id,
+      title: documentsTable.title,
+      docType: documentsTable.docType,
+      status: documentsTable.status,
+      cmmcLevel: documentsTable.cmmcLevel,
+      version: documentsTable.version,
+      ownerId: documentsTable.ownerId,
+      ownerName: usersTable.name,
+      nextReviewDate: documentsTable.nextReviewDate,
+      expiresAt: documentsTable.expiresAt,
+      createdAt: documentsTable.createdAt,
+      updatedAt: documentsTable.updatedAt,
+    })
+    .from(documentsTable)
+    .leftJoin(usersTable, eq(usersTable.id, documentsTable.ownerId))
+    .where(
+      and(
+        orgId ? eq(documentsTable.organizationId, orgId) : undefined,
+        eq(documentsTable.isCurrentVersion, true),
+        isNull(documentsTable.deletedAt),
+        type ? eq(documentsTable.docType, type as any) : undefined,
+        status ? eq(documentsTable.status, status as any) : undefined,
+        search ? ilike(documentsTable.title, `%${search}%`) : undefined,
+      )
+    )
+    .orderBy(desc(documentsTable.updatedAt));
+
+  // ── 2. Fetch document-like evidence ────────────────────────────────────────
+  const evidenceRows = (sourceType === "document") ? [] : await db
+    .select({
+      id: evidenceItemsTable.id,
+      title: evidenceItemsTable.title,
+      evidenceType: evidenceItemsTable.evidenceType,
+      status: evidenceItemsTable.status,
+      version: evidenceItemsTable.version,
+      ownerId: evidenceItemsTable.ownerId,
+      ownerName: usersTable.name,
+      reviewDueDate: evidenceItemsTable.reviewDueDate,
+      expiresAt: evidenceItemsTable.expiresAt,
+      createdAt: evidenceItemsTable.createdAt,
+      updatedAt: evidenceItemsTable.updatedAt,
+      tags: evidenceItemsTable.tags,
+      fileKey: evidenceItemsTable.fileKey,
+      fileName: evidenceItemsTable.fileName,
+    })
+    .from(evidenceItemsTable)
+    .leftJoin(usersTable, eq(usersTable.id, evidenceItemsTable.ownerId))
+    .where(
+      and(
+        orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined,
+        isNull(evidenceItemsTable.deletedAt),
+        eq(evidenceItemsTable.isCurrentVersion, true),
+        inArray(evidenceItemsTable.evidenceType, DOCUMENT_LIKE_EVIDENCE_TYPES as unknown as string[]),
+        type ? eq(evidenceItemsTable.evidenceType, type as any) : undefined,
+        status ? eq(evidenceItemsTable.status, status as any) : undefined,
+        search ? ilike(evidenceItemsTable.title, `%${search}%`) : undefined,
+      )
+    )
+    .orderBy(desc(evidenceItemsTable.updatedAt));
+
+  // ── 3. Fetch control + domain info for all items ───────────────────────────
+  const allIds = [
+    ...docRows.map((d) => ({ id: d.id, source: "document" as const })),
+    ...evidenceRows.map((e) => ({ id: e.id, source: "evidence" as const })),
+  ];
+
+  // Doc control links
+  const docIds = docRows.map((d) => d.id);
+  const docControlLinks = docIds.length > 0
+    ? await db.select({
+        documentId: documentControlMapsTable.documentId,
+        controlId: documentControlMapsTable.controlId,
+        controlLabel: controlsTable.controlId,
+        level: controlsTable.level,
+        domainName: domainsTable.name,
+      })
+        .from(documentControlMapsTable)
+        .innerJoin(controlsTable, eq(controlsTable.id, documentControlMapsTable.controlId))
+        .leftJoin(domainsTable, eq(domainsTable.id, controlsTable.domainId))
+        .where(inArray(documentControlMapsTable.documentId, docIds))
+    : [];
+
+  // Evidence control links
+  const evidenceIds = evidenceRows.map((e) => e.id);
+  const evidenceControlLinks = evidenceIds.length > 0
+    ? await db.select({
+        evidenceId: evidenceControlLinksTable.evidenceId,
+        controlId: evidenceControlLinksTable.controlId,
+        controlLabel: controlsTable.controlId,
+        level: controlsTable.level,
+        domainName: domainsTable.name,
+      })
+        .from(evidenceControlLinksTable)
+        .innerJoin(controlsTable, eq(controlsTable.id, evidenceControlLinksTable.controlId))
+        .leftJoin(domainsTable, eq(domainsTable.id, controlsTable.domainId))
+        .where(inArray(evidenceControlLinksTable.evidenceId, evidenceIds))
+    : [];
+
+  // Build lookup maps
+  const docControlMap: Record<string, typeof docControlLinks> = {};
+  for (const link of docControlLinks) {
+    if (!docControlMap[link.documentId]) docControlMap[link.documentId] = [];
+    docControlMap[link.documentId].push(link);
+  }
+  const evidControlMap: Record<string, typeof evidenceControlLinks> = {};
+  for (const link of evidenceControlLinks) {
+    if (!evidControlMap[link.evidenceId]) evidControlMap[link.evidenceId] = [];
+    evidControlMap[link.evidenceId].push(link);
+  }
+
+  // ── 4. Shape unified items ─────────────────────────────────────────────────
+  type LinkInfo = { controlId: string; controlLabel: string; level: string | null; domainName: string | null };
+
+  function buildDomains(links: LinkInfo[]) {
+    const seen = new Map<string, string>(); // domainName → domainCode
+    for (const l of links) {
+      const code = l.controlLabel.split(".")[0] ?? "";
+      if (l.domainName && !seen.has(l.domainName)) seen.set(l.domainName, code);
+    }
+    return Array.from(seen.entries()).map(([name, code]) => ({ name, code }));
+  }
+
+  function buildTags(links: LinkInfo[], extraTags: string[] = []): string[] {
+    const tags = new Set<string>(extraTags);
+    for (const l of links) {
+      tags.add(l.controlLabel);
+      if (l.level) tags.add(l.level);
+      if (l.domainName) tags.add(l.domainName);
+      const code = l.controlLabel.split(".")[0];
+      if (code) tags.add(code);
+    }
+    return Array.from(tags);
+  }
+
+  function buildLevels(links: LinkInfo[]): string[] {
+    return [...new Set(links.map((l) => l.level).filter(Boolean))] as string[];
+  }
+
+  function matchesDomainFilter(links: LinkInfo[], domainFilter: string): boolean {
+    const lf = domainFilter.toLowerCase();
+    return links.some((l) =>
+      (l.domainName?.toLowerCase().includes(lf) ?? false) ||
+      l.controlLabel.split(".")[0]?.toLowerCase() === lf
+    );
+  }
+
+  const docItems = docRows.map((doc) => {
+    const links = docControlMap[doc.id] ?? [];
+    if (controlId && !links.some((l) => l.controlId === controlId)) return null;
+    if (domain && links.length > 0 && !matchesDomainFilter(links, domain)) return null;
+    const cmmcLevels = buildLevels(links);
+    return {
+      id: doc.id,
+      sourceType: "document" as const,
+      title: doc.title,
+      type: doc.docType,
+      status: doc.status,
+      version: doc.version ?? "1.0",
+      cmmcLevel: doc.cmmcLevel ?? (cmmcLevels[0] ?? null),
+      ownerName: doc.ownerName ?? null,
+      nextReviewDate: doc.nextReviewDate ?? null,
+      expiresAt: doc.expiresAt ?? null,
+      createdAt: doc.createdAt,
+      updatedAt: doc.updatedAt,
+      tags: buildTags(links),
+      linkedControls: links.map((l) => ({ id: l.controlId, label: l.controlLabel })),
+      domains: buildDomains(links),
+      cmmcLevels,
+      fileKey: null as string | null,
+      fileName: null as string | null,
+    };
+  }).filter(Boolean);
+
+  const evidenceItems = evidenceRows.map((evid) => {
+    const links = evidControlMap[evid.id] ?? [];
+    if (controlId && !links.some((l) => l.controlId === controlId)) return null;
+    if (domain && links.length > 0 && !matchesDomainFilter(links, domain)) return null;
+    const cmmcLevels = buildLevels(links);
+    return {
+      id: evid.id,
+      sourceType: "evidence" as const,
+      title: evid.title,
+      type: evid.evidenceType,
+      status: evid.status,
+      version: evid.version ?? "1.0",
+      cmmcLevel: cmmcLevels[0] ?? null,
+      ownerName: evid.ownerName ?? null,
+      nextReviewDate: evid.reviewDueDate ?? null,
+      expiresAt: evid.expiresAt ?? null,
+      createdAt: evid.createdAt,
+      updatedAt: evid.updatedAt,
+      tags: buildTags(links, evid.tags ?? []),
+      linkedControls: links.map((l) => ({ id: l.controlId, label: l.controlLabel })),
+      domains: buildDomains(links),
+      cmmcLevels,
+      fileKey: evid.fileKey ?? null,
+      fileName: evid.fileName ?? null,
+    };
+  }).filter(Boolean);
+
+  // Merge and sort by updatedAt desc
+  const merged = [...docItems, ...evidenceItems].sort(
+    (a, b) => new Date(b!.updatedAt).getTime() - new Date(a!.updatedAt).getTime()
+  );
+
+  res.json(merged);
+});
+
 router.post("/documents/generate", requireAuth, requireOrg, async (req, res) => {
   const {
     templateId, title, organizationName, systemName, policyOwner,

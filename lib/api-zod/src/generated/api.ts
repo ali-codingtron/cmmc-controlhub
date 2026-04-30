@@ -3207,6 +3207,54 @@ export const ListDocumentsResponseItem = zod.object({
 export const ListDocumentsResponse = zod.array(ListDocumentsResponseItem);
 
 /**
+ * @summary Unified list of documents and document-like evidence
+ */
+export const GetAllDocumentsQueryParams = zod.object({
+  search: zod.coerce.string().optional(),
+  type: zod.coerce.string().optional(),
+  status: zod.coerce.string().optional(),
+  domain: zod.coerce.string().optional(),
+  controlId: zod.coerce.string().optional(),
+  sourceType: zod.enum(["document", "evidence"]).optional(),
+});
+
+export const GetAllDocumentsResponseItem = zod
+  .object({
+    id: zod.string(),
+    sourceType: zod.enum(["document", "evidence"]),
+    title: zod.string(),
+    type: zod.string().describe("Document type or evidence type"),
+    status: zod.string(),
+    version: zod.string(),
+    cmmcLevel: zod.string().nullish(),
+    ownerName: zod.string().nullish(),
+    nextReviewDate: zod.coerce.date().nullish(),
+    expiresAt: zod.coerce.date().nullish(),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date(),
+    tags: zod.array(zod.string()),
+    linkedControls: zod.array(
+      zod.object({
+        id: zod.string(),
+        label: zod.string(),
+      }),
+    ),
+    domains: zod.array(
+      zod.object({
+        name: zod.string(),
+        code: zod.string(),
+      }),
+    ),
+    cmmcLevels: zod.array(zod.string()),
+    fileKey: zod.string().nullish(),
+    fileName: zod.string().nullish(),
+  })
+  .describe(
+    "A unified document item from either the documents table or evidence (document-like types)",
+  );
+export const GetAllDocumentsResponse = zod.array(GetAllDocumentsResponseItem);
+
+/**
  * @summary Generate a document from a template
  */
 export const GenerateDocumentBody = zod.object({

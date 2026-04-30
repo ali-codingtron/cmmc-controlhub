@@ -54,6 +54,7 @@ import type {
   GenerateLogBody,
   GeneratedLog,
   GeneratedLogDetail,
+  GetAllDocumentsParams,
   GetRecentActivityParams,
   GetStaleEvidenceParams,
   HealthStatus,
@@ -79,6 +80,7 @@ import type {
   SuccessResponse,
   SupersedeEvidenceBody,
   Task,
+  UnifiedDocItem,
   UpcomingReviews,
   UpdateControlBody,
   UpdateDocumentBody,
@@ -4968,6 +4970,100 @@ export function useListDocuments<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getListDocumentsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Unified list of documents and document-like evidence
+ */
+export const getGetAllDocumentsUrl = (params?: GetAllDocumentsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/documents/all?${stringifiedParams}`
+    : `/api/documents/all`;
+};
+
+export const getAllDocuments = async (
+  params?: GetAllDocumentsParams,
+  options?: RequestInit,
+): Promise<UnifiedDocItem[]> => {
+  return customFetch<UnifiedDocItem[]>(getGetAllDocumentsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAllDocumentsQueryKey = (params?: GetAllDocumentsParams) => {
+  return [`/api/documents/all`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetAllDocumentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAllDocuments>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetAllDocumentsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAllDocuments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAllDocumentsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAllDocuments>>> = ({
+    signal,
+  }) => getAllDocuments(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAllDocuments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAllDocumentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAllDocuments>>
+>;
+export type GetAllDocumentsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Unified list of documents and document-like evidence
+ */
+
+export function useGetAllDocuments<
+  TData = Awaited<ReturnType<typeof getAllDocuments>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetAllDocumentsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAllDocuments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAllDocumentsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
