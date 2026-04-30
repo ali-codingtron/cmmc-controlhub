@@ -12,7 +12,7 @@ import {
   poamsTable,
   usersTable,
 } from "@workspace/db";
-import { eq, and, ilike, count, inArray, or } from "drizzle-orm";
+import { eq, and, ilike, count, inArray, or, desc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 import { logAudit } from "../lib/audit";
@@ -249,6 +249,9 @@ router.patch("/controls/:id", requireAuth, requireOrg, async (req, res) => {
 router.get("/controls/:id/evidence", requireAuth, requireOrg, async (req, res) => {
   const orgId = req.orgId;
 
+  // Active statuses: exclude archived (and soft-deleted). Count/display only live evidence.
+  const ACTIVE_STATUSES = ["draft", "needs_classification", "pending_review", "approved", "assessor_ready", "rejected", "stale", "superseded"];
+
   const links = await db
     .select({
       id: evidenceItemsTable.id,
@@ -257,16 +260,27 @@ router.get("/controls/:id/evidence", requireAuth, requireOrg, async (req, res) =
       status: evidenceItemsTable.status,
       fileName: evidenceItemsTable.fileName,
       fileSize: evidenceItemsTable.fileSize,
+      fileKey: evidenceItemsTable.fileKey,
+      mimeType: evidenceItemsTable.mimeType,
+      ownerId: evidenceItemsTable.ownerId,
+      ownerName: usersTable.name,
+      collectedAt: evidenceItemsTable.collectedAt,
+      expiresAt: evidenceItemsTable.expiresAt,
+      assessorSummary: evidenceItemsTable.assessorSummary,
       createdAt: evidenceItemsTable.createdAt,
+      updatedAt: evidenceItemsTable.updatedAt,
     })
     .from(evidenceControlLinksTable)
     .innerJoin(evidenceItemsTable, eq(evidenceItemsTable.id, evidenceControlLinksTable.evidenceId))
+    .leftJoin(usersTable, eq(usersTable.id, evidenceItemsTable.ownerId))
     .where(
       and(
         eq(evidenceControlLinksTable.controlId, req.params.id),
-        orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined
+        orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined,
+        inArray(evidenceItemsTable.status, ACTIVE_STATUSES as any[])
       )
-    );
+    )
+    .orderBy(desc(evidenceItemsTable.updatedAt));
 
   res.json(links);
 });

@@ -1,0 +1,133 @@
+Fix the evidence status, linked controls display, and delete/remove functionality.
+
+Current issues:
+1. Uploaded evidence automatically shows status = Draft, but there is no visible status workflow or explanation.
+2. Evidence Repository does not show linked controls, even though the evidence appears under a control.
+3. There is no way to remove/delete evidence from a control or repository.
+
+Fix requirements:
+
+1. Evidence Status
+Add a visible status dropdown on the Evidence Detail page and Add/Edit Evidence form.
+
+Statuses:
+- Draft
+- Pending Review
+- Approved
+- Assessor Ready
+- Rejected
+- Stale
+- Superseded
+- Archived
+
+Default new uploads to Draft, but make that clear in the UI:
+“New evidence starts as Draft until reviewed or approved.”
+
+Allow authorized users to change status.
+
+2. Linked Controls
+Fix the Evidence Repository table so Linked Controls displays all linked control IDs.
+
+Example:
+AC.L1-3.1.1
+
+If multiple controls are linked, show all of them as badges or comma-separated values.
+
+Make sure the database relationship is correctly queried and rendered.
+
+3. Evidence Detail Page
+When I click an evidence item, show a detail page with:
+- title
+- description
+- evidence type
+- status dropdown
+- uploaded file link
+- linked organization
+- linked controls
+- collection date
+- expiration/review date
+- owner
+- assessor summary
+- internal notes
+- audit history
+- save button
+- delete/archive button
+
+4. Remove Evidence From a Control
+On the control Evidence tab, add actions for each evidence item:
+- View
+- Edit
+- Remove from this Control
+- Archive Evidence
+
+“Remove from this Control” should only unlink the evidence from that control.
+It should not delete the evidence file or repository record if the evidence is linked to other controls.
+
+5. Archive/Delete Evidence
+In the Evidence Repository, add actions:
+- View
+- Edit
+- Archive
+- Delete
+
+Archive should:
+- set status = Archived
+- hide from normal evidence lists unless “Show archived” is enabled
+- keep the file and audit trail
+
+Delete should:
+- ask for confirmation
+- remove the evidence record and file if possible
+- remove related control mappings
+- write an audit log entry
+
+If hard delete is risky, implement Archive first and label Delete as “Permanent Delete”.
+
+6. Evidence Repository
+Update repository columns:
+- Title
+- Type
+- Status
+- Owner
+- Linked Controls
+- Uploaded Date
+- Expires
+- Actions
+
+7. Control Evidence Count
+Evidence count on the control tab should count only active linked evidence:
+- include Draft, Pending Review, Approved, Assessor Ready, Stale
+- exclude Archived and deleted
+- exclude evidence unlinked from that control
+
+8. Acceptance Tests
+Verify:
+
+Test A:
+- Upload evidence from AC.L1-3.1.1
+- Go to Evidence Repository
+- Linked Controls shows AC.L1-3.1.1
+
+Test B:
+- Open evidence detail
+- Change status from Draft to Approved
+- Save
+- Repository and control evidence tab both show Approved
+
+Test C:
+- From the control Evidence tab, click Remove from this Control
+- Evidence disappears from that control
+- Evidence count decreases
+- Evidence still exists in Evidence Repository if not deleted
+
+Test D:
+- Archive evidence from repository
+- It disappears from normal repository view
+- It does not show in the control Evidence tab
+- It appears only when Show Archived is enabled
+
+Test E:
+- Delete evidence
+- Confirm deletion
+- Evidence record and mappings are removed
+- File link no longer appears

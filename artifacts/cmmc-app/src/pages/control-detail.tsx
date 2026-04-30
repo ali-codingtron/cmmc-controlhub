@@ -11,6 +11,7 @@ import {
   getGetControlPoamsQueryKey,
 } from "@workspace/api-client-react";
 import { useOrg } from "@/context/OrgContext";
+import { Link } from "wouter";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusBadge, LevelBadge, RiskBadge } from "@/components/ui/badges";
@@ -33,6 +34,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import {
   FileText,
@@ -46,6 +54,10 @@ import {
   Calendar,
   Download,
   Paperclip,
+  MoreHorizontal,
+  Eye,
+  Unlink,
+  Archive,
 } from "lucide-react";
 
 const EVIDENCE_TYPES = [
@@ -750,8 +762,98 @@ export default function ControlDetail({ id }: { id: string }) {
                 <Card key={item.id} className="hover:shadow-md transition-shadow">
                   <CardHeader className="pb-2">
                     <div className="flex justify-between items-start gap-2">
-                      <CardTitle className="text-base leading-snug">{item.title}</CardTitle>
-                      <StatusBadge status={item.status} />
+                      <CardTitle className="text-base leading-snug flex-1 min-w-0">
+                        <Link href={`/evidence/${item.id}`} className="hover:underline text-primary">
+                          {item.title}
+                        </Link>
+                      </CardTitle>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <StatusBadge status={item.status} />
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem asChild>
+                              <Link href={`/evidence/${item.id}`} className="flex items-center gap-2">
+                                <Eye className="h-4 w-4" />
+                                View / Edit
+                              </Link>
+                            </DropdownMenuItem>
+                            {item.fileKey && (
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  const token = localStorage.getItem("auth_token");
+                                  const orgId = activeOrg?.id;
+                                  fetch(`/api/evidence/${item.id}/download`, {
+                                    headers: {
+                                      Authorization: `Bearer ${token}`,
+                                      ...(orgId ? { "X-Organization-ID": orgId } : {}),
+                                    },
+                                  })
+                                    .then((r) => r.blob())
+                                    .then((blob) => {
+                                      const url = URL.createObjectURL(blob);
+                                      const a = document.createElement("a");
+                                      a.href = url;
+                                      a.download = item.fileName ?? "evidence-file";
+                                      a.click();
+                                      URL.revokeObjectURL(url);
+                                    })
+                                    .catch(() => {});
+                                }}
+                                className="flex items-center gap-2"
+                              >
+                                <Download className="h-4 w-4" />
+                                Download File
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={async () => {
+                                try {
+                                  const res = await fetch(`/api/evidence/${item.id}/controls/${id}`, {
+                                    method: "DELETE",
+                                    headers: apiHeaders(activeOrg?.id),
+                                  });
+                                  if (!res.ok) throw new Error("Failed to remove");
+                                  toast({ title: "Evidence removed from this control" });
+                                  invalidateEvidence();
+                                } catch {
+                                  toast({ title: "Error", description: "Could not remove evidence from this control", variant: "destructive" });
+                                }
+                              }}
+                              className="flex items-center gap-2"
+                            >
+                              <Unlink className="h-4 w-4" />
+                              Remove from this Control
+                            </DropdownMenuItem>
+                            {item.status !== "archived" && (
+                              <DropdownMenuItem
+                                onClick={async () => {
+                                  try {
+                                    const res = await fetch(`/api/evidence/${item.id}/archive`, {
+                                      method: "POST",
+                                      headers: apiHeaders(activeOrg?.id),
+                                    });
+                                    if (!res.ok) throw new Error("Failed to archive");
+                                    toast({ title: "Evidence archived" });
+                                    invalidateEvidence();
+                                  } catch {
+                                    toast({ title: "Error", description: "Could not archive evidence", variant: "destructive" });
+                                  }
+                                }}
+                                className="flex items-center gap-2"
+                              >
+                                <Archive className="h-4 w-4" />
+                                Archive Evidence
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-2">
@@ -776,41 +878,6 @@ export default function ControlDetail({ id }: { id: string }) {
                     )}
                     {item.ownerName && (
                       <p className="text-xs text-muted-foreground">Owner: {item.ownerName}</p>
-                    )}
-                    {item.fileKey && (
-                      <a
-                        href={`/api/evidence/${item.id}/download`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          const token = localStorage.getItem("auth_token");
-                          const orgId = activeOrg?.id;
-                          fetch(`/api/evidence/${item.id}/download`, {
-                            headers: {
-                              Authorization: `Bearer ${token}`,
-                              ...(orgId ? { "X-Organization-ID": orgId } : {}),
-                            },
-                          })
-                            .then((r) => {
-                              if (!r.ok) throw new Error("Download failed");
-                              return r.blob();
-                            })
-                            .then((blob) => {
-                              const url = URL.createObjectURL(blob);
-                              const a = document.createElement("a");
-                              a.href = url;
-                              a.download = item.fileName ?? "evidence-file";
-                              a.click();
-                              URL.revokeObjectURL(url);
-                            })
-                            .catch(() => {});
-                        }}
-                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-0.5"
-                      >
-                        <Download className="h-3 w-3" />
-                        Download file
-                      </a>
                     )}
                   </CardContent>
                 </Card>

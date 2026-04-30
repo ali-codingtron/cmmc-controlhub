@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import path from "path";
-import { createReadStream, mkdirSync } from "fs";
+import { createReadStream, mkdirSync, unlink as fsUnlink } from "fs";
 import {
   db,
   evidenceItemsTable,
@@ -17,9 +17,10 @@ import {
   desc,
   or,
   inArray,
+  notInArray,
   lte,
-  sql,
   gte,
+  ne,
 } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
@@ -44,6 +45,17 @@ const upload = multer({
 });
 
 const router = Router();
+
+const ACTIVE_STATUSES = [
+  "draft",
+  "needs_classification",
+  "pending_review",
+  "approved",
+  "assessor_ready",
+  "rejected",
+  "stale",
+  "superseded",
+] as const;
 
 const evidenceSelect = {
   id: evidenceItemsTable.id,
@@ -73,10 +85,44 @@ const evidenceSelect = {
   updatedAt: evidenceItemsTable.updatedAt,
 };
 
+// Helper: fetch linked controls for a list of evidence IDs and attach to items
+async function attachLinkedControls<T extends { id: string }>(items: T[]): Promise<(T & { linkedControlIds: string[]; linkedControlLabels: string[] })[]> {
+  if (items.length === 0) return items.map(i => ({ ...i, linkedControlIds: [], linkedControlLabels: [] }));
+
+  const ids = items.map(i => i.id);
+  const links = await db
+    .select({
+      evidenceId: evidenceControlLinksTable.evidenceId,
+      controlId: evidenceControlLinksTable.controlId,
+      controlLabel: controlsTable.controlId,
+      controlTitle: controlsTable.title,
+    })
+    .from(evidenceControlLinksTable)
+    .innerJoin(controlsTable, eq(controlsTable.id, evidenceControlLinksTable.controlId))
+    .where(inArray(evidenceControlLinksTable.evidenceId, ids));
+
+  const linkMap = new Map<string, { ids: string[]; labels: string[] }>();
+  for (const l of links) {
+    if (!linkMap.has(l.evidenceId)) linkMap.set(l.evidenceId, { ids: [], labels: [] });
+    linkMap.get(l.evidenceId)!.ids.push(l.controlId);
+    linkMap.get(l.evidenceId)!.labels.push(l.controlLabel);
+  }
+
+  return items.map(i => ({
+    ...i,
+    linkedControlIds: linkMap.get(i.id)?.ids ?? [],
+    linkedControlLabels: linkMap.get(i.id)?.labels ?? [],
+  }));
+}
+
+// ── List evidence ──────────────────────────────────────────────────────────
 router.get("/evidence", requireAuth, requireOrg, async (req, res) => {
-  const { status, evidenceType, controlId, domainId, ownerId, search, expiringDays } =
+  const { status, evidenceType, controlId, ownerId, search, expiringDays, showArchived } =
     req.query as Record<string, string>;
   const orgId = req.orgId;
+
+  // Default: exclude archived. Pass showArchived=true to include them.
+  const excludeArchived = showArchived !== "true";
 
   let items;
   if (controlId) {
@@ -89,7 +135,7 @@ router.get("/evidence", requireAuth, requireOrg, async (req, res) => {
         and(
           eq(evidenceControlLinksTable.controlId, controlId),
           orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined,
-          status ? eq(evidenceItemsTable.status, status as any) : undefined,
+          status ? eq(evidenceItemsTable.status, status as any) : excludeArchived ? ne(evidenceItemsTable.status, "archived") : undefined,
           evidenceType ? eq(evidenceItemsTable.evidenceType, evidenceType as any) : undefined,
           ownerId ? eq(evidenceItemsTable.ownerId, ownerId) : undefined
         )
@@ -103,7 +149,7 @@ router.get("/evidence", requireAuth, requireOrg, async (req, res) => {
       .where(
         and(
           orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined,
-          status ? eq(evidenceItemsTable.status, status as any) : undefined,
+          status ? eq(evidenceItemsTable.status, status as any) : excludeArchived ? ne(evidenceItemsTable.status, "archived") : undefined,
           evidenceType ? eq(evidenceItemsTable.evidenceType, evidenceType as any) : undefined,
           ownerId ? eq(evidenceItemsTable.ownerId, ownerId) : undefined,
           search ? ilike(evidenceItemsTable.title, `%${search}%`) : undefined,
@@ -118,7 +164,8 @@ router.get("/evidence", requireAuth, requireOrg, async (req, res) => {
       .orderBy(desc(evidenceItemsTable.updatedAt));
   }
 
-  res.json(items);
+  const enriched = await attachLinkedControls(items);
+  res.json(enriched);
 });
 
 router.get("/evidence/search", requireAuth, requireOrg, async (req, res) => {
@@ -136,6 +183,7 @@ router.get("/evidence/search", requireAuth, requireOrg, async (req, res) => {
     .where(
       and(
         orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined,
+        ne(evidenceItemsTable.status, "archived"),
         or(
           ilike(evidenceItemsTable.title, `%${q}%`),
           ilike(evidenceItemsTable.description, `%${q}%`),
@@ -146,7 +194,8 @@ router.get("/evidence/search", requireAuth, requireOrg, async (req, res) => {
     .orderBy(desc(evidenceItemsTable.updatedAt))
     .limit(50);
 
-  res.json(items);
+  const enriched = await attachLinkedControls(items);
+  res.json(enriched);
 });
 
 // ── Upload endpoint (multipart/form-data) ──────────────────────────────────
@@ -233,10 +282,12 @@ router.post(
       .where(eq(evidenceItemsTable.id, id))
       .limit(1);
 
-    res.status(201).json(created);
+    const enriched = await attachLinkedControls([created]);
+    res.status(201).json(enriched[0]);
   }
 );
 
+// ── Create evidence (JSON, no file) ───────────────────────────────────────
 router.post("/evidence", requireAuth, requireOrg, async (req, res) => {
   const {
     title,
@@ -298,9 +349,11 @@ router.post("/evidence", requireAuth, requireOrg, async (req, res) => {
     .where(eq(evidenceItemsTable.id, id))
     .limit(1);
 
-  res.status(201).json(created);
+  const enriched = await attachLinkedControls([created]);
+  res.status(201).json(enriched[0]);
 });
 
+// ── Get single evidence item ───────────────────────────────────────────────
 router.get("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
   const orgId = req.orgId;
 
@@ -334,11 +387,12 @@ router.get("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
   res.json({
     ...item,
     linkedControlIds: links.map((l) => l.controlId),
-    linkedControlLabels: links.map((l) => `${l.controlLabel}: ${l.controlTitle}`),
+    linkedControlLabels: links.map((l) => l.controlLabel),
+    linkedControlFullLabels: links.map((l) => `${l.controlLabel}: ${l.controlTitle}`),
   });
 });
 
-// ── Download endpoint ──────────────────────────────────────────────────────
+// ── Download file ──────────────────────────────────────────────────────────
 router.get("/evidence/:id/download", requireAuth, requireOrg, async (req, res) => {
   const orgId = req.orgId;
 
@@ -380,6 +434,7 @@ router.get("/evidence/:id/download", requireAuth, requireOrg, async (req, res) =
   stream.pipe(res);
 });
 
+// ── Update evidence (status, fields) ──────────────────────────────────────
 router.patch("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
   const orgId = req.orgId;
 
@@ -401,7 +456,7 @@ router.patch("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
 
   const {
     title, description, evidenceType, sourceSystem, confidentialityLevel,
-    expiresAt, tags, assessorSummary, internalNotes, collectedAt,
+    expiresAt, tags, assessorSummary, internalNotes, collectedAt, status,
   } = req.body;
 
   await db
@@ -410,6 +465,7 @@ router.patch("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
       title: title ?? existing.title,
       description: description !== undefined ? description : existing.description,
       evidenceType: evidenceType ?? existing.evidenceType,
+      status: status ?? existing.status,
       sourceSystem: sourceSystem !== undefined ? sourceSystem : existing.sourceSystem,
       confidentialityLevel: confidentialityLevel !== undefined ? confidentialityLevel : existing.confidentialityLevel,
       expiresAt: expiresAt ? new Date(expiresAt) : existing.expiresAt,
@@ -421,7 +477,11 @@ router.patch("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
     })
     .where(eq(evidenceItemsTable.id, req.params.id));
 
-  await logAudit(req, "updated", "evidence", req.params.id, { entityLabel: existing.title });
+  await logAudit(req, "updated", "evidence", req.params.id, {
+    entityLabel: existing.title,
+    previousValue: status ? existing.status : undefined,
+    newValue: status ?? undefined,
+  });
 
   const [updated] = await db
     .select(evidenceSelect)
@@ -430,10 +490,12 @@ router.patch("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
     .where(eq(evidenceItemsTable.id, req.params.id))
     .limit(1);
 
-  res.json(updated);
+  const enriched = await attachLinkedControls([updated]);
+  res.json(enriched[0]);
 });
 
-router.post("/evidence/:id/submit", requireAuth, requireOrg, async (req, res) => {
+// ── Archive evidence ───────────────────────────────────────────────────────
+router.post("/evidence/:id/archive", requireAuth, requireOrg, async (req, res) => {
   const orgId = req.orgId;
   const [item] = await db
     .select()
@@ -443,6 +505,83 @@ router.post("/evidence/:id/submit", requireAuth, requireOrg, async (req, res) =>
 
   if (!item) { res.status(404).json({ error: "Not found" }); return; }
 
+  await db.update(evidenceItemsTable)
+    .set({ status: "archived", updatedAt: new Date() })
+    .where(eq(evidenceItemsTable.id, req.params.id));
+
+  await logAudit(req, "archived", "evidence", req.params.id, { entityLabel: item.title, previousValue: item.status, newValue: "archived" });
+  res.json({ id: req.params.id, status: "archived" });
+});
+
+// ── Hard delete evidence ───────────────────────────────────────────────────
+router.delete("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
+
+  const [item] = await db
+    .select({
+      id: evidenceItemsTable.id,
+      title: evidenceItemsTable.title,
+      fileKey: evidenceItemsTable.fileKey,
+      organizationId: evidenceItemsTable.organizationId,
+    })
+    .from(evidenceItemsTable)
+    .where(and(eq(evidenceItemsTable.id, req.params.id), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined))
+    .limit(1);
+
+  if (!item) { res.status(404).json({ error: "Not found" }); return; }
+
+  // Write audit log BEFORE deleting so we have a record
+  await logAudit(req, "deleted", "evidence", req.params.id, { entityLabel: item.title });
+
+  // Remove control links (evidenceControlLinksTable has onDelete cascade from evidence_items,
+  // but being explicit in case of manual unlink ordering)
+  await db.delete(evidenceControlLinksTable).where(eq(evidenceControlLinksTable.evidenceId, req.params.id));
+
+  // Delete DB record
+  await db.delete(evidenceItemsTable).where(eq(evidenceItemsTable.id, req.params.id));
+
+  // Attempt to delete file from disk (best effort, don't fail the request if missing)
+  if (item.fileKey) {
+    const filePath = path.resolve(UPLOADS_DIR, "..", item.fileKey);
+    fsUnlink(filePath, () => {});
+  }
+
+  res.json({ id: req.params.id, deleted: true });
+});
+
+// ── Unlink evidence from a specific control ────────────────────────────────
+router.delete("/evidence/:id/controls/:controlId", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
+
+  // Verify evidence belongs to this org
+  const [item] = await db
+    .select({ id: evidenceItemsTable.id, title: evidenceItemsTable.title })
+    .from(evidenceItemsTable)
+    .where(and(eq(evidenceItemsTable.id, req.params.id), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined))
+    .limit(1);
+
+  if (!item) { res.status(404).json({ error: "Not found" }); return; }
+
+  await db.delete(evidenceControlLinksTable).where(
+    and(
+      eq(evidenceControlLinksTable.evidenceId, req.params.id),
+      eq(evidenceControlLinksTable.controlId, req.params.controlId)
+    )
+  );
+
+  await logAudit(req, "unlinked", "evidence", req.params.id, {
+    entityLabel: item.title,
+    newValue: `Removed from control ${req.params.controlId}`,
+  });
+
+  res.json({ id: req.params.id, unlinkedControlId: req.params.controlId });
+});
+
+// ── Status transitions ─────────────────────────────────────────────────────
+router.post("/evidence/:id/submit", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
+  const [item] = await db.select().from(evidenceItemsTable).where(and(eq(evidenceItemsTable.id, req.params.id), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined)).limit(1);
+  if (!item) { res.status(404).json({ error: "Not found" }); return; }
   await db.update(evidenceItemsTable).set({ status: "pending_review", updatedAt: new Date() }).where(eq(evidenceItemsTable.id, req.params.id));
   await logAudit(req, "submitted", "evidence", req.params.id, { entityLabel: item.title, previousValue: item.status, newValue: "pending_review" });
   res.json({ id: req.params.id, status: "pending_review" });
@@ -452,9 +591,7 @@ router.post("/evidence/:id/approve", requireAuth, requireOrg, async (req, res) =
   const { assessorSummary } = req.body;
   const orgId = req.orgId;
   const [item] = await db.select().from(evidenceItemsTable).where(and(eq(evidenceItemsTable.id, req.params.id), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined)).limit(1);
-
   if (!item) { res.status(404).json({ error: "Not found" }); return; }
-
   await db.update(evidenceItemsTable).set({ status: "approved", approverId: req.authUser!.id, approvedAt: new Date(), assessorSummary: assessorSummary ?? item.assessorSummary, updatedAt: new Date() }).where(eq(evidenceItemsTable.id, req.params.id));
   await logAudit(req, "approved", "evidence", req.params.id, { entityLabel: item.title, previousValue: item.status, newValue: "approved" });
   res.json({ id: req.params.id, status: "approved" });
@@ -464,53 +601,18 @@ router.post("/evidence/:id/reject", requireAuth, requireOrg, async (req, res) =>
   const { reason } = req.body;
   const orgId = req.orgId;
   const [item] = await db.select().from(evidenceItemsTable).where(and(eq(evidenceItemsTable.id, req.params.id), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined)).limit(1);
-
   if (!item) { res.status(404).json({ error: "Not found" }); return; }
-
   await db.update(evidenceItemsTable).set({ status: "rejected", rejectionNotes: reason, reviewerId: req.authUser!.id, updatedAt: new Date() }).where(eq(evidenceItemsTable.id, req.params.id));
   await logAudit(req, "rejected", "evidence", req.params.id, { entityLabel: item.title, previousValue: item.status, newValue: "rejected" });
   res.json({ id: req.params.id, status: "rejected" });
 });
 
-router.post("/evidence/:id/stale", requireAuth, requireOrg, async (req, res) => {
-  const orgId = req.orgId;
-  const [item] = await db.select().from(evidenceItemsTable).where(and(eq(evidenceItemsTable.id, req.params.id), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined)).limit(1);
-
-  if (!item) { res.status(404).json({ error: "Not found" }); return; }
-
-  await db.update(evidenceItemsTable).set({ status: "stale", updatedAt: new Date() }).where(eq(evidenceItemsTable.id, req.params.id));
-  await logAudit(req, "marked_stale", "evidence", req.params.id, { entityLabel: item.title });
-  res.json({ id: req.params.id, status: "stale" });
-});
-
-router.post("/evidence/:id/supersede", requireAuth, requireOrg, async (req, res) => {
-  const { newEvidenceId } = req.body;
-  const orgId = req.orgId;
-  const [item] = await db.select().from(evidenceItemsTable).where(and(eq(evidenceItemsTable.id, req.params.id), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined)).limit(1);
-
-  if (!item) { res.status(404).json({ error: "Not found" }); return; }
-
-  await db.update(evidenceItemsTable).set({ status: "superseded", isCurrentVersion: false, updatedAt: new Date() }).where(eq(evidenceItemsTable.id, req.params.id));
-  if (newEvidenceId) {
-    await db.update(evidenceItemsTable).set({ previousVersionId: req.params.id, updatedAt: new Date() }).where(eq(evidenceItemsTable.id, newEvidenceId));
-  }
-  await logAudit(req, "superseded", "evidence", req.params.id, { entityLabel: item.title, newValue: newEvidenceId });
-  res.json({ id: req.params.id, status: "superseded" });
-});
-
+// ── Link controls ──────────────────────────────────────────────────────────
 router.post("/evidence/:id/link-controls", requireAuth, requireOrg, async (req, res) => {
   const { controlIds } = req.body;
+  if (!Array.isArray(controlIds)) { res.status(400).json({ error: "controlIds must be an array" }); return; }
 
-  if (!Array.isArray(controlIds)) {
-    res.status(400).json({ error: "controlIds must be an array" });
-    return;
-  }
-
-  const existing = await db
-    .select({ controlId: evidenceControlLinksTable.controlId })
-    .from(evidenceControlLinksTable)
-    .where(eq(evidenceControlLinksTable.evidenceId, req.params.id));
-
+  const existing = await db.select({ controlId: evidenceControlLinksTable.controlId }).from(evidenceControlLinksTable).where(eq(evidenceControlLinksTable.evidenceId, req.params.id));
   const existingIds = new Set(existing.map((l) => l.controlId));
   const newIds = controlIds.filter((id: string) => !existingIds.has(id));
 
@@ -530,6 +632,7 @@ router.post("/evidence/:id/link-controls", requireAuth, requireOrg, async (req, 
   res.json({ id: req.params.id, linkedControlIds: controlIds });
 });
 
+// ── Audit log ─────────────────────────────────────────────────────────────
 router.get("/evidence/:id/audit-log", requireAuth, requireOrg, async (req, res) => {
   const logs = await db
     .select()
