@@ -1,0 +1,94 @@
+Fix the Add Evidence form. It must allow uploading a file from my local PC.
+
+Current issue:
+The Add Evidence button opens or shows a form, but there is no working local file picker/upload from the computer.
+
+Requirements:
+
+1. Add a real file input
+Use an HTML file upload field:
+
+<input type="file" />
+
+The form must allow me to choose a file from my PC.
+
+2. Use multipart/form-data
+The evidence upload form must submit using FormData, not plain JSON.
+
+Frontend must send:
+- title
+- description
+- evidence_type
+- organization_id
+- control_id
+- collection_date
+- expiration_date
+- owner
+- assessor_summary
+- internal_notes
+- file
+
+3. Backend upload endpoint
+Create or fix:
+
+POST /api/evidence/upload
+
+It must accept multipart/form-data, save the uploaded file, and create an Evidence record.
+
+4. File storage
+For now, store uploaded files locally in the app using a folder such as:
+
+/uploads/evidence
+
+Save file metadata in the database:
+- original_filename
+- stored_filename
+- file_path
+- mime_type
+- file_size
+- uploaded_at
+
+5. Evidence record
+After upload, create the Evidence record and link it to:
+- current organization
+- selected control
+- selected evidence type
+
+6. Display uploaded file
+On the control Evidence tab, show:
+- evidence title
+- evidence type
+- status
+- uploaded filename
+- upload date
+- download/open link
+
+7. Download endpoint
+Create or fix:
+
+GET /api/evidence/:id/download
+
+This should download or open the uploaded file.
+
+8. Validation
+Do not allow saving evidence without:
+- title
+- evidence type
+- organization
+- linked control
+- file
+
+Show clear validation errors if missing.
+
+9. Acceptance test
+Verify this exact workflow:
+- Open a control
+- Click Add Evidence
+- Choose evidence type from dropdown
+- Click Choose File
+- Select a file from my PC
+- Click Save/Upload
+- Evidence appears in that control’s Evidence tab
+- Evidence count changes from 0 to 1
+- File can be opened/downloaded
+- Refresh the page and evidence is still there

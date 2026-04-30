@@ -1,4 +1,7 @@
 import { Router } from "express";
+import multer from "multer";
+import path from "path";
+import { createReadStream, mkdirSync } from "fs";
 import {
   db,
   evidenceItemsTable,
@@ -23,6 +26,23 @@ import { requireOrg } from "../middleware/org";
 import { logAudit } from "../lib/audit";
 import { randomUUID } from "crypto";
 
+// __dirname is injected by the esbuild build banner and points to dist/ at runtime
+const UPLOADS_DIR = path.resolve(__dirname, "..", "uploads", "evidence");
+mkdirSync(UPLOADS_DIR, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${randomUUID()}${ext}`);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
+});
+
 const router = Router();
 
 const evidenceSelect = {
@@ -31,8 +51,10 @@ const evidenceSelect = {
   description: evidenceItemsTable.description,
   evidenceType: evidenceItemsTable.evidenceType,
   status: evidenceItemsTable.status,
+  fileKey: evidenceItemsTable.fileKey,
   fileName: evidenceItemsTable.fileName,
   fileSize: evidenceItemsTable.fileSize,
+  mimeType: evidenceItemsTable.mimeType,
   sourceSystem: evidenceItemsTable.sourceSystem,
   confidentialityLevel: evidenceItemsTable.confidentialityLevel,
   version: evidenceItemsTable.version,
@@ -110,6 +132,7 @@ router.get("/evidence/search", requireAuth, requireOrg, async (req, res) => {
   const items = await db
     .select(evidenceSelect)
     .from(evidenceItemsTable)
+    .leftJoin(usersTable, eq(usersTable.id, evidenceItemsTable.ownerId))
     .where(
       and(
         orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined,
@@ -125,6 +148,94 @@ router.get("/evidence/search", requireAuth, requireOrg, async (req, res) => {
 
   res.json(items);
 });
+
+// ── Upload endpoint (multipart/form-data) ──────────────────────────────────
+router.post(
+  "/evidence/upload",
+  requireAuth,
+  requireOrg,
+  upload.single("file"),
+  async (req, res) => {
+    const { title, description, evidenceType, controlIds, collectedAt, expiresAt, assessorSummary, internalNotes } = req.body;
+
+    if (!title) {
+      res.status(400).json({ error: "title is required" });
+      return;
+    }
+    if (!evidenceType) {
+      res.status(400).json({ error: "evidenceType is required" });
+      return;
+    }
+    if (!req.file) {
+      res.status(400).json({ error: "file is required" });
+      return;
+    }
+
+    const id = randomUUID();
+    const storedFilename = req.file.filename;
+    const originalFilename = req.file.originalname;
+    const fileSize = req.file.size;
+    const mimeType = req.file.mimetype;
+    const fileKey = path.join("evidence", storedFilename);
+
+    await db.insert(evidenceItemsTable).values({
+      id,
+      organizationId: req.orgId ?? null,
+      title,
+      description,
+      evidenceType,
+      status: "draft",
+      ownerId: req.authUser!.id,
+      fileKey,
+      fileName: originalFilename,
+      fileSize,
+      mimeType,
+      collectedAt: collectedAt ? new Date(collectedAt) : undefined,
+      expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+      assessorSummary,
+      internalNotes,
+      tags: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const parsedControlIds: string[] = (() => {
+      try {
+        if (Array.isArray(controlIds)) return controlIds;
+        if (typeof controlIds === "string") {
+          const parsed = JSON.parse(controlIds);
+          return Array.isArray(parsed) ? parsed : [controlIds];
+        }
+        return [];
+      } catch {
+        return typeof controlIds === "string" ? [controlIds] : [];
+      }
+    })();
+
+    if (parsedControlIds.length > 0) {
+      await db.insert(evidenceControlLinksTable).values(
+        parsedControlIds.map((cid: string) => ({
+          id: randomUUID(),
+          evidenceId: id,
+          controlId: cid,
+          linkedAt: new Date(),
+          linkedById: req.authUser!.id,
+        }))
+      );
+    }
+
+    await logAudit(req, "uploaded", "evidence", id, { entityLabel: title });
+
+    const [created] = await db
+      .select(evidenceSelect)
+      .from(evidenceItemsTable)
+      .leftJoin(usersTable, eq(usersTable.id, evidenceItemsTable.ownerId))
+      .where(eq(evidenceItemsTable.id, id))
+      .limit(1);
+
+    res.status(201).json(created);
+  }
+);
 
 router.post("/evidence", requireAuth, requireOrg, async (req, res) => {
   const {
@@ -183,6 +294,7 @@ router.post("/evidence", requireAuth, requireOrg, async (req, res) => {
   const [created] = await db
     .select(evidenceSelect)
     .from(evidenceItemsTable)
+    .leftJoin(usersTable, eq(usersTable.id, evidenceItemsTable.ownerId))
     .where(eq(evidenceItemsTable.id, id))
     .limit(1);
 
@@ -195,6 +307,7 @@ router.get("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
   const [item] = await db
     .select(evidenceSelect)
     .from(evidenceItemsTable)
+    .leftJoin(usersTable, eq(usersTable.id, evidenceItemsTable.ownerId))
     .where(
       and(
         eq(evidenceItemsTable.id, req.params.id),
@@ -218,18 +331,53 @@ router.get("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
     .innerJoin(controlsTable, eq(controlsTable.id, evidenceControlLinksTable.controlId))
     .where(eq(evidenceControlLinksTable.evidenceId, req.params.id));
 
-  const owner = await db
-    .select({ name: usersTable.name })
-    .from(usersTable)
-    .where(eq(usersTable.id, item.ownerId))
-    .limit(1);
-
   res.json({
     ...item,
-    ownerName: owner[0]?.name,
     linkedControlIds: links.map((l) => l.controlId),
     linkedControlLabels: links.map((l) => `${l.controlLabel}: ${l.controlTitle}`),
   });
+});
+
+// ── Download endpoint ──────────────────────────────────────────────────────
+router.get("/evidence/:id/download", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
+
+  const [item] = await db
+    .select({
+      id: evidenceItemsTable.id,
+      fileKey: evidenceItemsTable.fileKey,
+      fileName: evidenceItemsTable.fileName,
+      mimeType: evidenceItemsTable.mimeType,
+      organizationId: evidenceItemsTable.organizationId,
+    })
+    .from(evidenceItemsTable)
+    .where(
+      and(
+        eq(evidenceItemsTable.id, req.params.id),
+        orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined
+      )
+    )
+    .limit(1);
+
+  if (!item || !item.fileKey) {
+    res.status(404).json({ error: "File not found" });
+    return;
+  }
+
+  const filePath = path.resolve(UPLOADS_DIR, "..", item.fileKey);
+  const contentType = item.mimeType ?? "application/octet-stream";
+  const downloadName = item.fileName ?? "evidence-file";
+
+  res.setHeader("Content-Type", contentType);
+  res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(downloadName)}"`);
+
+  const stream = createReadStream(filePath);
+  stream.on("error", () => {
+    if (!res.headersSent) {
+      res.status(404).json({ error: "File not found on disk" });
+    }
+  });
+  stream.pipe(res);
 });
 
 router.patch("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
@@ -278,6 +426,7 @@ router.patch("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
   const [updated] = await db
     .select(evidenceSelect)
     .from(evidenceItemsTable)
+    .leftJoin(usersTable, eq(usersTable.id, evidenceItemsTable.ownerId))
     .where(eq(evidenceItemsTable.id, req.params.id))
     .limit(1);
 

@@ -44,7 +44,8 @@ import {
   Target,
   ClipboardList,
   Calendar,
-  ExternalLink,
+  Download,
+  Paperclip,
 } from "lucide-react";
 
 const EVIDENCE_TYPES = [
@@ -124,6 +125,7 @@ interface AddEvidenceDialogProps {
 function AddEvidenceDialog({ open, onClose, controlId, orgId, onSaved }: AddEvidenceDialogProps) {
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -136,57 +138,90 @@ function AddEvidenceDialog({ open, onClose, controlId, orgId, onSaved }: AddEvid
 
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
 
+  const resetForm = () => {
+    setForm({ title: "", description: "", evidenceType: "", collectedAt: "", expiresAt: "", assessorSummary: "", internalNotes: "" });
+    setFile(null);
+  };
+
+  const errors = {
+    title: !form.title,
+    evidenceType: !form.evidenceType,
+    file: !file,
+  };
+  const hasErrors = errors.title || errors.evidenceType || errors.file;
+
   const handleSave = async () => {
-    if (!form.title || !form.evidenceType) {
-      toast({ title: "Title and evidence type are required", variant: "destructive" });
+    if (hasErrors) {
+      toast({ title: "Please fill in all required fields and attach a file", variant: "destructive" });
       return;
     }
     setSaving(true);
     try {
-      const res = await fetch("/api/evidence", {
+      const token = localStorage.getItem("auth_token");
+      const fd = new FormData();
+      fd.append("title", form.title);
+      fd.append("evidenceType", form.evidenceType);
+      if (form.description) fd.append("description", form.description);
+      if (form.collectedAt) fd.append("collectedAt", form.collectedAt);
+      if (form.expiresAt) fd.append("expiresAt", form.expiresAt);
+      if (form.assessorSummary) fd.append("assessorSummary", form.assessorSummary);
+      if (form.internalNotes) fd.append("internalNotes", form.internalNotes);
+      fd.append("controlIds", JSON.stringify([controlId]));
+      fd.append("file", file!);
+
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${token}`,
+      };
+      if (orgId) headers["X-Organization-ID"] = orgId;
+
+      const res = await fetch("/api/evidence/upload", {
         method: "POST",
-        headers: apiHeaders(orgId),
-        body: JSON.stringify({
-          title: form.title,
-          description: form.description,
-          evidenceType: form.evidenceType,
-          collectedAt: form.collectedAt || undefined,
-          expiresAt: form.expiresAt || undefined,
-          assessorSummary: form.assessorSummary,
-          internalNotes: form.internalNotes,
-          controlIds: [controlId],
-        }),
+        headers,
+        body: fd,
       });
       if (!res.ok) {
         const e = await res.json();
         throw new Error(e.error ?? "Failed to save evidence");
       }
-      toast({ title: "Evidence added" });
-      setForm({ title: "", description: "", evidenceType: "", collectedAt: "", expiresAt: "", assessorSummary: "", internalNotes: "" });
+      toast({ title: "Evidence uploaded successfully" });
+      resetForm();
       onSaved();
       onClose();
     } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
     } finally {
       setSaving(false);
     }
   };
 
+  const handleClose = () => {
+    resetForm();
+    onClose();
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Evidence</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-1">
           <div>
-            <Label>Title *</Label>
-            <Input value={form.title} onChange={(e) => set("title")(e.target.value)} placeholder="Evidence title" />
+            <Label>Title <span className="text-red-500">*</span></Label>
+            <Input
+              value={form.title}
+              onChange={(e) => set("title")(e.target.value)}
+              placeholder="Evidence title"
+              className={errors.title && form.title === "" && saving ? "border-red-400" : ""}
+            />
           </div>
+
           <div>
-            <Label>Evidence Type *</Label>
+            <Label>Evidence Type <span className="text-red-500">*</span></Label>
             <Select value={form.evidenceType} onValueChange={set("evidenceType")}>
-              <SelectTrigger><SelectValue placeholder="Select type..." /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="Select type..." />
+              </SelectTrigger>
               <SelectContent>
                 {EVIDENCE_TYPES.map((t) => (
                   <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
@@ -194,10 +229,49 @@ function AddEvidenceDialog({ open, onClose, controlId, orgId, onSaved }: AddEvid
               </SelectContent>
             </Select>
           </div>
+
+          <div>
+            <Label>File <span className="text-red-500">*</span></Label>
+            <label className={`mt-1 flex items-center justify-center gap-2 w-full border-2 border-dashed rounded-lg p-4 cursor-pointer transition-colors ${file ? "border-primary/40 bg-primary/5" : "border-muted-foreground/30 hover:border-primary/40 hover:bg-muted/40"}`}>
+              <input
+                type="file"
+                className="sr-only"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              />
+              {file ? (
+                <div className="flex items-center gap-2 text-sm">
+                  <Paperclip className="h-4 w-4 text-primary shrink-0" />
+                  <span className="font-medium text-primary truncate max-w-[280px]">{file.name}</span>
+                  <span className="text-muted-foreground shrink-0">({(file.size / 1024).toFixed(0)} KB)</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Paperclip className="h-4 w-4" />
+                  <span>Click to choose a file from your computer</span>
+                </div>
+              )}
+            </label>
+            {file && (
+              <button
+                type="button"
+                onClick={() => setFile(null)}
+                className="mt-1 text-xs text-muted-foreground hover:text-red-500 underline"
+              >
+                Remove file
+              </button>
+            )}
+          </div>
+
           <div>
             <Label>Description</Label>
-            <Textarea value={form.description} onChange={(e) => set("description")(e.target.value)} placeholder="What does this evidence demonstrate?" rows={3} />
+            <Textarea
+              value={form.description}
+              onChange={(e) => set("description")(e.target.value)}
+              placeholder="What does this evidence demonstrate?"
+              rows={2}
+            />
           </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Collection Date</Label>
@@ -208,19 +282,31 @@ function AddEvidenceDialog({ open, onClose, controlId, orgId, onSaved }: AddEvid
               <Input type="date" value={form.expiresAt} onChange={(e) => set("expiresAt")(e.target.value)} />
             </div>
           </div>
+
           <div>
             <Label>Assessor Summary</Label>
-            <Textarea value={form.assessorSummary} onChange={(e) => set("assessorSummary")(e.target.value)} placeholder="Summary for the assessor..." rows={2} />
+            <Textarea
+              value={form.assessorSummary}
+              onChange={(e) => set("assessorSummary")(e.target.value)}
+              placeholder="Summary for the assessor..."
+              rows={2}
+            />
           </div>
+
           <div>
             <Label>Internal Notes</Label>
-            <Textarea value={form.internalNotes} onChange={(e) => set("internalNotes")(e.target.value)} placeholder="Internal team notes..." rows={2} />
+            <Textarea
+              value={form.internalNotes}
+              onChange={(e) => set("internalNotes")(e.target.value)}
+              placeholder="Internal team notes..."
+              rows={2}
+            />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving || !form.title || !form.evidenceType}>
-            {saving ? "Saving..." : "Save Evidence"}
+          <Button variant="outline" onClick={handleClose}>Cancel</Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? "Uploading..." : "Upload Evidence"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -668,12 +754,20 @@ export default function ControlDetail({ id }: { id: string }) {
                       <StatusBadge status={item.status} />
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-1.5">
+                  <CardContent className="space-y-2">
                     <Badge variant="outline" className="text-xs">
                       {evidenceTypeLabel(item.evidenceType)}
                     </Badge>
                     {item.fileName && (
-                      <p className="text-xs text-muted-foreground truncate">{item.fileName}</p>
+                      <div className="flex items-center gap-1.5">
+                        <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
+                        <span className="text-xs text-muted-foreground truncate">{item.fileName}</span>
+                        {item.fileSize && (
+                          <span className="text-xs text-muted-foreground shrink-0">
+                            ({(item.fileSize / 1024).toFixed(0)} KB)
+                          </span>
+                        )}
+                      </div>
                     )}
                     {item.collectedAt && (
                       <p className="text-xs text-muted-foreground">
@@ -682,6 +776,41 @@ export default function ControlDetail({ id }: { id: string }) {
                     )}
                     {item.ownerName && (
                       <p className="text-xs text-muted-foreground">Owner: {item.ownerName}</p>
+                    )}
+                    {item.fileKey && (
+                      <a
+                        href={`/api/evidence/${item.id}/download`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          const token = localStorage.getItem("auth_token");
+                          const orgId = activeOrg?.id;
+                          fetch(`/api/evidence/${item.id}/download`, {
+                            headers: {
+                              Authorization: `Bearer ${token}`,
+                              ...(orgId ? { "X-Organization-ID": orgId } : {}),
+                            },
+                          })
+                            .then((r) => {
+                              if (!r.ok) throw new Error("Download failed");
+                              return r.blob();
+                            })
+                            .then((blob) => {
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement("a");
+                              a.href = url;
+                              a.download = item.fileName ?? "evidence-file";
+                              a.click();
+                              URL.revokeObjectURL(url);
+                            })
+                            .catch(() => {});
+                        }}
+                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-0.5"
+                      >
+                        <Download className="h-3 w-3" />
+                        Download file
+                      </a>
                     )}
                   </CardContent>
                 </Card>
