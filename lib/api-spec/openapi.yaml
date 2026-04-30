@@ -3189,33 +3189,60 @@ components:
       required:
         - rejectionNotes
 
+    ControlDocItem:
+      type: object
+      description: A control entry in the gap analysis report, with optional evidence/document link info
+      properties:
+        controlId:
+          type: string
+          description: Control UUID
+        controlLabel:
+          type: string
+          description: Display ID like AC.L1-3.1.1
+        title:
+          type: string
+          description: Human-readable control title
+        domainName:
+          type: string
+        existingStatus:
+          type: string
+          description: Status of the existing draft policy/procedure if one exists
+          nullable: true
+        existingSource:
+          type: string
+          enum: [evidence, document]
+          nullable: true
+        evidenceId:
+          type: string
+          nullable: true
+        documentId:
+          type: string
+          nullable: true
+      required: [controlId, controlLabel, title, domainName]
+
     MissingDocReport:
       type: object
       properties:
         controlsMissingPolicy:
           type: array
+          description: Controls with no policy from evidence or documents
           items:
-            type: object
-            properties:
-              controlId:
-                type: string
-              controlLabel:
-                type: string
-              domainName:
-                type: string
-            required: [controlId, controlLabel, domainName]
+            $ref: "#/components/schemas/ControlDocItem"
+        controlsWithDraftPolicy:
+          type: array
+          description: Controls that have a policy but it is not yet approved/active
+          items:
+            $ref: "#/components/schemas/ControlDocItem"
         controlsMissingProcedure:
           type: array
+          description: Controls with no procedure from evidence or documents
           items:
-            type: object
-            properties:
-              controlId:
-                type: string
-              controlLabel:
-                type: string
-              domainName:
-                type: string
-            required: [controlId, controlLabel, domainName]
+            $ref: "#/components/schemas/ControlDocItem"
+        controlsWithDraftProcedure:
+          type: array
+          description: Controls that have a procedure but it is not yet approved/active
+          items:
+            $ref: "#/components/schemas/ControlDocItem"
         expiredDocuments:
           type: array
           items:
@@ -3230,7 +3257,11 @@ components:
             $ref: "#/components/schemas/Document"
         totalMissingPolicies:
           type: integer
+        totalWithDraftPolicy:
+          type: integer
         totalMissingProcedures:
+          type: integer
+        totalWithDraftProcedure:
           type: integer
         totalExpired:
           type: integer
@@ -3240,12 +3271,16 @@ components:
           type: integer
       required:
         - controlsMissingPolicy
+        - controlsWithDraftPolicy
         - controlsMissingProcedure
+        - controlsWithDraftProcedure
         - expiredDocuments
         - documentsNeedingReview
         - pendingApproval
         - totalMissingPolicies
+        - totalWithDraftPolicy
         - totalMissingProcedures
+        - totalWithDraftProcedure
         - totalExpired
         - totalNeedingReview
         - totalPendingApproval
@@ -3530,8 +3565,16 @@ components:
           type: integer
         controlsMissingPolicy:
           type: integer
+          description: Controls with no policy at all (neither active nor draft)
         controlsMissingProcedure:
           type: integer
+          description: Controls with no procedure at all (neither active nor draft)
+        controlsWithDraftPolicy:
+          type: integer
+          description: Controls that have a draft/pending policy but not yet active
+        controlsWithDraftProcedure:
+          type: integer
+          description: Controls that have a draft/pending procedure but not yet active
         logsCompletedThisMonth:
           type: integer
         logsDue:
@@ -3552,6 +3595,8 @@ components:
         - totalTemplates
         - controlsMissingPolicy
         - controlsMissingProcedure
+        - controlsWithDraftPolicy
+        - controlsWithDraftProcedure
         - logsCompletedThisMonth
         - logsDue
         - checklistsCompleted

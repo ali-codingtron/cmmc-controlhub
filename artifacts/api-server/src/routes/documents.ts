@@ -12,10 +12,12 @@ import {
   checklistCompletionsTable,
   usersTable,
   controlsTable,
+  domainsTable,
   evidenceItemsTable,
+  evidenceControlLinksTable,
   tasksTable,
 } from "@workspace/db";
-import { eq, and, desc, ilike, or, inArray, lte, gte } from "drizzle-orm";
+import { eq, and, desc, ilike, or, inArray, lte, gte, isNull } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 import { logAudit } from "../lib/audit";
@@ -345,64 +347,223 @@ router.post("/documents/generate", requireAuth, requireOrg, async (req, res) => 
   res.status(201).json({ ...doc, linkedControlLabels: labels, templateTitle: template.title });
 });
 
-router.get("/documents/missing", requireAuth, requireOrg, async (req, res) => {
+// ── Shared gap-analysis helper ────────────────────────────────────────────────
+// Active means: evidence approved/assessor_ready OR document active/approved.
+// Draft means: exists with draft/pending status but not yet active.
+const ACTIVE_EVIDENCE_STATUSES = ["approved", "assessor_ready"] as const;
+const DRAFT_EVIDENCE_STATUSES = ["draft", "needs_classification", "pending_review"] as const;
+const ACTIVE_DOC_STATUSES = ["active", "approved"] as const;
+const DRAFT_DOC_STATUSES = ["draft", "pending_review", "needs_update"] as const;
+
+type ControlDocItem = {
+  controlId: string;
+  controlLabel: string;
+  title: string;
+  domainName: string;
+  existingStatus?: string;
+  existingSource?: "evidence" | "document";
+  evidenceId?: string;
+  documentId?: string;
+};
+
+async function buildPolicyCoverageForOrg(orgId: string | undefined) {
+  // 1. All active controls with domain info
   const allControls = await db
-    .select({ id: controlsTable.id, controlId: controlsTable.controlId, domainId: controlsTable.domainId })
-    .from(controlsTable);
+    .select({
+      id: controlsTable.id,
+      controlId: controlsTable.controlId,
+      title: controlsTable.title,
+      domainId: controlsTable.domainId,
+      domainName: domainsTable.name,
+    })
+    .from(controlsTable)
+    .leftJoin(domainsTable, eq(controlsTable.domainId, domainsTable.id))
+    .where(eq(controlsTable.isActive, true));
 
-  const activeDocs = await db
-    .select({ id: documentsTable.id, docType: documentsTable.docType })
-    .from(documentsTable)
-    .where(inArray(documentsTable.status, ["active", "approved"]));
+  // 2. Document policies/procedures (all active/draft statuses) linked to controls
+  const relevantDocStatuses = [...ACTIVE_DOC_STATUSES, ...DRAFT_DOC_STATUSES];
+  const docLinks = await db
+    .select({
+      documentId: documentControlMapsTable.documentId,
+      controlId: documentControlMapsTable.controlId,
+      docType: documentsTable.docType,
+      status: documentsTable.status,
+      orgId: documentsTable.organizationId,
+    })
+    .from(documentControlMapsTable)
+    .innerJoin(documentsTable, eq(documentsTable.id, documentControlMapsTable.documentId))
+    .where(
+      and(
+        eq(documentsTable.isCurrentVersion, true),
+        inArray(documentsTable.docType, ["policy", "procedure"]),
+        inArray(documentsTable.status, relevantDocStatuses),
+        orgId ? eq(documentsTable.organizationId, orgId) : undefined,
+        isNull(documentsTable.deletedAt)
+      )
+    );
 
-  const activeDocIds = activeDocs.map((d) => d.id);
-  const activeControlMaps = activeDocIds.length > 0
-    ? await db.select({ documentId: documentControlMapsTable.documentId, controlId: documentControlMapsTable.controlId })
-        .from(documentControlMapsTable)
-        .where(inArray(documentControlMapsTable.documentId, activeDocIds))
-    : [];
-  const docTypeById: Record<string, string> = {};
-  for (const d of activeDocs) docTypeById[d.id] = d.docType;
+  // 3. Evidence policies/procedures (all active/draft statuses) linked to controls
+  const relevantEvidenceStatuses = [...ACTIVE_EVIDENCE_STATUSES, ...DRAFT_EVIDENCE_STATUSES];
+  const evidenceLinks = await db
+    .select({
+      evidenceId: evidenceControlLinksTable.evidenceId,
+      controlId: evidenceControlLinksTable.controlId,
+      evidenceType: evidenceItemsTable.evidenceType,
+      status: evidenceItemsTable.status,
+    })
+    .from(evidenceControlLinksTable)
+    .innerJoin(evidenceItemsTable, eq(evidenceItemsTable.id, evidenceControlLinksTable.evidenceId))
+    .where(
+      and(
+        orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined,
+        inArray(evidenceItemsTable.evidenceType, ["policy", "procedure"]),
+        inArray(evidenceItemsTable.status, relevantEvidenceStatuses)
+      )
+    );
 
-  const controlsWithPolicy = new Set(activeControlMaps.filter((m) => docTypeById[m.documentId] === "policy").map((m) => m.controlId));
-  const controlsWithProcedure = new Set(activeControlMaps.filter((m) => docTypeById[m.documentId] === "procedure").map((m) => m.controlId));
+  // Build coverage maps keyed by controlId (UUID)
+  // Maps: controlId → best status ("active" beats "draft")
+  const policyDoc = new Map<string, { status: string; documentId: string }>();
+  const procedureDoc = new Map<string, { status: string; documentId: string }>();
+  for (const link of docLinks) {
+    const isActive = (ACTIVE_DOC_STATUSES as readonly string[]).includes(link.status);
+    if (link.docType === "policy") {
+      const existing = policyDoc.get(link.controlId);
+      if (!existing || isActive) policyDoc.set(link.controlId, { status: link.status, documentId: link.documentId });
+    } else if (link.docType === "procedure") {
+      const existing = procedureDoc.get(link.controlId);
+      if (!existing || isActive) procedureDoc.set(link.controlId, { status: link.status, documentId: link.documentId });
+    }
+  }
 
-  const now = new Date();
+  const policyEvidence = new Map<string, { status: string; evidenceId: string }>();
+  const procedureEvidence = new Map<string, { status: string; evidenceId: string }>();
+  for (const link of evidenceLinks) {
+    const isActive = (ACTIVE_EVIDENCE_STATUSES as readonly string[]).includes(link.status);
+    if (link.evidenceType === "policy") {
+      const existing = policyEvidence.get(link.controlId);
+      if (!existing || isActive) policyEvidence.set(link.controlId, { status: link.status, evidenceId: link.evidenceId });
+    } else if (link.evidenceType === "procedure") {
+      const existing = procedureEvidence.get(link.controlId);
+      if (!existing || isActive) procedureEvidence.set(link.controlId, { status: link.status, evidenceId: link.evidenceId });
+    }
+  }
+
+  const controlsMissingPolicy: ControlDocItem[] = [];
+  const controlsWithDraftPolicy: ControlDocItem[] = [];
+  const controlsMissingProcedure: ControlDocItem[] = [];
+  const controlsWithDraftProcedure: ControlDocItem[] = [];
+
+  for (const c of allControls) {
+    const domainName = c.domainName ?? "";
+
+    // Policy coverage
+    const pd = policyDoc.get(c.id);
+    const pe = policyEvidence.get(c.id);
+    // Choose best: prefer active over draft, prefer any over none
+    let bestPolicyStatus: string | undefined;
+    let bestPolicySource: "document" | "evidence" | undefined;
+    let bestPolicyDocId: string | undefined;
+    let bestPolicyEvidId: string | undefined;
+
+    if (pd) { bestPolicyStatus = pd.status; bestPolicySource = "document"; bestPolicyDocId = pd.documentId; }
+    if (pe) {
+      const peActive = (ACTIVE_EVIDENCE_STATUSES as readonly string[]).includes(pe.status);
+      const pdActive = pd ? (ACTIVE_DOC_STATUSES as readonly string[]).includes(pd.status) : false;
+      if (!pd || (peActive && !pdActive)) {
+        bestPolicyStatus = pe.status; bestPolicySource = "evidence"; bestPolicyEvidId = pe.evidenceId; bestPolicyDocId = undefined;
+      }
+    }
+
+    if (!bestPolicyStatus) {
+      controlsMissingPolicy.push({ controlId: c.id, controlLabel: c.controlId, title: c.title, domainName });
+    } else if (!(ACTIVE_DOC_STATUSES as readonly string[]).includes(bestPolicyStatus) && !(ACTIVE_EVIDENCE_STATUSES as readonly string[]).includes(bestPolicyStatus)) {
+      controlsWithDraftPolicy.push({
+        controlId: c.id, controlLabel: c.controlId, title: c.title, domainName,
+        existingStatus: bestPolicyStatus, existingSource: bestPolicySource,
+        evidenceId: bestPolicyEvidId, documentId: bestPolicyDocId,
+      });
+    }
+
+    // Procedure coverage
+    const procd = procedureDoc.get(c.id);
+    const proce = procedureEvidence.get(c.id);
+    let bestProcStatus: string | undefined;
+    let bestProcSource: "document" | "evidence" | undefined;
+    let bestProcDocId: string | undefined;
+    let bestProcEvidId: string | undefined;
+
+    if (procd) { bestProcStatus = procd.status; bestProcSource = "document"; bestProcDocId = procd.documentId; }
+    if (proce) {
+      const peActive = (ACTIVE_EVIDENCE_STATUSES as readonly string[]).includes(proce.status);
+      const pdActive = procd ? (ACTIVE_DOC_STATUSES as readonly string[]).includes(procd.status) : false;
+      if (!procd || (peActive && !pdActive)) {
+        bestProcStatus = proce.status; bestProcSource = "evidence"; bestProcEvidId = proce.evidenceId; bestProcDocId = undefined;
+      }
+    }
+
+    if (!bestProcStatus) {
+      controlsMissingProcedure.push({ controlId: c.id, controlLabel: c.controlId, title: c.title, domainName });
+    } else if (!(ACTIVE_DOC_STATUSES as readonly string[]).includes(bestProcStatus) && !(ACTIVE_EVIDENCE_STATUSES as readonly string[]).includes(bestProcStatus)) {
+      controlsWithDraftProcedure.push({
+        controlId: c.id, controlLabel: c.controlId, title: c.title, domainName,
+        existingStatus: bestProcStatus, existingSource: bestProcSource,
+        evidenceId: bestProcEvidId, documentId: bestProcDocId,
+      });
+    }
+  }
+
+  return { allControls, controlsMissingPolicy, controlsWithDraftPolicy, controlsMissingProcedure, controlsWithDraftProcedure };
+}
+
+router.get("/documents/missing", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
+
+  const [coverage, now] = await Promise.all([
+    buildPolicyCoverageForOrg(orgId),
+    Promise.resolve(new Date()),
+  ]);
   const soonDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
   const [expiredDocs, needsReviewDocs, pendingDocs] = await Promise.all([
     db.select().from(documentsTable).where(and(
       eq(documentsTable.isCurrentVersion, true),
-      lte(documentsTable.expiresAt, now)
+      lte(documentsTable.expiresAt, now),
+      orgId ? eq(documentsTable.organizationId, orgId) : undefined
     )).orderBy(desc(documentsTable.updatedAt)),
     db.select().from(documentsTable).where(and(
       eq(documentsTable.isCurrentVersion, true),
-      lte(documentsTable.nextReviewDate, soonDate)
+      lte(documentsTable.nextReviewDate, soonDate),
+      orgId ? eq(documentsTable.organizationId, orgId) : undefined
     )).orderBy(documentsTable.nextReviewDate),
     db.select().from(documentsTable).where(and(
       eq(documentsTable.isCurrentVersion, true),
-      eq(documentsTable.status, "pending_review")
+      eq(documentsTable.status, "pending_review"),
+      orgId ? eq(documentsTable.organizationId, orgId) : undefined
     )).orderBy(desc(documentsTable.updatedAt)),
   ]);
 
-  const missingPolicy = allControls
-    .filter((c) => !controlsWithPolicy.has(c.id))
-    .map((c) => ({ controlId: c.id, controlLabel: c.controlId, domainName: c.domainId ?? "" }));
-  const missingProcedure = allControls
-    .filter((c) => !controlsWithProcedure.has(c.id))
-    .map((c) => ({ controlId: c.id, controlLabel: c.controlId, domainName: c.domainId ?? "" }));
-
   const enrich = async (docs: (typeof documentsTable.$inferSelect)[]) =>
-    Promise.all(docs.map(async (d) => ({ ...d, linkedControlLabels: await getControlLabels(d.linkedControlIds ?? []) })));
+    Promise.all(docs.map(async (d) => {
+      const maps = await db.select({ controlId: documentControlMapsTable.controlId }).from(documentControlMapsTable).where(eq(documentControlMapsTable.documentId, d.id));
+      const labels = await getControlLabels(maps.map((m) => m.controlId));
+      return { ...d, linkedControlIds: maps.map((m) => m.controlId), linkedControlLabels: labels };
+    }));
+
+  const { controlsMissingPolicy, controlsWithDraftPolicy, controlsMissingProcedure, controlsWithDraftProcedure } = coverage;
 
   res.json({
-    controlsMissingPolicy: missingPolicy,
-    controlsMissingProcedure: missingProcedure,
+    controlsMissingPolicy,
+    controlsWithDraftPolicy,
+    controlsMissingProcedure,
+    controlsWithDraftProcedure,
     expiredDocuments: await enrich(expiredDocs),
     documentsNeedingReview: await enrich(needsReviewDocs),
     pendingApproval: await enrich(pendingDocs),
-    totalMissingPolicies: missingPolicy.length,
-    totalMissingProcedures: missingProcedure.length,
+    totalMissingPolicies: controlsMissingPolicy.length,
+    totalWithDraftPolicy: controlsWithDraftPolicy.length,
+    totalMissingProcedures: controlsMissingProcedure.length,
+    totalWithDraftProcedure: controlsWithDraftProcedure.length,
     totalExpired: expiredDocs.length,
     totalNeedingReview: needsReviewDocs.length,
     totalPendingApproval: pendingDocs.length,
@@ -1001,23 +1162,10 @@ router.get("/automation/doc-status", requireAuth, requireOrg, async (req, res) =
     return acc;
   }, {} as Record<string, number>);
 
-  // Get active docs for policy/procedure coverage analysis via junction table
-  const activePolicyProcedureDocs = await db
-    .select({ id: documentsTable.id, docType: documentsTable.docType })
-    .from(documentsTable)
-    .where(and(eq(documentsTable.isCurrentVersion, true), inArray(documentsTable.status, ["active", "approved"])));
-  const activePPDocIds = activePolicyProcedureDocs.map((d) => d.id);
-  const activePPDocTypeById: Record<string, string> = {};
-  for (const d of activePolicyProcedureDocs) activePPDocTypeById[d.id] = d.docType;
-  const activePPMaps = activePPDocIds.length > 0
-    ? await db.select({ documentId: documentControlMapsTable.documentId, controlId: documentControlMapsTable.controlId })
-        .from(documentControlMapsTable)
-        .where(inArray(documentControlMapsTable.documentId, activePPDocIds))
-    : [];
-  const activePolicies = new Set(activePPMaps.filter((m) => activePPDocTypeById[m.documentId] === "policy").map((m) => m.controlId));
-  const activeProcedures = new Set(activePPMaps.filter((m) => activePPDocTypeById[m.documentId] === "procedure").map((m) => m.controlId));
-
-  const totalControls = await db.select({ id: controlsTable.id }).from(controlsTable);
+  // Policy/procedure coverage: check both evidence and documents
+  const orgId = req.orgId;
+  const coverage = await buildPolicyCoverageForOrg(orgId);
+  const totalControls = coverage.allControls;
 
   const recentDocIds = recentDocs.map((d) => d.id);
   const recentControlMaps = recentDocIds.length > 0
@@ -1043,8 +1191,10 @@ router.get("/automation/doc-status", requireAuth, requireOrg, async (req, res) =
     totalExpired: statusCounts["expired"] ?? 0,
     totalNeedsUpdate: statusCounts["needs_update"] ?? 0,
     totalTemplates: templates.length,
-    controlsMissingPolicy: totalControls.filter((c) => !activePolicies.has(c.id)).length,
-    controlsMissingProcedure: totalControls.filter((c) => !activeProcedures.has(c.id)).length,
+    controlsMissingPolicy: coverage.controlsMissingPolicy.length,
+    controlsMissingProcedure: coverage.controlsMissingProcedure.length,
+    controlsWithDraftPolicy: coverage.controlsWithDraftPolicy.length,
+    controlsWithDraftProcedure: coverage.controlsWithDraftProcedure.length,
     logsCompletedThisMonth: logsThisMonth.length,
     logsDue: logsDue.length,
     checklistsCompleted: checklistsCompleted.length,

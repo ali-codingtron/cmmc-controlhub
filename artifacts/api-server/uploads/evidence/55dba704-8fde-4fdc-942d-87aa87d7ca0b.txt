@@ -1,0 +1,30 @@
+Control ID: 3.1.1
+Control Title: Limit system access to authorized users, processes acting on behalf of authorized users, and devices (including other systems).
+Family: Access Control
+Document Type: Control-Specific Policy Statement
+System: VTC CUI Enclave
+
+Policy Statement
+VTC requires that limit system access to authorized users, processes acting on behalf of authorized users, and devices (including other systems). within the scoped VTC CUI Enclave. VTC implements control 3.1.1 by applying tenant config + documented approvals within the scoped GCC High enclave. Access is limited to approved users, approved devices, and approved functions only, and changes are approved and recorded. Evidence for this control is stored in SharePoint at 07_Control_Evidence/3.1.1, and the control is reviewed whenever access changes and during periodic access review.
+This requirement applies to the VTC GCC High tenant, the approved managed workstation, the dedicated network path and firewall, and any supporting administrative process or record identified for this control.
+
+Authority and Responsibility
+The System Owner is responsible for maintaining this requirement in scope and approving any exceptions.
+The Security Officer is responsible for reviewing compliance, maintaining supporting records, and ensuring that the control remains aligned with the SSP.
+Designated administrators are responsible for implementing and maintaining the technical or operational settings that support this control.
+Users are responsible for following the applicable restrictions and procedures associated with this control.
+
+Required Documentation
+- Update the SSP with the tenant boundary, authorized users list, approved device list, and account approval process.
+- Create an Account Management Procedure stating who may request, approve, create, modify, disable, and delete accounts.
+- Maintain an Authorized Users and Devices register.
+
+Evidence Location
+Supporting evidence for this control will be maintained in SharePoint at 07_Control_Evidence/3.1.1.
+Policy, procedure, configuration reference, review records, and narrative notes for this control will be kept in the control folder and linked to related top-level program documents as needed.
+
+Review Frequency
+This policy statement will be reviewed Quarterly and whenever access or scope changes.
+
+Approved Operating Standard
+For the VTC CUI Enclave, VTC will treat this policy as mandatory unless a documented exception is approved by the System Owner and recorded in the POA&M or equivalent exception record.

@@ -3226,20 +3226,100 @@ export const GenerateDocumentBody = zod.object({
  * @summary Get controls missing required documentation
  */
 export const GetMissingDocumentationResponse = zod.object({
-  controlsMissingPolicy: zod.array(
-    zod.object({
-      controlId: zod.string(),
-      controlLabel: zod.string(),
-      domainName: zod.string(),
-    }),
-  ),
-  controlsMissingProcedure: zod.array(
-    zod.object({
-      controlId: zod.string(),
-      controlLabel: zod.string(),
-      domainName: zod.string(),
-    }),
-  ),
+  controlsMissingPolicy: zod
+    .array(
+      zod
+        .object({
+          controlId: zod.string().describe("Control UUID"),
+          controlLabel: zod.string().describe("Display ID like AC.L1-3.1.1"),
+          title: zod.string().describe("Human-readable control title"),
+          domainName: zod.string(),
+          existingStatus: zod
+            .string()
+            .nullish()
+            .describe(
+              "Status of the existing draft policy\/procedure if one exists",
+            ),
+          existingSource: zod.enum(["evidence", "document"]).nullish(),
+          evidenceId: zod.string().nullish(),
+          documentId: zod.string().nullish(),
+        })
+        .describe(
+          "A control entry in the gap analysis report, with optional evidence\/document link info",
+        ),
+    )
+    .describe("Controls with no policy from evidence or documents"),
+  controlsWithDraftPolicy: zod
+    .array(
+      zod
+        .object({
+          controlId: zod.string().describe("Control UUID"),
+          controlLabel: zod.string().describe("Display ID like AC.L1-3.1.1"),
+          title: zod.string().describe("Human-readable control title"),
+          domainName: zod.string(),
+          existingStatus: zod
+            .string()
+            .nullish()
+            .describe(
+              "Status of the existing draft policy\/procedure if one exists",
+            ),
+          existingSource: zod.enum(["evidence", "document"]).nullish(),
+          evidenceId: zod.string().nullish(),
+          documentId: zod.string().nullish(),
+        })
+        .describe(
+          "A control entry in the gap analysis report, with optional evidence\/document link info",
+        ),
+    )
+    .describe("Controls that have a policy but it is not yet approved\/active"),
+  controlsMissingProcedure: zod
+    .array(
+      zod
+        .object({
+          controlId: zod.string().describe("Control UUID"),
+          controlLabel: zod.string().describe("Display ID like AC.L1-3.1.1"),
+          title: zod.string().describe("Human-readable control title"),
+          domainName: zod.string(),
+          existingStatus: zod
+            .string()
+            .nullish()
+            .describe(
+              "Status of the existing draft policy\/procedure if one exists",
+            ),
+          existingSource: zod.enum(["evidence", "document"]).nullish(),
+          evidenceId: zod.string().nullish(),
+          documentId: zod.string().nullish(),
+        })
+        .describe(
+          "A control entry in the gap analysis report, with optional evidence\/document link info",
+        ),
+    )
+    .describe("Controls with no procedure from evidence or documents"),
+  controlsWithDraftProcedure: zod
+    .array(
+      zod
+        .object({
+          controlId: zod.string().describe("Control UUID"),
+          controlLabel: zod.string().describe("Display ID like AC.L1-3.1.1"),
+          title: zod.string().describe("Human-readable control title"),
+          domainName: zod.string(),
+          existingStatus: zod
+            .string()
+            .nullish()
+            .describe(
+              "Status of the existing draft policy\/procedure if one exists",
+            ),
+          existingSource: zod.enum(["evidence", "document"]).nullish(),
+          evidenceId: zod.string().nullish(),
+          documentId: zod.string().nullish(),
+        })
+        .describe(
+          "A control entry in the gap analysis report, with optional evidence\/document link info",
+        ),
+    )
+    .describe(
+      "Controls that have a procedure but it is not yet approved\/active",
+    ),
   expiredDocuments: zod.array(
     zod.object({
       id: zod.string(),
@@ -3397,7 +3477,9 @@ export const GetMissingDocumentationResponse = zod.object({
     }),
   ),
   totalMissingPolicies: zod.number(),
+  totalWithDraftPolicy: zod.number(),
   totalMissingProcedures: zod.number(),
+  totalWithDraftProcedure: zod.number(),
   totalExpired: zod.number(),
   totalNeedingReview: zod.number(),
   totalPendingApproval: zod.number(),
@@ -4208,8 +4290,20 @@ export const GetDocAutomationStatusResponse = zod.object({
   totalExpired: zod.number(),
   totalNeedsUpdate: zod.number(),
   totalTemplates: zod.number(),
-  controlsMissingPolicy: zod.number(),
-  controlsMissingProcedure: zod.number(),
+  controlsMissingPolicy: zod
+    .number()
+    .describe("Controls with no policy at all (neither active nor draft)"),
+  controlsMissingProcedure: zod
+    .number()
+    .describe("Controls with no procedure at all (neither active nor draft)"),
+  controlsWithDraftPolicy: zod
+    .number()
+    .describe("Controls that have a draft\/pending policy but not yet active"),
+  controlsWithDraftProcedure: zod
+    .number()
+    .describe(
+      "Controls that have a draft\/pending procedure but not yet active",
+    ),
   logsCompletedThisMonth: zod.number(),
   logsDue: zod.number(),
   checklistsCompleted: zod.number(),

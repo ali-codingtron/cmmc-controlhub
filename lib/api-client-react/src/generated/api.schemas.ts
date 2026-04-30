@@ -930,26 +930,49 @@ export interface RejectDocumentBody {
   rejectionNotes: string;
 }
 
-export type MissingDocReportControlsMissingPolicyItem = {
-  controlId: string;
-  controlLabel: string;
-  domainName: string;
-};
+export type ControlDocItemExistingSource =
+  | (typeof ControlDocItemExistingSource)[keyof typeof ControlDocItemExistingSource]
+  | null;
 
-export type MissingDocReportControlsMissingProcedureItem = {
+export const ControlDocItemExistingSource = {
+  evidence: "evidence",
+  document: "document",
+} as const;
+
+/**
+ * A control entry in the gap analysis report, with optional evidence/document link info
+ */
+export interface ControlDocItem {
+  /** Control UUID */
   controlId: string;
+  /** Display ID like AC.L1-3.1.1 */
   controlLabel: string;
+  /** Human-readable control title */
+  title: string;
   domainName: string;
-};
+  /** Status of the existing draft policy/procedure if one exists */
+  existingStatus?: string | null;
+  existingSource?: ControlDocItemExistingSource;
+  evidenceId?: string | null;
+  documentId?: string | null;
+}
 
 export interface MissingDocReport {
-  controlsMissingPolicy: MissingDocReportControlsMissingPolicyItem[];
-  controlsMissingProcedure: MissingDocReportControlsMissingProcedureItem[];
+  /** Controls with no policy from evidence or documents */
+  controlsMissingPolicy: ControlDocItem[];
+  /** Controls that have a policy but it is not yet approved/active */
+  controlsWithDraftPolicy: ControlDocItem[];
+  /** Controls with no procedure from evidence or documents */
+  controlsMissingProcedure: ControlDocItem[];
+  /** Controls that have a procedure but it is not yet approved/active */
+  controlsWithDraftProcedure: ControlDocItem[];
   expiredDocuments: Document[];
   documentsNeedingReview: Document[];
   pendingApproval: Document[];
   totalMissingPolicies: number;
+  totalWithDraftPolicy: number;
   totalMissingProcedures: number;
+  totalWithDraftProcedure: number;
   totalExpired: number;
   totalNeedingReview: number;
   totalPendingApproval: number;
@@ -1094,8 +1117,14 @@ export interface DocAutomationStatus {
   totalExpired: number;
   totalNeedsUpdate: number;
   totalTemplates: number;
+  /** Controls with no policy at all (neither active nor draft) */
   controlsMissingPolicy: number;
+  /** Controls with no procedure at all (neither active nor draft) */
   controlsMissingProcedure: number;
+  /** Controls that have a draft/pending policy but not yet active */
+  controlsWithDraftPolicy: number;
+  /** Controls that have a draft/pending procedure but not yet active */
+  controlsWithDraftProcedure: number;
   logsCompletedThisMonth: number;
   logsDue: number;
   checklistsCompleted: number;

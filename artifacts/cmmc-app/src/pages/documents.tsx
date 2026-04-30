@@ -79,22 +79,37 @@ export default function Documents() {
             <StatCard label="Expired / Needs Update" value={(status?.totalExpired ?? 0) + (status?.totalNeedsUpdate ?? 0)} icon={AlertCircle} color="bg-red-500" />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className={`border-l-4 ${(status?.controlsMissingPolicy ?? 0) > 0 ? 'border-l-red-500' : 'border-l-green-500'}`}>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card className={`border-l-4 ${(status?.controlsMissingPolicy ?? 0) > 0 ? 'border-l-red-500' : (status?.controlsWithDraftPolicy ?? 0) > 0 ? 'border-l-orange-400' : 'border-l-green-500'}`}>
               <CardContent className="pt-6">
                 <p className="text-sm text-muted-foreground">Controls Missing Policy</p>
-                <p className="text-2xl font-bold mt-1">{status?.controlsMissingPolicy ?? 0}</p>
+                <p className="text-2xl font-bold mt-1 text-red-600">{status?.controlsMissingPolicy ?? 0}</p>
+                {(status?.controlsWithDraftPolicy ?? 0) > 0 && (
+                  <p className="text-xs text-orange-600 mt-0.5">{status?.controlsWithDraftPolicy} with draft/pending</p>
+                )}
                 <Link href="/documents/missing" className="text-xs text-primary hover:underline mt-1 flex items-center gap-1">
                   View gap analysis <ChevronRight className="h-3 w-3" />
                 </Link>
               </CardContent>
             </Card>
-            <Card className={`border-l-4 ${(status?.controlsMissingProcedure ?? 0) > 0 ? 'border-l-orange-500' : 'border-l-green-500'}`}>
+            <Card className={`border-l-4 ${(status?.controlsMissingProcedure ?? 0) > 0 ? 'border-l-red-500' : (status?.controlsWithDraftProcedure ?? 0) > 0 ? 'border-l-orange-400' : 'border-l-green-500'}`}>
               <CardContent className="pt-6">
                 <p className="text-sm text-muted-foreground">Controls Missing Procedure</p>
-                <p className="text-2xl font-bold mt-1">{status?.controlsMissingProcedure ?? 0}</p>
+                <p className="text-2xl font-bold mt-1 text-red-600">{status?.controlsMissingProcedure ?? 0}</p>
+                {(status?.controlsWithDraftProcedure ?? 0) > 0 && (
+                  <p className="text-xs text-orange-600 mt-0.5">{status?.controlsWithDraftProcedure} with draft/pending</p>
+                )}
                 <Link href="/documents/missing" className="text-xs text-primary hover:underline mt-1 flex items-center gap-1">
                   View gap analysis <ChevronRight className="h-3 w-3" />
+                </Link>
+              </CardContent>
+            </Card>
+            <Card className={`border-l-4 ${(status?.totalExpired ?? 0) > 0 ? 'border-l-red-500' : 'border-l-green-500'}`}>
+              <CardContent className="pt-6">
+                <p className="text-sm text-muted-foreground">Expired Documents</p>
+                <p className="text-2xl font-bold mt-1 text-red-600">{status?.totalExpired ?? 0}</p>
+                <Link href="/documents/missing" className="text-xs text-primary hover:underline mt-1 flex items-center gap-1">
+                  View expired <ChevronRight className="h-3 w-3" />
                 </Link>
               </CardContent>
             </Card>

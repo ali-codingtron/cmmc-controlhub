@@ -1,0 +1,100 @@
+Fix the relationship between uploaded evidence/documents and documentation gap analysis.
+
+Current issue:
+I uploaded a Policy document to a control, but Documentation Gap Analysis still says the control is missing an active policy. Same issue for procedures.
+
+Expected behavior:
+If a control has an active/approved evidence item or document with type Policy, the control should no longer appear under “Controls Missing Active Policy.”
+If a control has an active/approved evidence item or document with type Procedure, the control should no longer appear under “Controls Missing Active Procedure.”
+
+Fix requirements:
+
+1. Treat evidence and documents consistently
+The app currently seems to separate Evidence from Documents. That is okay, but gap analysis must check both sources.
+
+A control has an active policy if either:
+- a Document is linked to the control with document_type = policy and status in [Approved, Active, Assessor Ready]
+OR
+- an Evidence item is linked to the control with evidence_type = policy and status in [Approved, Active, Assessor Ready]
+
+A control has an active procedure if either:
+- a Document is linked to the control with document_type = procedure and status in [Approved, Active, Assessor Ready]
+OR
+- an Evidence item is linked to the control with evidence_type = procedure and status in [Approved, Active, Assessor Ready]
+
+2. Linked control mapping
+Verify that uploaded policy/procedure evidence is actually linked to:
+- organization_id
+- control_id
+- evidence_id
+
+If the evidence is uploaded from inside a control page, default the linked control to that control.
+
+3. Status handling
+New uploads may start as Draft, but the gap analysis should make this clear.
+
+If a policy/procedure exists but is Draft or Pending Review:
+- do not count it as active
+- show it in a separate category:
+  “Controls with Draft Policy”
+  “Controls with Draft Procedure”
+  or show a note: “Policy exists but is not active/approved.”
+
+4. Add document/evidence status actions
+From the evidence detail page and document detail page, allow me to change status to:
+- Draft
+- Pending Review
+- Approved
+- Active
+- Assessor Ready
+- Rejected
+- Stale
+- Superseded
+- Archived
+
+5. Documentation Gap Analysis page
+Update the page to show:
+- Missing Active Policy
+- Policy Exists But Not Active
+- Missing Active Procedure
+- Procedure Exists But Not Active
+- Expired Documents
+- Documents Needing Review
+- Pending Approval
+
+For each listed control, show:
+- control ID
+- title
+- domain
+- current related policy/procedure status if one exists
+- link to control
+- link to related evidence/document if one exists
+
+6. Documentation dashboard cards
+Update these cards:
+- Controls Missing Policy should only count controls with no active/approved policy from either Documents or Evidence.
+- Controls Missing Procedure should only count controls with no active/approved procedure from either Documents or Evidence.
+- If a draft policy/procedure exists, show it separately as “Not Active” rather than missing.
+
+7. Acceptance tests
+Verify:
+
+Test A:
+- Upload evidence type Policy to AC.L1-3.1.1
+- Status remains Draft
+- Gap Analysis should no longer treat this as totally missing; it should show “Policy Exists But Not Active” for AC.L1-3.1.1
+
+Test B:
+- Change that evidence status to Approved or Active
+- Gap Analysis should remove AC.L1-3.1.1 from Missing Active Policy
+
+Test C:
+- Upload evidence type Procedure to AC.L1-3.1.1
+- Change status to Approved or Active
+- Gap Analysis should remove AC.L1-3.1.1 from Missing Active Procedure
+
+Test D:
+- Documentation dashboard counts update correctly after status change
+
+Important:
+Do not require the document to be created from the Documentation module only. Uploaded evidence of type Policy or Procedure must also satisfy documentation gap analysis when linked to a control and approved/active.
