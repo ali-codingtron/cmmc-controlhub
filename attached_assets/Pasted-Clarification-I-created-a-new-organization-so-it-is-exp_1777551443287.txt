@@ -1,0 +1,176 @@
+Clarification: I created a new organization, so it is expected that there is no evidence, tasks, POA&Ms, or completed implementation data yet.
+
+However, the app is still broken/incomplete because each control page must allow me to add organization-specific data from scratch.
+
+Fix the app so a new organization starts empty but usable.
+
+Requirements:
+
+1. Global controls vs organization data
+The CMMC control library should be global and pre-seeded.
+
+Each control must always show:
+- control ID
+- title
+- description
+- CMMC level
+- domain
+- assessment objectives
+- expected evidence types
+
+Organization-specific data should start empty for a new organization:
+- implementation narrative
+- evidence
+- tasks
+- POA&Ms
+- review history
+- control owner
+- status
+
+2. Control detail page for a new organization
+Even when no data exists yet, each control page must show working empty states and action buttons.
+
+Implementation tab should show:
+- global control details
+- empty implementation narrative textarea
+- owner dropdown or text field
+- status dropdown
+- last reviewed date
+- next review date
+- Save Implementation button
+
+Evidence tab should show:
+- “No evidence has been added for this control yet.”
+- Add Evidence button
+
+Tasks tab should show:
+- “No tasks have been added for this control yet.”
+- Add Task button
+
+POA&M tab should show:
+- “No POA&M items have been added for this control yet.”
+- Add POA&M button
+
+3. Evidence upload
+Evidence upload must work even if the organization has no existing evidence.
+
+Evidence form must include:
+- title
+- description
+- evidence type dropdown
+- file upload
+- linked control, defaulted to current control if launched from control page
+- collection date
+- review/expiration date
+- owner
+- assessor summary
+- internal notes
+- save button
+
+Evidence type must be a dropdown with:
+- Policy
+- Procedure
+- Screenshot
+- Log
+- Report
+- Ticket
+- Configuration Export
+- Access Review
+- Training Record
+- Incident Record
+- Risk Record
+- Approval Record
+- System Inventory
+- Asset Inventory
+- Supplier Review
+- Backup Verification
+- Vulnerability Scan
+- Other
+
+After save:
+- create evidence for the selected organization
+- link it to the selected control
+- show it on the control Evidence tab
+- update Evidence count
+- keep the organization isolated from other organizations
+
+4. Tasks and POA&M
+Add working forms for new organizations.
+
+Add Task form:
+- title
+- description
+- status
+- priority
+- assignee
+- due date
+- linked control
+- save button
+
+Add POA&M form:
+- title
+- description
+- weakness/gap
+- risk level
+- owner
+- target completion date
+- status
+- linked control
+- save button
+
+5. Control implementation data
+Create or update the organization-specific control implementation record when I click Save.
+
+If no OrganizationControl record exists yet for that organization/control:
+- create it
+- save narrative, owner, status, dates
+
+If it already exists:
+- update it
+
+6. Empty-state logic
+Do not treat empty data as an error.
+
+For a new organization:
+- controls should show Not Started
+- evidence count should be 0
+- task count should be 0
+- POA&M count should be 0
+- tabs should still display add buttons and forms
+
+7. Database model pattern
+Use this structure:
+
+Control = global CMMC practice data
+OrganizationControl = per-organization implementation/status/narrative
+Evidence = organization-specific evidence
+Task = organization-specific task
+POAM = organization-specific remediation item
+
+Every Evidence, Task, and POAM must include:
+- organization_id
+- control_id
+
+8. Acceptance test
+Verify this exact workflow:
+
+- Create a brand-new organization
+- Open AC.L1-3.1.1
+- See global control details
+- See empty Implementation tab with editable fields
+- Add implementation narrative and save
+- Refresh page and confirm it remains
+- Open Evidence tab
+- See empty state and Add Evidence button
+- Add evidence with file and evidence type dropdown
+- Save
+- Evidence appears under that control
+- Evidence count changes to 1
+- Open Tasks tab
+- Add task
+- Task appears and count changes to 1
+- Open POA&M tab
+- Add POA&M
+- POA&M appears and count changes to 1
+
+Fix this now. Do not require sample evidence for a new organization. The issue is not that the organization is empty; the issue is that empty controls are not actionable.
