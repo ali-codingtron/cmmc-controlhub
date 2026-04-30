@@ -58,6 +58,12 @@ import {
   Eye,
   Unlink,
   Archive,
+  Upload,
+  X,
+  CheckCircle2,
+  Loader2,
+  Wand2,
+  Files,
 } from "lucide-react";
 
 const EVIDENCE_TYPES = [
@@ -326,6 +332,440 @@ function AddEvidenceDialog({ open, onClose, controlId, orgId, onSaved }: AddEvid
   );
 }
 
+// ─── Bulk Upload Evidence Dialog ────────────────────────────────────────────
+
+interface BulkFileRow {
+  file: File;
+  title: string;
+  evidenceType: string;
+  expiresAt: string;
+  collectedAt: string;
+  description: string;
+  assessorSummary: string;
+  internalNotes: string;
+  tags: string;
+  status: "idle" | "uploading" | "done" | "error";
+  error?: string;
+}
+
+interface BulkUploadEvidenceDialogProps {
+  open: boolean;
+  onClose: () => void;
+  controlId: string;
+  controlLabel: string;
+  domainName: string | undefined | null;
+  level: string | undefined | null;
+  orgId: string | null | undefined;
+  onSaved: () => void;
+}
+
+function BulkUploadEvidenceDialog({
+  open,
+  onClose,
+  controlId,
+  controlLabel,
+  domainName,
+  level,
+  orgId,
+  onSaved,
+}: BulkUploadEvidenceDialogProps) {
+  const { toast } = useToast();
+
+  // shared defaults
+  const [defaults, setDefaults] = useState({
+    evidenceType: "",
+    collectedAt: "",
+    expiresAt: "",
+    description: "",
+    assessorSummary: "",
+    internalNotes: "",
+    tags: "",
+  });
+
+  const [rows, setRows] = useState<BulkFileRow[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [allDone, setAllDone] = useState(false);
+
+  const setDefault = (k: keyof typeof defaults) => (v: string) =>
+    setDefaults((d) => ({ ...d, [k]: v }));
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    setRows((prev) => {
+      const existing = new Set(prev.map((r) => r.file.name));
+      const newRows: BulkFileRow[] = files
+        .filter((f) => !existing.has(f.name))
+        .map((f) => ({
+          file: f,
+          title: f.name.replace(/\.[^/.]+$/, ""),
+          evidenceType: defaults.evidenceType,
+          expiresAt: defaults.expiresAt,
+          collectedAt: defaults.collectedAt,
+          description: defaults.description,
+          assessorSummary: defaults.assessorSummary,
+          internalNotes: defaults.internalNotes,
+          tags: defaults.tags,
+          status: "idle" as const,
+        }));
+      return [...prev, ...newRows];
+    });
+    e.target.value = "";
+  };
+
+  const applyDefaults = () => {
+    setRows((prev) =>
+      prev.map((r) =>
+        r.status === "idle"
+          ? {
+              ...r,
+              evidenceType: defaults.evidenceType || r.evidenceType,
+              expiresAt: defaults.expiresAt || r.expiresAt,
+              collectedAt: defaults.collectedAt || r.collectedAt,
+              description: defaults.description || r.description,
+              assessorSummary: defaults.assessorSummary || r.assessorSummary,
+              internalNotes: defaults.internalNotes || r.internalNotes,
+              tags: defaults.tags || r.tags,
+            }
+          : r
+      )
+    );
+  };
+
+  const updateRow = (idx: number, patch: Partial<BulkFileRow>) => {
+    setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  };
+
+  const removeRow = (idx: number) => {
+    setRows((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleUploadAll = async () => {
+    const pending = rows.filter((r) => r.status === "idle");
+    if (!pending.length) return;
+
+    const missingType = rows.some((r) => r.status === "idle" && !r.evidenceType);
+    if (missingType) {
+      toast({ title: "Set an evidence type for every file before uploading", variant: "destructive" });
+      return;
+    }
+
+    setUploading(true);
+
+    const token = localStorage.getItem("auth_token");
+    const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+    if (orgId) headers["X-Organization-ID"] = orgId;
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (row.status !== "idle") continue;
+
+      setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, status: "uploading" } : r)));
+
+      try {
+        const autoTags: string[] = [];
+        if (controlLabel) autoTags.push(controlLabel);
+        if (domainName) autoTags.push(domainName);
+        if (level) autoTags.push(level);
+        const userTags = row.tags
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean);
+        const allTags = Array.from(new Set([...autoTags, ...userTags]));
+
+        const fd = new FormData();
+        fd.append("file", row.file);
+        fd.append("title", row.title || row.file.name);
+        fd.append("evidenceType", row.evidenceType);
+        fd.append("controlIds", JSON.stringify([controlId]));
+        fd.append("tags", JSON.stringify(allTags));
+        if (row.description) fd.append("description", row.description);
+        if (row.collectedAt) fd.append("collectedAt", row.collectedAt);
+        if (row.expiresAt) fd.append("expiresAt", row.expiresAt);
+        if (row.assessorSummary) fd.append("assessorSummary", row.assessorSummary);
+        if (row.internalNotes) fd.append("internalNotes", row.internalNotes);
+
+        const res = await fetch("/api/evidence/upload", {
+          method: "POST",
+          headers,
+          body: fd,
+        });
+
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error ?? `HTTP ${res.status}`);
+        }
+
+        setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, status: "done" } : r)));
+      } catch (err: any) {
+        setRows((prev) =>
+          prev.map((r, idx) => (idx === i ? { ...r, status: "error", error: err.message } : r))
+        );
+      }
+    }
+
+    setUploading(false);
+    setAllDone(true);
+    onSaved();
+  };
+
+  const handleClose = () => {
+    if (!uploading) {
+      setRows([]);
+      setDefaults({ evidenceType: "", collectedAt: "", expiresAt: "", description: "", assessorSummary: "", internalNotes: "", tags: "" });
+      setAllDone(false);
+      onClose();
+    }
+  };
+
+  const successCount = rows.filter((r) => r.status === "done").length;
+  const errorCount = rows.filter((r) => r.status === "error").length;
+  const idleCount = rows.filter((r) => r.status === "idle").length;
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Files className="h-5 w-5" />
+            Bulk Upload Evidence
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-1">
+          {/* Control context */}
+          <div className="flex flex-wrap gap-3 text-sm p-3 rounded-md bg-muted/50 border">
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground">Control:</span>
+              <span className="font-semibold">{controlLabel}</span>
+            </div>
+            {domainName && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-muted-foreground">Domain:</span>
+                <span>{domainName}</span>
+              </div>
+            )}
+            {level && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-muted-foreground">Level:</span>
+                <LevelBadge level={level} />
+              </div>
+            )}
+          </div>
+
+          {/* Shared defaults */}
+          <div className="border rounded-md p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">Default Metadata</p>
+              <Button type="button" size="sm" variant="outline" onClick={applyDefaults} disabled={!rows.length}>
+                <Wand2 className="h-3.5 w-3.5 mr-1.5" />
+                Apply Defaults to All
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div>
+                <Label className="text-xs">Evidence Type</Label>
+                <Select value={defaults.evidenceType} onValueChange={setDefault("evidenceType")}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Select type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EVIDENCE_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Collection Date</Label>
+                <Input type="date" className="h-8 text-xs" value={defaults.collectedAt} onChange={(e) => setDefault("collectedAt")(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs">Expiration Date</Label>
+                <Input type="date" className="h-8 text-xs" value={defaults.expiresAt} onChange={(e) => setDefault("expiresAt")(e.target.value)} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <Label className="text-xs">Description</Label>
+                <Textarea className="text-xs min-h-[56px]" rows={2} value={defaults.description} onChange={(e) => setDefault("description")(e.target.value)} placeholder="Shared description for all files..." />
+              </div>
+              <div>
+                <Label className="text-xs">Tags (comma-separated)</Label>
+                <Input className="h-8 text-xs" value={defaults.tags} onChange={(e) => setDefault("tags")(e.target.value)} placeholder="e.g. quarterly, 2025" />
+                <p className="text-xs text-muted-foreground mt-0.5">Control ID, domain &amp; level are auto-tagged.</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <Label className="text-xs">Assessor Summary</Label>
+                <Textarea className="text-xs min-h-[56px]" rows={2} value={defaults.assessorSummary} onChange={(e) => setDefault("assessorSummary")(e.target.value)} placeholder="Summary for the assessor..." />
+              </div>
+              <div>
+                <Label className="text-xs">Internal Notes</Label>
+                <Textarea className="text-xs min-h-[56px]" rows={2} value={defaults.internalNotes} onChange={(e) => setDefault("internalNotes")(e.target.value)} placeholder="Internal team notes..." />
+              </div>
+            </div>
+          </div>
+
+          {/* File picker */}
+          <div>
+            <label className="flex items-center justify-center gap-2 w-full border-2 border-dashed rounded-lg p-5 cursor-pointer transition-colors border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/30">
+              <input type="file" multiple className="sr-only" onChange={handleFileChange} disabled={uploading} />
+              <Upload className="h-5 w-5 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Click to select files — multiple allowed</span>
+            </label>
+          </div>
+
+          {/* Per-file table */}
+          {rows.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">{rows.length} file{rows.length !== 1 ? "s" : ""} selected</p>
+                {allDone && (
+                  <p className="text-xs text-muted-foreground">
+                    {successCount} uploaded{errorCount > 0 ? `, ${errorCount} failed` : ""}
+                  </p>
+                )}
+              </div>
+              <div className="overflow-x-auto rounded-md border">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b bg-muted/30">
+                      <th className="text-left px-3 py-2 font-medium w-8"></th>
+                      <th className="text-left px-3 py-2 font-medium">File</th>
+                      <th className="text-left px-3 py-2 font-medium min-w-[160px]">Title</th>
+                      <th className="text-left px-3 py-2 font-medium min-w-[140px]">Evidence Type <span className="text-red-500">*</span></th>
+                      <th className="text-left px-3 py-2 font-medium">Linked Control</th>
+                      <th className="text-left px-3 py-2 font-medium min-w-[110px]">Collect Date</th>
+                      <th className="text-left px-3 py-2 font-medium min-w-[110px]">Expire Date</th>
+                      <th className="text-left px-3 py-2 font-medium min-w-[120px]">Extra Tags</th>
+                      <th className="text-left px-3 py-2 font-medium w-8"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, idx) => (
+                      <tr key={idx} className={`border-b last:border-b-0 ${row.status === "done" ? "bg-green-50 dark:bg-green-950/20" : row.status === "error" ? "bg-red-50 dark:bg-red-950/20" : ""}`}>
+                        <td className="px-3 py-2">
+                          {row.status === "uploading" && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />}
+                          {row.status === "done" && <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />}
+                          {row.status === "error" && (
+                            <span title={row.error}>
+                              <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-1">
+                            <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
+                            <span className="truncate max-w-[140px]" title={row.file.name}>{row.file.name}</span>
+                          </div>
+                          <div className="text-muted-foreground/70 mt-0.5">{(row.file.size / 1024).toFixed(0)} KB</div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input
+                            className="h-7 text-xs"
+                            value={row.title}
+                            onChange={(e) => updateRow(idx, { title: e.target.value })}
+                            disabled={row.status !== "idle"}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Select
+                            value={row.evidenceType}
+                            onValueChange={(v) => updateRow(idx, { evidenceType: v })}
+                            disabled={row.status !== "idle"}
+                          >
+                            <SelectTrigger className="h-7 text-xs">
+                              <SelectValue placeholder="Select..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {EVIDENCE_TYPES.map((t) => (
+                                <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="px-3 py-2">
+                          <Badge variant="outline" className="text-xs whitespace-nowrap">{controlLabel}</Badge>
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input
+                            type="date"
+                            className="h-7 text-xs"
+                            value={row.collectedAt}
+                            onChange={(e) => updateRow(idx, { collectedAt: e.target.value })}
+                            disabled={row.status !== "idle"}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input
+                            type="date"
+                            className="h-7 text-xs"
+                            value={row.expiresAt}
+                            onChange={(e) => updateRow(idx, { expiresAt: e.target.value })}
+                            disabled={row.status !== "idle"}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input
+                            className="h-7 text-xs"
+                            value={row.tags}
+                            onChange={(e) => updateRow(idx, { tags: e.target.value })}
+                            placeholder="tag1, tag2"
+                            disabled={row.status !== "idle"}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          {row.status === "idle" && (
+                            <button
+                              type="button"
+                              onClick={() => removeRow(idx)}
+                              className="text-muted-foreground hover:text-red-500 transition-colors"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {rows.some((r) => r.status === "error") && (
+                <p className="text-xs text-red-600">
+                  Some files failed to upload. Check that each file is under 50 MB and try again.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={handleClose} disabled={uploading}>
+            {allDone && !idleCount ? "Close" : "Cancel"}
+          </Button>
+          {idleCount > 0 && (
+            <Button onClick={handleUploadAll} disabled={uploading || !rows.length}>
+              {uploading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Uploading…
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Upload {idleCount} File{idleCount !== 1 ? "s" : ""}
+                </>
+              )}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Add Task Dialog ────────────────────────────────────────────────────────
 
 interface AddTaskDialogProps {
@@ -562,6 +1002,7 @@ export default function ControlDetail({ id }: { id: string }) {
 
   // Dialog states
   const [showAddEvidence, setShowAddEvidence] = useState(false);
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
   const [showAddPoam, setShowAddPoam] = useState(false);
 
@@ -736,10 +1177,16 @@ export default function ControlDetail({ id }: { id: string }) {
         <TabsContent value="evidence" className="mt-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-base">Evidence Items</h3>
-            <Button size="sm" onClick={() => setShowAddEvidence(true)}>
-              <Plus className="h-4 w-4 mr-1" />
-              Add Evidence
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => setShowBulkUpload(true)}>
+                <Files className="h-4 w-4 mr-1" />
+                Bulk Upload
+              </Button>
+              <Button size="sm" onClick={() => setShowAddEvidence(true)}>
+                <Plus className="h-4 w-4 mr-1" />
+                Add Evidence
+              </Button>
+            </div>
           </div>
 
           {evidence.length === 0 ? (
@@ -889,6 +1336,17 @@ export default function ControlDetail({ id }: { id: string }) {
             open={showAddEvidence}
             onClose={() => setShowAddEvidence(false)}
             controlId={id}
+            orgId={activeOrg?.id}
+            onSaved={invalidateEvidence}
+          />
+
+          <BulkUploadEvidenceDialog
+            open={showBulkUpload}
+            onClose={() => setShowBulkUpload(false)}
+            controlId={id}
+            controlLabel={(control as any).controlId ?? id}
+            domainName={(control as any).domainName}
+            level={(control as any).level}
             orgId={activeOrg?.id}
             onSaved={invalidateEvidence}
           />

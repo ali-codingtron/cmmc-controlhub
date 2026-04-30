@@ -205,7 +205,7 @@ router.post(
   requireOrg,
   upload.single("file"),
   async (req, res) => {
-    const { title, description, evidenceType, controlIds, collectedAt, expiresAt, assessorSummary, internalNotes } = req.body;
+    const { title, description, evidenceType, controlIds, collectedAt, expiresAt, assessorSummary, internalNotes, tags: rawTags, status: rawStatus } = req.body;
 
     if (!title) {
       res.status(400).json({ error: "title is required" });
@@ -220,6 +220,20 @@ router.post(
       return;
     }
 
+    const parsedTags: string[] = (() => {
+      try {
+        if (Array.isArray(rawTags)) return rawTags;
+        if (typeof rawTags === "string") {
+          const parsed = JSON.parse(rawTags);
+          return Array.isArray(parsed) ? parsed : [];
+        }
+        return [];
+      } catch { return []; }
+    })();
+
+    const allowedStatuses = ["draft", "needs_classification", "pending_review", "approved", "assessor_ready", "rejected", "stale", "superseded", "archived"] as const;
+    const uploadStatus = (allowedStatuses as readonly string[]).includes(rawStatus) ? rawStatus as typeof allowedStatuses[number] : "draft";
+
     const id = randomUUID();
     const storedFilename = req.file.filename;
     const originalFilename = req.file.originalname;
@@ -233,7 +247,7 @@ router.post(
       title,
       description,
       evidenceType,
-      status: "draft",
+      status: uploadStatus,
       ownerId: req.authUser!.id,
       fileKey,
       fileName: originalFilename,
@@ -243,7 +257,7 @@ router.post(
       expiresAt: expiresAt ? new Date(expiresAt) : undefined,
       assessorSummary,
       internalNotes,
-      tags: [],
+      tags: parsedTags,
       createdAt: new Date(),
       updatedAt: new Date(),
     });

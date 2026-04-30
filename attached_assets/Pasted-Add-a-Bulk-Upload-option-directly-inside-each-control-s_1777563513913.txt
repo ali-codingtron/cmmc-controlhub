@@ -1,0 +1,77 @@
+Add a Bulk Upload option directly inside each control’s Evidence tab.
+
+Current need:
+When I am viewing a specific control, such as AC.L1-3.1.2, I should be able to upload one file or bulk upload multiple files directly to that control.
+
+Requirements:
+
+1. Control Evidence Tab Buttons
+On each control Evidence tab, show two buttons:
+- Add Evidence
+- Bulk Upload Evidence
+
+2. Bulk Upload From Control Page
+When I click Bulk Upload Evidence from a control page:
+- open a modal or page
+- default the linked control to the current control
+- do not require me to select the control manually
+- allow selecting multiple files from my PC
+
+Use:
+<input type="file" multiple />
+
+3. Default Metadata
+Allow default metadata for all files:
+- evidence type dropdown
+- owner
+- collection date
+- review/expiration date
+- status, default Draft
+- tags
+- assessor summary
+- internal notes
+
+4. Per-File Metadata Table
+After file selection, show a table where I can edit each file:
+- file name
+- title, default to filename
+- evidence type
+- linked control, locked/defaulted to current control
+- security domain, auto-filled from current control
+- CMMC level, auto-filled from current control
+- owner
+- status
+- expiration date
+- tags
+
+5. Upload Behavior
+When uploaded:
+- create one Evidence record per file
+- link every item to the current organization
+- link every item to the current control
+- auto-tag each item with control ID, domain, and level
+- update the Evidence count on the control
+- show all uploaded files in the Evidence tab
+- also show document-like files in Documentation > All Documents
+- write audit logs for each upload
+
+6. Validation
+Require for each file:
+- title
+- evidence type
+- file
+- organization
+- current control
+
+7. Acceptance Test
+- Open AC.L1-3.1.2
+- Click Evidence tab
+- Click Bulk Upload Evidence
+- Select multiple files
+- Apply default metadata
+- Upload
+- All uploaded files appear under AC.L1-3.1.2
+- Evidence count updates
+- Evidence Repository shows the files
+- Linked Controls shows AC.L1-3.1.2
+- Domain and level tags are populated
