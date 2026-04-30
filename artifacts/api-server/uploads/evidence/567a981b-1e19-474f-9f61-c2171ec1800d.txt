@@ -1,0 +1,126 @@
+Control ID: 3.1.9
+Control Title: Provide privacy and security notices consistent with applicable CUI rules.
+Family: Access Control
+Document Type: Detailed Control Procedure
+System: VTC CUI Enclave
+
+Procedure Overview
+This procedure describes how VTC performs and documents control 3.1.9 for the VTC CUI Enclave. The control uses the reusable procedures listed below and then requires the control-specific closeout actions that follow.
+
+Referenced Reusable Procedures
+R-01 - Create a named user in Microsoft Entra
+Purpose: Use this procedure any time a control requires a new named user account or evidence that only approved users exist.
+Prerequisites:
+  Role: User Administrator (or higher) for user creation.
+  Approved user request or onboarding approval exists.
+  You know the user's UPN, display name, job title, and whether the account is a standard user or an admin account.
+Detailed Steps:
+  1. Sign in to the Microsoft Entra admin center (entra.microsoft.com) with a role that can create users.
+  2. Go to Identity > Users > All users.
+  3. Select New user > Create new user.
+  4. Enter the user's display name and user principal name (UPN). For admin accounts, use a separate .admin naming convention such as firstname.lastname.admin@tenant.
+  5. Set an initial password or leave Microsoft to generate one. If an initial password is shown, record it in your approved secure handoff process and do not leave it in screenshots or notes.
+  6. Confirm the user type is Member, not Guest, unless the design explicitly requires otherwise.
+  7. Complete any required profile information used by your organization, such as job title, department, or usage location.
+  8. Select Review + create and then Create.
+  9. After creation, open the new user record and confirm the account exists, is enabled, and has the expected UPN.
+  10. If the account is an admin account, do not assign end-user mail or collaboration permissions unless your documented standard specifically requires them.
+Reusable Validation:
+  1. Verify the account appears in Entra > Users and can be located by search.
+  2. If the account is standard, verify it does not hold privileged directory roles.
+
+R-06 - Join and enroll the Windows workstation in Entra / Intune
+Purpose: Use this procedure for the dedicated enclave workstation so that compliance, configuration, and Defender policies can be applied and evidenced.
+Prerequisites:
+  Windows 11 Pro or Enterprise workstation is ready for enrollment.
+  Automatic MDM enrollment has been configured for the correct scope, or you are performing a supported manual enrollment path.
+  The workstation is reserved for the GCC High enclave.
+Detailed Steps:
+  1. Verify Intune automatic enrollment is configured in the tenant. In Intune admin center, go to Devices > Enrollment > Windows > Automatic Enrollment and confirm the MDM user scope includes the intended user(s).
+  2. On the workstation, sign in with the intended enclave user if using a user-driven join.
+  3. Open Windows Settings > Accounts > Access work or school.
+  4. Select Connect or Join this device to Microsoft Entra ID, depending on your build method.
+  5. Complete the sign-in prompt with the enclave account and finish the join.
+  6. Allow policy sync to complete.
+  7. In the Intune admin center, go to Devices > All devices and verify the workstation appears.
+  8. Open the device record and confirm the owner, platform, compliance state, and last check-in.
+Reusable Validation:
+  1. Sync the device and verify the last check-in time updates in Intune.
+  2. Confirm that later compliance and configuration policies are assigned and reported to the device.
+
+R-10 - Onboard the device to Defender and validate protection
+Purpose: Use this procedure when a control requires anti-malware, EDR, vulnerability visibility, or Defender-based compliance/risk integration.
+Prerequisites:
+  The workstation is enrolled in Intune.
+  Defender for Business / Defender for Endpoint licensing and service connections are available.
+Detailed Steps:
+  1. Verify the Intune and Defender connection. In Intune admin center, go to Endpoint security > Microsoft Defender for Endpoint and confirm the connection status is enabled.
+  2. If needed, complete the service-to-service integration between Intune and Defender according to Microsoft guidance.
+  3. Enable Windows-device connection and compliance evaluation options required by your design.
+  4. Onboard the workstation using the Intune-driven or Defender-driven method approved for your tenant.
+  5. Open security.microsoft.com and verify the device appears in the Defender device inventory.
+  6. Enable or verify settings such as real-time protection, cloud-delivered protection, tamper protection, and EDR as applicable to your license and design.
+  7. Run the Microsoft detection test or other approved validation to confirm the device is actively onboarded.
+Reusable Validation:
+  1. Run the Microsoft detection test on the onboarded device and verify the event is seen in Defender.
+  2. Document the date, tester, and result in the control's test evidence.
+
+R-15 - Update the SSP, supporting registers, and the build sheet
+Purpose: Use this procedure for every control so the documentation, evidence repository, and scoring workbook stay aligned.
+Prerequisites:
+  You know the control ID and the build-sheet row number.
+  The relevant technical work, documentation, evidence, or test step has been completed or progressed.
+Detailed Steps:
+  1. Update the SSP, procedure, register, or other master document named in the control section.
+  2. Upload the updated document to the correct top-level SharePoint folder and, if needed, add a copy or link in the control folder.
+  3. Open the Build Sheet workbook and locate the control by Control ID or by the row number shown in this playbook.
+  4. Set Config Status to In Progress when you start technical work, and to Done when the configuration is finished and initially verified.
+  5. Set Doc Status to In Progress when documentation work starts, and to Done when the SSP, policy, procedure, or register updates are uploaded.
+  6. Set Evidence Status to In Progress when evidence capture begins, and to Done when screenshots, exports, logs, and approvals are uploaded to SharePoint.
+  7. Set Test Status to In Progress when validation work begins, and to Done when the test record and supporting artifacts are uploaded.
+  8. Review the Ready Gate column. When all four workstream statuses are Done, the Ready Gate should display Ready to mark Complete.
+  9. Only then set Overall Status to Complete. Confirm that Points Recovered and Remaining Deduction update automatically.
+  10. Enter or update Target Date and Notes / Dependencies if the row needs schedule or dependency tracking.
+Reusable Validation:
+  1. Verify the workbook formulas update after you mark the row Complete.
+  2. Verify the uploaded documents in SharePoint match the status claimed in the workbook.
+
+R-14 - Capture exports, screenshots, and logs for evidence
+Purpose: Use this procedure for every control so evidence is captured consistently the same day the control is configured or reviewed.
+Prerequisites:
+  You know the control ID and the SharePoint evidence folder path.
+  You know the artifact types you need to save.
+Detailed Steps:
+  1. Create or open the control's SharePoint folder, such as 07_Control_Evidence/3.1.1.
+  2. Capture screenshots that clearly show the setting, object name, and state of the control. Avoid cropped screenshots that hide context.
+  3. Where available, export configuration data to CSV, JSON, TXT, PDF, or portal reports instead of relying only on screenshots.
+  4. For recurring evidence, capture logs or reports that include the relevant date range and result.
+  5. Name files consistently, for example: 3.5.3_YYYY-MM-DD_CA_MFA_All_Users.png or 3.3.5_YYYY-MM-DD_AuditSearch.csv.
+  6. Upload each artifact to SharePoint and apply metadata such as ControlID, ArtifactType, Owner, EvidenceDate, and AssessmentResult.
+  7. If the artifact contains sensitive data, restrict permissions accordingly and mark the artifact or folder as containing CUI if your library uses that metadata.
+Reusable Validation:
+  1. Open the uploaded artifact in SharePoint and verify it is readable, correctly named, and tagged.
+  2. Confirm the artifact is located in the correct control folder.
+
+Control-Specific Action Sequence
+1. Configure a logon banner on the workstation stating the system is for authorized use only and activity may be monitored.
+2. Ensure the banner does not disclose sensitive details.
+3. Apply the banner through Intune or local policy before users start using the workstation.
+
+Documentation Actions
+Add the approved banner text to the Acceptable Use Policy or Access Control Procedure and reference it in the SSP.
+
+Control Closeout and Build-Sheet Update
+Open the Build Sheet workbook and locate row 37 for control 3.1.9.
+Set Config Status to In Progress when work starts. Set it to Done only after the implementation exists and you performed an initial verification.
+Set Doc Status to Done after the SSP, policy, procedure, matrix, or register update described above is uploaded to SharePoint.
+Set Evidence Status to Done after the artifacts listed above are uploaded to 07_Control_Evidence/3.1.9 and tagged in SharePoint.
+Set Test Status to Done after the validation steps are run and the test record is uploaded.
+Confirm the Ready Gate cell shows Ready to mark Complete.
+Only then set Overall Status = Complete, enter a Target Date if you use one, and update Notes / Dependencies if there were blockers or prerequisites.
+Verify the row formulas updated: Points Recovered should equal the DoD weight and Remaining Deduction should drop to zero.
+
+Operational Notes
+Store the control-specific written artifacts in SharePoint at 07_Control_Evidence/3.1.9.
+Capture evidence on the same day the setting or process is changed. Do not wait until later to reconstruct the record.
+If a reusable artifact supports this control, reference that artifact in the narrative and copy or link the approved artifact location in the control folder.

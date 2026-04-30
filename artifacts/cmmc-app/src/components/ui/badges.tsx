@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 
 type Status = 
   | "not_started" | "in_progress" | "implemented" | "needs_review" | "assessor_ready" | "not_applicable" | "at_risk"
-  | "draft" | "pending_review" | "approved" | "rejected" | "stale" | "superseded" | "archived"
+  | "draft" | "needs_classification" | "pending_review" | "approved" | "active" | "rejected" | "stale" | "superseded" | "archived"
   | "open" | "completed" | "overdue" | "cancelled" | "deferred"
   | "waiting_on_vendor" | "mitigated" | "accepted_risk" | "closed";
 
@@ -16,11 +16,13 @@ const statusColors: Record<string, "default" | "secondary" | "destructive" | "ou
   at_risk: "destructive",
   
   draft: "secondary",
+  needs_classification: "secondary",
   pending_review: "secondary", // yellow
-  approved: "default", // green
+  approved: "default", // blue/green
+  active: "default", // green
   rejected: "destructive",
   stale: "destructive", // orange
-  superseded: "secondary",
+  superseded: "default", // purple (custom class)
   archived: "secondary",
 
   open: "default",
@@ -38,10 +40,12 @@ const statusColors: Record<string, "default" | "secondary" | "destructive" | "ou
 const statusClasses: Record<string, string> = {
   implemented: "bg-green-600 hover:bg-green-700 text-white",
   needs_review: "bg-yellow-500 hover:bg-yellow-600 text-white",
-  assessor_ready: "bg-emerald-600 hover:bg-emerald-700 text-white",
+  assessor_ready: "bg-emerald-700 hover:bg-emerald-800 text-white",
   pending_review: "bg-yellow-500 hover:bg-yellow-600 text-white",
-  approved: "bg-green-600 hover:bg-green-700 text-white",
+  approved: "bg-blue-600 hover:bg-blue-700 text-white",
+  active: "bg-green-600 hover:bg-green-700 text-white",
   stale: "bg-orange-500 hover:bg-orange-600 text-white",
+  superseded: "bg-purple-600 hover:bg-purple-700 text-white",
   completed: "bg-green-600 hover:bg-green-700 text-white",
   waiting_on_vendor: "bg-yellow-500 hover:bg-yellow-600 text-white",
   mitigated: "bg-green-600 hover:bg-green-700 text-white",

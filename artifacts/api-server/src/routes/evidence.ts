@@ -231,7 +231,7 @@ router.post(
       } catch { return []; }
     })();
 
-    const allowedStatuses = ["draft", "needs_classification", "pending_review", "approved", "assessor_ready", "rejected", "stale", "superseded", "archived"] as const;
+    const allowedStatuses = ["draft", "needs_classification", "pending_review", "approved", "active", "assessor_ready", "rejected", "stale", "superseded", "archived"] as const;
     const uploadStatus = (allowedStatuses as readonly string[]).includes(rawStatus) ? rawStatus as typeof allowedStatuses[number] : "draft";
 
     const id = randomUUID();

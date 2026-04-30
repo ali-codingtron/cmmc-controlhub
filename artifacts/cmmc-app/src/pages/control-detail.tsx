@@ -112,6 +112,18 @@ const RISK_LEVELS = [
   { value: "low", label: "Low" },
 ];
 
+const EVIDENCE_STATUSES = [
+  { value: "draft", label: "Draft" },
+  { value: "pending_review", label: "Pending Review" },
+  { value: "approved", label: "Approved" },
+  { value: "active", label: "Active" },
+  { value: "assessor_ready", label: "Assessor Ready" },
+  { value: "rejected", label: "Rejected" },
+  { value: "stale", label: "Stale" },
+  { value: "superseded", label: "Superseded" },
+  { value: "archived", label: "Archived" },
+];
+
 function apiHeaders(orgId: string | null | undefined) {
   const token = localStorage.getItem("auth_token");
   return {
@@ -338,6 +350,7 @@ interface BulkFileRow {
   file: File;
   title: string;
   evidenceType: string;
+  evidenceStatus: string;
   expiresAt: string;
   collectedAt: string;
   description: string;
@@ -374,6 +387,7 @@ function BulkUploadEvidenceDialog({
   // shared defaults
   const [defaults, setDefaults] = useState({
     evidenceType: "",
+    evidenceStatus: "draft",
     collectedAt: "",
     expiresAt: "",
     description: "",
@@ -400,6 +414,7 @@ function BulkUploadEvidenceDialog({
           file: f,
           title: f.name.replace(/\.[^/.]+$/, ""),
           evidenceType: defaults.evidenceType,
+          evidenceStatus: defaults.evidenceStatus || "draft",
           expiresAt: defaults.expiresAt,
           collectedAt: defaults.collectedAt,
           description: defaults.description,
@@ -420,6 +435,7 @@ function BulkUploadEvidenceDialog({
           ? {
               ...r,
               evidenceType: defaults.evidenceType || r.evidenceType,
+              evidenceStatus: defaults.evidenceStatus || r.evidenceStatus || "draft",
               expiresAt: defaults.expiresAt || r.expiresAt,
               collectedAt: defaults.collectedAt || r.collectedAt,
               description: defaults.description || r.description,
@@ -477,6 +493,7 @@ function BulkUploadEvidenceDialog({
         fd.append("file", row.file);
         fd.append("title", row.title || row.file.name);
         fd.append("evidenceType", row.evidenceType);
+        fd.append("status", row.evidenceStatus || "draft");
         fd.append("controlIds", JSON.stringify([controlId]));
         fd.append("tags", JSON.stringify(allTags));
         if (row.description) fd.append("description", row.description);
@@ -512,7 +529,7 @@ function BulkUploadEvidenceDialog({
   const handleClose = () => {
     if (!uploading) {
       setRows([]);
-      setDefaults({ evidenceType: "", collectedAt: "", expiresAt: "", description: "", assessorSummary: "", internalNotes: "", tags: "" });
+      setDefaults({ evidenceType: "", evidenceStatus: "draft", collectedAt: "", expiresAt: "", description: "", assessorSummary: "", internalNotes: "", tags: "" });
       setAllDone(false);
       onClose();
     }
@@ -562,7 +579,7 @@ function BulkUploadEvidenceDialog({
                 Apply Defaults to All
               </Button>
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div>
                 <Label className="text-xs">Evidence Type</Label>
                 <Select value={defaults.evidenceType} onValueChange={setDefault("evidenceType")}>
@@ -572,6 +589,19 @@ function BulkUploadEvidenceDialog({
                   <SelectContent>
                     {EVIDENCE_TYPES.map((t) => (
                       <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Status</Label>
+                <Select value={defaults.evidenceStatus} onValueChange={setDefault("evidenceStatus")}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Select status..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EVIDENCE_STATUSES.map((s) => (
+                      <SelectItem key={s.value} value={s.value} className="text-xs">{s.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -636,6 +666,7 @@ function BulkUploadEvidenceDialog({
                       <th className="text-left px-3 py-2 font-medium">File</th>
                       <th className="text-left px-3 py-2 font-medium min-w-[160px]">Title</th>
                       <th className="text-left px-3 py-2 font-medium min-w-[140px]">Evidence Type <span className="text-red-500">*</span></th>
+                      <th className="text-left px-3 py-2 font-medium min-w-[130px]">Status <span className="text-red-500">*</span></th>
                       <th className="text-left px-3 py-2 font-medium">Linked Control</th>
                       <th className="text-left px-3 py-2 font-medium min-w-[110px]">Collect Date</th>
                       <th className="text-left px-3 py-2 font-medium min-w-[110px]">Expire Date</th>
@@ -685,6 +716,25 @@ function BulkUploadEvidenceDialog({
                               ))}
                             </SelectContent>
                           </Select>
+                        </td>
+                        <td className="px-3 py-2">
+                          {row.status === "idle" ? (
+                            <Select
+                              value={row.evidenceStatus || "draft"}
+                              onValueChange={(v) => updateRow(idx, { evidenceStatus: v })}
+                            >
+                              <SelectTrigger className="h-7 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {EVIDENCE_STATUSES.map((s) => (
+                                  <SelectItem key={s.value} value={s.value} className="text-xs">{s.label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <StatusBadge status={row.evidenceStatus || "draft"} />
+                          )}
                         </td>
                         <td className="px-3 py-2">
                           <Badge variant="outline" className="text-xs whitespace-nowrap">{controlLabel}</Badge>
