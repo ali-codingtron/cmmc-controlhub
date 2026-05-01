@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useGetMe, useLogin, useLogout } from "@workspace/api-client-react";
 import type { User, LoginBody } from "@workspace/api-client-react";
 
@@ -12,6 +13,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const qc = useQueryClient();
   const { data: user, isLoading, refetch } = useGetMe({
     query: {
       queryKey: ["me"],
@@ -35,7 +37,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Ignore server errors — the session ends locally regardless
     } finally {
       localStorage.removeItem("auth_token");
-      await refetch();
+      // Clear all cached query data so the app immediately treats the
+      // user as unauthenticated without relying on stale cache.
+      await qc.resetQueries({ queryKey: ["me"] });
+      qc.clear();
     }
   };
 
