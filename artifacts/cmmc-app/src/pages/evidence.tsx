@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { EvidencePreviewModal } from "@/components/EvidencePreviewModal";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListEvidence,
@@ -71,6 +72,7 @@ import {
   X,
   Check,
   ChevronDown,
+  Pencil,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -389,6 +391,7 @@ export default function Evidence() {
 
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [previewItem, setPreviewItem] = useState<EvidenceItem | null>(null);
 
   const queryParams = {
     ...(filterStatus !== "all" ? { status: filterStatus } : {}),
@@ -932,14 +935,12 @@ export default function Evidence() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem asChild>
-                              <Link
-                                href={`/evidence/${item.id}`}
-                                className="flex items-center gap-2"
-                              >
-                                <Eye className="h-4 w-4" />
-                                View / Edit
-                              </Link>
+                            <DropdownMenuItem
+                              onClick={() => setPreviewItem(item)}
+                              className="flex items-center gap-2"
+                            >
+                              <Eye className="h-4 w-4" />
+                              View
                             </DropdownMenuItem>
                             {item.fileName && (
                               <DropdownMenuItem
@@ -950,6 +951,15 @@ export default function Evidence() {
                                 Download
                               </DropdownMenuItem>
                             )}
+                            <DropdownMenuItem asChild>
+                              <Link
+                                href={`/evidence/${item.id}`}
+                                className="flex items-center gap-2"
+                              >
+                                <Pencil className="h-4 w-4" />
+                                Edit
+                              </Link>
+                            </DropdownMenuItem>
                             {item.status !== "archived" && (
                               <>
                                 <DropdownMenuSeparator />
@@ -1016,6 +1026,12 @@ export default function Evidence() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Evidence Preview Modal */}
+      <EvidencePreviewModal
+        item={previewItem}
+        onClose={() => setPreviewItem(null)}
+      />
     </div>
   );
 }

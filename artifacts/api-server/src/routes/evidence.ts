@@ -452,6 +452,53 @@ router.get("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
   });
 });
 
+// ── Preview file (inline) ──────────────────────────────────────────────────
+router.get("/evidence/:id/preview", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
+
+  const [item] = await db
+    .select({
+      id: evidenceItemsTable.id,
+      title: evidenceItemsTable.title,
+      fileKey: evidenceItemsTable.fileKey,
+      fileName: evidenceItemsTable.fileName,
+      mimeType: evidenceItemsTable.mimeType,
+      organizationId: evidenceItemsTable.organizationId,
+    })
+    .from(evidenceItemsTable)
+    .where(
+      and(
+        eq(evidenceItemsTable.id, req.params.id),
+        orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined
+      )
+    )
+    .limit(1);
+
+  if (!item || !item.fileKey) {
+    res.status(404).json({ error: "File not found" });
+    return;
+  }
+
+  const filePath = path.resolve(UPLOADS_DIR, "..", item.fileKey);
+  const contentType = item.mimeType ?? "application/octet-stream";
+  const fileName = item.fileName ?? "evidence-file";
+
+  res.setHeader("Content-Type", contentType);
+  res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(fileName)}"`);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+
+  const stream = createReadStream(filePath);
+  stream.on("error", () => {
+    if (!res.headersSent) {
+      res.status(404).json({ error: "File not found on disk" });
+    }
+  });
+  stream.pipe(res);
+
+  // Fire-and-forget audit log after headers sent
+  logAudit(req, "viewed", "evidence", item.id, { entityLabel: item.title ?? fileName }).catch(() => {});
+});
+
 // ── Download file ──────────────────────────────────────────────────────────
 router.get("/evidence/:id/download", requireAuth, requireOrg, async (req, res) => {
   const orgId = req.orgId;
@@ -459,6 +506,7 @@ router.get("/evidence/:id/download", requireAuth, requireOrg, async (req, res) =
   const [item] = await db
     .select({
       id: evidenceItemsTable.id,
+      title: evidenceItemsTable.title,
       fileKey: evidenceItemsTable.fileKey,
       fileName: evidenceItemsTable.fileName,
       mimeType: evidenceItemsTable.mimeType,
@@ -492,6 +540,8 @@ router.get("/evidence/:id/download", requireAuth, requireOrg, async (req, res) =
     }
   });
   stream.pipe(res);
+
+  logAudit(req, "downloaded", "evidence", item.id, { entityLabel: item.title ?? downloadName }).catch(() => {});
 });
 
 // ── Update evidence (status, fields) ──────────────────────────────────────
