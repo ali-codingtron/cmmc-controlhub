@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetEvidence,
@@ -31,6 +31,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation } from "wouter";
 import {
   Download,
+  Eye,
+  EyeOff,
   Paperclip,
   Save,
   Archive,
@@ -41,6 +43,8 @@ import {
   Link2,
   Calendar,
   FileText,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 
 const EVIDENCE_TYPES = [
@@ -118,6 +122,155 @@ function downloadFile(id: string, fileName: string, orgId: string | undefined | 
     .catch(() => {});
 }
 
+// ─── Inline file preview ──────────────────────────────────────────────────────
+
+type PreviewState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ready"; kind: "image" | "pdf" | "text"; url?: string; text?: string }
+  | { status: "unsupported" }
+  | { status: "error"; message: string };
+
+function getPreviewKindFromContentType(ct: string): "image" | "pdf" | "text" | "unsupported" {
+  const base = ct.split(";")[0].trim();
+  if (base === "application/pdf") return "pdf";
+  if (base.startsWith("image/")) return "image";
+  if (base.startsWith("text/")) return "text";
+  return "unsupported";
+}
+
+function getPreviewKindFromExtension(fileName: string): "image" | "pdf" | "text" | "unsupported" {
+  const ext = (fileName.split(".").pop() ?? "").toLowerCase();
+  if (["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(ext)) return "image";
+  if (ext === "pdf") return "pdf";
+  if (["txt", "log", "md", "yaml", "yml", "json", "xml", "csv"].includes(ext)) return "text";
+  return "unsupported";
+}
+
+function InlineFilePreview({
+  evidenceId,
+  fileName,
+  orgId,
+}: {
+  evidenceId: string;
+  fileName: string;
+  orgId: string | null | undefined;
+}) {
+  const [state, setState] = useState<PreviewState>({ status: "idle" });
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [blobUrl]);
+
+  useEffect(() => {
+    setState({ status: "loading" });
+    if (blobUrl) {
+      URL.revokeObjectURL(blobUrl);
+      setBlobUrl(null);
+    }
+
+    const token = localStorage.getItem("auth_token");
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token ?? ""}`,
+      ...(orgId ? { "X-Organization-ID": orgId } : {}),
+    };
+
+    fetch(`/api/evidence/${evidenceId}/preview`, { headers })
+      .then(async (res) => {
+        if (!res.ok) {
+          setState({ status: "error", message: `Server error ${res.status}` });
+          return;
+        }
+        const rawCt = res.headers.get("Content-Type") ?? "";
+        const kindFromCt = getPreviewKindFromContentType(rawCt);
+        const kind = kindFromCt !== "unsupported" ? kindFromCt : getPreviewKindFromExtension(fileName);
+
+        if (kind === "image" || kind === "pdf") {
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          setBlobUrl(url);
+          setState({ status: "ready", kind, url });
+        } else if (kind === "text") {
+          const text = await res.text();
+          setState({ status: "ready", kind, text });
+        } else {
+          setState({ status: "unsupported" });
+        }
+      })
+      .catch((err) => {
+        setState({ status: "error", message: err?.message ?? "Failed to load preview" });
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [evidenceId, orgId]);
+
+  if (state.status === "idle") return null;
+
+  if (state.status === "loading") {
+    return (
+      <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground text-sm">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading preview…
+      </div>
+    );
+  }
+
+  if (state.status === "error") {
+    return (
+      <div className="flex items-center gap-2 py-6 px-3 text-sm text-muted-foreground">
+        <AlertCircle className="h-4 w-4 text-destructive/60 shrink-0" />
+        Preview unavailable: {state.message}
+      </div>
+    );
+  }
+
+  if (state.status === "unsupported") {
+    return (
+      <div className="py-6 px-3 text-sm text-muted-foreground text-center">
+        Preview not available for this file type.
+      </div>
+    );
+  }
+
+  if (state.kind === "image" && state.url) {
+    return (
+      <div className="flex items-center justify-center rounded-md border bg-muted/20 overflow-hidden p-2">
+        <img
+          src={state.url}
+          alt={fileName}
+          className="max-w-full max-h-[480px] object-contain rounded"
+        />
+      </div>
+    );
+  }
+
+  if (state.kind === "pdf" && state.url) {
+    return (
+      <div className="rounded-md border overflow-hidden bg-white">
+        <iframe
+          src={state.url}
+          title={fileName}
+          className="w-full h-[520px] border-0"
+        />
+      </div>
+    );
+  }
+
+  if (state.kind === "text" && state.text !== undefined) {
+    return (
+      <div className="rounded-md border bg-muted/20 overflow-auto max-h-[480px] p-3">
+        <pre className="text-xs font-mono whitespace-pre-wrap break-all leading-relaxed">
+          {state.text}
+        </pre>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 export default function EvidenceDetail({ id }: { id: string }) {
   const { activeOrg } = useOrg();
   const { toast } = useToast();
@@ -129,6 +282,7 @@ export default function EvidenceDetail({ id }: { id: string }) {
 
   const [saving, setSaving] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Form state — seeded from evidence once loaded
@@ -432,36 +586,77 @@ export default function EvidenceDetail({ id }: { id: string }) {
         <div className="space-y-4">
           {/* File */}
           {ev.fileKey && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Paperclip className="h-4 w-4" />
-                  Uploaded File
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-start gap-2">
-                  <FileText className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{ev.fileName ?? "File"}</p>
-                    {ev.fileSize && (
-                      <p className="text-xs text-muted-foreground">
-                        {(ev.fileSize / 1024).toFixed(0)} KB
-                      </p>
-                    )}
+            <>
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Paperclip className="h-4 w-4" />
+                    Uploaded File
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-start gap-2">
+                    <FileText className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{ev.fileName ?? "File"}</p>
+                      {ev.fileSize && (
+                        <p className="text-xs text-muted-foreground">
+                          {(ev.fileSize / 1024).toFixed(0)} KB
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full gap-1.5"
-                  onClick={() => downloadFile(id, ev.fileName ?? "evidence-file", activeOrg?.id)}
-                >
-                  <Download className="h-4 w-4" />
-                  Download File
-                </Button>
-              </CardContent>
-            </Card>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={showPreview ? "secondary" : "outline"}
+                      size="sm"
+                      className="flex-1 gap-1.5"
+                      onClick={() => setShowPreview((v) => !v)}
+                    >
+                      {showPreview ? (
+                        <>
+                          <EyeOff className="h-4 w-4" />
+                          Hide Preview
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="h-4 w-4" />
+                          View File
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 gap-1.5"
+                      onClick={() => downloadFile(id, ev.fileName ?? "evidence-file", activeOrg?.id)}
+                    >
+                      <Download className="h-4 w-4" />
+                      Download File
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Inline file preview */}
+              {showPreview && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Eye className="h-4 w-4" />
+                      File Preview
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <InlineFilePreview
+                      evidenceId={id}
+                      fileName={ev.fileName ?? ""}
+                      orgId={activeOrg?.id}
+                    />
+                  </CardContent>
+                </Card>
+              )}
+            </>
           )}
 
           {/* Linked Controls */}
