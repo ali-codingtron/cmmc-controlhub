@@ -79,17 +79,16 @@ function OrgSwitcher() {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="listbox"
+        title={activeOrg.name}
         className="w-full flex items-center gap-2 px-3 py-2 rounded-md bg-sidebar-accent/60 hover:bg-sidebar-accent text-sidebar-foreground transition-colors text-left"
       >
         <Building2 className="h-4 w-4 shrink-0 text-primary" />
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium truncate">{activeOrg.shortName ?? activeOrg.name}</div>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className={cn("text-[10px] font-semibold px-1.5 py-0 rounded", levelBadgeColor)}>
-              {activeOrg.cmmcTargetLevel ?? "—"}
-            </span>
-          </div>
-        </div>
+        <span className="flex-1 min-w-0 text-sm font-medium truncate">
+          {activeOrg.name}
+        </span>
+        <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0", levelBadgeColor)}>
+          {activeOrg.cmmcTargetLevel ?? "—"}
+        </span>
         <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-sidebar-foreground/50" />
       </button>
 
