@@ -154,7 +154,7 @@ function OrgCard({ org, onSwitch, onDelete }: { org: OrgStats; onSwitch: (id: st
   );
 }
 
-function NewOrgDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+function NewOrgDialog({ open, onClose, onSuccess }: { open: boolean; onClose: () => void; onSuccess?: () => void }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [form, setForm] = useState({
@@ -187,6 +187,7 @@ function NewOrgDialog({ open, onClose }: { open: boolean; onClose: () => void })
       if (!res.ok) throw new Error("Failed to create organization");
       toast({ title: "Organization created" });
       queryClient.invalidateQueries({ queryKey: ["global-stats"] });
+      onSuccess?.();
       onClose();
     } catch {
       toast({ title: "Error", description: "Could not create organization", variant: "destructive" });
@@ -262,7 +263,7 @@ function NewOrgDialog({ open, onClose }: { open: boolean; onClose: () => void })
 
 export default function Organizations() {
   const { user } = useAuth();
-  const { orgs, setActiveOrg } = useOrg();
+  const { orgs, setActiveOrg, refreshOrgs } = useOrg();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showNew, setShowNew] = useState(false);
@@ -335,7 +336,7 @@ export default function Organizations() {
           <p className="text-muted-foreground mt-1">Manage client organizations and monitor compliance readiness across all tenants.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
+          <Button variant="outline" size="sm" onClick={() => { refetch(); refreshOrgs(); }}>
             <RefreshCw className="h-4 w-4 mr-1" />
             Refresh
           </Button>
@@ -459,7 +460,7 @@ export default function Organizations() {
         </Card>
       )}
 
-      <NewOrgDialog open={showNew} onClose={() => setShowNew(false)} />
+      <NewOrgDialog open={showNew} onClose={() => setShowNew(false)} onSuccess={refreshOrgs} />
 
       <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <DialogContent className="max-w-sm">

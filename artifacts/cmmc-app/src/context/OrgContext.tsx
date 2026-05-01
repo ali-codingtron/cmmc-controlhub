@@ -19,6 +19,7 @@ interface OrgContextType {
   orgs: OrgSummary[];
   isLoading: boolean;
   setActiveOrg: (org: OrgSummary) => void;
+  refreshOrgs: () => Promise<void>;
 }
 
 const OrgContext = createContext<OrgContextType | undefined>(undefined);
@@ -35,6 +36,35 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
     return () => setOrgIdGetter(null);
   }, []);
 
+  const fetchOrgs = useCallback(async () => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
+
+    setIsLoading(true);
+    try {
+      const r = await fetch("/api/organizations/my-orgs", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data: OrgSummary[] = r.ok ? await r.json() : [];
+      setOrgs(data);
+
+      // Keep the currently active org if it still exists; otherwise pick the first.
+      setActiveOrgState((prev) => {
+        const savedId = prev?.id ?? localStorage.getItem(ORG_STORAGE_KEY);
+        const kept = data.find((o) => o.id === savedId) ?? data[0] ?? null;
+        activeOrgRef.current = kept?.id ?? null;
+        if (kept) localStorage.setItem(ORG_STORAGE_KEY, kept.id);
+        return kept;
+      });
+    } catch {
+      setOrgs([]);
+      setActiveOrgState(null);
+      activeOrgRef.current = null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!user) {
       setOrgs([]);
@@ -43,32 +73,8 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
       return;
     }
-
-    setIsLoading(true);
-    const token = localStorage.getItem("auth_token");
-
-    fetch("/api/organizations/my-orgs", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => (r.ok ? r.json() : []))
-      .then((data: OrgSummary[]) => {
-        setOrgs(data);
-
-        const savedId = localStorage.getItem(ORG_STORAGE_KEY);
-        const saved = data.find((o) => o.id === savedId);
-        const first = data[0] ?? null;
-        const selected = saved ?? first;
-
-        setActiveOrgState(selected);
-        activeOrgRef.current = selected?.id ?? null;
-      })
-      .catch(() => {
-        setOrgs([]);
-        setActiveOrgState(null);
-        activeOrgRef.current = null;
-      })
-      .finally(() => setIsLoading(false));
-  }, [user]);
+    fetchOrgs();
+  }, [user, fetchOrgs]);
 
   const setActiveOrg = useCallback((org: OrgSummary) => {
     setActiveOrgState(org);
@@ -77,7 +83,7 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <OrgContext.Provider value={{ activeOrg, orgs, isLoading, setActiveOrg }}>
+    <OrgContext.Provider value={{ activeOrg, orgs, isLoading, setActiveOrg, refreshOrgs: fetchOrgs }}>
       {children}
     </OrgContext.Provider>
   );
