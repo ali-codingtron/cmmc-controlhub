@@ -53,6 +53,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Plus,
   MoreHorizontal,
@@ -65,6 +74,7 @@ import {
   X,
   Loader2,
   ShieldCheck,
+  ChevronsUpDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -447,6 +457,124 @@ function OrgMembershipsPanel({ userId }: { userId: string }) {
   );
 }
 
+// ─── Org Access Builder (for Add User) ───────────────────────────────────────
+
+interface PendingOrgMembership {
+  orgId: string;
+  role: string;
+  status: string;
+}
+
+function OrgAccessBuilder({
+  value,
+  onChange,
+}: {
+  value: PendingOrgMembership[];
+  onChange: (memberships: PendingOrgMembership[]) => void;
+}) {
+  const { data: allOrgs = [] } = useListOrganizations();
+  const [open, setOpen] = useState(false);
+  const assignedIds = new Set(value.map((m) => m.orgId));
+  const available = allOrgs.filter((o) => !assignedIds.has(o.id));
+
+  const addOrg = (orgId: string) => {
+    onChange([...value, { orgId, role: "it_contributor", status: "active" }]);
+    setOpen(false);
+  };
+
+  const removeOrg = (orgId: string) => {
+    onChange(value.filter((m) => m.orgId !== orgId));
+  };
+
+  const updateField = (orgId: string, field: "role" | "status", val: string) => {
+    onChange(value.map((m) => (m.orgId === orgId ? { ...m, [field]: val } : m)));
+  };
+
+  const orgName = (id: string) => allOrgs.find((o) => o.id === id)?.name ?? id;
+
+  return (
+    <div className="space-y-3">
+      {value.length > 0 && (
+        <div className="space-y-2">
+          {value.map((m) => (
+            <div key={m.orgId} className="flex items-center gap-2 p-2 rounded-md border bg-muted/30">
+              <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="text-sm font-medium flex-1 min-w-0 truncate">{orgName(m.orgId)}</span>
+              <Select value={m.role} onValueChange={(v) => updateField(m.orgId, "role", v)}>
+                <SelectTrigger className="h-7 w-40 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ORG_ROLES.map((r) => (
+                    <SelectItem key={r.value} value={r.value} className="text-xs">
+                      {r.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={m.status} onValueChange={(v) => updateField(m.orgId, "status", v)}>
+                <SelectTrigger className="h-7 w-24 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ORG_STATUSES.map((s) => (
+                    <SelectItem key={s.value} value={s.value} className="text-xs">
+                      {s.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-red-500"
+                onClick={() => removeOrg(m.orgId)}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {available.length > 0 && (
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+              <Plus className="h-3.5 w-3.5" />
+              Add Organization
+              <ChevronsUpDown className="h-3 w-3 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-72 p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Search organizations…" className="h-9" />
+              <CommandList>
+                <CommandEmpty>No organizations found.</CommandEmpty>
+                <CommandGroup>
+                  {available.map((org) => (
+                    <CommandItem key={org.id} value={org.name} onSelect={() => addOrg(org.id)}>
+                      <Building2 className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                      {org.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      )}
+
+      {available.length === 0 && value.length === 0 && (
+        <p className="text-xs text-muted-foreground italic">No organizations available.</p>
+      )}
+      {available.length === 0 && value.length > 0 && (
+        <p className="text-xs text-muted-foreground italic">All organizations assigned.</p>
+      )}
+    </div>
+  );
+}
+
 // ─── Add / Edit Dialog ────────────────────────────────────────────────────────
 
 const EMPTY_FORM: UserFormData = {
@@ -483,9 +611,11 @@ function UserDialog({ user, open, onClose, onSuccess }: UserDialogProps) {
   );
   const [errors, setErrors] = useState<Partial<Record<keyof UserFormData, string>>>({});
   const [activeTab, setActiveTab] = useState<"details" | "orgs">("details");
+  const [pendingOrgs, setPendingOrgs] = useState<PendingOrgMembership[]>([]);
 
   const createMutation = useCreateUser();
   const updateMutation = useUpdateUser();
+  const addToOrgMutation = useAddUserToOrg();
 
   const setField = (field: keyof UserFormData, value: string) => {
     setForm((f) => ({ ...f, [field]: value }));
@@ -522,7 +652,7 @@ function UserDialog({ user, open, onClose, onSuccess }: UserDialogProps) {
         });
         toast({ title: "User updated successfully" });
       } else {
-        await createMutation.mutateAsync({
+        const newUser = await createMutation.mutateAsync({
           data: {
             name: form.name,
             email: form.email,
@@ -532,7 +662,25 @@ function UserDialog({ user, open, onClose, onSuccess }: UserDialogProps) {
             department: form.department || undefined,
           },
         });
-        toast({ title: "User created successfully" });
+        // Apply org memberships sequentially after creation
+        for (const m of pendingOrgs) {
+          await addToOrgMutation.mutateAsync({
+            id: newUser.id,
+            data: {
+              organizationId: m.orgId,
+              role: m.role as any,
+              status: m.status as any,
+            },
+          });
+        }
+        const orgCount = pendingOrgs.length;
+        toast({
+          title: "User created successfully",
+          description:
+            orgCount > 0
+              ? `Added to ${orgCount} organization${orgCount > 1 ? "s" : ""}`
+              : undefined,
+        });
       }
       onSuccess();
       onClose();
@@ -546,17 +694,17 @@ function UserDialog({ user, open, onClose, onSuccess }: UserDialogProps) {
     }
   };
 
-  const isPending = createMutation.isPending || updateMutation.isPending;
+  const isPending = createMutation.isPending || updateMutation.isPending || addToOrgMutation.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit User" : "Add User"}</DialogTitle>
         </DialogHeader>
 
         {isEdit && (
-          <div className="flex gap-1 border-b pb-0 -mt-2">
+          <div className="flex gap-1 border-b pb-0 -mt-2 shrink-0">
             <button
               onClick={() => setActiveTab("details")}
               className={cn(
@@ -583,25 +731,53 @@ function UserDialog({ user, open, onClose, onSuccess }: UserDialogProps) {
           </div>
         )}
 
-        <div className="py-2">
-          {activeTab === "details" && (
-            <UserForm
-              data={form}
-              onChange={setField}
-              isEdit={isEdit}
-              errors={errors}
-            />
-          )}
-          {activeTab === "orgs" && isEdit && user && (
-            <OrgMembershipsPanel userId={user.id} />
+        <div className="py-2 overflow-y-auto flex-1 min-h-0">
+          {isEdit ? (
+            <>
+              {activeTab === "details" && (
+                <UserForm
+                  data={form}
+                  onChange={setField}
+                  isEdit={isEdit}
+                  errors={errors}
+                />
+              )}
+              {activeTab === "orgs" && user && (
+                <OrgMembershipsPanel userId={user.id} />
+              )}
+            </>
+          ) : (
+            <div className="space-y-6">
+              <UserForm
+                data={form}
+                onChange={setField}
+                isEdit={false}
+                errors={errors}
+              />
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold">Organization Access</h3>
+                  {pendingOrgs.length > 0 && (
+                    <Badge variant="secondary" className="text-xs h-5">
+                      {pendingOrgs.length}
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Optionally add this user to one or more organizations with a specific role and status.
+                </p>
+                <OrgAccessBuilder value={pendingOrgs} onChange={setPendingOrgs} />
+              </div>
+            </div>
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          {activeTab === "details" && (
+          {(!isEdit || activeTab === "details") && (
             <Button onClick={handleSubmit} disabled={isPending}>
               {isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {isEdit ? "Save Changes" : "Create User"}
