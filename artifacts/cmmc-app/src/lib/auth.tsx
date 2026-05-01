@@ -29,9 +29,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleLogout = async () => {
-    await logoutMutation.mutateAsync();
-    localStorage.removeItem("auth_token");
-    await refetch();
+    try {
+      await logoutMutation.mutateAsync();
+    } catch {
+      // Ignore server errors — the session ends locally regardless
+    } finally {
+      localStorage.removeItem("auth_token");
+      await refetch();
+    }
   };
 
   return (
