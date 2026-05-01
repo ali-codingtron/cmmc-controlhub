@@ -394,10 +394,8 @@ export default function EvidenceDetail({ id }: { id: string }) {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
-          <Button variant="ghost" size="icon" asChild className="mt-0.5">
-            <Link href="/evidence">
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
+          <Button variant="ghost" size="icon" className="mt-0.5" onClick={() => window.history.back()}>
+            <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
             <div className="flex items-center gap-3 mb-1">

@@ -544,6 +544,88 @@ router.get("/evidence/:id/download", requireAuth, requireOrg, async (req, res) =
   logAudit(req, "downloaded", "evidence", item.id, { entityLabel: item.title ?? downloadName }).catch(() => {});
 });
 
+// ── Bulk status update ─────────────────────────────────────────────────────
+router.patch("/evidence/bulk-status", requireAuth, requireOrg, async (req, res) => {
+  const { ids, status } = req.body as { ids: string[]; status: string };
+  const orgId = req.orgId;
+
+  const ALLOWED = ["draft","pending_review","approved","active","assessor_ready","rejected","stale","archived","superseded"] as const;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    res.status(400).json({ error: "ids array required" });
+    return;
+  }
+  if (!ALLOWED.includes(status as any)) {
+    res.status(400).json({ error: "invalid status" });
+    return;
+  }
+
+  const rows = await db
+    .select({ id: evidenceItemsTable.id, title: evidenceItemsTable.title, status: evidenceItemsTable.status })
+    .from(evidenceItemsTable)
+    .where(
+      and(
+        inArray(evidenceItemsTable.id, ids),
+        orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined,
+        sql`deleted_at IS NULL`
+      )
+    );
+
+  if (rows.length === 0) {
+    res.status(404).json({ error: "No matching evidence found" });
+    return;
+  }
+
+  await db
+    .update(evidenceItemsTable)
+    .set({ status: status as any, updatedAt: new Date() })
+    .where(
+      and(
+        inArray(evidenceItemsTable.id, ids),
+        orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined
+      )
+    );
+
+  // Write audit logs for each updated item
+  for (const row of rows) {
+    await logAudit(req, "status_changed", "evidence", row.id, {
+      entityLabel: row.title ?? undefined,
+      previousValue: row.status,
+      newValue: status,
+    });
+  }
+
+  res.json({ updated: rows.length });
+});
+
+// ── Bulk remove from control ─────────────────────────────────────────────────
+router.post("/evidence/bulk-unlink-control", requireAuth, requireOrg, async (req, res) => {
+  const { ids, controlId } = req.body as { ids: string[]; controlId: string };
+  const orgId = req.orgId;
+
+  if (!Array.isArray(ids) || ids.length === 0 || !controlId) {
+    res.status(400).json({ error: "ids and controlId required" });
+    return;
+  }
+
+  await db
+    .delete(evidenceControlLinksTable)
+    .where(
+      and(
+        inArray(evidenceControlLinksTable.evidenceId, ids),
+        eq(evidenceControlLinksTable.controlId, controlId)
+      )
+    );
+
+  for (const id of ids) {
+    await logAudit(req, "link_removed", "evidence", id, {
+      entityLabel: controlId,
+      previousValue: controlId,
+    });
+  }
+
+  res.json({ unlinked: ids.length });
+});
+
 // ── Update evidence (status, fields) ──────────────────────────────────────
 router.patch("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
   const orgId = req.orgId;

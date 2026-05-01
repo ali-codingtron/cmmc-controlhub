@@ -5,7 +5,6 @@ import {
   FileText, 
   CheckSquare, 
   AlertTriangle, 
-  UserSquare2, 
   History, 
   Users, 
   Settings,
@@ -25,7 +24,6 @@ import { cn } from "@/lib/utils";
 const documentationItems = [
   { href: "/documents", label: "Overview" },
   { href: "/documents/list", label: "All Documents" },
-  { href: "/documents/templates", label: "Templates" },
   { href: "/documents/logs", label: "Compliance Logs" },
   { href: "/documents/checklists", label: "Checklists" },
   { href: "/documents/missing", label: "Gap Analysis" },
@@ -141,7 +139,6 @@ export function Sidebar() {
           <NavLink href="/evidence" icon={FileText} label="Evidence" />
           <NavLink href="/tasks" icon={CheckSquare} label="Tasks" />
           <NavLink href="/poams" icon={AlertTriangle} label="POA&Ms" />
-          <NavLink href="/assessor" icon={UserSquare2} label="Assessor View" />
 
           {/* Documentation section */}
           <button

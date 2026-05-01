@@ -1,12 +1,25 @@
-import { 
-  useGetDashboardSummary, 
-  useGetReadinessByDomain, 
-  useGetRecentActivity 
+import {
+  useGetDashboardSummary,
+  useGetReadinessByDomain,
+  useGetRecentActivity,
 } from "@workspace/api-client-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
-import { ShieldCheck, AlertTriangle, FileText, CheckSquare, Activity, Clock } from "lucide-react";
+import {
+  ShieldCheck,
+  AlertTriangle,
+  FileText,
+  CheckSquare,
+  Activity,
+  Clock,
+  TrendingUp,
+  CircleCheck,
+  CircleDot,
+  CircleX,
+  CircleAlert,
+} from "lucide-react";
+import { Link } from "wouter";
+import { cn } from "@/lib/utils";
 
 function relativeTime(ts: string | Date | null | undefined): string {
   if (!ts) return "";
@@ -36,27 +49,53 @@ function actionBadgeColor(action: string): string {
   }
 }
 
-function getProgressColor(percent: number): string {
-  if (percent < 50) return "bg-red-500";
-  if (percent < 80) return "bg-yellow-500";
+function getProgressColor(pct: number): string {
+  if (pct < 40) return "bg-red-500";
+  if (pct < 70) return "bg-yellow-500";
   return "bg-green-500";
+}
+
+function ReadinessRing({ value }: { value: number }) {
+  const circumference = 2 * Math.PI * 15.9;
+  const strokeDash = (value / 100) * circumference;
+  const colorClass = value < 40 ? "stroke-red-500" : value < 70 ? "stroke-yellow-500" : "stroke-green-500";
+  const textColor = value < 40 ? "text-red-600" : value < 70 ? "text-yellow-600" : "text-green-600";
+  return (
+    <div className="relative flex items-center justify-center w-24 h-24">
+      <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+        <circle cx="18" cy="18" r="15.9" fill="none" strokeWidth="3" className="stroke-muted" />
+        <circle
+          cx="18" cy="18" r="15.9" fill="none" strokeWidth="3"
+          strokeDasharray={`${strokeDash} ${circumference - strokeDash}`}
+          strokeLinecap="round"
+          className={colorClass}
+        />
+      </svg>
+      <div className="absolute flex flex-col items-center">
+        <span className={cn("text-xl font-bold leading-none", textColor)}>{value}%</span>
+        <span className="text-[10px] text-muted-foreground">Ready</span>
+      </div>
+    </div>
+  );
 }
 
 export default function Dashboard() {
   const { data: summary, isLoading: summaryLoading } = useGetDashboardSummary();
   const { data: domains, isLoading: domainsLoading } = useGetReadinessByDomain();
   const { data: recentActivity, isLoading: activityLoading } = useGetRecentActivity({ limit: 15 });
-  
+
   if (summaryLoading || domainsLoading) {
     return (
       <div className="space-y-6">
         <h1 className="text-3xl font-bold">Dashboard</h1>
-        <div className="text-muted-foreground text-sm">Loading dashboard...</div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[...Array(8)].map((_, i) => <div key={i} className="h-28 animate-pulse bg-muted rounded-lg" />)}
+        </div>
       </div>
     );
   }
 
-  if (!summary || !domains) {
+  if (!summary) {
     return (
       <div className="space-y-6">
         <h1 className="text-3xl font-bold">Dashboard</h1>
@@ -65,53 +104,97 @@ export default function Dashboard() {
     );
   }
 
+  const total = summary.totalControls ?? 0;
+  const implemented = summary.implementedControls ?? 0;
+  const assessorReady = summary.assessorReadyControls ?? 0;
+  const notStarted = summary.notStartedControls ?? 0;
+  const inProgress = Math.max(0, total - implemented - notStarted);
+  const justImplemented = Math.max(0, implemented - assessorReady);
+  const readiness = summary.overallReadinessPercent ?? 0;
+
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Dashboard</h1>
-      
-      {/* Summary KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+
+      {/* Top section: readiness ring + controls breakdown */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Overall Readiness */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Overall Readiness</CardTitle>
-            <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{summary.overallReadinessPercent ?? 0}%</div>
-            <Progress value={summary.overallReadinessPercent ?? 0} className="mt-2" indicatorClassName={getProgressColor(summary.overallReadinessPercent ?? 0)} />
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">At Risk Controls</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{summary.atRiskControls ?? 0}</div>
-            <p className="text-xs text-muted-foreground">Controls needing attention</p>
+          <CardContent className="pt-5 pb-5 flex items-center gap-5">
+            <ReadinessRing value={readiness} />
+            <div className="flex-1 space-y-1">
+              <p className="font-semibold">Overall Readiness</p>
+              <p className="text-sm text-muted-foreground">{implemented} of {total} controls implemented</p>
+              <Progress value={readiness} className="h-2 mt-1" indicatorClassName={getProgressColor(readiness)} />
+            </div>
           </CardContent>
         </Card>
 
+        {/* Controls Breakdown */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Evidence</CardTitle>
-            <FileText className="h-4 w-4 text-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{summary.pendingReviewItems ?? 0}</div>
-            <p className="text-xs text-muted-foreground">Items awaiting review</p>
+          <CardContent className="pt-5 pb-5">
+            <p className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide text-xs">Controls Breakdown</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-purple-500 shrink-0" />
+                <div>
+                  <p className="text-[11px] text-muted-foreground leading-none mb-0.5">Assessor Ready</p>
+                  <p className="text-lg font-bold leading-none">{assessorReady}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <CircleCheck className="h-4 w-4 text-green-500 shrink-0" />
+                <div>
+                  <p className="text-[11px] text-muted-foreground leading-none mb-0.5">Implemented</p>
+                  <p className="text-lg font-bold leading-none">{justImplemented}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <CircleDot className="h-4 w-4 text-yellow-500 shrink-0" />
+                <div>
+                  <p className="text-[11px] text-muted-foreground leading-none mb-0.5">In Progress</p>
+                  <p className="text-lg font-bold leading-none">{inProgress}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <CircleAlert className="h-4 w-4 text-red-400 shrink-0" />
+                <div>
+                  <p className="text-[11px] text-muted-foreground leading-none mb-0.5">Not Started</p>
+                  <p className="text-lg font-bold leading-none">{notStarted}</p>
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
+        {/* Evidence + Risk */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Overdue Tasks</CardTitle>
-            <CheckSquare className="h-4 w-4 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{summary.overdueTasks ?? 0}</div>
-            <p className="text-xs text-muted-foreground">Tasks past due date</p>
+          <CardContent className="pt-5 pb-5 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Evidence &amp; Risk</p>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-md bg-muted/50 p-2 text-center">
+                <p className="text-[10px] text-muted-foreground">Total</p>
+                <p className="font-bold text-base">{summary.totalEvidenceItems ?? 0}</p>
+              </div>
+              <div className="rounded-md bg-green-50 dark:bg-green-950/30 p-2 text-center">
+                <p className="text-[10px] text-muted-foreground">Approved</p>
+                <p className="font-bold text-base text-green-700 dark:text-green-400">{summary.approvedEvidenceItems ?? 0}</p>
+              </div>
+              <div className="rounded-md bg-yellow-50 dark:bg-yellow-950/30 p-2 text-center">
+                <p className="text-[10px] text-muted-foreground">Pending</p>
+                <p className="font-bold text-base text-yellow-700 dark:text-yellow-400">{summary.pendingReviewItems ?? 0}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 border-t pt-3">
+              <Link href="/poams" className="rounded-md bg-red-50 dark:bg-red-950/30 p-2 block hover:opacity-80 transition-opacity">
+                <p className="text-[10px] text-muted-foreground">Open POA&amp;Ms</p>
+                <p className="font-bold text-base text-red-700 dark:text-red-400">{summary.openPoams ?? 0}</p>
+              </Link>
+              <Link href="/tasks" className="rounded-md bg-orange-50 dark:bg-orange-950/30 p-2 block hover:opacity-80 transition-opacity">
+                <p className="text-[10px] text-muted-foreground">Overdue Tasks</p>
+                <p className="font-bold text-base text-orange-700 dark:text-orange-400">{summary.overdueTasks ?? 0}</p>
+              </Link>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -120,35 +203,39 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Domain Readiness</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              Domain Readiness
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {domains.length === 0 ? (
+          <CardContent className="space-y-4">
+            {!domains || domains.length === 0 ? (
               <p className="text-sm text-muted-foreground">No domain data available.</p>
             ) : (
               domains.map((domain) => {
                 const pct = domain.readinessPercent ?? 0;
-                const ready = domain.readyControls ?? domain.implementedControls ?? 0;
-                const total = domain.totalControls ?? 0;
+                const ready = (domain as any).readyControls ?? domain.implementedControls ?? 0;
+                const dtotal = domain.totalControls ?? 0;
                 return (
-                  <div key={domain.domainId} className="space-y-1">
+                  <div key={domain.domainId} className="space-y-1.5">
                     <div className="flex justify-between items-center text-sm">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="inline-flex items-center justify-center w-8 h-5 rounded text-xs font-bold bg-slate-100 text-slate-700 shrink-0">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0 min-w-[28px]">
                           {domain.domainCode}
                         </span>
-                        <span className="font-medium truncate" title={domain.domainName}>
+                        <span className="font-medium truncate text-sm" title={domain.domainName}>
                           {domain.domainName}
                         </span>
                       </div>
-                      <span className="text-muted-foreground shrink-0 ml-2">
-                        {ready}/{total}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0 ml-2">
+                        <span className="text-muted-foreground text-xs tabular-nums">{ready}/{dtotal}</span>
+                        <span className={cn(
+                          "text-xs font-semibold tabular-nums w-9 text-right",
+                          pct < 40 ? "text-red-600" : pct < 70 ? "text-yellow-600" : "text-green-600"
+                        )}>{pct}%</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Progress value={pct} className="flex-1 h-2" indicatorClassName={getProgressColor(pct)} />
-                      <span className="text-xs font-medium w-9 text-right">{pct}%</span>
-                    </div>
+                    <Progress value={pct} className="h-2" indicatorClassName={getProgressColor(pct)} />
                   </div>
                 );
               })
@@ -158,8 +245,10 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
-            <CardTitle>Recent Activity</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-4 w-4 text-muted-foreground" />
+              Recent Activity
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {activityLoading ? (
@@ -171,20 +260,16 @@ export default function Dashboard() {
                 <p className="text-xs text-muted-foreground mt-1">Actions like updating controls, uploading evidence, and managing tasks will appear here.</p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
                 {recentActivity.map((activity) => (
                   <div key={activity.id} className="flex items-start gap-3 text-sm pb-3 border-b last:border-0 last:pb-0">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-foreground">
-                          {activity.userName ?? "System"}
-                        </span>
+                        <span className="font-medium text-foreground">{activity.userName ?? "System"}</span>
                         <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${actionBadgeColor(activity.action ?? "")}`}>
                           {activity.actionLabel ?? activity.action}
                         </span>
-                        <span className="text-muted-foreground capitalize">
-                          {activity.entityTypeLabel ?? activity.entityType}
-                        </span>
+                        <span className="text-muted-foreground capitalize">{activity.entityTypeLabel ?? activity.entityType}</span>
                       </div>
                       {activity.entityLabel && (
                         <p className="text-xs text-foreground/70 mt-0.5 truncate" title={activity.entityLabel}>
@@ -194,9 +279,7 @@ export default function Dashboard() {
                             : ""}
                         </p>
                       )}
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {relativeTime(activity.timestamp)}
-                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{relativeTime(activity.timestamp)}</p>
                     </div>
                   </div>
                 ))}

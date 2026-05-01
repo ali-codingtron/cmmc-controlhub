@@ -541,15 +541,15 @@ function BulkUploadEvidenceDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Files className="h-5 w-5" />
             Bulk Upload Evidence
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-1">
+        <div className="flex-1 overflow-y-auto min-h-0 space-y-4 py-1 pr-1">
           {/* Control context */}
           <div className="flex flex-wrap gap-3 text-sm p-3 rounded-md bg-muted/50 border">
             <div className="flex items-center gap-1.5">
@@ -791,7 +791,7 @@ function BulkUploadEvidenceDialog({
           )}
         </div>
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="shrink-0 gap-2 pt-2">
           <Button variant="outline" onClick={handleClose} disabled={uploading}>
             {allDone && !idleCount ? "Close" : "Cancel"}
           </Button>
@@ -1056,6 +1056,39 @@ export default function ControlDetail({ id }: { id: string }) {
   const [showAddTask, setShowAddTask] = useState(false);
   const [showAddPoam, setShowAddPoam] = useState(false);
 
+  // Evidence bulk selection
+  const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<Set<string>>(new Set());
+  const [bulkStatusBusy, setBulkStatusBusy] = useState(false);
+
+  const toggleEvidenceSelection = (itemId: string) => {
+    setSelectedEvidenceIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  };
+
+  const handleBulkStatusUpdate = async (newStatus: string) => {
+    if (!selectedEvidenceIds.size) return;
+    setBulkStatusBusy(true);
+    try {
+      const res = await fetch("/api/evidence/bulk-status", {
+        method: "PATCH",
+        headers: apiHeaders(activeOrg?.id),
+        body: JSON.stringify({ evidenceIds: Array.from(selectedEvidenceIds), status: newStatus }),
+      });
+      if (!res.ok) throw new Error("Bulk update failed");
+      toast({ title: `${selectedEvidenceIds.size} item(s) updated to "${newStatus.replace(/_/g, " ")}"` });
+      setSelectedEvidenceIds(new Set());
+      invalidateEvidence();
+    } catch {
+      toast({ title: "Error", description: "Could not update evidence status", variant: "destructive" });
+    } finally {
+      setBulkStatusBusy(false);
+    }
+  };
+
   // When control loads, initialise local state (only once per control load)
   const narrativeValue = narrative !== null ? narrative : (control?.implementationNarrative ?? "");
   const statusValue = status !== null ? status : (control?.status ?? "not_started");
@@ -1226,8 +1259,35 @@ export default function ControlDetail({ id }: { id: string }) {
         {/* ── Evidence Tab ── */}
         <TabsContent value="evidence" className="mt-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-base">Evidence Items</h3>
+            <h3 className="font-semibold text-base">
+              Evidence Items
+              {selectedEvidenceIds.size > 0 && (
+                <span className="ml-2 text-xs font-normal text-muted-foreground">{selectedEvidenceIds.size} selected</span>
+              )}
+            </h3>
             <div className="flex items-center gap-2">
+              {selectedEvidenceIds.size > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="sm" variant="outline" disabled={bulkStatusBusy}>
+                      {bulkStatusBusy
+                        ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />Updating…</>
+                        : <><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Bulk Action ({selectedEvidenceIds.size})</>
+                      }
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleBulkStatusUpdate("approved")}>Mark Approved</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleBulkStatusUpdate("pending_review")}>Mark Pending Review</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleBulkStatusUpdate("assessor_ready")}>Mark Assessor Ready</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleBulkStatusUpdate("draft")}>Mark Draft</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => handleBulkStatusUpdate("archived")} className="text-red-600">Mark Archived</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setSelectedEvidenceIds(new Set())}>Clear Selection</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
               <Button size="sm" variant="outline" onClick={() => setShowBulkUpload(true)}>
                 <Files className="h-4 w-4 mr-1" />
                 Bulk Upload
@@ -1255,130 +1315,144 @@ export default function ControlDetail({ id }: { id: string }) {
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {evidence.map((item: any) => (
-                <Card key={item.id} className="hover:shadow-md transition-shadow">
-                  <CardHeader className="pb-2">
-                    <div className="flex justify-between items-start gap-2">
-                      <CardTitle className="text-base leading-snug flex-1 min-w-0">
-                        <Link href={`/evidence/${item.id}`} className="hover:underline text-primary">
-                          {item.title}
-                        </Link>
-                      </CardTitle>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <StatusBadge status={item.status} />
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem asChild>
-                              <Link href={`/evidence/${item.id}`} className="flex items-center gap-2">
-                                <Eye className="h-4 w-4" />
-                                View / Edit
-                              </Link>
-                            </DropdownMenuItem>
-                            {item.fileKey && (
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  const token = localStorage.getItem("auth_token");
-                                  const orgId = activeOrg?.id;
-                                  fetch(`/api/evidence/${item.id}/download`, {
-                                    headers: {
-                                      Authorization: `Bearer ${token}`,
-                                      ...(orgId ? { "X-Organization-ID": orgId } : {}),
-                                    },
-                                  })
-                                    .then((r) => r.blob())
-                                    .then((blob) => {
-                                      const url = URL.createObjectURL(blob);
-                                      const a = document.createElement("a");
-                                      a.href = url;
-                                      a.download = item.fileName ?? "evidence-file";
-                                      a.click();
-                                      URL.revokeObjectURL(url);
-                                    })
-                                    .catch(() => {});
-                                }}
-                                className="flex items-center gap-2"
-                              >
-                                <Download className="h-4 w-4" />
-                                Download File
+              {evidence.map((item: any) => {
+                const isSelected = selectedEvidenceIds.has(item.id);
+                return (
+                  <Card
+                    key={item.id}
+                    className={`hover:shadow-md transition-shadow ${isSelected ? "ring-2 ring-primary ring-offset-1" : ""}`}
+                  >
+                    <CardHeader className="pb-2">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="flex items-start gap-2 flex-1 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleEvidenceSelection(item.id)}
+                            className="mt-1 h-4 w-4 shrink-0 cursor-pointer"
+                          />
+                          <CardTitle className="text-base leading-snug flex-1 min-w-0">
+                            <Link href={`/evidence/${item.id}`} className="hover:underline text-primary">
+                              {item.title}
+                            </Link>
+                          </CardTitle>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <StatusBadge status={item.status} />
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem asChild>
+                                <Link href={`/evidence/${item.id}`} className="flex items-center gap-2">
+                                  <Eye className="h-4 w-4" />
+                                  View / Edit
+                                </Link>
                               </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={async () => {
-                                try {
-                                  const res = await fetch(`/api/evidence/${item.id}/controls/${id}`, {
-                                    method: "DELETE",
-                                    headers: apiHeaders(activeOrg?.id),
-                                  });
-                                  if (!res.ok) throw new Error("Failed to remove");
-                                  toast({ title: "Evidence removed from this control" });
-                                  invalidateEvidence();
-                                } catch {
-                                  toast({ title: "Error", description: "Could not remove evidence from this control", variant: "destructive" });
-                                }
-                              }}
-                              className="flex items-center gap-2"
-                            >
-                              <Unlink className="h-4 w-4" />
-                              Remove from this Control
-                            </DropdownMenuItem>
-                            {item.status !== "archived" && (
+                              {item.fileKey && (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    const token = localStorage.getItem("auth_token");
+                                    const orgId = activeOrg?.id;
+                                    fetch(`/api/evidence/${item.id}/download`, {
+                                      headers: {
+                                        Authorization: `Bearer ${token}`,
+                                        ...(orgId ? { "X-Organization-ID": orgId } : {}),
+                                      },
+                                    })
+                                      .then((r) => r.blob())
+                                      .then((blob) => {
+                                        const url = URL.createObjectURL(blob);
+                                        const a = document.createElement("a");
+                                        a.href = url;
+                                        a.download = item.fileName ?? "evidence-file";
+                                        a.click();
+                                        URL.revokeObjectURL(url);
+                                      })
+                                      .catch(() => {});
+                                  }}
+                                  className="flex items-center gap-2"
+                                >
+                                  <Download className="h-4 w-4" />
+                                  Download File
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 onClick={async () => {
                                   try {
-                                    const res = await fetch(`/api/evidence/${item.id}/archive`, {
-                                      method: "POST",
+                                    const res = await fetch(`/api/evidence/${item.id}/controls/${id}`, {
+                                      method: "DELETE",
                                       headers: apiHeaders(activeOrg?.id),
                                     });
-                                    if (!res.ok) throw new Error("Failed to archive");
-                                    toast({ title: "Evidence archived" });
+                                    if (!res.ok) throw new Error("Failed to remove");
+                                    toast({ title: "Evidence removed from this control" });
                                     invalidateEvidence();
                                   } catch {
-                                    toast({ title: "Error", description: "Could not archive evidence", variant: "destructive" });
+                                    toast({ title: "Error", description: "Could not remove evidence from this control", variant: "destructive" });
                                   }
                                 }}
                                 className="flex items-center gap-2"
                               >
-                                <Archive className="h-4 w-4" />
-                                Archive Evidence
+                                <Unlink className="h-4 w-4" />
+                                Remove from this Control
                               </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                              {item.status !== "archived" && (
+                                <DropdownMenuItem
+                                  onClick={async () => {
+                                    try {
+                                      const res = await fetch(`/api/evidence/${item.id}/archive`, {
+                                        method: "POST",
+                                        headers: apiHeaders(activeOrg?.id),
+                                      });
+                                      if (!res.ok) throw new Error("Failed to archive");
+                                      toast({ title: "Evidence archived" });
+                                      invalidateEvidence();
+                                    } catch {
+                                      toast({ title: "Error", description: "Could not archive evidence", variant: "destructive" });
+                                    }
+                                  }}
+                                  className="flex items-center gap-2"
+                                >
+                                  <Archive className="h-4 w-4" />
+                                  Archive Evidence
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <Badge variant="outline" className="text-xs">
-                      {evidenceTypeLabel(item.evidenceType)}
-                    </Badge>
-                    {item.fileName && (
-                      <div className="flex items-center gap-1.5">
-                        <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
-                        <span className="text-xs text-muted-foreground truncate">{item.fileName}</span>
-                        {item.fileSize && (
-                          <span className="text-xs text-muted-foreground shrink-0">
-                            ({(item.fileSize / 1024).toFixed(0)} KB)
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    {item.collectedAt && (
-                      <p className="text-xs text-muted-foreground">
-                        Collected: {formatDate(item.collectedAt)}
-                      </p>
-                    )}
-                    {item.ownerName && (
-                      <p className="text-xs text-muted-foreground">Owner: {item.ownerName}</p>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <Badge variant="outline" className="text-xs">
+                        {evidenceTypeLabel(item.evidenceType)}
+                      </Badge>
+                      {item.fileName && (
+                        <div className="flex items-center gap-1.5">
+                          <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
+                          <span className="text-xs text-muted-foreground truncate">{item.fileName}</span>
+                          {item.fileSize && (
+                            <span className="text-xs text-muted-foreground shrink-0">
+                              ({(item.fileSize / 1024).toFixed(0)} KB)
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {item.collectedAt && (
+                        <p className="text-xs text-muted-foreground">
+                          Collected: {formatDate(item.collectedAt)}
+                        </p>
+                      )}
+                      {item.ownerName && (
+                        <p className="text-xs text-muted-foreground">Owner: {item.ownerName}</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
 

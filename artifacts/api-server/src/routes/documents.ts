@@ -1,4 +1,7 @@
 import { Router } from "express";
+import multer from "multer";
+import path from "path";
+import { mkdirSync } from "fs";
 import {
   db,
   documentTemplatesTable,
@@ -22,6 +25,18 @@ import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 import { logAudit } from "../lib/audit";
 import { randomUUID } from "crypto";
+
+const DOCS_UPLOADS_DIR = path.resolve(__dirname, "..", "uploads", "documents");
+mkdirSync(DOCS_UPLOADS_DIR, { recursive: true });
+
+const docStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, DOCS_UPLOADS_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${randomUUID()}${ext}`);
+  },
+});
+const docUpload = multer({ storage: docStorage, limits: { fileSize: 50 * 1024 * 1024 } });
 
 const router = Router();
 
@@ -283,6 +298,94 @@ const DOCUMENT_LIKE_EVIDENCE_TYPES = [
   "incident_record", "risk_record", "approval_record", "system_inventory",
   "asset_inventory", "supplier_review", "backup_verification", "scan_report",
 ] as const;
+
+// ── Upload Document (file-based, no template) ────────────────────────────────
+router.post(
+  "/documents/upload",
+  requireAuth,
+  requireOrg,
+  docUpload.single("file"),
+  async (req, res) => {
+    const orgId = req.orgId;
+    const user = req.authUser!;
+
+    const {
+      title, docType, status, linkedControlIds: rawControls,
+      ownerId, effectiveDate, nextReviewDate, expiresAt,
+      assessorSummary, internalNotes, tags: rawTags,
+    } = req.body;
+
+    if (!title || !docType) {
+      res.status(400).json({ error: "title and docType are required" });
+      return;
+    }
+
+    const controlIds: string[] = (() => {
+      try { return JSON.parse(rawControls || "[]"); } catch { return []; }
+    })();
+    const tags: string[] = (() => {
+      try { return JSON.parse(rawTags || "[]"); } catch { return []; }
+    })();
+
+    const id = randomUUID();
+    const resolvedOwnerId = ownerId ?? user.id;
+
+    await db.insert(documentsTable).values({
+      id,
+      organizationId: orgId ?? null,
+      title,
+      docType: docType as any,
+      status: (status as any) ?? "draft",
+      body: "",
+      ownerId: resolvedOwnerId,
+      effectiveDate: effectiveDate ? new Date(effectiveDate) : undefined,
+      nextReviewDate: nextReviewDate ? new Date(nextReviewDate) : undefined,
+      expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+      assessorSummary: assessorSummary ?? null,
+      internalNotes: internalNotes ?? null,
+      tags,
+      fileKey: req.file ? req.file.filename : null,
+      fileName: req.file ? req.file.originalname : null,
+      fileSize: req.file ? String(req.file.size) : null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    // Link to controls
+    if (controlIds.length) {
+      await db.insert(documentControlMapsTable).values(
+        controlIds.map((cid) => ({ id: randomUUID(), documentId: id, controlId: cid, linkedAt: new Date() }))
+      );
+    }
+
+    await logAudit(req, "created", "document", id, { entityLabel: title });
+
+    const [doc] = await db.select().from(documentsTable).where(eq(documentsTable.id, id)).limit(1);
+    res.status(201).json(doc);
+  }
+);
+
+// ── Download Document file ────────────────────────────────────────────────────
+router.get("/documents/:id/download", requireAuth, requireOrg, async (req, res) => {
+  const [doc] = await db
+    .select({ fileKey: documentsTable.fileKey, fileName: documentsTable.fileName })
+    .from(documentsTable)
+    .where(eq(documentsTable.id, req.params.id))
+    .limit(1);
+
+  if (!doc?.fileKey) {
+    res.status(404).json({ error: "No file attached to this document" });
+    return;
+  }
+
+  const filePath = path.join(DOCS_UPLOADS_DIR, doc.fileKey);
+  const downloadName = doc.fileName ?? doc.fileKey;
+  res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(downloadName)}"`);
+  const { createReadStream } = await import("fs");
+  const stream = createReadStream(filePath);
+  stream.on("error", () => res.status(404).json({ error: "File not found" }));
+  stream.pipe(res);
+});
 
 router.get("/documents/all", requireAuth, requireOrg, async (req, res) => {
   const { search, type, status, domain, controlId, sourceType } = req.query as Record<string, string>;
@@ -1412,6 +1515,7 @@ router.get("/automation/doc-status", requireAuth, requireOrg, async (req, res) =
     totalPendingReview: statusCounts["pending_review"] ?? 0,
     totalExpired: statusCounts["expired"] ?? 0,
     totalNeedsUpdate: statusCounts["needs_update"] ?? 0,
+    totalAssessorReady: statusCounts["assessor_ready"] ?? 0,
     totalTemplates: templates.length,
     controlsMissingPolicy: coverage.controlsMissingPolicy.length,
     controlsMissingProcedure: coverage.controlsMissingProcedure.length,

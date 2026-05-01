@@ -1,0 +1,252 @@
+Fix and simplify the application based on the current workflow issues. Do not add unrelated features.
+
+1. Expand Bulk Upload Evidence Modal
+The bulk upload modal is too small and cramped.
+
+Update it so:
+- modal is wider and taller
+- table is readable without excessive horizontal scrolling
+- columns fit properly
+- action buttons are always visible
+- selected files table supports scrolling inside the modal
+- metadata fields are cleanly laid out
+
+2. Add Bulk Status Update on Control Evidence Tab
+On each control’s Evidence tab, add bulk actions for linked evidence.
+
+Requirements:
+- Add checkboxes next to each evidence item
+- Add “Select All”
+- Add bulk action dropdown:
+  - Change Status
+  - Archive
+  - Remove from Control
+- For Change Status, allow selecting:
+  - Draft
+  - Pending Review
+  - Approved
+  - Active
+  - Assessor Ready
+  - Rejected
+  - Stale
+  - Superseded
+  - Archived
+
+When bulk status update is applied:
+- update all selected evidence records
+- update evidence cards immediately
+- update counts/readiness
+- write audit logs
+
+3. Fix Back Button / Breadcrumb Behavior
+The app should act like a breadcrumb trail.
+
+Requirements:
+- When I click into evidence, documents, controls, tasks, or POA&Ms, Back should return me to the exact previous page I came from.
+- If I came from a control Evidence tab, Back returns to that control Evidence tab.
+- If I came from Evidence Repository, Back returns to Evidence Repository with filters preserved.
+- If I came from All Documents, Back returns to All Documents with filters preserved.
+- Use browser history when available.
+- Add visible breadcrumbs where useful:
+  Organization > Controls > AC.L2-3.3.5 > Evidence > Evidence Title
+
+4. Simplify Documents Module
+Remove template-based document generation entirely.
+
+Remove from UI and routes:
+- Generate Document
+- Document Templates
+- Template creation
+- Template preview
+- Any “Browse Templates” buttons
+- Any automatic redirect to template generation
+
+Documents should work like uploaded compliance documents.
+
+5. Fix Add Document
+Add a normal “Add Document” workflow.
+
+Add Document form must include:
+- title
+- document type
+- file upload from PC
+- status
+- linked controls multi-select
+- security domain auto-filled from linked controls
+- CMMC level auto-filled from linked controls
+- owner
+- effective date
+- review date
+- expiration date
+- assessor summary
+- internal notes
+- tags
+
+Document types:
+- Policy
+- Procedure
+- Log
+- Report
+- Approval Record
+- Access Review
+- Training Record
+- Incident Record
+- Risk Record
+- System Inventory
+- Asset Inventory
+- Supplier Review
+- Backup Verification
+- Vulnerability Scan
+- Other
+
+Statuses:
+- Draft
+- Pending Review
+- Approved
+- Active
+- Assessor Ready
+- Rejected
+- Stale
+- Superseded
+- Archived
+
+6. Fix Documents Linked Controls
+In Documentation > All Documents:
+- linked controls must display correctly
+- show all linked control IDs as badges
+- security domain must display full domain code/name
+- level must display L1/L2
+- source should show Uploaded Document or Uploaded Evidence
+
+Documents and evidence should both be able to satisfy documentation gap analysis when type is Policy or Procedure and status is Approved, Active, or Assessor Ready.
+
+7. Redesign Main Dashboard
+Make the dashboard look more professional and useful.
+
+Remove Assessor View section from main navigation/dashboard. Assessors will have their own login and restricted experience.
+
+Dashboard should show:
+- Overall readiness percentage
+- Controls ready / total controls, e.g. 42 / 110
+- Controls not started
+- Controls in progress
+- Controls implemented
+- Controls assessor ready
+- Evidence count
+- Approved evidence count
+- Draft/pending evidence count
+- Open POA&M count
+- Overdue task count only if real tasks exist
+- Upcoming reviews due
+- Domain readiness with domain names, ready/total, percentage
+- Recent activity
+- Top gaps / next actions
+
+Clarify overdue tasks:
+- It should count actual Task records with due date before today and status not completed/cancelled.
+- If there are no tasks, show 0 and “No overdue tasks.”
+
+8. Improve Domain Readiness
+Domain readiness should show:
+- domain code
+- full domain name
+- ready controls / total controls
+- percentage
+- color-coded progress
+
+Readiness should be based on current organization only.
+
+9. Fix POA&M Section
+The POA&M page is empty and not pulling from anywhere.
+
+Add working POA&M functionality.
+
+POA&M page must show:
+- POA&M number
+- title
+- status
+- risk level
+- linked control
+- owner
+- scheduled completion date
+- actual completion date
+- actions
+
+Add buttons:
+- Add POA&M
+- Upload POA&M
+
+Add POA&M form fields:
+- POA&M number
+- title
+- description
+- linked controls
+- weakness/gap
+- risk level
+- status
+- owner
+- scheduled completion date
+- remediation plan
+- required evidence
+- notes
+
+Upload POA&M:
+- allow file upload from PC
+- allow linking to one or more controls
+- create POA&M record
+- store uploaded file
+- show it in POA&M list
+- link it to control POA&M tab
+- write audit log
+
+10. Control POA&M Tab
+On each control page:
+- POA&M tab should show POA&M items linked to that control
+- Add POA&M button should default linked control to current control
+- Upload POA&M button should default linked control to current control
+- count should update correctly
+
+11. Acceptance Tests
+
+Bulk upload:
+- Open a control
+- Bulk upload multiple evidence files
+- Modal is readable
+- Upload succeeds
+- Select multiple evidence items
+- Bulk change status to Approved
+- All selected files update to Approved
+
+Back behavior:
+- Open Evidence Repository
+- Click evidence
+- Click Back
+- Return to Evidence Repository
+- Open control Evidence tab
+- Click evidence
+- Click Back
+- Return to same control Evidence tab
+
+Documents:
+- Documentation no longer shows Templates or Generate Document
+- Click Add Document
+- Upload a policy file
+- Link it to AC.L1-3.1.1
+- Save
+- It appears in All Documents
+- Linked Controls shows AC.L1-3.1.1
+- Domain and level show correctly
+- Approved policy removes that control from Missing Policy gap analysis
+
+Dashboard:
+- Dashboard shows controls ready / total controls
+- Domain readiness labels and counts display clearly
+- Overdue tasks count is based on real tasks only
+- Assessor View is removed from main nav/dashboard
+
+POA&M:
+- Add POA&M manually
+- It appears on POA&M page
+- It appears under linked control POA&M tab
+- Upload POA&M file
+- It appears in POA&M page and linked control

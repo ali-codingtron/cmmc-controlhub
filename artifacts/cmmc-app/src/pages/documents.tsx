@@ -5,8 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import {
-  FileText, FilePlus, ClipboardList, LayoutList,
-  Clock, AlertCircle, CheckCircle2, Archive, RefreshCw, ChevronRight
+  FileText, FilePlus, LayoutList,
+  Clock, AlertCircle, CheckCircle2, RefreshCw, ChevronRight
 } from "lucide-react";
 
 function StatCard({ label, value, icon: Icon, color }: { label: string; value: number; icon: any; color: string }) {
@@ -56,9 +56,9 @@ export default function Documents() {
             Refresh
           </Button>
           <Button asChild>
-            <Link href="/documents/generate">
+            <Link href="/documents/list">
               <FilePlus className="h-4 w-4 mr-2" />
-              New Document
+              Add Document
             </Link>
           </Button>
         </div>
@@ -113,12 +113,12 @@ export default function Documents() {
                 </Link>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="border-l-4 border-l-blue-400">
               <CardContent className="pt-6">
-                <p className="text-sm text-muted-foreground">Templates Available</p>
-                <p className="text-2xl font-bold mt-1">{status?.totalTemplates ?? 0}</p>
-                <Link href="/documents/templates" className="text-xs text-primary hover:underline mt-1 flex items-center gap-1">
-                  Browse templates <ChevronRight className="h-3 w-3" />
+                <p className="text-sm text-muted-foreground">Assessor Ready</p>
+                <p className="text-2xl font-bold mt-1 text-blue-700">{status?.totalAssessorReady ?? 0}</p>
+                <Link href="/documents/list?status=assessor_ready" className="text-xs text-primary hover:underline mt-1 flex items-center gap-1">
+                  View documents <ChevronRight className="h-3 w-3" />
                 </Link>
               </CardContent>
             </Card>
@@ -158,11 +158,10 @@ export default function Documents() {
         </>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {[
           { href: "/documents/list", icon: LayoutList, label: "All Documents", description: "Browse and manage all policies, procedures, and records" },
-          { href: "/documents/templates", icon: ClipboardList, label: "Templates", description: "Generate documents from pre-built CMMC templates" },
-          { href: "/documents/logs", icon: Clock, label: "Compliance Logs", description: "Generate and track recurring compliance log activities" },
+          { href: "/documents/logs", icon: Clock, label: "Compliance Logs", description: "Track recurring compliance log activities" },
           { href: "/documents/checklists", icon: CheckCircle2, label: "Checklists", description: "Run and document compliance checklists with evidence generation" },
         ].map((item) => (
           <Link key={item.href} href={item.href}>

@@ -84,15 +84,15 @@ All major data tables have an `organizationId` foreign key. Every API request to
 
 | Route | Component | Description |
 |---|---|---|
-| / | Dashboard | Readiness summary, domain progress, activity |
+| / | Dashboard | Readiness ring, controls breakdown, evidence stats, domain progress, activity |
 | /controls | Controls | 110 CMMC controls table with search |
-| /controls/:id | ControlDetail | Control assessment, evidence, tasks, POA&Ms |
+| /controls/:id | ControlDetail | Control assessment, evidence (w/ bulk select), tasks, POA&Ms |
 | /evidence | Evidence | Evidence repository list |
 | /evidence/upload | EvidenceUpload | Upload new evidence file |
-| /evidence/:id | EvidenceDetail | Evidence review & approve/reject |
+| /evidence/:id | EvidenceDetail | Evidence review & approve/reject (back button uses browser history) |
 | /tasks | Tasks | Task list with filtering |
 | /tasks/:id | TaskDetail | Task details, complete/reopen |
-| /poams | Poams | POA&M list |
+| /poams | Poams | POA&M list with filters, summary stats, Add POA&M dialog |
 | /poams/:id | PoamDetail | POA&M details, close POA&M |
 | /assessor | Assessor | Assessor control list for assessment |
 | /assessor/controls/:id | AssessorControl | Full assessor package for a control |
@@ -100,10 +100,8 @@ All major data tables have an `organizationId` foreign key. Every API request to
 | /users | Users | User management (admin only) |
 | /settings | Settings | User settings |
 | /organizations | Organizations | Global admin: org management, readiness comparison (admin only) |
-| /documents | Documents | Documentation automation overview/stats |
-| /documents/list | DocumentsList | All documents with search/filter |
-| /documents/templates | DocumentTemplates | 22 seeded templates, generate modal |
-| /documents/generate | DocumentsGenerate | Generate document from template |
+| /documents | Documents | Documentation overview/stats (no templates) |
+| /documents/list | DocumentsList | All documents with search/filter, Add Document dialog (file upload) |
 | /documents/logs | DocumentLogs | Compliance log instances |
 | /documents/checklists | DocumentChecklists | Checklist tracking |
 | /documents/missing | DocumentsMissing | Gap analysis: missing policies/procedures |
@@ -120,15 +118,13 @@ All routes under `/api` prefix, JWT-authenticated:
 - `/api/organizations/global-stats` — cross-org summary stats (admin only)
 - `/api/domains` — CMMC domains (org-scoped)
 - `/api/controls` — controls with assessment status, evidence, tasks, POA&Ms (org-scoped)
-- `/api/evidence` — evidence CRUD, approve/reject/submit/stale/supersede actions (org-scoped)
+- `/api/evidence` — evidence CRUD, approve/reject/submit/stale/supersede actions (org-scoped); `PATCH /api/evidence/bulk-status` for bulk status updates
 - `/api/tasks` — task CRUD, complete/reopen actions (org-scoped)
 - `/api/poams` — POA&M CRUD, close action (org-scoped)
 - `/api/dashboard/*` — summary, domain readiness, recent activity, overdue items (org-scoped)
 - `/api/assessor/*` — assessor control list, control packages, exports (org-scoped)
 - `/api/audit-logs` — audit trail (org-scoped)
-- `/api/documents/templates` — template CRUD (22 system templates seeded; global, not org-scoped)
-- `/api/documents` — document CRUD + workflow (org-scoped)
-- `/api/documents/generate` — generate a document from a template (org-scoped)
+- `/api/documents` — document CRUD + workflow (org-scoped); `POST /api/documents/upload` for file-based upload; `GET /api/documents/:id/download` for file download
 - `/api/documents/missing` — gap analysis (org-scoped)
 - `/api/document-logs` — compliance log instances (org-scoped)
 - `/api/checklists` — checklist completion tracking (org-scoped)

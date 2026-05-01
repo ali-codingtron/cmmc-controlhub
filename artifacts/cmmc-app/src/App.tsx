@@ -25,8 +25,6 @@ import Users from "@/pages/users";
 import Settings from "@/pages/settings";
 import Documents from "@/pages/documents";
 import DocumentsList from "@/pages/documents-list";
-import DocumentTemplates from "@/pages/documents-templates";
-import DocumentsGenerate from "@/pages/documents-generate";
 import DocumentLogs from "@/pages/documents-logs";
 import DocumentChecklists from "@/pages/documents-checklists";
 import DocumentsMissing from "@/pages/documents-missing";
@@ -99,8 +97,6 @@ function AppRoutes() {
               <Route path="/organizations" component={Organizations} />
               <Route path="/documents" component={Documents} />
               <Route path="/documents/list" component={DocumentsList} />
-              <Route path="/documents/templates" component={DocumentTemplates} />
-              <Route path="/documents/generate" component={DocumentsGenerate} />
               <Route path="/documents/logs" component={DocumentLogs} />
               <Route path="/documents/checklists" component={DocumentChecklists} />
               <Route path="/documents/missing" component={DocumentsMissing} />
