@@ -85,10 +85,108 @@ export const UpdateUserBodyRole = {
 
 export interface UpdateUserBody {
   name?: string;
+  email?: string;
   role?: UpdateUserBodyRole;
   title?: string;
   department?: string;
   isActive?: boolean;
+}
+
+export interface ResetPasswordBody {
+  password: string;
+}
+
+export type UserOrgMembershipRole =
+  (typeof UserOrgMembershipRole)[keyof typeof UserOrgMembershipRole];
+
+export const UserOrgMembershipRole = {
+  global_admin: "global_admin",
+  org_admin: "org_admin",
+  compliance_manager: "compliance_manager",
+  it_contributor: "it_contributor",
+  reviewer: "reviewer",
+  executive_viewer: "executive_viewer",
+  assessor: "assessor",
+} as const;
+
+export type UserOrgMembershipStatus =
+  (typeof UserOrgMembershipStatus)[keyof typeof UserOrgMembershipStatus];
+
+export const UserOrgMembershipStatus = {
+  active: "active",
+  invited: "invited",
+  suspended: "suspended",
+} as const;
+
+export interface UserOrgMembership {
+  membershipId: string;
+  organizationId: string;
+  organizationName: string;
+  role: UserOrgMembershipRole;
+  status: UserOrgMembershipStatus;
+  joinedAt?: string | null;
+}
+
+export type AddUserToOrgBodyRole =
+  (typeof AddUserToOrgBodyRole)[keyof typeof AddUserToOrgBodyRole];
+
+export const AddUserToOrgBodyRole = {
+  global_admin: "global_admin",
+  org_admin: "org_admin",
+  compliance_manager: "compliance_manager",
+  it_contributor: "it_contributor",
+  reviewer: "reviewer",
+  executive_viewer: "executive_viewer",
+  assessor: "assessor",
+} as const;
+
+export type AddUserToOrgBodyStatus =
+  (typeof AddUserToOrgBodyStatus)[keyof typeof AddUserToOrgBodyStatus];
+
+export const AddUserToOrgBodyStatus = {
+  active: "active",
+  invited: "invited",
+  suspended: "suspended",
+} as const;
+
+export interface AddUserToOrgBody {
+  organizationId: string;
+  role: AddUserToOrgBodyRole;
+  status?: AddUserToOrgBodyStatus;
+}
+
+export type UpdateUserOrgMembershipBodyRole =
+  (typeof UpdateUserOrgMembershipBodyRole)[keyof typeof UpdateUserOrgMembershipBodyRole];
+
+export const UpdateUserOrgMembershipBodyRole = {
+  global_admin: "global_admin",
+  org_admin: "org_admin",
+  compliance_manager: "compliance_manager",
+  it_contributor: "it_contributor",
+  reviewer: "reviewer",
+  executive_viewer: "executive_viewer",
+  assessor: "assessor",
+} as const;
+
+export type UpdateUserOrgMembershipBodyStatus =
+  (typeof UpdateUserOrgMembershipBodyStatus)[keyof typeof UpdateUserOrgMembershipBodyStatus];
+
+export const UpdateUserOrgMembershipBodyStatus = {
+  active: "active",
+  invited: "invited",
+  suspended: "suspended",
+} as const;
+
+export interface UpdateUserOrgMembershipBody {
+  role?: UpdateUserOrgMembershipBodyRole;
+  status?: UpdateUserOrgMembershipBodyStatus;
+}
+
+export interface OrganizationSummary {
+  id: string;
+  name: string;
+  shortName?: string | null;
+  isActive: boolean;
 }
 
 export interface DomainWithStats {

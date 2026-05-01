@@ -114,7 +114,7 @@ All major data tables have an `organizationId` foreign key. Every API request to
 
 All routes under `/api` prefix, JWT-authenticated:
 - `/api/auth/login`, `/api/auth/logout`, `/api/auth/me`
-- `/api/users` — user CRUD
+- `/api/users` — user CRUD (create, list, update, deactivate, activate, reset-password, delete) + org membership management (`/api/users/:id/orgs`)
 - `/api/organizations` — org CRUD (admin only)
 - `/api/organizations/my-orgs` — orgs for current user
 - `/api/organizations/global-stats` — cross-org summary stats (admin only)
@@ -152,3 +152,5 @@ All routes under `/api` prefix, JWT-authenticated:
 7. **Documentation schema**: `documentsTable` has NO `linkedControlIds` column — control links use the `documentControlMapsTable` junction table (`documentId`, `controlId`). Only `documentTemplatesTable` and `generatedLogsTable` have `linkedControlIds` as a direct array column. Always query the junction table when getting control links for a document.
 
 8. **Org switcher dropdown**: Uses `onMouseDown` + `e.preventDefault()` (not `onClick`) on list items to prevent blur-before-click issues that would close the dropdown before the selection registers.
+
+9. **User deletion cascade**: `DELETE /api/users/:id` runs a full transaction that: nullifies nullable FK references in `audit_logs`, `control_assessments`, `tasks`, `poams`, `documents`, `document_versions`, `generated_logs`, `log_entries`, `procedure_task_rules`, and `evidence_items`; reassigns NOT-NULL `ownerId` fields in `documents` and `evidence_items` to the deleting admin; deletes `document_reviews` and `checklist_completions` rows for the user; removes org memberships; then deletes the user record.

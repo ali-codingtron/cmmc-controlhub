@@ -186,6 +186,185 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/User"
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Permanently delete a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+
+  /users/{id}/deactivate:
+    post:
+      operationId: deactivateUser
+      tags: [users]
+      summary: Deactivate a user account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deactivated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}/activate:
+    post:
+      operationId: activateUser
+      tags: [users]
+      summary: Reactivate a user account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Activated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}/reset-password:
+    post:
+      operationId: resetUserPassword
+      tags: [users]
+      summary: Reset a user password
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordBody"
+      responses:
+        "200":
+          description: Password reset
+
+  /users/{id}/orgs:
+    get:
+      operationId: getUserOrgs
+      tags: [users]
+      summary: List organization memberships for a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of org memberships
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserOrgMembership"
+    post:
+      operationId: addUserToOrg
+      tags: [users]
+      summary: Add a user to an organization
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddUserToOrgBody"
+      responses:
+        "200":
+          description: Membership created or updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserOrgMembership"
+
+  /users/{id}/orgs/{orgId}:
+    patch:
+      operationId: updateUserOrgMembership
+      tags: [users]
+      summary: Update a user's role in an organization
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserOrgMembershipBody"
+      responses:
+        "200":
+          description: Updated membership
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserOrgMembership"
+    delete:
+      operationId: removeUserFromOrg
+      tags: [users]
+      summary: Remove a user from an organization
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Removed
+
+  /organizations:
+    get:
+      operationId: listOrganizations
+      tags: [organizations]
+      summary: List all organizations
+      responses:
+        "200":
+          description: List of organizations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OrganizationSummary"
 
   # ─── DOMAINS ────────────────────────────────────────────────
   /domains:
@@ -1890,6 +2069,8 @@ components:
       properties:
         name:
           type: string
+        email:
+          type: string
         role:
           type: string
           enum: [admin, compliance_manager, it_contributor, reviewer, executive_viewer, assessor]
@@ -1899,6 +2080,79 @@ components:
           type: string
         isActive:
           type: boolean
+
+    ResetPasswordBody:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+
+    UserOrgMembership:
+      type: object
+      properties:
+        membershipId:
+          type: string
+        organizationId:
+          type: string
+        organizationName:
+          type: string
+        role:
+          type: string
+          enum: [global_admin, org_admin, compliance_manager, it_contributor, reviewer, executive_viewer, assessor]
+        status:
+          type: string
+          enum: [active, invited, suspended]
+        joinedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - membershipId
+        - organizationId
+        - organizationName
+        - role
+        - status
+
+    AddUserToOrgBody:
+      type: object
+      required: [organizationId, role]
+      properties:
+        organizationId:
+          type: string
+        role:
+          type: string
+          enum: [global_admin, org_admin, compliance_manager, it_contributor, reviewer, executive_viewer, assessor]
+        status:
+          type: string
+          enum: [active, invited, suspended]
+
+    UpdateUserOrgMembershipBody:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [global_admin, org_admin, compliance_manager, it_contributor, reviewer, executive_viewer, assessor]
+        status:
+          type: string
+          enum: [active, invited, suspended]
+
+    OrganizationSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        shortName:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+      required:
+        - id
+        - name
+        - isActive
 
     # ─── DOMAIN ───────────────────────────────────────────────
     DomainWithStats:

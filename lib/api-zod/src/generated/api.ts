@@ -146,6 +146,7 @@ export const UpdateUserParams = zod.object({
 
 export const UpdateUserBody = zod.object({
   name: zod.string().optional(),
+  email: zod.string().optional(),
   role: zod
     .enum([
       "admin",
@@ -178,6 +179,198 @@ export const UpdateUserResponse = zod.object({
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
+
+/**
+ * @summary Permanently delete a user
+ */
+export const DeleteUserParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+/**
+ * @summary Deactivate a user account
+ */
+export const DeactivateUserParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const DeactivateUserResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  email: zod.string(),
+  role: zod.enum([
+    "admin",
+    "compliance_manager",
+    "it_contributor",
+    "reviewer",
+    "executive_viewer",
+    "assessor",
+  ]),
+  title: zod.string().nullish(),
+  department: zod.string().nullish(),
+  isActive: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Reactivate a user account
+ */
+export const ActivateUserParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ActivateUserResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  email: zod.string(),
+  role: zod.enum([
+    "admin",
+    "compliance_manager",
+    "it_contributor",
+    "reviewer",
+    "executive_viewer",
+    "assessor",
+  ]),
+  title: zod.string().nullish(),
+  department: zod.string().nullish(),
+  isActive: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Reset a user password
+ */
+export const ResetUserPasswordParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ResetUserPasswordBody = zod.object({
+  password: zod.string(),
+});
+
+/**
+ * @summary List organization memberships for a user
+ */
+export const GetUserOrgsParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const GetUserOrgsResponseItem = zod.object({
+  membershipId: zod.string(),
+  organizationId: zod.string(),
+  organizationName: zod.string(),
+  role: zod.enum([
+    "global_admin",
+    "org_admin",
+    "compliance_manager",
+    "it_contributor",
+    "reviewer",
+    "executive_viewer",
+    "assessor",
+  ]),
+  status: zod.enum(["active", "invited", "suspended"]),
+  joinedAt: zod.coerce.date().nullish(),
+});
+export const GetUserOrgsResponse = zod.array(GetUserOrgsResponseItem);
+
+/**
+ * @summary Add a user to an organization
+ */
+export const AddUserToOrgParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AddUserToOrgBody = zod.object({
+  organizationId: zod.string(),
+  role: zod.enum([
+    "global_admin",
+    "org_admin",
+    "compliance_manager",
+    "it_contributor",
+    "reviewer",
+    "executive_viewer",
+    "assessor",
+  ]),
+  status: zod.enum(["active", "invited", "suspended"]).optional(),
+});
+
+export const AddUserToOrgResponse = zod.object({
+  membershipId: zod.string(),
+  organizationId: zod.string(),
+  organizationName: zod.string(),
+  role: zod.enum([
+    "global_admin",
+    "org_admin",
+    "compliance_manager",
+    "it_contributor",
+    "reviewer",
+    "executive_viewer",
+    "assessor",
+  ]),
+  status: zod.enum(["active", "invited", "suspended"]),
+  joinedAt: zod.coerce.date().nullish(),
+});
+
+/**
+ * @summary Update a user's role in an organization
+ */
+export const UpdateUserOrgMembershipParams = zod.object({
+  id: zod.coerce.string(),
+  orgId: zod.coerce.string(),
+});
+
+export const UpdateUserOrgMembershipBody = zod.object({
+  role: zod
+    .enum([
+      "global_admin",
+      "org_admin",
+      "compliance_manager",
+      "it_contributor",
+      "reviewer",
+      "executive_viewer",
+      "assessor",
+    ])
+    .optional(),
+  status: zod.enum(["active", "invited", "suspended"]).optional(),
+});
+
+export const UpdateUserOrgMembershipResponse = zod.object({
+  membershipId: zod.string(),
+  organizationId: zod.string(),
+  organizationName: zod.string(),
+  role: zod.enum([
+    "global_admin",
+    "org_admin",
+    "compliance_manager",
+    "it_contributor",
+    "reviewer",
+    "executive_viewer",
+    "assessor",
+  ]),
+  status: zod.enum(["active", "invited", "suspended"]),
+  joinedAt: zod.coerce.date().nullish(),
+});
+
+/**
+ * @summary Remove a user from an organization
+ */
+export const RemoveUserFromOrgParams = zod.object({
+  id: zod.coerce.string(),
+  orgId: zod.coerce.string(),
+});
+
+/**
+ * @summary List all organizations
+ */
+export const ListOrganizationsResponseItem = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  shortName: zod.string().nullish(),
+  isActive: zod.boolean(),
+});
+export const ListOrganizationsResponse = zod.array(
+  ListOrganizationsResponseItem,
+);
 
 /**
  * @summary List all CMMC security domains with readiness stats
