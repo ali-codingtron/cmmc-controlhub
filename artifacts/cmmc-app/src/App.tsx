@@ -37,6 +37,15 @@ import SspSections from "@/pages/ssp-sections";
 import SspMappings from "@/pages/ssp-mappings";
 import SspDocuments from "@/pages/ssp-documents";
 import SspExport from "@/pages/ssp-export";
+import ReportsExecutive from "@/pages/reports-executive";
+import ReportsGap from "@/pages/reports-gap";
+import ReportsControls from "@/pages/reports-controls";
+import ReportsEvidence from "@/pages/reports-evidence";
+import ReportsPoam from "@/pages/reports-poam";
+import ReportsMonitoring from "@/pages/reports-monitoring";
+import ReportsDomain from "@/pages/reports-domain";
+import ReportsAudit from "@/pages/reports-audit";
+import ReportsSsp from "@/pages/reports-ssp";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -121,6 +130,18 @@ function AppRoutes() {
               <Route path="/ssp/mappings" component={SspMappings} />
               <Route path="/ssp/documents" component={SspDocuments} />
               <Route path="/ssp/export" component={SspExport} />
+              <Route path="/reports">
+                {() => <Redirect to="/reports/executive" />}
+              </Route>
+              <Route path="/reports/executive" component={ReportsExecutive} />
+              <Route path="/reports/gap" component={ReportsGap} />
+              <Route path="/reports/controls" component={ReportsControls} />
+              <Route path="/reports/evidence" component={ReportsEvidence} />
+              <Route path="/reports/poam" component={ReportsPoam} />
+              <Route path="/reports/monitoring" component={ReportsMonitoring} />
+              <Route path="/reports/domain" component={ReportsDomain} />
+              <Route path="/reports/audit" component={ReportsAudit} />
+              <Route path="/reports/ssp" component={ReportsSsp} />
               <Route component={NotFound} />
             </Switch>
           </Guard>

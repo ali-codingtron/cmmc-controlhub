@@ -1,0 +1,213 @@
+Add a full Reporting module designed for CMMC compliance tracking, client communication, and audit readiness.
+
+Create a new sidebar section:
+Reports
+
+Reports must be downloadable (PDF + optional Excel/CSV) and organization-specific.
+
+1. Executive Readiness Report (Client-Facing)
+
+Purpose:
+Show a client where they stand in simple terms.
+
+Include:
+- Organization Name
+- Report Date
+- CMMC Target Level
+- Overall Readiness %
+- Controls Implemented / Total (e.g. 42 / 110)
+- Controls In Progress
+- Controls Not Started
+- Top 5 Risk Areas
+- Open POA&M count
+- Overdue Monitoring Items
+- Evidence completeness summary
+- Key upcoming deadlines
+- Simple “What to do next” section
+
+Design:
+- Clean, non-technical
+- Charts and progress bars
+- Minimal jargon
+
+2. Control Status Report
+
+Purpose:
+Detailed view of every control.
+
+Include:
+- Control ID
+- Title
+- Domain
+- Status (Not Started / In Progress / Implemented)
+- Evidence count
+- Missing evidence flags
+- Linked policies/procedures
+- Last review date
+- Next review date
+
+Export format:
+- PDF (formatted)
+- Excel (table)
+
+3. Evidence Inventory Report
+
+Purpose:
+Show all evidence in a structured way.
+
+Include:
+- Evidence Title
+- Type
+- Status
+- Linked Controls
+- Domain
+- Level
+- Owner
+- Upload Date
+- Expiration Date
+- File hash (if implemented)
+
+Filters:
+- By domain
+- By control
+- By status
+
+4. Gap Analysis Report (VERY IMPORTANT)
+
+Purpose:
+This is one of the most valuable reports for clients.
+
+Include:
+- Controls missing policy
+- Controls missing procedure
+- Controls missing evidence
+- Controls with draft-only evidence
+- Controls with stale evidence
+- Controls with no implementation narrative
+
+Group by domain.
+
+Add:
+- severity level (High / Medium / Low)
+
+5. POA&M Report
+
+Purpose:
+Track remediation work.
+
+Include:
+- POA&M ID
+- Linked control
+- Description
+- Risk level
+- Status
+- Owner
+- Target completion date
+- Days overdue
+- Evidence linked
+
+Add summary:
+- total open
+- overdue
+- closing soon
+
+6. Monitoring Tracker Report
+
+Purpose:
+Show operational compliance (this is HUGE for audits)
+
+Include:
+- Task
+- Frequency
+- Control ID
+- Last Completed
+- Next Due
+- Status
+- Overdue flag
+
+Summary:
+- Overdue items
+- Due within 7 days
+- Completed this period
+
+7. Domain Readiness Report
+
+Purpose:
+Break down compliance by domain.
+
+Include:
+- Domain name
+- Controls implemented / total
+- % complete
+- visual bar chart
+
+8. Audit Readiness Report (C3PAO PREP)
+
+Purpose:
+This is what you’ll use right before an audit.
+
+Include:
+- Controls fully ready
+- Controls missing evidence
+- Controls missing implementation narrative
+- Evidence not approved
+- Evidence missing metadata
+- Open POA&M items
+- Monitoring gaps
+
+This should clearly answer:
+“Are we ready for an assessment?”
+
+9. SSP Summary Report
+
+Purpose:
+Show SSP completeness.
+
+Include:
+- SSP version/date
+- System scope summary
+- Controls mapped to SSP
+- Missing implementation statements
+- Supporting policies list
+
+10. Client Progress Trend Report
+
+Purpose:
+Show improvement over time.
+
+Include:
+- Readiness % over time
+- Evidence count growth
+- POA&M reduction
+- Monitoring completion trends
+
+11. Export Options
+
+Every report must support:
+- Download as PDF (clean, formatted)
+- Export as Excel (raw data)
+- Print-friendly layout
+
+12. Report Filters
+
+Allow filtering by:
+- Organization
+- Domain
+- Control
+- Status
+- Date range
+
+13. Scheduling (Optional but HIGH VALUE)
+
+Allow:
+- Monthly report auto-generation
+- Email to client
+- Save report history
+
+14. Acceptance Test
+
+- Generate Executive Report → shows readiness and summary
+- Generate Gap Analysis → shows missing controls
+- Generate Monitoring Report → shows overdue items
+- Export to PDF → clean formatting
+- Export to Excel → usable data

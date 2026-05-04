@@ -15,6 +15,7 @@ import {
   ChevronsUpDown,
   Check,
   ScrollText,
+  BarChart3,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useOrg } from "@/context/OrgContext";
@@ -36,6 +37,18 @@ const sspItems = [
   { href: "/ssp/mappings", label: "Control Mapping" },
   { href: "/ssp/documents", label: "Documents" },
   { href: "/ssp/export", label: "Export" },
+];
+
+const reportsItems = [
+  { href: "/reports/executive", label: "Executive Readiness" },
+  { href: "/reports/gap", label: "Gap Analysis" },
+  { href: "/reports/controls", label: "Control Status" },
+  { href: "/reports/evidence", label: "Evidence Inventory" },
+  { href: "/reports/poam", label: "POA&M Report" },
+  { href: "/reports/monitoring", label: "Monitoring Tracker" },
+  { href: "/reports/domain", label: "Domain Readiness" },
+  { href: "/reports/audit", label: "Audit Readiness" },
+  { href: "/reports/ssp", label: "SSP Summary" },
 ];
 
 function NavLink({ href, icon: Icon, label }: { href: string; icon: React.ComponentType<{ className?: string }>; label: string }) {
@@ -127,13 +140,15 @@ export function Sidebar() {
   const { user, logout } = useAuth();
   const isDocsActive = location.startsWith("/documents");
   const isSspActive = location.startsWith("/ssp");
+  const isReportsActive = location.startsWith("/reports");
   const [docsExpanded, setDocsExpanded] = useState(isDocsActive);
   const [sspExpanded, setSspExpanded] = useState(isSspActive);
+  const [reportsExpanded, setReportsExpanded] = useState(isReportsActive);
 
   const isAdmin = user?.role === "admin";
 
   return (
-    <div className="flex flex-col w-64 bg-sidebar border-r border-sidebar-border text-sidebar-foreground h-screen sticky top-0">
+    <div className="no-print flex flex-col w-64 bg-sidebar border-r border-sidebar-border text-sidebar-foreground h-screen sticky top-0">
       <div className="p-4 flex items-center gap-2 border-b border-sidebar-border h-14">
         <ShieldCheck className="h-6 w-6 text-primary" />
         <span className="font-semibold tracking-tight">Control HUB</span>
@@ -205,6 +220,42 @@ export function Sidebar() {
             <div className="ml-3 pl-3 border-l border-sidebar-border space-y-0.5">
               {sspItems.map((item) => {
                 const isActive = location === item.href || location.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center px-3 py-1.5 rounded-md text-xs transition-colors",
+                      isActive
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                        : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                    )}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Reports section */}
+          <button
+            onClick={() => setReportsExpanded((v) => !v)}
+            className={cn(
+              "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+              isReportsActive
+                ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+            )}
+          >
+            <BarChart3 className="h-4 w-4 shrink-0" />
+            <span className="flex-1 text-left">Reports</span>
+            <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", reportsExpanded && "rotate-90")} />
+          </button>
+          {reportsExpanded && (
+            <div className="ml-3 pl-3 border-l border-sidebar-border space-y-0.5">
+              {reportsItems.map((item) => {
+                const isActive = location === item.href;
                 return (
                   <Link
                     key={item.href}

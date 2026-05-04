@@ -1,5 +1,12 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+
+@media print {
+  .no-print { display: none !important; }
+  .print-area { display: block !important; }
+  body { background: white !important; }
+  @page { margin: 1.5cm; }
+}
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
