@@ -1,0 +1,152 @@
+I have an existing SSP document that I want incorporated into the app as the baseline SSP for the selected organization.
+
+File name:
+VTC-IMS-QP026 - System Security Plan - Draft for CMMC Level 2.docx
+
+Add a dedicated SSP module and import/mapping workflow.
+
+Requirements:
+
+1. Add SSP Section
+Add a sidebar section called:
+SSP
+
+Pages:
+- SSP Overview
+- SSP Sections
+- SSP Control Mapping
+- SSP Documents
+- SSP Export
+
+2. Upload Existing SSP
+Allow uploading an existing Word document SSP.
+
+Fields:
+- SSP title
+- document number
+- revision number
+- revision date
+- prepared by
+- reviewed by
+- approved by
+- organization
+- system name
+- system owner
+- CMMC level
+- status
+- uploaded file
+
+3. Parse / Extract SSP Data
+When I upload the SSP, extract and store:
+- document number
+- revision number
+- revision date
+- prepared by
+- document purpose/status
+- revision history
+- reference documents
+- organization information
+- system description
+- system boundary
+- system components
+- external interconnections
+- data flow
+- roles and responsibilities
+- maintenance/review section
+- POA&M summary
+- supporting policy document list
+- approval/signature section
+
+4. Control Implementation Mapping
+The SSP includes CMMC control implementation statements.
+
+Extract each control row and map it to the global control library.
+
+For each control, populate:
+- control ID
+- requirement/practice title
+- SSP implementation narrative
+- policy reference
+- status from SSP
+- source document
+- source section
+
+Example:
+AC.L1-3.1.1 should map to the AC.L1-3.1.1 control page and populate that control’s SSP narrative.
+
+5. Sync With Control Pages
+On each Control Detail page, add an SSP section or tab showing:
+- SSP implementation narrative
+- policy reference
+- SSP status
+- source SSP version/date
+- edit button
+- save button
+
+If the narrative is edited from the control page, it should update the SSP mapping record.
+
+6. SSP Overview Dashboard
+Show:
+- SSP status
+- SSP version
+- last revision date
+- controls mapped from SSP
+- controls missing SSP narrative
+- SSP sections complete/incomplete
+- POA&M items referenced
+- supporting policies referenced
+- next SSP review date
+
+7. SSP Document Viewer
+Allow viewing the uploaded SSP file in the app.
+Support:
+- download original SSP
+- view metadata
+- view extracted sections
+- view mapped controls
+
+8. Preserve Original File
+Do not overwrite the uploaded SSP.
+Store it as an official SSP source document.
+All extracted data should reference the original uploaded file.
+
+9. Manual Correction
+After import, allow me to manually correct:
+- extracted control mappings
+- implementation narratives
+- policy references
+- section text
+- organization/system metadata
+
+10. Export Updated SSP
+Allow export of an updated SSP using:
+- stored SSP metadata
+- edited sections
+- current control implementation narratives
+- POA&M summary
+- supporting policies
+- approval section
+
+Export formats:
+- DOCX preferred
+- PDF optional
+
+11. Organization-Specific
+SSP data must be organization-specific.
+A different organization can have a different SSP.
+
+12. Acceptance Test
+- Upload the VTC SSP DOCX
+- SSP Overview shows document number VTC-IMS-QP026
+- Revision shows 2.0
+- Revision date shows 4/08/2026
+- Organization shows Visionary Technology Consultants, LLC
+- CMMC level shows Level 2
+- Control AC.L1-3.1.1 gets its SSP implementation narrative populated
+- Control AU.L2-3.3.5 gets its SSP implementation narrative populated
+- Supporting policies show QP022, QP023, QP024, etc.
+- POA&M summary appears in SSP module
+- Original SSP can still be downloaded
+- Extracted data can be edited manually
+
+Important: do not make SSP just another uploaded document. It needs to become structured data tied to controls, evidence, POA&M, and the dashboard.

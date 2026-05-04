@@ -8,3 +8,4 @@ export * from "./poams";
 export * from "./audit";
 export * from "./documents";
 export * from "./monitoring";
+export * from "./ssp";

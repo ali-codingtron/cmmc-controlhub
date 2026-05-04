@@ -14,6 +14,7 @@ import {
   Building2,
   ChevronsUpDown,
   Check,
+  ScrollText,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useOrg } from "@/context/OrgContext";
@@ -27,6 +28,14 @@ const documentationItems = [
   { href: "/documents/logs", label: "Compliance Logs" },
   { href: "/documents/checklists", label: "Checklists" },
   { href: "/documents/missing", label: "Gap Analysis" },
+];
+
+const sspItems = [
+  { href: "/ssp/overview", label: "Overview" },
+  { href: "/ssp/sections", label: "Sections" },
+  { href: "/ssp/mappings", label: "Control Mapping" },
+  { href: "/ssp/documents", label: "Documents" },
+  { href: "/ssp/export", label: "Export" },
 ];
 
 function NavLink({ href, icon: Icon, label }: { href: string; icon: React.ComponentType<{ className?: string }>; label: string }) {
@@ -117,7 +126,9 @@ export function Sidebar() {
   const [location] = useLocation();
   const { user, logout } = useAuth();
   const isDocsActive = location.startsWith("/documents");
+  const isSspActive = location.startsWith("/ssp");
   const [docsExpanded, setDocsExpanded] = useState(isDocsActive);
+  const [sspExpanded, setSspExpanded] = useState(isSspActive);
 
   const isAdmin = user?.role === "admin";
 
@@ -158,6 +169,42 @@ export function Sidebar() {
             <div className="ml-3 pl-3 border-l border-sidebar-border space-y-0.5">
               {documentationItems.map((item) => {
                 const isActive = location === item.href || (item.href !== "/documents" && location.startsWith(item.href));
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center px-3 py-1.5 rounded-md text-xs transition-colors",
+                      isActive
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                        : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                    )}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+
+          {/* SSP section */}
+          <button
+            onClick={() => setSspExpanded((v) => !v)}
+            className={cn(
+              "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+              isSspActive
+                ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+            )}
+          >
+            <ScrollText className="h-4 w-4 shrink-0" />
+            <span className="flex-1 text-left">SSP</span>
+            <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", sspExpanded && "rotate-90")} />
+          </button>
+          {sspExpanded && (
+            <div className="ml-3 pl-3 border-l border-sidebar-border space-y-0.5">
+              {sspItems.map((item) => {
+                const isActive = location === item.href || location.startsWith(item.href);
                 return (
                   <Link
                     key={item.href}

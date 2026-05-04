@@ -32,6 +32,11 @@ import DocumentsMissing from "@/pages/documents-missing";
 import DocumentDetail from "@/pages/document-detail";
 import DocumentLogDetail from "@/pages/document-log-detail";
 import Organizations from "@/pages/organizations";
+import SspOverview from "@/pages/ssp-overview";
+import SspSections from "@/pages/ssp-sections";
+import SspMappings from "@/pages/ssp-mappings";
+import SspDocuments from "@/pages/ssp-documents";
+import SspExport from "@/pages/ssp-export";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -108,6 +113,14 @@ function AppRoutes() {
               <Route path="/documents/:id">
                 {(params: { id: string }) => <DocumentDetail id={params.id} />}
               </Route>
+              <Route path="/ssp">
+                {() => <Redirect to="/ssp/overview" />}
+              </Route>
+              <Route path="/ssp/overview" component={SspOverview} />
+              <Route path="/ssp/sections" component={SspSections} />
+              <Route path="/ssp/mappings" component={SspMappings} />
+              <Route path="/ssp/documents" component={SspDocuments} />
+              <Route path="/ssp/export" component={SspExport} />
               <Route component={NotFound} />
             </Switch>
           </Guard>

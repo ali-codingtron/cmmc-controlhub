@@ -64,6 +64,7 @@ import {
   Loader2,
   Wand2,
   Files,
+  Edit,
 } from "lucide-react";
 
 const EVIDENCE_TYPES = [
@@ -1287,6 +1288,7 @@ export default function ControlDetail({ id }: { id: string }) {
           <TabsTrigger value="tasks">Tasks ({tasks.length})</TabsTrigger>
           <TabsTrigger value="poams">POA&Ms ({poams.length})</TabsTrigger>
           <TabsTrigger value="monitoring">Monitoring</TabsTrigger>
+          <TabsTrigger value="ssp">SSP</TabsTrigger>
         </TabsList>
 
         {/* ── Implementation Tab ── */}
@@ -1733,7 +1735,216 @@ export default function ControlDetail({ id }: { id: string }) {
 
         {/* ── Monitoring Tab ── */}
         <MonitoringTab controlCmmcId={control?.controlId ?? ""} orgId={activeOrg?.id} />
+
+        {/* ── SSP Tab ── */}
+        <SspTab controlRef={control?.controlId ?? ""} orgId={activeOrg?.id} />
       </Tabs>
     </div>
+  );
+}
+
+// ─── SSP Tab Component ────────────────────────────────────────────────────────
+
+interface SspMappingShape {
+  id: string;
+  controlRef: string;
+  implementationNarrative: string;
+  policyReference: string | null;
+  sspStatus: string | null;
+  sourceSection: string | null;
+  isEdited: boolean;
+  sspDocumentTitle?: string;
+  sspDocumentNumber?: string | null;
+  sspRevisionDate?: string | null;
+}
+
+function SspTab({ controlRef, orgId }: { controlRef: string; orgId?: string }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [editMode, setEditMode] = useState(false);
+  const [narrative, setNarrative] = useState("");
+  const [policyRef, setPolicyRef] = useState("");
+  const [sspStatus, setSspStatus] = useState("planned");
+  const [saving, setSaving] = useState(false);
+
+  const { data: mapping, isLoading } = useQuery<SspMappingShape | null>({
+    queryKey: ["ssp-control-mapping", controlRef, orgId],
+    queryFn: async () => {
+      if (!orgId || !controlRef) return null;
+      const token = localStorage.getItem("auth_token");
+      const r = await fetch(
+        `/api/ssp/control-mapping?controlRef=${encodeURIComponent(controlRef)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "X-Organization-ID": orgId,
+          },
+        }
+      );
+      if (!r.ok) return null;
+      return r.json();
+    },
+    enabled: !!orgId && !!controlRef,
+  });
+
+  const startEdit = () => {
+    setNarrative(mapping?.implementationNarrative ?? "");
+    setPolicyRef(mapping?.policyReference ?? "");
+    setSspStatus(mapping?.sspStatus ?? "planned");
+    setEditMode(true);
+  };
+
+  const handleSave = async () => {
+    if (!mapping?.id) return;
+    setSaving(true);
+    try {
+      const token = localStorage.getItem("auth_token");
+      const r = await fetch(`/api/ssp/control-mappings/${mapping.id}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          ...(orgId ? { "X-Organization-ID": orgId } : {}),
+        },
+        body: JSON.stringify({ implementationNarrative: narrative, policyReference: policyRef, sspStatus }),
+      });
+      if (!r.ok) throw new Error("Failed");
+      queryClient.invalidateQueries({ queryKey: ["ssp-control-mapping", controlRef, orgId] });
+      setEditMode(false);
+      toast({ title: "SSP narrative saved" });
+    } catch {
+      toast({ title: "Save failed", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const SSP_STATUS_OPTS = [
+    { value: "planned", label: "Planned" },
+    { value: "implemented", label: "Implemented" },
+    { value: "alternative", label: "Alternative" },
+    { value: "not_applicable", label: "N/A" },
+  ];
+
+  const SSP_STATUS_COLORS: Record<string, string> = {
+    implemented: "bg-green-100 text-green-700",
+    planned: "bg-yellow-100 text-yellow-700",
+    alternative: "bg-blue-100 text-blue-700",
+    not_applicable: "bg-gray-100 text-gray-500",
+  };
+
+  return (
+    <TabsContent value="ssp" className="mt-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-semibold text-base">SSP Implementation Narrative</h3>
+        {mapping && !editMode && (
+          <Button size="sm" variant="outline" onClick={startEdit}>
+            <Edit className="h-3.5 w-3.5 mr-1.5" />
+            Edit
+          </Button>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="h-10 animate-pulse bg-muted rounded" />
+          ))}
+        </div>
+      ) : !mapping ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-10 text-center">
+            <BookOpen className="h-8 w-8 text-muted-foreground opacity-40 mb-2" />
+            <p className="text-sm text-muted-foreground font-medium">No SSP narrative for this control</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Upload and parse an SSP in the{" "}
+              <a href="/ssp/documents" className="text-primary hover:underline">SSP module</a>{" "}
+              to extract control implementation statements automatically.
+            </p>
+          </CardContent>
+        </Card>
+      ) : editMode ? (
+        <Card>
+          <CardContent className="pt-4 space-y-4">
+            <div>
+              <Label className="text-xs mb-1 block">Implementation Narrative</Label>
+              <Textarea
+                value={narrative}
+                onChange={(e) => setNarrative(e.target.value)}
+                rows={7}
+                className="text-sm"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs mb-1 block">Policy Reference</Label>
+                <Input
+                  value={policyRef}
+                  onChange={(e) => setPolicyRef(e.target.value)}
+                  placeholder="QP022, QP023…"
+                  className="text-sm"
+                />
+              </div>
+              <div>
+                <Label className="text-xs mb-1 block">Status</Label>
+                <Select value={sspStatus} onValueChange={setSspStatus}>
+                  <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {SSP_STATUS_OPTS.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={handleSave} disabled={saving}>
+                {saving ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+                Save
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setEditMode(false)}>
+                <X className="h-3.5 w-3.5 mr-1" />
+                Cancel
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${SSP_STATUS_COLORS[mapping.sspStatus ?? "planned"] ?? "bg-gray-100 text-gray-600"}`}>
+                  {SSP_STATUS_OPTS.find((s) => s.value === mapping.sspStatus)?.label ?? "Planned"}
+                </span>
+                {mapping.isEdited && (
+                  <span className="text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">Manually edited</span>
+                )}
+              </div>
+              <p className="text-sm whitespace-pre-line leading-relaxed">
+                {mapping.implementationNarrative || <span className="text-muted-foreground italic">No narrative</span>}
+              </p>
+              {mapping.policyReference && (
+                <div className="mt-3 pt-3 border-t">
+                  <span className="text-xs text-muted-foreground">Policy Reference: </span>
+                  <span className="text-xs font-medium">{mapping.policyReference}</span>
+                </div>
+              )}
+              {(mapping.sspDocumentTitle || mapping.sspDocumentNumber || mapping.sspRevisionDate) && (
+                <div className="mt-2 text-xs text-muted-foreground">
+                  Source:{" "}
+                  {mapping.sspDocumentTitle && <span>{mapping.sspDocumentTitle}</span>}
+                  {mapping.sspDocumentNumber && <span> · #{mapping.sspDocumentNumber}</span>}
+                  {mapping.sspRevisionDate && <span> · Rev date {mapping.sspRevisionDate}</span>}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          <p className="text-xs text-muted-foreground text-right">
+            <a href="/ssp/mappings" className="text-primary hover:underline">View all control mappings →</a>
+          </p>
+        </div>
+      )}
+    </TabsContent>
   );
 }

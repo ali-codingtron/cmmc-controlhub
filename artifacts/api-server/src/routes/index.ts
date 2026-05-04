@@ -13,6 +13,7 @@ import auditRouter from "./auditlogs";
 import documentsRouter from "./documents";
 import organizationsRouter from "./organizations";
 import monitoringRouter from "./monitoring";
+import sspRouter from "./ssp";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(assessorRouter);
 router.use(auditRouter);
 router.use(documentsRouter);
 router.use(monitoringRouter);
+router.use(sspRouter);
 
 export default router;
