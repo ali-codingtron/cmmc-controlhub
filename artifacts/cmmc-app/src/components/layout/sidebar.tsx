@@ -125,7 +125,7 @@ export function Sidebar() {
     <div className="flex flex-col w-64 bg-sidebar border-r border-sidebar-border text-sidebar-foreground h-screen sticky top-0">
       <div className="p-4 flex items-center gap-2 border-b border-sidebar-border h-14">
         <ShieldCheck className="h-6 w-6 text-primary" />
-        <span className="font-semibold tracking-tight">CMMC Ops</span>
+        <span className="font-semibold tracking-tight">Control HUB</span>
       </div>
 
       <div className="pt-3">
