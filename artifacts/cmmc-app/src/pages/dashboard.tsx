@@ -3,6 +3,7 @@ import {
   useGetReadinessByDomain,
   useGetRecentActivity,
 } from "@workspace/api-client-react";
+import { useOrg } from "@/context/OrgContext";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -80,14 +81,17 @@ function ReadinessRing({ value }: { value: number }) {
 }
 
 export default function Dashboard() {
+  const { activeOrg } = useOrg();
   const { data: summary, isLoading: summaryLoading } = useGetDashboardSummary();
   const { data: domains, isLoading: domainsLoading } = useGetReadinessByDomain();
   const { data: recentActivity, isLoading: activityLoading } = useGetRecentActivity({ limit: 15 });
 
+  const pageTitle = activeOrg ? `Dashboard: ${activeOrg.name}` : "Dashboard";
+
   if (summaryLoading || domainsLoading) {
     return (
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <h1 className="text-3xl font-bold">{pageTitle}</h1>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[...Array(8)].map((_, i) => <div key={i} className="h-28 animate-pulse bg-muted rounded-lg" />)}
         </div>
@@ -98,7 +102,7 @@ export default function Dashboard() {
   if (!summary) {
     return (
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <h1 className="text-3xl font-bold">{pageTitle}</h1>
         <div className="text-muted-foreground text-sm">Unable to load dashboard data. Make sure an organization is selected.</div>
       </div>
     );
@@ -106,15 +110,13 @@ export default function Dashboard() {
 
   const total = summary.totalControls ?? 0;
   const implemented = summary.implementedControls ?? 0;
-  const assessorReady = summary.assessorReadyControls ?? 0;
   const notStarted = summary.notStartedControls ?? 0;
   const inProgress = Math.max(0, total - implemented - notStarted);
-  const justImplemented = Math.max(0, implemented - assessorReady);
   const readiness = summary.overallReadinessPercent ?? 0;
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Dashboard</h1>
+      <h1 className="text-3xl font-bold">{pageTitle}</h1>
 
       {/* Top section: readiness ring + controls breakdown */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -134,31 +136,24 @@ export default function Dashboard() {
         <Card>
           <CardContent className="pt-5 pb-5">
             <p className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide text-xs">Controls Breakdown</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-purple-500 shrink-0" />
-                <div>
-                  <p className="text-[11px] text-muted-foreground leading-none mb-0.5">Assessor Ready</p>
-                  <p className="text-lg font-bold leading-none">{assessorReady}</p>
-                </div>
-              </div>
+            <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <CircleCheck className="h-4 w-4 text-green-500 shrink-0" />
-                <div>
+                <div className="flex-1">
                   <p className="text-[11px] text-muted-foreground leading-none mb-0.5">Implemented</p>
-                  <p className="text-lg font-bold leading-none">{justImplemented}</p>
+                  <p className="text-lg font-bold leading-none">{implemented}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <CircleDot className="h-4 w-4 text-yellow-500 shrink-0" />
-                <div>
+                <div className="flex-1">
                   <p className="text-[11px] text-muted-foreground leading-none mb-0.5">In Progress</p>
                   <p className="text-lg font-bold leading-none">{inProgress}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <CircleAlert className="h-4 w-4 text-red-400 shrink-0" />
-                <div>
+                <div className="flex-1">
                   <p className="text-[11px] text-muted-foreground leading-none mb-0.5">Not Started</p>
                   <p className="text-lg font-bold leading-none">{notStarted}</p>
                 </div>
