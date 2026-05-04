@@ -59,28 +59,43 @@ const FREQUENCY_COLOR: Record<MonitoringFrequency, string> = {
   annually: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
 };
 
-function calcNextDue(frequency: MonitoringFrequency): string {
+function todayStr(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
+/**
+ * Calculate Next Due by adding the frequency's days to a given base date string (YYYY-MM-DD).
+ * Uses local calendar arithmetic so the date doesn't shift due to UTC offset.
+ */
+function calcNextDueFrom(frequency: MonitoringFrequency, baseDateStr: string): string {
   const days = FREQUENCY_DAYS[frequency];
-  const d = new Date(Date.now() + days * 86400000);
-  return d.toISOString().split("T")[0];
+  const [y, m, d] = baseDateStr.split("-").map(Number);
+  const base = new Date(y, (m as number) - 1, d as number);
+  base.setDate(base.getDate() + days);
+  const yy = base.getFullYear();
+  const mm = String(base.getMonth() + 1).padStart(2, "0");
+  const dd = String(base.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
 }
 
 function toDateInputValue(ts: string | null): string {
   if (!ts) return "";
-  return new Date(ts).toISOString().split("T")[0];
+  // Handle both ISO timestamps and plain YYYY-MM-DD strings
+  const s = ts.includes("T") ? ts.split("T")[0] : ts;
+  return s ?? "";
 }
 
 function isOverdue(item: MonitoringItem): boolean {
   if (item.status === "complete" || !item.nextDue) return false;
-  return new Date(item.nextDue) < new Date();
+  return toDateInputValue(item.nextDue) < todayStr();
 }
 
 function isDueSoon(item: MonitoringItem): boolean {
   if (item.status === "complete" || !item.nextDue) return false;
-  const due = new Date(item.nextDue);
-  const now = new Date();
-  const sevenDays = new Date(now.getTime() + 7 * 86400000);
-  return due >= now && due <= sevenDays;
+  const due = toDateInputValue(item.nextDue);
+  const today = todayStr();
+  const sevenDays = calcNextDueFrom("weekly", today);
+  return due >= today && due <= sevenDays;
 }
 
 function makeHeaders(orgId: string) {
@@ -168,8 +183,14 @@ export default function MonitoringTracker() {
   const dueSoonCount = items.filter(isDueSoon).length;
   const completeCount = items.filter((i) => i.status === "complete").length;
 
+  /**
+   * Status change handler.
+   * When marking complete:
+   *   - Fill lastCompleted = today if currently blank
+   *   - Always recalculate nextDue from the effective lastCompleted date
+   */
   function handleStatusChange(item: MonitoringItem, newStatus: MonitoringStatus) {
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayStr();
     const patch: {
       status: MonitoringStatus;
       lastCompleted?: string | null;
@@ -177,15 +198,35 @@ export default function MonitoringTracker() {
     } = { status: newStatus };
 
     if (newStatus === "complete") {
-      if (!item.lastCompleted) patch.lastCompleted = today;
-      if (!item.nextDue) patch.nextDue = calcNextDue(item.frequency);
+      const baseDate = item.lastCompleted
+        ? toDateInputValue(item.lastCompleted)
+        : today;
+
+      if (!item.lastCompleted) {
+        patch.lastCompleted = today;
+      }
+      patch.nextDue = calcNextDueFrom(item.frequency, baseDate);
     }
 
     updateMutation.mutate({ id: item.id, ...patch });
   }
 
-  function handleDateChange(id: string, field: "lastCompleted" | "nextDue", value: string) {
-    updateMutation.mutate({ id, [field]: value || null });
+  /**
+   * Date field change handler.
+   * When lastCompleted changes, automatically recalculate nextDue.
+   * When nextDue changes, save as-is (manual override).
+   */
+  function handleLastCompletedChange(item: MonitoringItem, value: string) {
+    if (value) {
+      const nextDue = calcNextDueFrom(item.frequency, value);
+      updateMutation.mutate({ id: item.id, lastCompleted: value, nextDue });
+    } else {
+      updateMutation.mutate({ id: item.id, lastCompleted: null });
+    }
+  }
+
+  function handleNextDueChange(id: string, value: string) {
+    updateMutation.mutate({ id, nextDue: value || null });
   }
 
   function handleNotesSave(id: string) {
@@ -373,17 +414,17 @@ export default function MonitoringTracker() {
                         {/* Description */}
                         <TableCell className="text-sm text-muted-foreground">{item.description}</TableCell>
 
-                        {/* Last Completed */}
+                        {/* Last Completed — triggers nextDue recalculation on change */}
                         <TableCell>
                           <input
                             type="date"
                             className="w-full text-sm border border-input rounded-md px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
                             value={toDateInputValue(item.lastCompleted)}
-                            onChange={(e) => handleDateChange(item.id, "lastCompleted", e.target.value)}
+                            onChange={(e) => handleLastCompletedChange(item, e.target.value)}
                           />
                         </TableCell>
 
-                        {/* Next Due */}
+                        {/* Next Due — manual override, shown with red border if overdue */}
                         <TableCell>
                           <input
                             type="date"
@@ -392,7 +433,7 @@ export default function MonitoringTracker() {
                               overdue && "border-red-400 text-red-700 dark:text-red-400"
                             )}
                             value={toDateInputValue(item.nextDue)}
-                            onChange={(e) => handleDateChange(item.id, "nextDue", e.target.value)}
+                            onChange={(e) => handleNextDueChange(item.id, e.target.value)}
                           />
                         </TableCell>
 
