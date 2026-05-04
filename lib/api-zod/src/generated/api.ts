@@ -2334,6 +2334,14 @@ export const GetDashboardSummaryResponse = zod.object({
   controlsWithNoEvidence: zod.number(),
   controlsWithNoPolicy: zod.number(),
   controlsWithNoProcedure: zod.number(),
+  monitoringOverdue: zod.number(),
+  monitoringDueSoon: zod.number(),
+  monitoringTotal: zod.number(),
+  overduePoams: zod.number(),
+  controlsWithApprovedEvidence: zod.number(),
+  controlsWithNarrative: zod.number(),
+  activePolicies: zod.number(),
+  activeProcedures: zod.number(),
 });
 
 /**

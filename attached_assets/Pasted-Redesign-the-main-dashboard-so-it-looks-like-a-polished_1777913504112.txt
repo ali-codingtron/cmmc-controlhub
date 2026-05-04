@@ -1,0 +1,285 @@
+Redesign the main dashboard so it looks like a polished, professional compliance executive dashboard.
+
+Do not change the underlying data calculations unless needed. Focus on layout, visual hierarchy, spacing, typography, colors, and usability.
+
+Current issue:
+The dashboard works, but it looks basic and too flat. It needs to look like a professional CMMC compliance platform that I can show to clients or executives.
+
+1. Dashboard Header
+
+Replace the plain title with a professional header.
+
+Current:
+Dashboard: VTCCORP.US
+
+Update to:
+VTCCORP.US Compliance Dashboard
+
+Under the title, show:
+- CMMC Target Level: L2
+- Report Date: today’s date
+- Overall Status: Ready / In Progress / At Risk
+- Last Activity timestamp
+
+Add right-side actions:
+- Refresh
+- Export Executive Report
+- View Gap Analysis
+
+2. Improve Page Layout
+
+Use a clean responsive grid.
+
+Recommended layout:
+- Top row: executive KPI cards
+- Second row: readiness summary + evidence/risk summary
+- Third row: domain readiness + recent activity
+- Fourth row: top gaps / next actions
+
+Use:
+- consistent card spacing
+- consistent card heights
+- subtle borders
+- soft shadows
+- rounded corners
+- more white space
+- max content width or balanced full-width layout
+
+3. Replace Current Top Cards With Executive KPI Cards
+
+Create 6 professional KPI cards:
+
+A. Overall Readiness
+- large percentage
+- controls ready / total controls
+- small progress bar
+- status badge
+
+B. Controls Implemented
+- implemented count
+- in progress count
+- not started count
+
+C. Evidence Health
+- total evidence
+- approved evidence
+- pending/draft evidence
+- stale evidence
+
+D. Documentation Health
+- active policies
+- active procedures
+- missing policies
+- missing procedures
+
+E. Monitoring Health
+- overdue monitoring items
+- due within 7 days
+- completed this period
+
+F. POA&M Health
+- open POA&Ms
+- overdue POA&Ms
+- high-risk POA&Ms
+
+4. Improve Readiness Gauge
+
+The current green circle is too basic.
+
+Replace or improve it with:
+- a polished circular gauge or large KPI card
+- percentage in center
+- label underneath
+- small supporting text:
+  “110 of 110 controls implemented”
+
+Use color logic:
+- 0–39% = red
+- 40–74% = orange/yellow
+- 75–94% = blue
+- 95–100% = green
+
+5. Make the Dashboard More Honest and Useful
+
+Even if controls show 100%, add a “Readiness Quality” section so the dashboard does not look misleading.
+
+Readiness Quality should show:
+- Controls with approved evidence
+- Controls with implementation narratives
+- Controls with active policy/procedure coverage
+- Controls with current monitoring records
+- Controls with no open POA&M
+
+This helps show whether “100% implemented” is actually audit-ready.
+
+6. Redesign Domain Readiness
+
+The current domain readiness section is useful but visually plain.
+
+Update it to show each domain as a clean row or compact card with:
+- domain code badge
+- full domain name
+- ready / total controls
+- percentage
+- progress bar
+- status color
+
+Example:
+AC — Access Control
+22 / 22 Controls Ready
+100%
+
+Use more refined colors:
+- green for ready
+- amber for partial
+- red for low readiness
+- muted gray for not started
+
+Do not make every bar overly bright green. Use a professional enterprise color palette.
+
+7. Recent Activity Timeline
+
+Redesign Recent Activity as a timeline.
+
+Each row should show:
+- icon based on activity type
+- user name
+- action
+- entity type
+- entity title
+- related control ID if available
+- time ago
+
+Example:
+Joseph Murray uploaded Evidence “R-10 Defender Incident and Alerts” for SI.L2-3.14.3 — just now
+
+Improve the card:
+- no awkward internal scrollbar unless needed
+- show latest 8–10 activities
+- add “View all activity” link
+- use subtle separators
+
+8. Add Top Gaps / Next Actions Card
+
+Add a high-value section called:
+Recommended Next Actions
+
+Show the top 5 things that need attention.
+
+Examples:
+- 3 controls missing implementation narrative
+- 2 monitoring items due this week
+- 1 POA&M overdue
+- 5 evidence items missing expiration/review date
+- SSP needs annual review
+
+Each item should have:
+- priority
+- description
+- link to fix it
+
+If everything is clean, show:
+“No critical gaps detected.”
+
+9. Add Professional Status Badges
+
+Use consistent badges throughout dashboard:
+
+- Ready
+- Implemented
+- In Progress
+- Not Started
+- At Risk
+- Overdue
+- Due Soon
+- Complete
+
+Make badge colors consistent with the rest of the app.
+
+10. Improve Typography
+
+Use a more polished hierarchy:
+- Page title: large and bold
+- Section headings: medium weight
+- KPI numbers: large and prominent
+- Supporting text: smaller and muted
+- Labels: uppercase small text only where appropriate
+
+Avoid oversized empty spaces.
+
+11. Improve Evidence & Risk Card
+
+The current Evidence & Risk section feels cramped.
+
+Split it into cleaner mini-cards:
+- Total Evidence
+- Approved Evidence
+- Pending Evidence
+- Stale Evidence
+- Open POA&Ms
+- Monitoring Overdue
+
+Each should be clickable and link to the filtered view.
+
+12. Add Clickable Dashboard Cards
+
+Dashboard cards should link to filtered sections:
+
+- Controls Implemented → Controls filtered by Implemented
+- In Progress → Controls filtered by In Progress
+- Pending Evidence → Evidence filtered by Pending/Draft
+- Open POA&Ms → POA&M page filtered by Open
+- Monitoring Overdue → Monitoring Tracker filtered by overdue
+- Missing Policies → Gap Analysis filtered by missing policies
+
+13. Add Export-Friendly Design
+
+Make the dashboard suitable for screenshots and PDF export.
+
+Add:
+- Print-friendly layout
+- Export Executive Dashboard button
+- Hide sidebar when printing/exporting
+- Include organization name and report date
+
+14. Suggested Layout
+
+Use this structure:
+
+Header:
+- VTCCORP.US Compliance Dashboard
+- Target Level: L2
+- Report Date
+- Overall Status badge
+- Buttons: Refresh, Export Report, Gap Analysis
+
+Top KPI Row:
+- Overall Readiness
+- Controls
+- Evidence Health
+- Documentation
+- Monitoring
+- POA&M
+
+Middle:
+- Domain Readiness, left large card
+- Recent Activity, right large card
+
+Bottom:
+- Readiness Quality
+- Recommended Next Actions
+
+15. Acceptance Tests
+
+- Dashboard title shows selected organization name
+- Dashboard looks professional and balanced
+- Cards have consistent spacing and styling
+- Overall readiness shows percentage and controls ready / total
+- Domain readiness is readable and polished
+- Recent activity appears as timeline
+- Evidence and risk metrics are separated cleanly
+- Recommended Next Actions appears
+- Cards link to relevant filtered pages
+- Dashboard is usable for a client-facing screenshot
+
+Do not overuse bright green. Use a professional compliance/security color palette with navy, slate, muted blue, green, amber, and red. The dashboard should look like an enterprise GRC platform, not a basic admin page.

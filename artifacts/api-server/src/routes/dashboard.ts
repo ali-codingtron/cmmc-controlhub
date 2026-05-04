@@ -11,8 +11,9 @@ import {
   auditLogsTable,
   usersTable,
   monitoringItemsTable,
+  documentsTable,
 } from "@workspace/db";
-import { eq, and, or, count, lte, gte, ne, desc, sql } from "drizzle-orm";
+import { eq, and, or, count, lte, gte, ne, desc, sql, isNotNull } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 
@@ -79,6 +80,17 @@ router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
       )
     );
 
+  const [overduePoamStats] = await db
+    .select({ total: count() })
+    .from(poamsTable)
+    .where(
+      and(
+        or(eq(poamsTable.status, "open"), eq(poamsTable.status, "in_progress")),
+        lte(poamsTable.scheduledCompletionDate, new Date()),
+        orgId ? eq(poamsTable.organizationId, orgId) : undefined
+      )
+    );
+
   const [criticalPoamStats] = await db
     .select({ total: count() })
     .from(poamsTable)
@@ -116,6 +128,50 @@ router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
         lte(monitoringItemsTable.nextDue, sevenDaysFromNow)
       )
     );
+
+  const [monitoringTotalStats] = await db
+    .select({ total: count() })
+    .from(monitoringItemsTable)
+    .where(orgId ? eq(monitoringItemsTable.organizationId, orgId) : undefined);
+
+  // Controls with at least one approved evidence item linked
+  const [controlsWithApprovedEvidenceStats] = await db
+    .select({ total: count(sql`DISTINCT ${evidenceControlLinksTable.controlId}`) })
+    .from(evidenceControlLinksTable)
+    .innerJoin(evidenceItemsTable, eq(evidenceItemsTable.id, evidenceControlLinksTable.evidenceId))
+    .where(
+      and(
+        sql`${evidenceItemsTable.deletedAt} IS NULL`,
+        eq(evidenceItemsTable.status, "approved"),
+        orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined
+      )
+    );
+
+  // Controls with an implementation narrative
+  const [controlsWithNarrativeStats] = await db
+    .select({ total: count() })
+    .from(controlAssessmentsTable)
+    .where(
+      and(
+        orgId ? eq(controlAssessmentsTable.organizationId, orgId) : undefined,
+        isNotNull(controlAssessmentsTable.implementationNarrative),
+        sql`${controlAssessmentsTable.implementationNarrative} != ''`
+      )
+    );
+
+  // Active policy / procedure counts
+  const docsByType = await db
+    .select({ docType: documentsTable.docType, status: documentsTable.status, cnt: count() })
+    .from(documentsTable)
+    .where(orgId ? eq(documentsTable.organizationId, orgId) : sql`1=1`)
+    .groupBy(documentsTable.docType, documentsTable.status);
+
+  const activePolicies = docsByType
+    .filter((d) => d.docType === "policy" && d.status === "active")
+    .reduce((sum, d) => sum + Number(d.cnt), 0);
+  const activeProcedures = docsByType
+    .filter((d) => d.docType === "procedure" && d.status === "active")
+    .reduce((sum, d) => sum + Number(d.cnt), 0);
 
   const totalControls = Number(controlStats?.total ?? 0);
   const implemented = assessmentStats
@@ -164,12 +220,18 @@ router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
     openTasks: Number(taskStats?.total ?? 0),
     overdueTasks: Number(overdueTaskStats?.total ?? 0),
     openPoams: Number(openPoamStats?.total ?? 0),
+    overduePoams: Number(overduePoamStats?.total ?? 0),
     criticalPoams: Number(criticalPoamStats?.total ?? 0),
     monitoringOverdue: Number(monitoringOverdueStats?.total ?? 0),
     monitoringDueSoon: Number(monitoringDueSoonStats?.total ?? 0),
+    monitoringTotal: Number(monitoringTotalStats?.total ?? 0),
     controlsWithNoEvidence: 0,
     controlsWithNoPolicy: 0,
     controlsWithNoProcedure: 0,
+    controlsWithApprovedEvidence: Number(controlsWithApprovedEvidenceStats?.total ?? 0),
+    controlsWithNarrative: Number(controlsWithNarrativeStats?.total ?? 0),
+    activePolicies,
+    activeProcedures,
   });
 });
 
@@ -196,7 +258,6 @@ router.get("/dashboard/readiness-by-domain", requireAuth, requireOrg, async (req
 
   const domains = await db.select().from(domainsTable).orderBy(domainsTable.sortOrder);
 
-  // Left join so controls with no org assessment row are counted as not_started
   const assessments = await db
     .select({
       domainId: controlsTable.domainId,
@@ -222,13 +283,11 @@ router.get("/dashboard/readiness-by-domain", requireAuth, requireOrg, async (req
 
   const result = domains
     .filter((d) => {
-      // Only include domains that have at least one active control
       return (totalByDomain.find((t) => t.domainId === d.id)?.cnt ?? 0) > 0;
     })
     .map((d) => {
       const domainAssessments = assessments.filter((a) => a.domainId === d.id);
       const total = Number(totalByDomain.find((t) => t.domainId === d.id)?.cnt ?? 0);
-      // "Ready" = implemented or assessor_ready
       const readyControls = domainAssessments
         .filter((a) => a.status === "implemented" || a.status === "assessor_ready")
         .reduce((sum, a) => sum + Number(a.cnt), 0);
@@ -240,7 +299,6 @@ router.get("/dashboard/readiness-by-domain", requireAuth, requireOrg, async (req
         readyControls,
         totalControls: total,
         readinessPercent: total > 0 ? Math.round((readyControls / total) * 100) : 0,
-        // legacy aliases for backwards compat
         id: d.id,
         name: d.name,
         implementedControls: readyControls,
@@ -366,14 +424,12 @@ router.get("/dashboard/recent-activity", requireAuth, requireOrg, async (req, re
     .where(
       and(
         orgId ? eq(auditLogsTable.organizationId, orgId) : undefined,
-        // Exclude login/logout noise from the dashboard feed
         sql`${auditLogsTable.action} NOT IN ('logged_in', 'logged_out')`
       )
     )
     .orderBy(desc(auditLogsTable.timestamp))
     .limit(parseInt(limit ?? "20"));
 
-  // Format each log into a readable activity description
   const activity = logs.map((log) => {
     const actionLabel = (() => {
       switch (log.action) {
@@ -415,7 +471,6 @@ router.get("/dashboard/recent-activity", requireAuth, requireOrg, async (req, re
     let description = `${actionLabel} ${entityTypeLabel}`;
     if (log.entityLabel) description += `: ${log.entityLabel}`;
 
-    // Append status change info
     if (log.action === "status_changed" && log.newValue) {
       const nv = String(log.newValue).replace(/_/g, " ");
       description += ` → ${nv}`;

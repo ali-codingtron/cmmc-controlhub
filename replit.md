@@ -85,7 +85,7 @@ All major data tables have an `organizationId` foreign key. Every API request to
 
 | Route | Component | Description |
 |---|---|---|
-| / | Dashboard | Readiness ring, controls breakdown, evidence stats, domain progress, activity |
+| / | Dashboard | Executive compliance dashboard — 6 KPI cards, domain readiness, activity timeline, recommended next actions |
 | /controls | Controls | 110 CMMC controls table with search |
 | /controls/:id | ControlDetail | Control assessment, evidence (w/ bulk select), tasks, POA&Ms |
 | /evidence | Evidence | Evidence repository list |
@@ -124,7 +124,7 @@ All routes under `/api` prefix, JWT-authenticated:
 - `/api/monitoring` — monitoring item list (GET with frequency/status/controlRef/search filters) + inline update (PATCH :id) + stats (GET /stats); org-scoped; 19 items pre-seeded per org
 - `/api/tasks` — task CRUD, complete/reopen actions (org-scoped)
 - `/api/poams` — POA&M CRUD, close action (org-scoped)
-- `/api/dashboard/*` — summary, domain readiness, recent activity, overdue items (org-scoped)
+- `/api/dashboard/*` — summary (incl. monitoringOverdue, monitoringDueSoon, monitoringTotal, overduePoams, controlsWithApprovedEvidence, controlsWithNarrative, activePolicies, activeProcedures), domain readiness, recent activity, overdue items (org-scoped)
 - `/api/assessor/*` — assessor control list, control packages, exports (org-scoped)
 - `/api/audit-logs` — audit trail (org-scoped)
 - `/api/documents` — document CRUD + workflow (org-scoped); `POST /api/documents/upload` for file-based upload; `GET /api/documents/:id/download` for file download

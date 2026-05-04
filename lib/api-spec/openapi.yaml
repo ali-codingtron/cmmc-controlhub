@@ -2924,6 +2924,22 @@ components:
           type: integer
         controlsWithNoProcedure:
           type: integer
+        monitoringOverdue:
+          type: integer
+        monitoringDueSoon:
+          type: integer
+        monitoringTotal:
+          type: integer
+        overduePoams:
+          type: integer
+        controlsWithApprovedEvidence:
+          type: integer
+        controlsWithNarrative:
+          type: integer
+        activePolicies:
+          type: integer
+        activeProcedures:
+          type: integer
       required:
         - overallReadinessPercent
         - l1ReadinessPercent
@@ -2944,6 +2960,14 @@ components:
         - controlsWithNoEvidence
         - controlsWithNoPolicy
         - controlsWithNoProcedure
+        - monitoringOverdue
+        - monitoringDueSoon
+        - monitoringTotal
+        - overduePoams
+        - controlsWithApprovedEvidence
+        - controlsWithNarrative
+        - activePolicies
+        - activeProcedures
 
     UpcomingReviews:
       type: object

@@ -771,6 +771,14 @@ export interface DashboardSummary {
   controlsWithNoEvidence: number;
   controlsWithNoPolicy: number;
   controlsWithNoProcedure: number;
+  monitoringOverdue: number;
+  monitoringDueSoon: number;
+  monitoringTotal: number;
+  overduePoams: number;
+  controlsWithApprovedEvidence: number;
+  controlsWithNarrative: number;
+  activePolicies: number;
+  activeProcedures: number;
 }
 
 export interface UpcomingReviews {
