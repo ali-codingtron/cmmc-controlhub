@@ -185,9 +185,9 @@ export default function Dashboard() {
                 <p className="text-[10px] text-muted-foreground">Open POA&amp;Ms</p>
                 <p className="font-bold text-base text-red-700 dark:text-red-400">{summary.openPoams ?? 0}</p>
               </Link>
-              <Link href="/tasks" className="rounded-md bg-orange-50 dark:bg-orange-950/30 p-2 block hover:opacity-80 transition-opacity">
-                <p className="text-[10px] text-muted-foreground">Overdue Tasks</p>
-                <p className="font-bold text-base text-orange-700 dark:text-orange-400">{summary.overdueTasks ?? 0}</p>
+              <Link href="/monitoring" className="rounded-md bg-orange-50 dark:bg-orange-950/30 p-2 block hover:opacity-80 transition-opacity">
+                <p className="text-[10px] text-muted-foreground">Monitoring Overdue</p>
+                <p className="font-bold text-base text-orange-700 dark:text-orange-400">{(summary as any).monitoringOverdue ?? 0}</p>
               </Link>
             </div>
           </CardContent>

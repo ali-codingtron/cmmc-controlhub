@@ -1,0 +1,110 @@
+Replace the Tasks module with a Monitoring Tracker module based on CMMC L2 operational monitoring requirements.
+
+1. Rename Module
+- Rename “Tasks” in the sidebar to: Monitoring Tracker
+- Update all routes, page titles, and references
+
+2. Monitoring Tracker Page Layout
+Create a table/grid matching this structure:
+
+Columns:
+- Frequency (read-only)
+- Task (read-only)
+- Control ID (read-only)
+- Description (read-only)
+- Last Completed (editable date)
+- Next Due (editable date)
+- Status (dropdown)
+- Notes (multi-line text)
+
+3. Status Field
+Status must be a dropdown with ONLY:
+- Open
+- In Progress
+- Complete
+
+Default:
+- Open
+
+4. Editable Fields
+Allow editing only:
+- Last Completed (date picker)
+- Next Due (date picker)
+- Status (dropdown)
+- Notes (multi-line text area)
+
+All other fields must be read-only and pre-seeded.
+
+5. Seed Data
+Seed the Monitoring Tracker with these rows:
+
+Daily (as needed) | Review Defender Alerts | 3.14.3 | Check Microsoft Defender for active alerts
+Weekly | Review Entra Sign-in Logs | 3.3.x | Check for suspicious logins
+Weekly | Review Audit Logs | 3.12.3 | Review Purview audit logs
+Weekly | Review Vulnerabilities | 3.11.2 | Check Defender recommendations
+Weekly | Update POA&M | 3.12.2 | Update any findings
+Weekly | Check Device Compliance | 3.4.x | Verify Intune compliance
+Monthly | Review Firewall Rules | 3.13.6 | Validate deny-by-default rules
+Monthly | Review User Accounts | 3.1.x | Check user and admin accounts
+Monthly | Verify Backups | 3.8.9 | Ensure backups are accessible
+Monthly | Verify Updates | 3.14.1 | Confirm patches applied
+Monthly | Check Media Compliance | 3.8.x | Ensure no unauthorized media
+Quarterly | Review Risk Assessment | 3.11.1 | Update risk profile
+Quarterly | Review Policies | ALL | Ensure policies are current
+Quarterly | Test Incident Response | 3.6.3 | Run simulated incident
+Annually | Security Assessment | 3.12.1 | Full control review
+Annually | Update SSP | 3.12.4 | Update system security plan
+Annually | Security Training | 3.2.x | Complete awareness training
+Annually | Formal Risk Review | 3.11.1 | Update risk documentation
+Annually | Access Review | 3.1.x | Review user access
+
+6. Auto Date Logic (Important)
+When Status is set to “Complete”:
+- Automatically update Last Completed = today (if not manually set)
+- Automatically calculate Next Due based on Frequency:
+
+Daily → +1 day
+Weekly → +7 days
+Monthly → +30 days
+Quarterly → +90 days
+Annually → +365 days
+
+Allow manual override if needed.
+
+7. Filtering
+Add filters similar to other sections:
+- Frequency
+- Status
+- Control ID
+- Search (Task + Description)
+
+8. Dashboard Integration
+Replace “Overdue Tasks” with:
+Monitoring Overdue Items
+
+Logic:
+- Next Due < today
+- Status ≠ Complete
+
+Add:
+- Items Due Soon (within 7 days)
+- Completed This Period
+
+9. Control Integration
+On each control page:
+- Add a Monitoring tab or section showing related monitoring tasks
+- Based on Control ID mapping
+
+10. Save Behavior
+Changes must persist immediately or via Save button:
+- Last Completed
+- Next Due
+- Status
+- Notes
+
+11. Acceptance Test
+- Change Status to Complete → Last Completed updates
+- Next Due auto-calculates
+- Change Status back to In Progress → dates remain editable
+- Overdue items show correctly on Dashboard
+- Filtering works by Weekly, Monthly, etc.

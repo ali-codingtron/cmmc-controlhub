@@ -9,8 +9,10 @@ import {
   usersTable,
   documentTemplatesTable,
   checklistItemsTable,
+  organizationsTable,
 } from "@workspace/db";
-import { count } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
+import { seedMonitoringItemsForOrg } from "./routes/monitoring";
 import { logger } from "./lib/logger";
 import { DOCUMENT_TEMPLATES } from "./data/document-templates-data";
 
@@ -161,11 +163,19 @@ async function seedDocumentTemplates() {
   logger.info({ count: seeded }, "Document templates seeded");
 }
 
+async function seedMonitoringItems() {
+  const orgs = await db.select({ id: organizationsTable.id }).from(organizationsTable);
+  for (const org of orgs) {
+    await seedMonitoringItemsForOrg(org.id);
+  }
+}
+
 export async function runStartupSeed() {
   try {
     await seedDomainControls();
     await seedInitialAdmin();
     await seedDocumentTemplates();
+    await seedMonitoringItems();
   } catch (err) {
     logger.error({ err }, "Startup seed failed — app will continue but may lack reference data");
   }

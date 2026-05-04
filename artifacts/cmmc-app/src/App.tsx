@@ -16,6 +16,7 @@ import EvidenceUpload from "@/pages/evidence-upload";
 import EvidenceDetail from "@/pages/evidence-detail";
 import Tasks from "@/pages/tasks";
 import TaskDetail from "@/pages/task-detail";
+import MonitoringTracker from "@/pages/monitoring-tracker";
 import Poams from "@/pages/poams";
 import PoamDetail from "@/pages/poam-detail";
 import Assessor from "@/pages/assessor";
@@ -79,6 +80,7 @@ function AppRoutes() {
               <Route path="/evidence/:id">
                 {(params: { id: string }) => <EvidenceDetail id={params.id} />}
               </Route>
+              <Route path="/monitoring" component={MonitoringTracker} />
               <Route path="/tasks" component={Tasks} />
               <Route path="/tasks/:id">
                 {(params: { id: string }) => <TaskDetail id={params.id} />}

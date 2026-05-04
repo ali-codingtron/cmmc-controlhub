@@ -3,7 +3,7 @@ import {
   LayoutDashboard, 
   ShieldCheck, 
   FileText, 
-  CheckSquare, 
+  Activity, 
   AlertTriangle, 
   History, 
   Users, 
@@ -137,7 +137,7 @@ export function Sidebar() {
           <NavLink href="/" icon={LayoutDashboard} label="Dashboard" />
           <NavLink href="/controls" icon={ShieldCheck} label="Controls" />
           <NavLink href="/evidence" icon={FileText} label="Evidence" />
-          <NavLink href="/tasks" icon={CheckSquare} label="Tasks" />
+          <NavLink href="/monitoring" icon={Activity} label="Monitoring Tracker" />
           <NavLink href="/poams" icon={AlertTriangle} label="POA&Ms" />
 
           {/* Documentation section */}

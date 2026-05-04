@@ -12,6 +12,7 @@ import assessorRouter from "./assessor";
 import auditRouter from "./auditlogs";
 import documentsRouter from "./documents";
 import organizationsRouter from "./organizations";
+import monitoringRouter from "./monitoring";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(dashboardRouter);
 router.use(assessorRouter);
 router.use(auditRouter);
 router.use(documentsRouter);
+router.use(monitoringRouter);
 
 export default router;

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useState, useMemo } from "react";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import {
   useGetControl,
   useGetControlEvidence,
@@ -1033,6 +1033,133 @@ function AddPoamDialog({ open, onClose, controlId, orgId, onSaved }: AddPoamDial
   );
 }
 
+// ─── Monitoring Tab Component ────────────────────────────────────────────────
+
+interface MonitoringItemShape {
+  id: string;
+  frequency: string;
+  task: string;
+  controlRef: string;
+  description: string;
+  lastCompleted: string | null;
+  nextDue: string | null;
+  status: string;
+  notes: string | null;
+}
+
+const MONITORING_FREQ_COLOR: Record<string, string> = {
+  daily: "bg-red-100 text-red-700",
+  weekly: "bg-orange-100 text-orange-700",
+  monthly: "bg-blue-100 text-blue-700",
+  quarterly: "bg-purple-100 text-purple-700",
+  annually: "bg-slate-100 text-slate-700",
+};
+
+function matchesControlRef(ref: string, cmmcId: string): boolean {
+  if (ref === "ALL") return false;
+  // Extract numeric part: "AC.L2-3.1.2" → "3.1.2"
+  const numericPart = cmmcId.replace(/^[A-Z]+\.L\d+-/, "");
+  if (ref === numericPart) return true;
+  if (ref.endsWith(".x")) {
+    const prefix = ref.slice(0, -2);
+    return numericPart.startsWith(prefix + ".");
+  }
+  return false;
+}
+
+function MonitoringTab({ controlCmmcId, orgId }: { controlCmmcId: string; orgId?: string }) {
+  const { data: allItems = [], isLoading } = useQuery<MonitoringItemShape[]>({
+    queryKey: ["monitoring", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      const token = localStorage.getItem("auth_token");
+      const r = await fetch("/api/monitoring", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "X-Organization-ID": orgId,
+        },
+      });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: !!orgId,
+  });
+
+  const related = useMemo(
+    () => allItems.filter((item) => matchesControlRef(item.controlRef, controlCmmcId)),
+    [allItems, controlCmmcId]
+  );
+
+  return (
+    <TabsContent value="monitoring" className="mt-6">
+      <h3 className="font-semibold text-base mb-4">Related Monitoring Items</h3>
+      {isLoading ? (
+        <div className="space-y-2">
+          {[...Array(3)].map((_, i) => <div key={i} className="h-10 animate-pulse bg-muted rounded" />)}
+        </div>
+      ) : related.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-10 text-center">
+          <CheckCircle2 className="h-8 w-8 text-muted-foreground opacity-40 mb-2" />
+          <p className="text-sm text-muted-foreground">No monitoring items are specifically mapped to this control.</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            View all monitoring tasks in the{" "}
+            <a href="/monitoring" className="text-primary hover:underline">Monitoring Tracker</a>.
+          </p>
+        </div>
+      ) : (
+        <div className="border rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50">
+              <tr>
+                <th className="text-left px-4 py-2 font-medium text-xs text-muted-foreground">Frequency</th>
+                <th className="text-left px-4 py-2 font-medium text-xs text-muted-foreground">Task</th>
+                <th className="text-left px-4 py-2 font-medium text-xs text-muted-foreground">Control Ref</th>
+                <th className="text-left px-4 py-2 font-medium text-xs text-muted-foreground">Status</th>
+                <th className="text-left px-4 py-2 font-medium text-xs text-muted-foreground">Next Due</th>
+              </tr>
+            </thead>
+            <tbody>
+              {related.map((item, i) => {
+                const isOverdue = item.nextDue && new Date(item.nextDue) < new Date() && item.status !== "complete";
+                return (
+                  <tr key={item.id} className={`border-t ${i % 2 === 0 ? "" : "bg-muted/20"}`}>
+                    <td className="px-4 py-2">
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${MONITORING_FREQ_COLOR[item.frequency] ?? "bg-gray-100 text-gray-700"}`}>
+                        {item.frequency.charAt(0).toUpperCase() + item.frequency.slice(1)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 font-medium">{item.task}</td>
+                    <td className="px-4 py-2">
+                      <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">{item.controlRef}</code>
+                    </td>
+                    <td className="px-4 py-2">
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                        item.status === "complete"
+                          ? "bg-green-100 text-green-700"
+                          : item.status === "in_progress"
+                          ? "bg-yellow-100 text-yellow-700"
+                          : isOverdue
+                          ? "bg-red-100 text-red-700"
+                          : "bg-slate-100 text-slate-700"
+                      }`}>
+                        {item.status === "in_progress" ? "In Progress" : item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                      </span>
+                    </td>
+                    <td className={`px-4 py-2 text-xs ${isOverdue ? "text-red-600 font-medium" : "text-muted-foreground"}`}>
+                      {item.nextDue ? new Date(item.nextDue).toLocaleDateString() : "—"}
+                      {isOverdue && " (Overdue)"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </TabsContent>
+  );
+}
+
 // ─── Main Control Detail Page ───────────────────────────────────────────────
 
 export default function ControlDetail({ id }: { id: string }) {
@@ -1159,6 +1286,7 @@ export default function ControlDetail({ id }: { id: string }) {
           <TabsTrigger value="evidence">Evidence ({evidence.length})</TabsTrigger>
           <TabsTrigger value="tasks">Tasks ({tasks.length})</TabsTrigger>
           <TabsTrigger value="poams">POA&Ms ({poams.length})</TabsTrigger>
+          <TabsTrigger value="monitoring">Monitoring</TabsTrigger>
         </TabsList>
 
         {/* ── Implementation Tab ── */}
@@ -1602,6 +1730,9 @@ export default function ControlDetail({ id }: { id: string }) {
             onSaved={invalidatePoams}
           />
         </TabsContent>
+
+        {/* ── Monitoring Tab ── */}
+        <MonitoringTab controlCmmcId={control?.controlId ?? ""} orgId={activeOrg?.id} />
       </Tabs>
     </div>
   );

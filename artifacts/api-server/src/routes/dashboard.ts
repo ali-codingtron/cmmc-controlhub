@@ -10,8 +10,9 @@ import {
   poamsTable,
   auditLogsTable,
   usersTable,
+  monitoringItemsTable,
 } from "@workspace/db";
-import { eq, and, or, count, lte, gte, desc, sql } from "drizzle-orm";
+import { eq, and, or, count, lte, gte, ne, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 
@@ -89,6 +90,33 @@ router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
       )
     );
 
+  const now = new Date();
+  const sevenDaysFromNow = new Date(now.getTime() + 7 * 86400000);
+
+  const [monitoringOverdueStats] = await db
+    .select({ total: count() })
+    .from(monitoringItemsTable)
+    .where(
+      and(
+        orgId ? eq(monitoringItemsTable.organizationId, orgId) : undefined,
+        ne(monitoringItemsTable.status, "complete"),
+        lte(monitoringItemsTable.nextDue, now),
+        sql`${monitoringItemsTable.nextDue} IS NOT NULL`
+      )
+    );
+
+  const [monitoringDueSoonStats] = await db
+    .select({ total: count() })
+    .from(monitoringItemsTable)
+    .where(
+      and(
+        orgId ? eq(monitoringItemsTable.organizationId, orgId) : undefined,
+        ne(monitoringItemsTable.status, "complete"),
+        gte(monitoringItemsTable.nextDue, now),
+        lte(monitoringItemsTable.nextDue, sevenDaysFromNow)
+      )
+    );
+
   const totalControls = Number(controlStats?.total ?? 0);
   const implemented = assessmentStats
     .filter((s) => s.status === "implemented" || s.status === "assessor_ready")
@@ -137,6 +165,8 @@ router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
     overdueTasks: Number(overdueTaskStats?.total ?? 0),
     openPoams: Number(openPoamStats?.total ?? 0),
     criticalPoams: Number(criticalPoamStats?.total ?? 0),
+    monitoringOverdue: Number(monitoringOverdueStats?.total ?? 0),
+    monitoringDueSoon: Number(monitoringDueSoonStats?.total ?? 0),
     controlsWithNoEvidence: 0,
     controlsWithNoPolicy: 0,
     controlsWithNoProcedure: 0,

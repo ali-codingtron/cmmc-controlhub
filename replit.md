@@ -32,8 +32,9 @@ pnpm workspace monorepo using TypeScript. CMMC Compliance Readiness & Evidence M
 
 On every startup, `artifacts/api-server/src/startup-seed.ts` runs **before** `app.listen()`. It checks each table with a `count()` query and skips any that already have data (fully idempotent).
 
-- **Empty database (production first boot)**: Seeds 14 CMMC domains, 110 controls, 22 document templates, and one initial admin user (`admin@example.com` / `Admin1234!` — must be changed immediately)
+- **Empty database (production first boot)**: Seeds 14 CMMC domains, 110 controls, 22 document templates, one initial admin user (`admin@example.com` / `Admin1234!` — must be changed immediately), and 19 monitoring items per org
 - **Populated database (all subsequent starts)**: All checks pass instantly with no DB writes
+- **New org created**: `seedMonitoringItemsForOrg(orgId)` is called from `artifacts/api-server/src/routes/monitoring.ts` on the startup seed pass for any org that has 0 monitoring items
 
 The `cmmc-controls.json` data file is copied to `dist/data/` during the esbuild build step (`build.mjs`). The document templates are embedded directly in `src/data/document-templates-data.ts`.
 
@@ -90,7 +91,8 @@ All major data tables have an `organizationId` foreign key. Every API request to
 | /evidence | Evidence | Evidence repository list |
 | /evidence/upload | EvidenceUpload | Upload new evidence file |
 | /evidence/:id | EvidenceDetail | Evidence review & approve/reject (back button uses browser history) |
-| /tasks | Tasks | Task list with filtering |
+| /monitoring | MonitoringTracker | 19-row inline-editable CMMC L2 operational monitoring tracker (replaces Tasks in sidebar) |
+| /tasks | Tasks | Task list with filtering (still accessible, not in sidebar) |
 | /tasks/:id | TaskDetail | Task details, complete/reopen |
 | /poams | Poams | POA&M list with filters, summary stats, Add POA&M dialog |
 | /poams/:id | PoamDetail | POA&M details, close POA&M |
@@ -119,6 +121,7 @@ All routes under `/api` prefix, JWT-authenticated:
 - `/api/domains` — CMMC domains (org-scoped)
 - `/api/controls` — controls with assessment status, evidence, tasks, POA&Ms (org-scoped)
 - `/api/evidence` — evidence CRUD, approve/reject/submit/stale/supersede actions (org-scoped); `PATCH /api/evidence/bulk-status` for bulk status updates
+- `/api/monitoring` — monitoring item list (GET with frequency/status/controlRef/search filters) + inline update (PATCH :id) + stats (GET /stats); org-scoped; 19 items pre-seeded per org
 - `/api/tasks` — task CRUD, complete/reopen actions (org-scoped)
 - `/api/poams` — POA&M CRUD, close action (org-scoped)
 - `/api/dashboard/*` — summary, domain readiness, recent activity, overdue items (org-scoped)
