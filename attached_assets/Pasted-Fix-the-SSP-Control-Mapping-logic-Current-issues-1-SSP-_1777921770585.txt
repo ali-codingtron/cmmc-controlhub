@@ -1,0 +1,76 @@
+Fix the SSP Control Mapping logic.
+
+Current issues:
+1. SSP Overview shows 117 controls mapped, but CMMC Level 2 should only be 110 controls.
+2. SSP Control Mapping has a Policy Ref column that I do not want.
+3. SSP mapping status shows “Planned,” but it should use the actual control status from the Controls section.
+
+Requirements:
+
+1. Deduplicate SSP Control Mappings
+The SSP parser/import should only create one mapping per valid CMMC control ID per organization/SSP.
+
+Do not create duplicate mappings when:
+- the same control appears in multiple SSP sections
+- the SSP is re-parsed
+- the control appears in both the L1 and L2 sections
+
+Expected result:
+- CMMC L2 organization should show 110 mapped controls maximum
+- CMMC L1 organization should show 17 mapped controls maximum
+
+2. Valid Control IDs Only
+Only map SSP narratives to valid controls that exist in the global Controls library.
+
+If the parser finds non-standard references like:
+- 3.1.x
+- 3.3.x
+- ALL
+- section numbers
+do not count them as mapped controls.
+
+3. Re-parse Behavior
+When clicking Re-parse:
+- clear existing SSP mappings for this SSP/organization
+- recreate mappings from the SSP
+- deduplicate by control_id
+- do not append duplicates
+
+4. Remove Policy Ref Column
+Remove the Policy Ref column from SSP Control Mapping.
+
+New columns:
+- Control
+- Implementation Narrative
+- Status
+- Actions
+
+5. Status Source
+The Status column must show the organization-specific control status from the Controls section.
+
+Use OrganizationControl.status.
+
+Examples:
+- Not Started
+- In Progress
+- Implemented
+
+Do not show “Planned” unless that is actually a valid control status in the Controls section.
+
+6. Sync Status
+If a control status is changed in Controls section:
+- SSP Control Mapping status updates automatically
+- no duplicate status should be stored separately in SSP mapping unless necessary
+
+7. SSP Overview Counts
+Update SSP Overview:
+- Controls Mapped should count unique valid controls only
+- show “110 / 110 mapped” for L2 if all controls are mapped
+- show “17 / 17 mapped” for L1 if L1 only
+
+8. Acceptance Tests
+- Re-parse the uploaded SSP
+- SSP Overview shows no more than 110 controls mapped for L2
+- SSP Control Mapping no longer shows Policy Ref
+- Status values match the Controls Library status
+- Changing a control status in Controls Library updates SSP Control Mapping

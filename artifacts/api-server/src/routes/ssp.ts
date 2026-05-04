@@ -3,8 +3,8 @@ import multer from "multer";
 import path from "path";
 import { createReadStream, mkdirSync } from "fs";
 import { unlink } from "fs/promises";
-import { db, sspDocumentsTable, sspSectionsTable, sspControlMappingsTable, controlsTable } from "@workspace/db";
-import { eq, and, desc, count, isNotNull } from "drizzle-orm";
+import { db, sspDocumentsTable, sspSectionsTable, sspControlMappingsTable, controlsTable, controlAssessmentsTable } from "@workspace/db";
+import { eq, and, desc, count, isNotNull, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 import { randomUUID } from "crypto";
@@ -183,16 +183,20 @@ router.get("/ssp/:id/stats", requireAuth, requireOrg, async (req, res) => {
     .limit(1);
   if (!doc) return res.status(404).json({ error: "Not found" });
 
-  const [sectionsRow] = await db.select({ total: count() }).from(sspSectionsTable).where(eq(sspSectionsTable.sspDocumentId, id));
-  const [completeSectionsRow] = await db.select({ total: count() }).from(sspSectionsTable).where(and(eq(sspSectionsTable.sspDocumentId, id), eq(sspSectionsTable.isComplete, true)));
-  const [mappingsRow] = await db.select({ total: count() }).from(sspControlMappingsTable).where(eq(sspControlMappingsTable.sspDocumentId, id));
-  const [editedRow] = await db.select({ total: count() }).from(sspControlMappingsTable).where(and(eq(sspControlMappingsTable.sspDocumentId, id), eq(sspControlMappingsTable.isEdited, true)));
+  const [[sectionsRow], [completeSectionsRow], [mappingsRow], [editedRow], [totalControlsRow]] = await Promise.all([
+    db.select({ total: count() }).from(sspSectionsTable).where(eq(sspSectionsTable.sspDocumentId, id)),
+    db.select({ total: count() }).from(sspSectionsTable).where(and(eq(sspSectionsTable.sspDocumentId, id), eq(sspSectionsTable.isComplete, true))),
+    db.select({ total: count() }).from(sspControlMappingsTable).where(and(eq(sspControlMappingsTable.sspDocumentId, id), isNotNull(sspControlMappingsTable.controlDbId))),
+    db.select({ total: count() }).from(sspControlMappingsTable).where(and(eq(sspControlMappingsTable.sspDocumentId, id), eq(sspControlMappingsTable.isEdited, true))),
+    db.select({ total: count() }).from(controlsTable),
+  ]);
 
   res.json({
     totalSections: Number(sectionsRow?.total ?? 0),
     completeSections: Number(completeSectionsRow?.total ?? 0),
     totalMappings: Number(mappingsRow?.total ?? 0),
     editedMappings: Number(editedRow?.total ?? 0),
+    totalControls: Number(totalControlsRow?.total ?? 0),
   });
 });
 
@@ -233,24 +237,33 @@ router.post("/ssp/:id/parse", requireAuth, requireOrg, async (req, res) => {
     );
   }
 
-  // Insert control mappings — resolve controlDbId from controls table
-  if (controlMappings.length > 0) {
-    const allControls = await db
-      .select({ id: controlsTable.id, controlId: controlsTable.controlId })
-      .from(controlsTable);
+  // Resolve controlDbId from controls table; only insert mappings for valid CMMC control IDs
+  const allControls = await db
+    .select({ id: controlsTable.id, controlId: controlsTable.controlId })
+    .from(controlsTable);
 
-    const controlMap = new Map(allControls.map((c) => [c.controlId, c.id]));
+  const controlMap = new Map(allControls.map((c) => [c.controlId, c.id]));
 
+  // Deduplicate by controlRef and filter to only valid CMMC controls that exist in the library
+  const seenRefs = new Set<string>();
+  const validMappings = controlMappings.filter((m) => {
+    if (!controlMap.has(m.controlRef)) return false;
+    if (seenRefs.has(m.controlRef)) return false;
+    seenRefs.add(m.controlRef);
+    return true;
+  });
+
+  if (validMappings.length > 0) {
     await db.insert(sspControlMappingsTable).values(
-      controlMappings.map((m) => ({
+      validMappings.map((m) => ({
         id: randomUUID(),
         sspDocumentId: id,
         organizationId: orgId,
         controlRef: m.controlRef,
         controlDbId: controlMap.get(m.controlRef) ?? null,
         implementationNarrative: m.implementationNarrative,
-        policyReference: m.policyReference || null,
-        sspStatus: m.sspStatus || "planned",
+        policyReference: null,
+        sspStatus: null,
         sourceSection: m.sourceSection || null,
         isEdited: false,
       }))
@@ -262,7 +275,7 @@ router.post("/ssp/:id/parse", requireAuth, requireOrg, async (req, res) => {
     .set({ extractedAt: new Date(), updatedAt: new Date() })
     .where(eq(sspDocumentsTable.id, id));
 
-  res.json({ sectionsCount: sections.length, mappingsCount: controlMappings.length });
+  res.json({ sectionsCount: sections.length, mappingsCount: validMappings.length });
 });
 
 // ── Set primary SSP ───────────────────────────────────────────────────────────
@@ -469,8 +482,23 @@ router.get("/ssp/:id/control-mappings", requireAuth, requireOrg, async (req, res
   if (!doc) return res.status(404).json({ error: "Not found" });
 
   let mappings = await db
-    .select()
+    .select({
+      id: sspControlMappingsTable.id,
+      controlRef: sspControlMappingsTable.controlRef,
+      controlDbId: sspControlMappingsTable.controlDbId,
+      implementationNarrative: sspControlMappingsTable.implementationNarrative,
+      sourceSection: sspControlMappingsTable.sourceSection,
+      isEdited: sspControlMappingsTable.isEdited,
+      controlStatus: sql<string | null>`${controlAssessmentsTable.status}`,
+    })
     .from(sspControlMappingsTable)
+    .leftJoin(
+      controlAssessmentsTable,
+      and(
+        sql`${sspControlMappingsTable.controlDbId} = ${controlAssessmentsTable.controlId}`,
+        eq(controlAssessmentsTable.organizationId, orgId)
+      )
+    )
     .where(eq(sspControlMappingsTable.sspDocumentId, id))
     .orderBy(sspControlMappingsTable.controlRef);
 
@@ -479,12 +507,11 @@ router.get("/ssp/:id/control-mappings", requireAuth, requireOrg, async (req, res
     mappings = mappings.filter(
       (m) =>
         m.controlRef.toLowerCase().includes(q) ||
-        m.implementationNarrative.toLowerCase().includes(q) ||
-        (m.policyReference ?? "").toLowerCase().includes(q)
+        m.implementationNarrative.toLowerCase().includes(q)
     );
   }
   if (status) {
-    mappings = mappings.filter((m) => m.sspStatus === status);
+    mappings = mappings.filter((m) => m.controlStatus === status);
   }
 
   res.json(mappings);

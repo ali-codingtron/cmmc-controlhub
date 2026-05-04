@@ -44,6 +44,7 @@ interface SspStats {
   totalMappings: number;
   editedMappings: number;
   withNarrative: number;
+  totalControls: number;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -237,8 +238,8 @@ export default function SspOverview() {
         <StatCard
           icon={ShieldCheck}
           label="Controls Mapped"
-          value={stats?.totalMappings ?? "—"}
-          sub="with narratives"
+          value={stats ? `${stats.totalMappings} / ${stats.totalControls}` : "—"}
+          sub="unique valid controls"
           color="text-green-600"
           bg="bg-green-50"
         />
