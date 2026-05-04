@@ -171,32 +171,13 @@ function ReadinessGauge({ value }: { value: number }) {
   );
 }
 
-function QualityBar({ label, value, total, colorClass }: {
-  label: string;
-  value: number;
-  total: number;
-  colorClass: string;
-}) {
-  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
-  return (
-    <div className="space-y-1">
-      <div className="flex justify-between items-center">
-        <span className="text-xs text-muted-foreground">{label}</span>
-        <span className="text-xs font-semibold tabular-nums">{value}<span className="font-normal text-muted-foreground">/{total}</span></span>
-      </div>
-      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-        <div className={cn("h-full rounded-full transition-all duration-500", colorClass)} style={{ width: `${pct}%` }} />
-      </div>
-    </div>
-  );
-}
 
 function SkeletonDashboard() {
   return (
     <div className="space-y-6 animate-pulse">
       <div className="h-24 bg-muted rounded-xl" />
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-        {[...Array(6)].map((_, i) => <div key={i} className="h-40 bg-muted rounded-lg" />)}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+        {[...Array(5)].map((_, i) => <div key={i} className="h-40 bg-muted rounded-lg" />)}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         <div className="lg:col-span-3 h-80 bg-muted rounded-lg" />
@@ -241,11 +222,6 @@ export default function Dashboard() {
   const monitoringDueSoon = summary.monitoringDueSoon ?? 0;
   const monitoringTotal = summary.monitoringTotal ?? 0;
   const overduePoams = summary.overduePoams ?? 0;
-  const controlsWithApprovedEvidence = summary.controlsWithApprovedEvidence ?? 0;
-  const controlsWithNarrative = summary.controlsWithNarrative ?? 0;
-  const activePolicies = summary.activePolicies ?? 0;
-  const activeProcedures = summary.activeProcedures ?? 0;
-
   const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
   const lastActivity = recentActivity?.[0]?.timestamp;
 
@@ -320,8 +296,8 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── 6 KPI Cards ───────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+      {/* ── 5 KPI Cards ───────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
 
         {/* 1. Overall Readiness */}
         <KpiCard title="Overall Readiness" className="xl:col-span-1">
@@ -476,35 +452,6 @@ export default function Dashboard() {
           ) : null}
         </KpiCard>
 
-        {/* 6. Audit Readiness Quality */}
-        <KpiCard title="Readiness Quality" href="/reports/audit" className="xl:col-span-1">
-          <div className="flex-1 space-y-2.5">
-            <QualityBar
-              label="Evidence Coverage"
-              value={controlsWithApprovedEvidence}
-              total={total}
-              colorClass={controlsWithApprovedEvidence / Math.max(total, 1) >= 0.8 ? "bg-emerald-500" : "bg-amber-500"}
-            />
-            <QualityBar
-              label="Narratives Written"
-              value={controlsWithNarrative}
-              total={total}
-              colorClass={controlsWithNarrative / Math.max(total, 1) >= 0.8 ? "bg-emerald-500" : "bg-amber-500"}
-            />
-            <QualityBar
-              label="Active Policies"
-              value={activePolicies}
-              total={Math.max(activePolicies, 10)}
-              colorClass="bg-blue-500"
-            />
-            <QualityBar
-              label="Active Procedures"
-              value={activeProcedures}
-              total={Math.max(activeProcedures, 10)}
-              colorClass="bg-blue-500"
-            />
-          </div>
-        </KpiCard>
       </div>
 
       {/* ── Middle: Domain Readiness + Recent Activity ──────────── */}
