@@ -134,6 +134,17 @@ All routes under `/api` prefix, JWT-authenticated:
 - `/api/automation/doc-status` — overview stats (org-scoped)
 - `/api/automation/run-doc-checks` — mark expired docs, generate overdue tasks (org-scoped)
 
+### Evidence File Storage
+
+Evidence files are stored in **Replit Object Storage (GCS-backed)** — persistent across deployments.
+
+- **Upload flow**: multer `memoryStorage()` buffers the file in RAM → server uploads buffer directly to GCS → stores `/objects/evidence/<uuid><ext>` as `fileKey` in the DB
+- **Download / Preview flow**: server reads `fileKey`; if it starts with `/objects/` → stream from GCS; otherwise fall back to local disk (backward-compat for pre-migration dev records)
+- **Delete**: removes the GCS object (best-effort) + the DB record
+- **GCS client**: `artifacts/api-server/src/lib/objectStorage.ts` (copied from object-storage skill; uses Replit sidecar auth — do not modify the client setup)
+- **ACL**: `artifacts/api-server/src/lib/objectAcl.ts` (framework in place; evidence objects are currently served without ACL enforcement — authenticated by JWT middleware on the route)
+- **Bucket**: `DEFAULT_OBJECT_STORAGE_BUCKET_ID` env var (already provisioned)
+
 ### Important Technical Notes
 
 1. **wouter v3 routing**: Uses flat Switch with catch-all `<Route>` (no path) for the Layout wrapper. Avoid nested Switch inside `<Route path="/">` — this fails because wouter v3 does EXACT matching by default.

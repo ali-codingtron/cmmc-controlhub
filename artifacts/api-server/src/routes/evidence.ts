@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import path from "path";
-import { createReadStream, mkdirSync, unlink as fsUnlink } from "fs";
+import { createReadStream } from "fs";
 import {
   db,
   evidenceItemsTable,
@@ -28,21 +28,66 @@ import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 import { logAudit } from "../lib/audit";
 import { randomUUID } from "crypto";
+import { objectStorageClient, ObjectStorageService } from "../lib/objectStorage";
 
-// __dirname is injected by the esbuild build banner and points to dist/ at runtime
+const objectStorageService = new ObjectStorageService();
+
+// ── GCS upload helper ──────────────────────────────────────────────────────
+// Uploads a buffer directly to GCS (server-side, bypassing presigned URL flow).
+// Returns the fileKey to store in the database (e.g. /objects/evidence/uuid.pdf).
+async function uploadBufferToGCS(
+  buffer: Buffer,
+  mimeType: string,
+  ext: string,
+  originalFilename: string
+): Promise<string> {
+  const privateDir = objectStorageService.getPrivateObjectDir(); // e.g. /bucket-name/private
+  const normalised = privateDir.startsWith("/") ? privateDir : `/${privateDir}`;
+  const parts = normalised.split("/").filter(Boolean);
+  const bucketName = parts[0];
+  const prefix = parts.slice(1).join("/"); // e.g. "private"
+
+  const objectId = randomUUID();
+  const objectName = prefix
+    ? `${prefix}/evidence/${objectId}${ext}`
+    : `evidence/${objectId}${ext}`;
+
+  await objectStorageClient
+    .bucket(bucketName)
+    .file(objectName)
+    .save(buffer, {
+      contentType: mimeType,
+      metadata: {
+        contentDisposition: `attachment; filename="${encodeURIComponent(originalFilename)}"`,
+      },
+    });
+
+  return `/objects/evidence/${objectId}${ext}`;
+}
+
+// ── GCS delete helper ──────────────────────────────────────────────────────
+async function deleteFromGCS(fileKey: string): Promise<void> {
+  try {
+    const file = await objectStorageService.getObjectEntityFile(fileKey);
+    await file.delete();
+  } catch {
+    // Best effort — ignore missing objects
+  }
+}
+
+// ── Local disk fallback (development backward-compat only) ─────────────────
+// Files uploaded before GCS migration have keys like "evidence/uuid.ext" and
+// live on the local container disk. We keep this path so dev env old records
+// still work, but all NEW uploads go to GCS.
 const UPLOADS_DIR = path.resolve(__dirname, "..", "uploads", "evidence");
-mkdirSync(UPLOADS_DIR, { recursive: true });
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${randomUUID()}${ext}`);
-  },
-});
+function isGcsKey(fileKey: string): boolean {
+  return fileKey.startsWith("/objects/");
+}
 
+// multer now buffers in memory — file is uploaded to GCS in the route handler.
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
 });
 
@@ -281,11 +326,19 @@ router.post(
     const uploadStatus = (allowedStatuses as readonly string[]).includes(rawStatus) ? rawStatus as typeof allowedStatuses[number] : "draft";
 
     const id = randomUUID();
-    const storedFilename = req.file.filename;
     const originalFilename = req.file.originalname;
     const fileSize = req.file.size;
     const mimeType = req.file.mimetype;
-    const fileKey = path.join("evidence", storedFilename);
+    const ext = path.extname(originalFilename);
+
+    // Upload buffer to GCS (persistent storage — survives redeployments)
+    let fileKey: string;
+    try {
+      fileKey = await uploadBufferToGCS(req.file.buffer, mimeType, ext, originalFilename);
+    } catch (err) {
+      res.status(500).json({ error: "File upload to storage failed" });
+      return;
+    }
 
     await db.insert(evidenceItemsTable).values({
       id,
@@ -456,8 +509,6 @@ router.get("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
 router.get("/evidence/:id/preview", requireAuth, requireOrg, async (req, res) => {
   const orgId = req.orgId;
 
-  // Look up by ID only — we verify org access below so the query is not
-  // sensitive to the caller sending a slightly stale or mismatched org header.
   const [item] = await db
     .select({
       id: evidenceItemsTable.id,
@@ -477,13 +528,11 @@ router.get("/evidence/:id/preview", requireAuth, requireOrg, async (req, res) =>
   }
 
   // Verify the caller has access to the org that owns this evidence.
-  // Admins can preview any evidence; regular users must be in the same org.
   if (req.authUser?.role !== "admin" && item.organizationId !== orgId) {
     res.status(403).json({ error: "Access denied" });
     return;
   }
 
-  const filePath = path.resolve(UPLOADS_DIR, "..", item.fileKey);
   const contentType = item.mimeType ?? "application/octet-stream";
   const fileName = item.fileName ?? "evidence-file";
 
@@ -491,13 +540,27 @@ router.get("/evidence/:id/preview", requireAuth, requireOrg, async (req, res) =>
   res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(fileName)}"`);
   res.setHeader("X-Content-Type-Options", "nosniff");
 
-  const stream = createReadStream(filePath);
-  stream.on("error", () => {
-    if (!res.headersSent) {
-      res.status(404).json({ error: "File not found on disk" });
+  if (isGcsKey(item.fileKey)) {
+    // Serve from GCS (persistent object storage)
+    try {
+      const file = await objectStorageService.getObjectEntityFile(item.fileKey);
+      const nodeStream = file.createReadStream();
+      nodeStream.on("error", () => {
+        if (!res.headersSent) res.status(404).json({ error: "File not found in storage" });
+      });
+      nodeStream.pipe(res);
+    } catch {
+      if (!res.headersSent) res.status(404).json({ error: "File not found in storage" });
     }
-  });
-  stream.pipe(res);
+  } else {
+    // Backward-compat: serve from local disk (dev env only)
+    const filePath = path.resolve(UPLOADS_DIR, "..", item.fileKey);
+    const stream = createReadStream(filePath);
+    stream.on("error", () => {
+      if (!res.headersSent) res.status(404).json({ error: "File not found on disk" });
+    });
+    stream.pipe(res);
+  }
 
   logAudit(req, "viewed", "evidence", item.id, { entityLabel: item.title ?? fileName }).catch(() => {});
 });
@@ -529,20 +592,33 @@ router.get("/evidence/:id/download", requireAuth, requireOrg, async (req, res) =
     return;
   }
 
-  const filePath = path.resolve(UPLOADS_DIR, "..", item.fileKey);
   const contentType = item.mimeType ?? "application/octet-stream";
   const downloadName = item.fileName ?? "evidence-file";
 
   res.setHeader("Content-Type", contentType);
   res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(downloadName)}"`);
 
-  const stream = createReadStream(filePath);
-  stream.on("error", () => {
-    if (!res.headersSent) {
-      res.status(404).json({ error: "File not found on disk" });
+  if (isGcsKey(item.fileKey)) {
+    // Serve from GCS (persistent object storage)
+    try {
+      const file = await objectStorageService.getObjectEntityFile(item.fileKey);
+      const nodeStream = file.createReadStream();
+      nodeStream.on("error", () => {
+        if (!res.headersSent) res.status(404).json({ error: "File not found in storage" });
+      });
+      nodeStream.pipe(res);
+    } catch {
+      if (!res.headersSent) res.status(404).json({ error: "File not found in storage" });
     }
-  });
-  stream.pipe(res);
+  } else {
+    // Backward-compat: serve from local disk (dev env only)
+    const filePath = path.resolve(UPLOADS_DIR, "..", item.fileKey);
+    const stream = createReadStream(filePath);
+    stream.on("error", () => {
+      if (!res.headersSent) res.status(404).json({ error: "File not found on disk" });
+    });
+    stream.pipe(res);
+  }
 
   logAudit(req, "downloaded", "evidence", item.id, { entityLabel: item.title ?? downloadName }).catch(() => {});
 });
@@ -588,95 +664,74 @@ router.patch("/evidence/bulk-status", requireAuth, requireOrg, async (req, res) 
       )
     );
 
-  // Write audit logs for each updated item
-  for (const row of rows) {
-    await logAudit(req, "status_changed", "evidence", row.id, {
-      entityLabel: row.title ?? undefined,
-      previousValue: row.status,
-      newValue: status,
-    });
-  }
+  await Promise.all(
+    rows.map((row) =>
+      logAudit(req, "status_changed", "evidence", row.id, {
+        entityLabel: row.title,
+        previousValue: row.status,
+        newValue: status,
+      })
+    )
+  );
 
   res.json({ updated: rows.length });
 });
 
-// ── Bulk remove from control ─────────────────────────────────────────────────
-router.post("/evidence/bulk-unlink-control", requireAuth, requireOrg, async (req, res) => {
-  const { ids, controlId } = req.body as { ids: string[]; controlId: string };
-  const orgId = req.orgId;
-
-  if (!Array.isArray(ids) || ids.length === 0 || !controlId) {
-    res.status(400).json({ error: "ids and controlId required" });
-    return;
-  }
-
-  await db
-    .delete(evidenceControlLinksTable)
-    .where(
-      and(
-        inArray(evidenceControlLinksTable.evidenceId, ids),
-        eq(evidenceControlLinksTable.controlId, controlId)
-      )
-    );
-
-  for (const id of ids) {
-    await logAudit(req, "link_removed", "evidence", id, {
-      entityLabel: controlId,
-      previousValue: controlId,
-    });
-  }
-
-  res.json({ unlinked: ids.length });
-});
-
-// ── Update evidence (status, fields) ──────────────────────────────────────
+// ── Patch evidence metadata ────────────────────────────────────────────────
 router.patch("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
   const orgId = req.orgId;
 
-  const [existing] = await db
-    .select()
+  const [item] = await db
+    .select({ id: evidenceItemsTable.id, title: evidenceItemsTable.title, status: evidenceItemsTable.status })
     .from(evidenceItemsTable)
-    .where(
-      and(
-        eq(evidenceItemsTable.id, req.params.id),
-        orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined
-      )
-    )
+    .where(and(eq(evidenceItemsTable.id, req.params.id), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined))
     .limit(1);
 
-  if (!existing) {
+  if (!item) {
     res.status(404).json({ error: "Not found" });
     return;
   }
 
   const {
-    title, description, evidenceType, sourceSystem, confidentialityLevel,
-    expiresAt, tags, assessorSummary, internalNotes, collectedAt, status,
+    title,
+    description,
+    evidenceType,
+    status,
+    sourceSystem,
+    confidentialityLevel,
+    collectedAt,
+    expiresAt,
+    reviewDueDate,
+    assessorSummary,
+    internalNotes,
+    tags,
   } = req.body;
 
-  await db
-    .update(evidenceItemsTable)
-    .set({
-      title: title ?? existing.title,
-      description: description !== undefined ? description : existing.description,
-      evidenceType: evidenceType ?? existing.evidenceType,
-      status: status ?? existing.status,
-      sourceSystem: sourceSystem !== undefined ? sourceSystem : existing.sourceSystem,
-      confidentialityLevel: confidentialityLevel !== undefined ? confidentialityLevel : existing.confidentialityLevel,
-      expiresAt: expiresAt ? new Date(expiresAt) : existing.expiresAt,
-      tags: tags ?? existing.tags,
-      assessorSummary: assessorSummary !== undefined ? assessorSummary : existing.assessorSummary,
-      internalNotes: internalNotes !== undefined ? internalNotes : existing.internalNotes,
-      collectedAt: collectedAt ? new Date(collectedAt) : existing.collectedAt,
-      updatedAt: new Date(),
-    })
-    .where(eq(evidenceItemsTable.id, req.params.id));
+  const updateData: Record<string, unknown> = { updatedAt: new Date() };
+  if (title !== undefined) updateData.title = title;
+  if (description !== undefined) updateData.description = description;
+  if (evidenceType !== undefined) updateData.evidenceType = evidenceType;
+  if (status !== undefined) updateData.status = status;
+  if (sourceSystem !== undefined) updateData.sourceSystem = sourceSystem;
+  if (confidentialityLevel !== undefined) updateData.confidentialityLevel = confidentialityLevel;
+  if (collectedAt !== undefined) updateData.collectedAt = collectedAt ? new Date(collectedAt) : null;
+  if (expiresAt !== undefined) updateData.expiresAt = expiresAt ? new Date(expiresAt) : null;
+  if (reviewDueDate !== undefined) updateData.reviewDueDate = reviewDueDate ? new Date(reviewDueDate) : null;
+  if (assessorSummary !== undefined) updateData.assessorSummary = assessorSummary;
+  if (internalNotes !== undefined) updateData.internalNotes = internalNotes;
+  if (tags !== undefined) updateData.tags = tags;
 
-  await logAudit(req, "updated", "evidence", req.params.id, {
-    entityLabel: existing.title,
-    previousValue: status ? existing.status : undefined,
-    newValue: status ?? undefined,
-  });
+  await db.update(evidenceItemsTable).set(updateData as any).where(eq(evidenceItemsTable.id, req.params.id));
+
+  if (status && status !== item.status) {
+    await logAudit(req, "status_changed", "evidence", req.params.id, {
+      entityLabel: title ?? item.title,
+      previousValue: item.status,
+      newValue: status,
+    });
+  } else {
+    await logAudit(req, "updated", "evidence", req.params.id, { entityLabel: title ?? item.title });
+  }
 
   const [updated] = await db
     .select(evidenceSelect)
@@ -685,15 +740,15 @@ router.patch("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
     .where(eq(evidenceItemsTable.id, req.params.id))
     .limit(1);
 
-  const enriched = await attachLinkedControls([updated]);
-  res.json(enriched[0]);
+  res.json(updated);
 });
 
 // ── Archive evidence ───────────────────────────────────────────────────────
 router.post("/evidence/:id/archive", requireAuth, requireOrg, async (req, res) => {
   const orgId = req.orgId;
+
   const [item] = await db
-    .select()
+    .select({ id: evidenceItemsTable.id, title: evidenceItemsTable.title, status: evidenceItemsTable.status })
     .from(evidenceItemsTable)
     .where(and(eq(evidenceItemsTable.id, req.params.id), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined))
     .limit(1);
@@ -728,17 +783,19 @@ router.delete("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
   // Write audit log BEFORE deleting so we have a record
   await logAudit(req, "deleted", "evidence", req.params.id, { entityLabel: item.title });
 
-  // Remove control links (evidenceControlLinksTable has onDelete cascade from evidence_items,
-  // but being explicit in case of manual unlink ordering)
   await db.delete(evidenceControlLinksTable).where(eq(evidenceControlLinksTable.evidenceId, req.params.id));
-
-  // Delete DB record
   await db.delete(evidenceItemsTable).where(eq(evidenceItemsTable.id, req.params.id));
 
-  // Attempt to delete file from disk (best effort, don't fail the request if missing)
+  // Clean up stored file (best effort)
   if (item.fileKey) {
-    const filePath = path.resolve(UPLOADS_DIR, "..", item.fileKey);
-    fsUnlink(filePath, () => {});
+    if (isGcsKey(item.fileKey)) {
+      deleteFromGCS(item.fileKey).catch(() => {});
+    } else {
+      // Legacy local disk cleanup
+      const { unlink } = await import("fs");
+      const filePath = path.resolve(UPLOADS_DIR, "..", item.fileKey);
+      unlink(filePath, () => {});
+    }
   }
 
   res.json({ id: req.params.id, deleted: true });
@@ -748,7 +805,6 @@ router.delete("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
 router.delete("/evidence/:id/controls/:controlId", requireAuth, requireOrg, async (req, res) => {
   const orgId = req.orgId;
 
-  // Verify evidence belongs to this org
   const [item] = await db
     .select({ id: evidenceItemsTable.id, title: evidenceItemsTable.title })
     .from(evidenceItemsTable)
