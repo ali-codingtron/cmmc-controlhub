@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -15,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { X, Activity, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
+import { X, Activity, CheckCircle2, Clock, AlertTriangle, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type MonitoringFrequency = "daily" | "weekly" | "monthly" | "quarterly" | "annually";
@@ -86,7 +87,6 @@ function toDateInputValue(ts: string | null): string {
 
 /**
  * An item is overdue whenever its nextDue has passed — regardless of status.
- * A "current" item with a past nextDue is overdue for the new cycle.
  */
 function isOverdue(item: MonitoringItem): boolean {
   if (!item.nextDue) return false;
@@ -121,6 +121,10 @@ export default function MonitoringTracker() {
   const [controlRefFilter, setControlRefFilter] = useState("all");
   const [pendingNotes, setPendingNotes] = useState<Record<string, string>>({});
 
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkFreq, setBulkFreq] = useState<MonitoringFrequency | "">("");
+
   const { data: items = [], isLoading } = useQuery<MonitoringItem[]>({
     queryKey: ["monitoring", activeOrg?.id],
     queryFn: async () => {
@@ -144,6 +148,7 @@ export default function MonitoringTracker() {
       nextDue?: string | null;
       status?: MonitoringStatus;
       notes?: string;
+      frequency?: MonitoringFrequency;
     }) => {
       if (!activeOrg?.id) throw new Error("No org selected");
       const r = await fetch(`/api/monitoring/${id}`, {
@@ -184,14 +189,92 @@ export default function MonitoringTracker() {
 
   const overdueCount = items.filter(isOverdue).length;
   const dueSoonCount = items.filter((i) => !isOverdue(i) && isDueSoon(i)).length;
-  // "Current" = status is current AND not overdue yet
   const currentCount = items.filter((i) => i.status === "current" && !isOverdue(i)).length;
+
+  // Checkbox helpers
+  const filteredIds = filtered.map((i) => i.id);
+  const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id));
+  const someSelected = filteredIds.some((id) => selectedIds.has(id));
+
+  function toggleSelectAll() {
+    if (allSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        filteredIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        filteredIds.forEach((id) => next.add(id));
+        return next;
+      });
+    }
+  }
+
+  function toggleSelectOne(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  /**
+   * Frequency change handler for a single row.
+   * Recalculates nextDue from lastCompleted (or today if none).
+   */
+  function handleFrequencyChange(item: MonitoringItem, newFreq: MonitoringFrequency) {
+    const baseDate = item.lastCompleted
+      ? toDateInputValue(item.lastCompleted)
+      : todayStr();
+    const nextDue = calcNextDueFrom(newFreq, baseDate);
+    updateMutation.mutate(
+      { id: item.id, frequency: newFreq, nextDue },
+      {
+        onSuccess: () => {
+          toast({
+            title: "Frequency updated",
+            description: "Frequency updated and next due recalculated",
+          });
+        },
+      }
+    );
+  }
+
+  /**
+   * Bulk frequency change — applies to all selected rows.
+   */
+  async function handleBulkFrequencyChange() {
+    if (!bulkFreq || selectedIds.size === 0 || !activeOrg?.id) return;
+    const targets = items.filter((i) => selectedIds.has(i.id));
+    let successCount = 0;
+    await Promise.all(
+      targets.map(async (item) => {
+        const baseDate = item.lastCompleted
+          ? toDateInputValue(item.lastCompleted)
+          : todayStr();
+        const nextDue = calcNextDueFrom(bulkFreq as MonitoringFrequency, baseDate);
+        const r = await fetch(`/api/monitoring/${item.id}`, {
+          method: "PATCH",
+          headers: makeHeaders(activeOrg.id),
+          body: JSON.stringify({ frequency: bulkFreq, nextDue }),
+        });
+        if (r.ok) successCount++;
+      })
+    );
+    queryClient.invalidateQueries({ queryKey: ["monitoring", activeOrg?.id] });
+    setSelectedIds(new Set());
+    setBulkFreq("");
+    toast({
+      title: `${successCount} item${successCount !== 1 ? "s" : ""} updated`,
+      description: "Frequency updated and next due recalculated",
+    });
+  }
 
   /**
    * Status change handler.
-   * When marking current:
-   *   - Fill lastCompleted = today if currently blank
-   *   - Always recalculate nextDue from the effective lastCompleted date
    */
   function handleStatusChange(item: MonitoringItem, newStatus: MonitoringStatus) {
     const today = todayStr();
@@ -205,21 +288,13 @@ export default function MonitoringTracker() {
       const baseDate = item.lastCompleted
         ? toDateInputValue(item.lastCompleted)
         : today;
-
-      if (!item.lastCompleted) {
-        patch.lastCompleted = today;
-      }
+      if (!item.lastCompleted) patch.lastCompleted = today;
       patch.nextDue = calcNextDueFrom(item.frequency, baseDate);
     }
 
     updateMutation.mutate({ id: item.id, ...patch });
   }
 
-  /**
-   * Date field change handler.
-   * When lastCompleted changes, automatically recalculate nextDue.
-   * When nextDue changes, save as-is (manual override).
-   */
   function handleLastCompletedChange(item: MonitoringItem, value: string) {
     if (value) {
       const nextDue = calcNextDueFrom(item.frequency, value);
@@ -243,6 +318,8 @@ export default function MonitoringTracker() {
       return next;
     });
   }
+
+  const selectedCount = filteredIds.filter((id) => selectedIds.has(id)).length;
 
   return (
     <div className="space-y-6">
@@ -291,9 +368,9 @@ export default function MonitoringTracker() {
         </Card>
       </div>
 
-      {/* Filters */}
       <Card>
         <CardContent className="pt-4 pb-0">
+          {/* Filters row */}
           <div className="flex flex-wrap gap-3 items-center">
             <Input
               placeholder="Search tasks or descriptions..."
@@ -356,6 +433,44 @@ export default function MonitoringTracker() {
               {isLoading ? "Loading..." : `${filtered.length} item${filtered.length !== 1 ? "s" : ""}`}
             </span>
           </div>
+
+          {/* Bulk action toolbar — shown when rows are selected */}
+          {someSelected && selectedCount > 0 && (
+            <div className="mt-3 flex items-center gap-3 p-3 bg-muted/60 rounded-lg border border-border">
+              <RefreshCw className="h-4 w-4 text-muted-foreground shrink-0" />
+              <span className="text-sm font-medium text-foreground">
+                {selectedCount} item{selectedCount !== 1 ? "s" : ""} selected
+              </span>
+              <span className="text-sm text-muted-foreground">— Change frequency to:</span>
+              <Select value={bulkFreq} onValueChange={(v) => setBulkFreq(v as MonitoringFrequency)}>
+                <SelectTrigger className="w-36 h-8 text-sm">
+                  <SelectValue placeholder="Select..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="quarterly">Quarterly</SelectItem>
+                  <SelectItem value="annually">Annually</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                disabled={!bulkFreq}
+                onClick={handleBulkFrequencyChange}
+              >
+                Apply
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setSelectedIds(new Set()); setBulkFreq(""); }}
+                className="text-muted-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
         </CardContent>
 
         <CardContent className="pt-4 overflow-x-auto">
@@ -369,7 +484,15 @@ export default function MonitoringTracker() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-24">Frequency</TableHead>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={allSelected}
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Select all"
+                      className={someSelected && !allSelected ? "opacity-50" : ""}
+                    />
+                  </TableHead>
+                  <TableHead className="w-32">Frequency</TableHead>
                   <TableHead className="w-48">Task</TableHead>
                   <TableHead className="w-24">Control ID</TableHead>
                   <TableHead>Description</TableHead>
@@ -382,7 +505,7 @@ export default function MonitoringTracker() {
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
+                    <TableCell colSpan={9} className="text-center text-muted-foreground py-10">
                       No monitoring items match the current filters.
                     </TableCell>
                   </TableRow>
@@ -390,19 +513,64 @@ export default function MonitoringTracker() {
                   filtered.map((item) => {
                     const overdue = isOverdue(item);
                     const dueSoon = !overdue && isDueSoon(item);
+                    const isSelected = selectedIds.has(item.id);
                     return (
                       <TableRow
                         key={item.id}
                         className={cn(
                           overdue && "bg-red-50/60 dark:bg-red-950/15",
-                          !overdue && dueSoon && "bg-yellow-50/50 dark:bg-yellow-950/10"
+                          !overdue && dueSoon && "bg-yellow-50/50 dark:bg-yellow-950/10",
+                          isSelected && "bg-primary/5 dark:bg-primary/10"
                         )}
                       >
-                        {/* Frequency */}
+                        {/* Checkbox */}
                         <TableCell>
-                          <Badge className={cn("text-[11px] font-medium", FREQUENCY_COLOR[item.frequency])}>
-                            {FREQUENCY_LABEL[item.frequency]}
-                          </Badge>
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleSelectOne(item.id)}
+                            aria-label={`Select ${item.task}`}
+                          />
+                        </TableCell>
+
+                        {/* Frequency — inline editable dropdown */}
+                        <TableCell>
+                          <Select
+                            value={item.frequency}
+                            onValueChange={(v) => handleFrequencyChange(item, v as MonitoringFrequency)}
+                          >
+                            <SelectTrigger className="h-7 w-28 border-0 shadow-none p-0 focus:ring-0 bg-transparent hover:bg-muted/60 rounded px-1.5">
+                              <Badge className={cn("text-[11px] font-medium cursor-pointer", FREQUENCY_COLOR[item.frequency])}>
+                                {FREQUENCY_LABEL[item.frequency]}
+                              </Badge>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="daily">
+                                <span className="flex items-center gap-2">
+                                  <span className={cn("inline-block px-1.5 py-0.5 rounded text-[11px] font-medium", FREQUENCY_COLOR["daily"])}>Daily</span>
+                                </span>
+                              </SelectItem>
+                              <SelectItem value="weekly">
+                                <span className="flex items-center gap-2">
+                                  <span className={cn("inline-block px-1.5 py-0.5 rounded text-[11px] font-medium", FREQUENCY_COLOR["weekly"])}>Weekly</span>
+                                </span>
+                              </SelectItem>
+                              <SelectItem value="monthly">
+                                <span className="flex items-center gap-2">
+                                  <span className={cn("inline-block px-1.5 py-0.5 rounded text-[11px] font-medium", FREQUENCY_COLOR["monthly"])}>Monthly</span>
+                                </span>
+                              </SelectItem>
+                              <SelectItem value="quarterly">
+                                <span className="flex items-center gap-2">
+                                  <span className={cn("inline-block px-1.5 py-0.5 rounded text-[11px] font-medium", FREQUENCY_COLOR["quarterly"])}>Quarterly</span>
+                                </span>
+                              </SelectItem>
+                              <SelectItem value="annually">
+                                <span className="flex items-center gap-2">
+                                  <span className={cn("inline-block px-1.5 py-0.5 rounded text-[11px] font-medium", FREQUENCY_COLOR["annually"])}>Annually</span>
+                                </span>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
                         </TableCell>
 
                         {/* Task */}

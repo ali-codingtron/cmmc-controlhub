@@ -94,11 +94,12 @@ router.patch("/monitoring/:id", requireAuth, requireOrg, async (req, res) => {
     return;
   }
 
-  const { lastCompleted, nextDue, status, notes } = req.body;
+  const { lastCompleted, nextDue, status, notes, frequency } = req.body;
 
   await db
     .update(monitoringItemsTable)
     .set({
+      frequency: frequency !== undefined ? frequency : existing.frequency,
       lastCompleted:
         lastCompleted !== undefined
           ? lastCompleted
