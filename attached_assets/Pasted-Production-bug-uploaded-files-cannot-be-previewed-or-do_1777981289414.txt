@@ -1,0 +1,87 @@
+Production bug: uploaded files cannot be previewed or downloaded.
+
+Current issue:
+Evidence records exist in production, but preview returns Server error 404 and download does not work.
+
+This is likely because files are being saved to local disk in development, but production storage is not persistent or the file path is different.
+
+Fix file storage for production.
+
+Requirements:
+
+1. Diagnose current storage
+Inspect:
+- upload endpoint
+- preview endpoint
+- download endpoint
+- database file fields
+- production filesystem path
+
+Confirm whether files are being stored in local /uploads but not available after deploy.
+
+2. Use persistent object storage
+Do not rely on local filesystem for production uploads.
+
+Update file storage to use Replit-compatible persistent storage or object storage.
+
+Preferred:
+- Replit Object Storage if available
+- otherwise S3-compatible object storage
+
+Store in database:
+- original_filename
+- stored_filename
+- storage_key
+- mime_type
+- file_size
+- uploaded_at
+- hash_sha256 if available
+
+3. Fix upload flow
+When evidence is uploaded:
+- save file to persistent storage
+- save storage_key in database
+- confirm file exists after upload
+- return success only if storage write succeeds
+
+4. Fix preview endpoint
+GET /api/evidence/:id/preview
+
+Must:
+- load evidence record
+- verify organization access
+- retrieve file from persistent storage using storage_key
+- return file inline with correct Content-Type
+- set Content-Disposition: inline
+
+5. Fix download endpoint
+GET /api/evidence/:id/download
+
+Must:
+- retrieve same file from persistent storage
+- return Content-Disposition: attachment
+- preserve original filename
+
+6. Migration/backfill
+For existing evidence records:
+- detect records where file path points to missing local file
+- show clear message:
+  “File missing from storage. Please re-upload this file.”
+- add a Re-upload File button on evidence detail page
+- do not show generic 404 to the user
+
+7. UI error handling
+If preview fails:
+- show a clear reason
+- show Re-upload File option if storage file is missing
+- keep metadata visible
+
+8. Acceptance tests
+- Upload a new PNG in production
+- Preview works
+- Download works
+- Refresh page
+- Preview/download still work
+- Redeploy/restart app
+- Preview/download still work
+- Existing broken records show “File missing from storage” instead of generic 404
