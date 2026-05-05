@@ -2200,7 +2200,9 @@ interface SspMappingShape {
   controlRef: string;
   implementationNarrative: string;
   policyReference: string | null;
-  sspStatus: string | null;
+  controlStatus: string | null;
+  hasNarrative: boolean;
+  hasEvidence: boolean;
   sourceSection: string | null;
   isEdited: boolean;
   sspDocumentTitle?: string;
@@ -2214,7 +2216,6 @@ function SspTab({ controlRef, orgId }: { controlRef: string; orgId?: string }) {
   const [editMode, setEditMode] = useState(false);
   const [narrative, setNarrative] = useState("");
   const [policyRef, setPolicyRef] = useState("");
-  const [sspStatus, setSspStatus] = useState("planned");
   const [saving, setSaving] = useState(false);
 
   const { data: mapping, isLoading } = useQuery<SspMappingShape | null>({
@@ -2237,10 +2238,19 @@ function SspTab({ controlRef, orgId }: { controlRef: string; orgId?: string }) {
     enabled: !!orgId && !!controlRef,
   });
 
+  const CONTROL_STATUS_OPTS: Record<string, { label: string; color: string }> = {
+    not_started: { label: "Not Started", color: "bg-gray-100 text-gray-600" },
+    in_progress: { label: "In Progress", color: "bg-blue-100 text-blue-700" },
+    implemented: { label: "Implemented", color: "bg-green-100 text-green-700" },
+    needs_review: { label: "Needs Review", color: "bg-yellow-100 text-yellow-700" },
+    assessor_ready: { label: "Assessor Ready", color: "bg-purple-100 text-purple-700" },
+    not_applicable: { label: "N/A", color: "bg-gray-100 text-gray-400" },
+    at_risk: { label: "At Risk", color: "bg-red-100 text-red-700" },
+  };
+
   const startEdit = () => {
     setNarrative(mapping?.implementationNarrative ?? "");
     setPolicyRef(mapping?.policyReference ?? "");
-    setSspStatus(mapping?.sspStatus ?? "planned");
     setEditMode(true);
   };
 
@@ -2256,7 +2266,7 @@ function SspTab({ controlRef, orgId }: { controlRef: string; orgId?: string }) {
           "Content-Type": "application/json",
           ...(orgId ? { "X-Organization-ID": orgId } : {}),
         },
-        body: JSON.stringify({ implementationNarrative: narrative, policyReference: policyRef, sspStatus }),
+        body: JSON.stringify({ implementationNarrative: narrative, policyReference: policyRef }),
       });
       if (!r.ok) throw new Error("Failed");
       queryClient.invalidateQueries({ queryKey: ["ssp-control-mapping", controlRef, orgId] });
@@ -2267,20 +2277,6 @@ function SspTab({ controlRef, orgId }: { controlRef: string; orgId?: string }) {
     } finally {
       setSaving(false);
     }
-  };
-
-  const SSP_STATUS_OPTS = [
-    { value: "planned", label: "Planned" },
-    { value: "implemented", label: "Implemented" },
-    { value: "alternative", label: "Alternative" },
-    { value: "not_applicable", label: "N/A" },
-  ];
-
-  const SSP_STATUS_COLORS: Record<string, string> = {
-    implemented: "bg-green-100 text-green-700",
-    planned: "bg-yellow-100 text-yellow-700",
-    alternative: "bg-blue-100 text-blue-700",
-    not_applicable: "bg-gray-100 text-gray-500",
   };
 
   return (
@@ -2336,15 +2332,10 @@ function SspTab({ controlRef, orgId }: { controlRef: string; orgId?: string }) {
                 />
               </div>
               <div>
-                <Label className="text-xs mb-1 block">Status</Label>
-                <Select value={sspStatus} onValueChange={setSspStatus}>
-                  <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {SSP_STATUS_OPTS.map((s) => (
-                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label className="text-xs mb-1 block">Control Status</Label>
+                <p className="text-xs text-muted-foreground pt-1.5">
+                  Managed in the Controls Library — not editable here.
+                </p>
               </div>
             </div>
             <div className="flex gap-2">
@@ -2363,10 +2354,18 @@ function SspTab({ controlRef, orgId }: { controlRef: string; orgId?: string }) {
         <div className="space-y-3">
           <Card>
             <CardContent className="pt-4">
-              <div className="flex items-center gap-2 mb-2">
-                <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${SSP_STATUS_COLORS[mapping.sspStatus ?? "planned"] ?? "bg-gray-100 text-gray-600"}`}>
-                  {SSP_STATUS_OPTS.find((s) => s.value === mapping.sspStatus)?.label ?? "Planned"}
-                </span>
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                {mapping.controlStatus && (
+                  <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${CONTROL_STATUS_OPTS[mapping.controlStatus]?.color ?? "bg-gray-100 text-gray-600"}`}>
+                    {CONTROL_STATUS_OPTS[mapping.controlStatus]?.label ?? mapping.controlStatus}
+                  </span>
+                )}
+                {mapping.hasNarrative && (
+                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">Narrative ✓</span>
+                )}
+                {mapping.hasEvidence && (
+                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700">Evidence ✓</span>
+                )}
                 {mapping.isEdited && (
                   <span className="text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">Manually edited</span>
                 )}

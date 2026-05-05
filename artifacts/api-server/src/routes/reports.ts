@@ -868,8 +868,23 @@ router.get("/reports/ssp", requireAuth, requireOrg, async (req, res) => {
     .orderBy(sspSectionsTable.sortOrder);
 
   const mappings = await db
-    .select()
+    .select({
+      id: sspControlMappingsTable.id,
+      controlRef: sspControlMappingsTable.controlRef,
+      controlDbId: sspControlMappingsTable.controlDbId,
+      implementationNarrative: sspControlMappingsTable.implementationNarrative,
+      policyReference: sspControlMappingsTable.policyReference,
+      isEdited: sspControlMappingsTable.isEdited,
+      controlStatus: sql<string | null>`${controlAssessmentsTable.status}`,
+    })
     .from(sspControlMappingsTable)
+    .leftJoin(
+      controlAssessmentsTable,
+      and(
+        sql`${sspControlMappingsTable.controlDbId} = ${controlAssessmentsTable.controlId}`,
+        eq(controlAssessmentsTable.organizationId, orgId),
+      )
+    )
     .where(eq(sspControlMappingsTable.sspDocumentId, primaryDoc.id))
     .orderBy(sspControlMappingsTable.controlRef);
 

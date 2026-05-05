@@ -3,8 +3,8 @@ import multer from "multer";
 import path from "path";
 import { createReadStream, mkdirSync } from "fs";
 import { unlink } from "fs/promises";
-import { db, sspDocumentsTable, sspSectionsTable, sspControlMappingsTable, controlsTable, controlAssessmentsTable } from "@workspace/db";
-import { eq, and, desc, count, isNotNull, sql } from "drizzle-orm";
+import { db, sspDocumentsTable, sspSectionsTable, sspControlMappingsTable, controlsTable, controlAssessmentsTable, evidenceControlLinksTable, evidenceItemsTable } from "@workspace/db";
+import { eq, and, desc, count, isNotNull, isNull, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 import { randomUUID } from "crypto";
@@ -64,8 +64,40 @@ router.get("/ssp/control-mapping", requireAuth, requireOrg, async (req, res) => 
     .limit(1);
 
   if (!mapping) return res.json(null);
+
+  // Get actual control status from controlAssessmentsTable (single source of truth)
+  const controlStatus = mapping.controlDbId
+    ? await db
+        .select({ status: controlAssessmentsTable.status })
+        .from(controlAssessmentsTable)
+        .where(and(
+          eq(controlAssessmentsTable.controlId, mapping.controlDbId),
+          eq(controlAssessmentsTable.organizationId, orgId),
+        ))
+        .limit(1)
+        .then(r => r[0]?.status ?? null)
+    : null;
+
+  // Check if evidence is linked to this control
+  const hasEvidence = mapping.controlDbId
+    ? await db
+        .select({ id: evidenceControlLinksTable.evidenceId })
+        .from(evidenceControlLinksTable)
+        .innerJoin(evidenceItemsTable, and(
+          eq(evidenceItemsTable.id, evidenceControlLinksTable.evidenceId),
+          eq(evidenceItemsTable.organizationId, orgId),
+          isNull(evidenceItemsTable.deletedAt),
+        ))
+        .where(eq(evidenceControlLinksTable.controlId, mapping.controlDbId))
+        .limit(1)
+        .then(r => r.length > 0)
+    : false;
+
   res.json({
     ...mapping,
+    controlStatus,
+    hasNarrative: !!(mapping.implementationNarrative?.trim()),
+    hasEvidence,
     sspDocumentTitle: primary.title,
     sspDocumentNumber: primary.documentNumber,
     sspRevisionDate: primary.revisionDate,
@@ -87,7 +119,6 @@ router.patch("/ssp/control-mappings/:mappingId", requireAuth, requireOrg, async 
   const updates: Record<string, any> = { updatedAt: new Date(), isEdited: true };
   if ("implementationNarrative" in req.body) updates.implementationNarrative = req.body.implementationNarrative;
   if ("policyReference" in req.body) updates.policyReference = req.body.policyReference;
-  if ("sspStatus" in req.body) updates.sspStatus = req.body.sspStatus;
 
   const [updated] = await db
     .update(sspControlMappingsTable)
@@ -481,12 +512,14 @@ router.get("/ssp/:id/control-mappings", requireAuth, requireOrg, async (req, res
     .limit(1);
   if (!doc) return res.status(404).json({ error: "Not found" });
 
+  // Fetch mappings with actual control status (single source of truth)
   let mappings = await db
     .select({
       id: sspControlMappingsTable.id,
       controlRef: sspControlMappingsTable.controlRef,
       controlDbId: sspControlMappingsTable.controlDbId,
       implementationNarrative: sspControlMappingsTable.implementationNarrative,
+      policyReference: sspControlMappingsTable.policyReference,
       sourceSection: sspControlMappingsTable.sourceSection,
       isEdited: sspControlMappingsTable.isEdited,
       controlStatus: sql<string | null>`${controlAssessmentsTable.status}`,
@@ -502,19 +535,37 @@ router.get("/ssp/:id/control-mappings", requireAuth, requireOrg, async (req, res
     .where(eq(sspControlMappingsTable.sspDocumentId, id))
     .orderBy(sspControlMappingsTable.controlRef);
 
+  // Get set of control UUIDs that have at least one evidence item linked (for this org)
+  const evidenceLinked = await db
+    .selectDistinct({ controlId: evidenceControlLinksTable.controlId })
+    .from(evidenceControlLinksTable)
+    .innerJoin(evidenceItemsTable, and(
+      eq(evidenceItemsTable.id, evidenceControlLinksTable.evidenceId),
+      eq(evidenceItemsTable.organizationId, orgId),
+      isNull(evidenceItemsTable.deletedAt),
+    ));
+  const evidenceSet = new Set(evidenceLinked.map(e => e.controlId));
+
+  const enriched = mappings.map(m => ({
+    ...m,
+    hasNarrative: !!(m.implementationNarrative?.trim()),
+    hasEvidence: !!(m.controlDbId && evidenceSet.has(m.controlDbId)),
+  }));
+
+  let filtered = enriched;
   if (search) {
     const q = search.toLowerCase();
-    mappings = mappings.filter(
+    filtered = filtered.filter(
       (m) =>
         m.controlRef.toLowerCase().includes(q) ||
         m.implementationNarrative.toLowerCase().includes(q)
     );
   }
   if (status) {
-    mappings = mappings.filter((m) => m.controlStatus === status);
+    filtered = filtered.filter((m) => m.controlStatus === status);
   }
 
-  res.json(mappings);
+  res.json(filtered);
 });
 
 // ── Update a control mapping ──────────────────────────────────────────────────
@@ -532,7 +583,6 @@ router.patch("/ssp/:id/control-mappings/:mappingId", requireAuth, requireOrg, as
   const updates: Record<string, any> = { updatedAt: new Date(), isEdited: true };
   if ("implementationNarrative" in req.body) updates.implementationNarrative = req.body.implementationNarrative;
   if ("policyReference" in req.body) updates.policyReference = req.body.policyReference;
-  if ("sspStatus" in req.body) updates.sspStatus = req.body.sspStatus;
   if ("sourceSection" in req.body) updates.sourceSection = req.body.sourceSection;
 
   const [updated] = await db

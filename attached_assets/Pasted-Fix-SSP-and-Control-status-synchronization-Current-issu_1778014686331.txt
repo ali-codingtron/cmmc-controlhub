@@ -1,0 +1,88 @@
+Fix SSP and Control status synchronization.
+
+Current issue:
+SSP Control Mapping shows controls as Implemented, but the actual Control page shows Planned.
+
+This creates conflicting data and is not acceptable for audit readiness.
+
+Requirements:
+
+1. Single Source of Truth
+The authoritative status must be:
+OrganizationControl.status (Controls section)
+
+SSP Control Mapping must NOT maintain its own independent status.
+
+2. Remove SSP Status Field
+Remove or ignore any status field stored in SSP Control Mapping.
+
+SSP should only store:
+- implementation narrative
+- source document
+- mapping metadata
+
+NOT status.
+
+3. Display Logic Fix
+In SSP Control Mapping:
+- replace “Status” column with the actual control status from OrganizationControl
+
+Example:
+If control is “Planned” → show Planned
+If control is “Implemented” → show Implemented
+
+4. Import Behavior Fix (CRITICAL)
+
+When parsing SSP:
+
+DO NOT automatically set controls to Implemented.
+
+Instead:
+- only import the implementation narrative
+- optionally mark control as:
+  “In Progress” OR leave unchanged
+
+Add optional setting:
+“Update control status from SSP import”
+
+If enabled:
+- only set status to Implemented if:
+  - narrative exists AND
+  - evidence exists for that control
+
+Otherwise:
+- leave status unchanged
+
+5. Status Sync Rule
+
+Control → SSP
+- Control status changes must immediately reflect in SSP Mapping
+
+SSP → Control
+- SSP should NOT automatically override control status unless explicitly triggered
+
+6. UI Fix
+
+In SSP Control Mapping:
+- show status badge from Control
+- remove “Planned” as SSP-specific label
+- keep “View control” link
+
+7. Optional Enhancement
+
+Add indicator in SSP Mapping:
+- “Narrative Exists” (yes/no)
+- “Evidence Linked” (yes/no)
+
+This gives better visibility than fake status.
+
+8. Acceptance Tests
+
+- Re-parse SSP
+- SSP Control Mapping no longer shows its own status
+- Status column matches Control page status exactly
+
+- Update control to Implemented
+- SSP mapping updates automatically
+
+- SSP import does NOT overwrite control status unless explicitly allowed

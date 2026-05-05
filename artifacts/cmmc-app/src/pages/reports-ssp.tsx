@@ -37,7 +37,7 @@ interface SspData {
     withNarrative: number;
     missingNarrative: number;
     edited: number;
-    items: { controlRef: string; sspStatus: string; implementationNarrative: string; policyReference: string | null }[];
+    items: { controlRef: string; controlStatus: string | null; implementationNarrative: string; policyReference: string | null }[];
   };
   policies?: (string | null)[];
 }
@@ -75,7 +75,8 @@ export default function ReportsSsp() {
   const narrativePct = data.mappings!.total > 0 ? Math.round((data.mappings!.withNarrative / data.mappings!.total) * 100) : 0;
 
   const csvMappings = data.mappings!.items.map(m => ({
-    "Control Ref": m.controlRef, "SSP Status": m.sspStatus,
+    "Control Ref": m.controlRef,
+    "Control Status": m.controlStatus ?? "",
     "Has Narrative": m.implementationNarrative?.trim() ? "Yes" : "No",
     "Policy Reference": m.policyReference ?? "",
     "Narrative Preview": m.implementationNarrative?.slice(0, 100) ?? "",

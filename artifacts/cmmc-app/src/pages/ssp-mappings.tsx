@@ -38,9 +38,12 @@ interface SspMapping {
   controlRef: string;
   controlDbId: string | null;
   implementationNarrative: string;
+  policyReference: string | null;
   sourceSection: string | null;
   isEdited: boolean;
   controlStatus: string | null;
+  hasNarrative: boolean;
+  hasEvidence: boolean;
 }
 
 const STATUS_OPTS = [
@@ -219,6 +222,8 @@ export default function SspMappings() {
             <thead className="bg-muted/50 border-b">
               <tr>
                 <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground w-36">Control</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Narrative</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Evidence</th>
                 <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Implementation Narrative</th>
                 <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground w-32">Status</th>
                 <th className="px-4 py-2.5 w-20" />
@@ -228,7 +233,7 @@ export default function SspMappings() {
               {filtered.map((mapping, i) => (
                 <tr key={mapping.id} className={`border-t ${i % 2 === 0 ? "" : "bg-muted/20"}`}>
                   {editing === mapping.id ? (
-                    <td colSpan={4} className="px-4 py-3">
+                    <td colSpan={6} className="px-4 py-3">
                       <div className="space-y-3">
                         <div className="flex items-center gap-2">
                           <code className="text-xs font-mono bg-muted px-2 py-1 rounded">{mapping.controlRef}</code>
@@ -285,6 +290,20 @@ export default function SspMappings() {
                           <Link href={`/controls/${mapping.controlDbId}`}>
                             <span className="text-[10px] text-primary hover:underline">View control →</span>
                           </Link>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {mapping.hasNarrative ? (
+                          <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">✓</span>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {mapping.hasEvidence ? (
+                          <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700">✓</span>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground">—</span>
                         )}
                       </td>
                       <td className="px-4 py-3 max-w-sm">
