@@ -11,6 +11,7 @@ import {
   getGetControlPoamsQueryKey,
 } from "@workspace/api-client-react";
 import { useOrg } from "@/context/OrgContext";
+import { useIsAssessor } from "@/lib/auth";
 import { EvidencePreviewModal } from "@/components/EvidencePreviewModal";
 import { Link, useLocation } from "wouter";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -1211,6 +1212,7 @@ export default function ControlDetail({ id }: { id: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
+  const isAssessor = useIsAssessor();
 
   const { data: control, isLoading: isLoadingControl } = useGetControl(id);
   const { data: evidence = [] } = useGetControlEvidence(id);
@@ -1530,10 +1532,12 @@ export default function ControlDetail({ id }: { id: string }) {
                 )}
               </div>
 
-              <Button onClick={handleSaveImplementation} disabled={saving}>
-                <Save className="h-4 w-4 mr-2" />
-                {saving ? "Saving..." : "Save Implementation"}
-              </Button>
+              {!isAssessor && (
+                <Button onClick={handleSaveImplementation} disabled={saving}>
+                  <Save className="h-4 w-4 mr-2" />
+                  {saving ? "Saving..." : "Save Implementation"}
+                </Button>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -1552,7 +1556,7 @@ export default function ControlDetail({ id }: { id: string }) {
               )}
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {selectedEvidenceIds.size > 0 && (
+              {!isAssessor && selectedEvidenceIds.size > 0 && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button size="sm" variant="outline" disabled={bulkStatusBusy}>
@@ -1600,14 +1604,18 @@ export default function ControlDetail({ id }: { id: string }) {
                   {evDensity === "comfortable" ? "Compact" : "Comfortable"}
                 </button>
               )}
-              <Button size="sm" variant="outline" onClick={() => setShowBulkUpload(true)}>
-                <Files className="h-4 w-4 mr-1" />
-                Bulk Upload
-              </Button>
-              <Button size="sm" onClick={() => setShowAddEvidence(true)}>
-                <Plus className="h-4 w-4 mr-1" />
-                Add Evidence
-              </Button>
+              {!isAssessor && (
+                <Button size="sm" variant="outline" onClick={() => setShowBulkUpload(true)}>
+                  <Files className="h-4 w-4 mr-1" />
+                  Bulk Upload
+                </Button>
+              )}
+              {!isAssessor && (
+                <Button size="sm" onClick={() => setShowAddEvidence(true)}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Evidence
+                </Button>
+              )}
             </div>
           </div>
 
@@ -1829,46 +1837,50 @@ export default function ControlDetail({ id }: { id: string }) {
                                     Download File
                                   </DropdownMenuItem>
                                 )}
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={async () => {
-                                    try {
-                                      const res = await fetch(`/api/evidence/${item.id}/controls/${id}`, {
-                                        method: "DELETE",
-                                        headers: apiHeaders(activeOrg?.id),
-                                      });
-                                      if (!res.ok) throw new Error("Failed to remove");
-                                      toast({ title: "Evidence removed from this control" });
-                                      invalidateEvidence();
-                                    } catch {
-                                      toast({ title: "Error", description: "Could not remove evidence", variant: "destructive" });
-                                    }
-                                  }}
-                                  className="flex items-center gap-2"
-                                >
-                                  <Unlink className="h-4 w-4" />
-                                  Remove from Control
-                                </DropdownMenuItem>
-                                {item.status !== "archived" && (
-                                  <DropdownMenuItem
-                                    onClick={async () => {
-                                      try {
-                                        const res = await fetch(`/api/evidence/${item.id}/archive`, {
-                                          method: "POST",
-                                          headers: apiHeaders(activeOrg?.id),
-                                        });
-                                        if (!res.ok) throw new Error("Failed to archive");
-                                        toast({ title: "Evidence archived" });
-                                        invalidateEvidence();
-                                      } catch {
-                                        toast({ title: "Error", description: "Could not archive evidence", variant: "destructive" });
-                                      }
-                                    }}
-                                    className="flex items-center gap-2"
-                                  >
-                                    <Archive className="h-4 w-4" />
-                                    Archive
-                                  </DropdownMenuItem>
+                                {!isAssessor && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      onClick={async () => {
+                                        try {
+                                          const res = await fetch(`/api/evidence/${item.id}/controls/${id}`, {
+                                            method: "DELETE",
+                                            headers: apiHeaders(activeOrg?.id),
+                                          });
+                                          if (!res.ok) throw new Error("Failed to remove");
+                                          toast({ title: "Evidence removed from this control" });
+                                          invalidateEvidence();
+                                        } catch {
+                                          toast({ title: "Error", description: "Could not remove evidence", variant: "destructive" });
+                                        }
+                                      }}
+                                      className="flex items-center gap-2"
+                                    >
+                                      <Unlink className="h-4 w-4" />
+                                      Remove from Control
+                                    </DropdownMenuItem>
+                                    {item.status !== "archived" && (
+                                      <DropdownMenuItem
+                                        onClick={async () => {
+                                          try {
+                                            const res = await fetch(`/api/evidence/${item.id}/archive`, {
+                                              method: "POST",
+                                              headers: apiHeaders(activeOrg?.id),
+                                            });
+                                            if (!res.ok) throw new Error("Failed to archive");
+                                            toast({ title: "Evidence archived" });
+                                            invalidateEvidence();
+                                          } catch {
+                                            toast({ title: "Error", description: "Could not archive evidence", variant: "destructive" });
+                                          }
+                                        }}
+                                        className="flex items-center gap-2"
+                                      >
+                                        <Archive className="h-4 w-4" />
+                                        Archive
+                                      </DropdownMenuItem>
+                                    )}
+                                  </>
                                 )}
                               </DropdownMenuContent>
                             </DropdownMenu>
@@ -1938,46 +1950,50 @@ export default function ControlDetail({ id }: { id: string }) {
                                   Download
                                 </DropdownMenuItem>
                               )}
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  try {
-                                    await fetch(`/api/evidence/${item.id}/controls/${id}`, {
-                                      method: "DELETE",
-                                      headers: apiHeaders(activeOrg?.id),
-                                    });
-                                    toast({ title: "Evidence removed from this control" });
-                                    invalidateEvidence();
-                                  } catch {
-                                    toast({ title: "Error", description: "Could not remove evidence", variant: "destructive" });
-                                  }
-                                }}
-                                className="flex items-center gap-2"
-                              >
-                                <Unlink className="h-4 w-4" />
-                                Remove from Control
-                              </DropdownMenuItem>
-                              {item.status !== "archived" && (
-                                <DropdownMenuItem
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    try {
-                                      await fetch(`/api/evidence/${item.id}/archive`, {
-                                        method: "POST",
-                                        headers: apiHeaders(activeOrg?.id),
-                                      });
-                                      toast({ title: "Evidence archived" });
-                                      invalidateEvidence();
-                                    } catch {
-                                      toast({ title: "Error", description: "Could not archive evidence", variant: "destructive" });
-                                    }
-                                  }}
-                                  className="flex items-center gap-2"
-                                >
-                                  <Archive className="h-4 w-4" />
-                                  Archive
-                                </DropdownMenuItem>
+                              {!isAssessor && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      try {
+                                        await fetch(`/api/evidence/${item.id}/controls/${id}`, {
+                                          method: "DELETE",
+                                          headers: apiHeaders(activeOrg?.id),
+                                        });
+                                        toast({ title: "Evidence removed from this control" });
+                                        invalidateEvidence();
+                                      } catch {
+                                        toast({ title: "Error", description: "Could not remove evidence", variant: "destructive" });
+                                      }
+                                    }}
+                                    className="flex items-center gap-2"
+                                  >
+                                    <Unlink className="h-4 w-4" />
+                                    Remove from Control
+                                  </DropdownMenuItem>
+                                  {item.status !== "archived" && (
+                                    <DropdownMenuItem
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        try {
+                                          await fetch(`/api/evidence/${item.id}/archive`, {
+                                            method: "POST",
+                                            headers: apiHeaders(activeOrg?.id),
+                                          });
+                                          toast({ title: "Evidence archived" });
+                                          invalidateEvidence();
+                                        } catch {
+                                          toast({ title: "Error", description: "Could not archive evidence", variant: "destructive" });
+                                        }
+                                      }}
+                                      className="flex items-center gap-2"
+                                    >
+                                      <Archive className="h-4 w-4" />
+                                      Archive
+                                    </DropdownMenuItem>
+                                  )}
+                                </>
                               )}
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -2036,10 +2052,12 @@ export default function ControlDetail({ id }: { id: string }) {
         <TabsContent value="tasks" className="mt-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-base">Tasks</h3>
-            <Button size="sm" onClick={() => setShowAddTask(true)}>
-              <Plus className="h-4 w-4 mr-1" />
-              Add Task
-            </Button>
+            {!isAssessor && (
+              <Button size="sm" onClick={() => setShowAddTask(true)}>
+                <Plus className="h-4 w-4 mr-1" />
+                Add Task
+              </Button>
+            )}
           </div>
 
           {tasks.length === 0 ? (
@@ -2050,10 +2068,12 @@ export default function ControlDetail({ id }: { id: string }) {
                 <p className="text-sm text-muted-foreground mt-1">
                   Create tasks to track remediation work, reviews, and compliance activities.
                 </p>
-                <Button className="mt-4" size="sm" onClick={() => setShowAddTask(true)}>
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Task
-                </Button>
+                {!isAssessor && (
+                  <Button className="mt-4" size="sm" onClick={() => setShowAddTask(true)}>
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Task
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ) : (
@@ -2096,10 +2116,12 @@ export default function ControlDetail({ id }: { id: string }) {
         <TabsContent value="poams" className="mt-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-base">Plans of Action & Milestones</h3>
-            <Button size="sm" onClick={() => setShowAddPoam(true)}>
-              <Plus className="h-4 w-4 mr-1" />
-              Add POA&M
-            </Button>
+            {!isAssessor && (
+              <Button size="sm" onClick={() => setShowAddPoam(true)}>
+                <Plus className="h-4 w-4 mr-1" />
+                Add POA&M
+              </Button>
+            )}
           </div>
 
           {poams.length === 0 ? (
@@ -2110,10 +2132,12 @@ export default function ControlDetail({ id }: { id: string }) {
                 <p className="text-sm text-muted-foreground mt-1">
                   Add POA&M items to track gaps, remediation plans, and risk acceptance decisions.
                 </p>
-                <Button className="mt-4" size="sm" onClick={() => setShowAddPoam(true)}>
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add POA&M
-                </Button>
+                {!isAssessor && (
+                  <Button className="mt-4" size="sm" onClick={() => setShowAddPoam(true)}>
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add POA&M
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ) : (

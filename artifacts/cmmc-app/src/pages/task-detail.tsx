@@ -3,11 +3,13 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { StatusBadge, RiskBadge } from "@/components/ui/badges";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, RefreshCw } from "lucide-react";
+import { useIsAssessor } from "@/lib/auth";
 
 export default function TaskDetail({ id }: { id: string }) {
   const { data: task, isLoading, refetch } = useGetTask(id);
   const completeMutation = useCompleteTask();
   const reopenMutation = useReopenTask();
+  const isAssessor = useIsAssessor();
 
   if (isLoading) return <div>Loading...</div>;
   if (!task) return <div>Task not found</div>;
@@ -33,11 +35,12 @@ export default function TaskDetail({ id }: { id: string }) {
           </div>
         </div>
         <div className="flex gap-2">
-          {task.status !== 'completed' ? (
+          {!isAssessor && task.status !== 'completed' && (
             <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={handleComplete}>
               <CheckCircle className="mr-2 h-4 w-4" /> Mark Complete
             </Button>
-          ) : (
+          )}
+          {!isAssessor && task.status === 'completed' && (
             <Button variant="outline" onClick={handleReopen}>
               <RefreshCw className="mr-2 h-4 w-4" /> Reopen Task
             </Button>

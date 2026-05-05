@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useIsAssessor } from "@/lib/auth";
 import {
   useListPoams,
   getListPoamsQueryKey,
@@ -316,6 +317,7 @@ export default function Poams() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterRisk, setFilterRisk] = useState("all");
   const [showAdd, setShowAdd] = useState(false);
+  const isAssessor = useIsAssessor();
 
   const { data: poams = [], isLoading } = useListPoams({
     status: filterStatus !== "all" ? filterStatus : undefined,
@@ -343,10 +345,12 @@ export default function Poams() {
           <h1 className="text-3xl font-bold">POA&amp;Ms</h1>
           <p className="text-muted-foreground mt-1">Plan of Action &amp; Milestones — track remediation of gaps and findings</p>
         </div>
-        <Button onClick={() => setShowAdd(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add POA&amp;M
-        </Button>
+        {!isAssessor && (
+          <Button onClick={() => setShowAdd(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add POA&amp;M
+          </Button>
+        )}
       </div>
 
       {/* Summary cards */}

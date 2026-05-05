@@ -6,6 +6,7 @@ import {
   getGetEvidenceQueryKey,
 } from "@workspace/api-client-react";
 import { useOrg } from "@/context/OrgContext";
+import { useIsAssessor } from "@/lib/auth";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -277,6 +278,7 @@ export default function EvidenceDetail({ id }: { id: string }) {
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
 
+  const isAssessor = useIsAssessor();
   const { data: evidence, isLoading } = useGetEvidence(id);
   const { data: auditLog = [] } = useGetEvidenceAuditLog(id);
 
@@ -411,25 +413,29 @@ export default function EvidenceDetail({ id }: { id: string }) {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {evidence.status !== "archived" && (
+          {!isAssessor && evidence.status !== "archived" && (
             <Button variant="outline" size="sm" onClick={handleArchive} className="gap-1.5">
               <Archive className="h-4 w-4" />
               Archive
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowDeleteDialog(true)}
-            className="gap-1.5 text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
-          >
-            <Trash2 className="h-4 w-4" />
-            Delete
-          </Button>
-          <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5">
-            <Save className="h-4 w-4" />
-            {saving ? "Saving..." : "Save"}
-          </Button>
+          {!isAssessor && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowDeleteDialog(true)}
+              className="gap-1.5 text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </Button>
+          )}
+          {!isAssessor && (
+            <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5">
+              <Save className="h-4 w-4" />
+              {saving ? "Saving..." : "Save"}
+            </Button>
+          )}
         </div>
       </div>
 

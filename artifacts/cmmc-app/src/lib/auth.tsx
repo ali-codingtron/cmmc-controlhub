@@ -58,3 +58,9 @@ export function useAuth() {
   }
   return context;
 }
+
+/** Returns true when the current user has the assessor role (read-only). */
+export function useIsAssessor() {
+  const { user } = useAuth();
+  return user?.role === "assessor";
+}

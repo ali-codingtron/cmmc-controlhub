@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrg } from "@/context/OrgContext";
+import { useIsAssessor } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -114,6 +115,7 @@ export default function MonitoringTracker() {
   const { activeOrg } = useOrg();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const isAssessor = useIsAssessor();
 
   const [search, setSearch] = useState("");
   const [freqFilter, setFreqFilter] = useState("all");
@@ -434,8 +436,8 @@ export default function MonitoringTracker() {
             </span>
           </div>
 
-          {/* Bulk action toolbar — shown when rows are selected */}
-          {someSelected && selectedCount > 0 && (
+          {/* Bulk action toolbar — shown when rows are selected (write-only, hidden for assessors) */}
+          {!isAssessor && someSelected && selectedCount > 0 && (
             <div className="mt-3 flex items-center gap-3 p-3 bg-muted/60 rounded-lg border border-border">
               <RefreshCw className="h-4 w-4 text-muted-foreground shrink-0" />
               <span className="text-sm font-medium text-foreground">
@@ -537,6 +539,7 @@ export default function MonitoringTracker() {
                           <Select
                             value={item.frequency}
                             onValueChange={(v) => handleFrequencyChange(item, v as MonitoringFrequency)}
+                            disabled={isAssessor}
                           >
                             <SelectTrigger className="h-7 w-28 border-0 shadow-none p-0 focus:ring-0 bg-transparent hover:bg-muted/60 rounded px-1.5">
                               <Badge className={cn("text-[11px] font-medium cursor-pointer", FREQUENCY_COLOR[item.frequency])}>
@@ -600,9 +603,10 @@ export default function MonitoringTracker() {
                         <TableCell>
                           <input
                             type="date"
-                            className="w-full text-sm border border-input rounded-md px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                            className="w-full text-sm border border-input rounded-md px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60 disabled:cursor-not-allowed"
                             value={toDateInputValue(item.lastCompleted)}
                             onChange={(e) => handleLastCompletedChange(item, e.target.value)}
+                            disabled={isAssessor}
                           />
                         </TableCell>
 
@@ -611,11 +615,12 @@ export default function MonitoringTracker() {
                           <input
                             type="date"
                             className={cn(
-                              "w-full text-sm border border-input rounded-md px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring",
+                              "w-full text-sm border border-input rounded-md px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60 disabled:cursor-not-allowed",
                               overdue && "border-red-400 text-red-700 dark:text-red-400"
                             )}
                             value={toDateInputValue(item.nextDue)}
                             onChange={(e) => handleNextDueChange(item.id, e.target.value)}
+                            disabled={isAssessor}
                           />
                         </TableCell>
 
@@ -624,6 +629,7 @@ export default function MonitoringTracker() {
                           <Select
                             value={item.status}
                             onValueChange={(v) => handleStatusChange(item, v as MonitoringStatus)}
+                            disabled={isAssessor}
                           >
                             <SelectTrigger className={cn(
                               "h-8 text-xs",
@@ -644,14 +650,15 @@ export default function MonitoringTracker() {
                         {/* Notes */}
                         <TableCell>
                           <Textarea
-                            className="text-xs min-h-[2rem] resize-none"
+                            className="text-xs min-h-[2rem] resize-none disabled:opacity-60 disabled:cursor-not-allowed"
                             rows={2}
                             placeholder="Add notes..."
                             value={pendingNotes[item.id] ?? (item.notes ?? "")}
                             onChange={(e) =>
                               setPendingNotes((prev) => ({ ...prev, [item.id]: e.target.value }))
                             }
-                            onBlur={() => handleNotesSave(item.id)}
+                            onBlur={() => !isAssessor && handleNotesSave(item.id)}
+                            disabled={isAssessor}
                           />
                         </TableCell>
                       </TableRow>

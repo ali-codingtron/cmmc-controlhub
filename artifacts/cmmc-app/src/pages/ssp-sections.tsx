@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrg } from "@/context/OrgContext";
+import { useIsAssessor } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -58,6 +59,8 @@ export default function SspSections() {
     },
     enabled: !!activeOrg?.id,
   });
+
+  const isAssessor = useIsAssessor();
 
   const { data: sections = [], isLoading: loadingSections } = useQuery<SspSection[]>({
     queryKey: ["ssp-sections", primary?.id],
@@ -176,17 +179,22 @@ export default function SspSections() {
               <CardHeader className="pb-2 pt-4 px-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => toggleComplete(section)}
-                      className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
-                      title={section.isComplete ? "Mark incomplete" : "Mark complete"}
-                    >
-                      {section.isComplete ? (
-                        <CheckCircle2 className="h-5 w-5 text-green-500" />
-                      ) : (
-                        <Circle className="h-5 w-5" />
-                      )}
-                    </button>
+                    {!isAssessor && (
+                      <button
+                        onClick={() => toggleComplete(section)}
+                        className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                        title={section.isComplete ? "Mark incomplete" : "Mark complete"}
+                      >
+                        {section.isComplete ? (
+                          <CheckCircle2 className="h-5 w-5 text-green-500" />
+                        ) : (
+                          <Circle className="h-5 w-5" />
+                        )}
+                      </button>
+                    )}
+                    {isAssessor && section.isComplete && (
+                      <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
+                    )}
                     <CardTitle className="text-sm font-semibold">{section.sectionTitle}</CardTitle>
                     {section.isComplete && (
                       <Badge className="text-[10px] bg-green-50 text-green-700 border-green-200">
@@ -224,17 +232,19 @@ export default function SspSections() {
                         </Button>
                       </>
                     ) : (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setEditing(section.id);
-                          setEditContent(section.content);
-                        }}
-                      >
-                        <Edit2 className="h-3.5 w-3.5 mr-1" />
-                        Edit
-                      </Button>
+                      !isAssessor && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setEditing(section.id);
+                            setEditContent(section.content);
+                          }}
+                        >
+                          <Edit2 className="h-3.5 w-3.5 mr-1" />
+                          Edit
+                        </Button>
+                      )
                     )}
                   </div>
                 </div>

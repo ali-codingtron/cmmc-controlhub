@@ -1,0 +1,95 @@
+Fix Assessor role permissions immediately.
+
+The Assessor role must be read-only across the entire application.
+
+Current issue:
+Assessor users can add, edit, delete, remove, archive, change status, upload, or modify records. This is a security problem.
+
+Requirements:
+
+1. Assessor Role Permissions
+Assessor users can ONLY:
+- view assigned organization data
+- view controls
+- view evidence metadata
+- preview evidence files
+- download evidence files
+- view documents
+- preview/download documents
+- view POA&M records
+- view SSP sections
+- view reports if explicitly allowed
+
+Assessor users CANNOT:
+- add anything
+- edit anything
+- delete anything
+- archive anything
+- upload files
+- bulk upload
+- change statuses
+- change control implementation
+- change monitoring tracker
+- change POA&M
+- change users
+- change organizations
+- change settings
+- re-parse SSP
+- export destructive/admin data
+- manage documents
+- manage evidence mappings
+
+2. Hide Write Buttons
+For Assessor users, hide or disable:
+- Add Evidence
+- Bulk Upload
+- Save
+- Delete
+- Archive
+- Edit
+- Add Document
+- Add POA&M
+- Upload POA&M
+- Add User
+- Add Organization
+- Re-parse SSP
+- Bulk Actions
+- Status dropdowns
+- editable date fields
+- notes fields
+
+3. Backend Enforcement
+Do not rely only on hiding buttons.
+
+Add backend permission checks to all POST, PATCH, PUT, DELETE endpoints.
+
+If role = Assessor:
+- block write requests
+- return 403 Forbidden
+
+4. Allow Preview and Download Only
+Assessor can access:
+- GET /api/evidence/:id/preview
+- GET /api/evidence/:id/download
+
+Only if:
+- evidence belongs to their assigned organization
+- evidence/document is approved, active, or assessor ready
+
+5. Audit Logs
+Log assessor activity:
+- viewed evidence
+- previewed file
+- downloaded file
+- viewed control
+- viewed report
+
+6. Acceptance Test
+Login as Assessor:
+- no add/edit/delete/archive/upload buttons visible
+- all forms are read-only
+- status fields are not editable
+- can preview/download approved files
+- cannot access other organizations
+- direct API call to edit evidence returns 403
+- direct API call to delete evidence returns 403

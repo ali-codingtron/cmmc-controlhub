@@ -71,3 +71,12 @@ export function requireRole(...roles: string[]) {
     next();
   };
 }
+
+/** Blocks the assessor role from performing any write operation. */
+export function requireNotAssessor(req: Request, res: Response, next: NextFunction) {
+  if (req.authUser?.role === "assessor") {
+    res.status(403).json({ error: "Assessors cannot perform write operations" });
+    return;
+  }
+  next();
+}

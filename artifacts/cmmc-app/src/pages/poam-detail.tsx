@@ -4,10 +4,12 @@ import { StatusBadge, RiskBadge } from "@/components/ui/badges";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { CheckCircle } from "lucide-react";
+import { useIsAssessor } from "@/lib/auth";
 
 export default function PoamDetail({ id }: { id: string }) {
   const { data: poam, isLoading, refetch } = useGetPoam(id);
   const closeMutation = useClosePoam();
+  const isAssessor = useIsAssessor();
 
   if (isLoading) return <div>Loading...</div>;
   if (!poam) return <div>POA&M not found</div>;
@@ -28,7 +30,7 @@ export default function PoamDetail({ id }: { id: string }) {
           </div>
         </div>
         <div className="flex gap-2">
-          {poam.status !== 'closed' && (
+          {!isAssessor && poam.status !== 'closed' && (
             <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={handleClose}>
               <CheckCircle className="mr-2 h-4 w-4" /> Close POA&M
             </Button>

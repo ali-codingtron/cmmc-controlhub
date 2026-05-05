@@ -21,7 +21,7 @@ import {
   tasksTable,
 } from "@workspace/db";
 import { eq, and, desc, ilike, or, inArray, lte, gte, isNull } from "drizzle-orm";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requireNotAssessor } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 import { logAudit } from "../lib/audit";
 import { randomUUID } from "crypto";
@@ -140,7 +140,7 @@ router.get("/document-templates", requireAuth, async (req, res) => {
   res.json(enriched);
 });
 
-router.post("/document-templates", requireAuth, async (req, res) => {
+router.post("/document-templates", requireAuth, requireNotAssessor, async (req, res) => {
   const {
     title, docType, cmmcLevel, domainAbbr, ownerRole, reviewFrequency,
     description, bodyTemplate, requiredFields, linkedControlIds, recurrenceRule,
@@ -202,7 +202,7 @@ router.get("/document-templates/:id", requireAuth, async (req, res) => {
   res.json({ ...template, checklistItems: items });
 });
 
-router.patch("/document-templates/:id", requireAuth, async (req, res) => {
+router.patch("/document-templates/:id", requireAuth, requireNotAssessor, async (req, res) => {
   const { title, bodyTemplate, description, isActive, linkedControlIds, checklistItems } = req.body;
   const prev = await db.select().from(documentTemplatesTable).where(eq(documentTemplatesTable.id, req.params.id));
   if (!prev[0]) { res.status(404).json({ error: "Not found" }); return; }

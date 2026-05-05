@@ -9,6 +9,7 @@ import {
 } from "@workspace/api-client-react";
 import type { EvidenceItem, ControlWithStatus, User } from "@workspace/api-client-react";
 import { useOrg } from "@/context/OrgContext";
+import { useIsAssessor } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -376,6 +377,7 @@ export default function Evidence() {
   const { activeOrg } = useOrg();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const isAssessor = useIsAssessor();
 
   // Server-side filters (re-fetch when these change)
   const [filterStatus, setFilterStatus] = useState("all");
@@ -560,11 +562,13 @@ export default function Evidence() {
             All evidence items for this organization
           </p>
         </div>
-        <Button asChild>
-          <Link href="/evidence/upload">
-            <Plus className="mr-2 h-4 w-4" /> Upload Evidence
-          </Link>
-        </Button>
+        {!isAssessor && (
+          <Button asChild>
+            <Link href="/evidence/upload">
+              <Plus className="mr-2 h-4 w-4" /> Upload Evidence
+            </Link>
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -962,7 +966,7 @@ export default function Evidence() {
                                 Edit
                               </Link>
                             </DropdownMenuItem>
-                            {item.status !== "archived" && (
+                            {!isAssessor && item.status !== "archived" && (
                               <>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
@@ -974,16 +978,20 @@ export default function Evidence() {
                                 </DropdownMenuItem>
                               </>
                             )}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() =>
-                                setDeleteTarget({ id: item.id, title: item.title })
-                              }
-                              className="flex items-center gap-2 text-red-600 focus:text-red-600"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              Permanent Delete
-                            </DropdownMenuItem>
+                            {!isAssessor && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    setDeleteTarget({ id: item.id, title: item.title })
+                                  }
+                                  className="flex items-center gap-2 text-red-600 focus:text-red-600"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  Permanent Delete
+                                </DropdownMenuItem>
+                              </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

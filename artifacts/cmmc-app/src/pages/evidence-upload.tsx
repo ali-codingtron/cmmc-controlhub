@@ -6,7 +6,9 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useEffect } from "react";
 import { useLocation } from "wouter";
+import { useIsAssessor } from "@/lib/auth";
 
 const uploadSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -18,6 +20,13 @@ const uploadSchema = z.object({
 export default function EvidenceUpload() {
   const [, setLocation] = useLocation();
   const uploadMutation = useUploadEvidence();
+  const isAssessor = useIsAssessor();
+
+  useEffect(() => {
+    if (isAssessor) setLocation("/evidence");
+  }, [isAssessor, setLocation]);
+
+  if (isAssessor) return null;
 
   const form = useForm<z.infer<typeof uploadSchema>>({
     resolver: zodResolver(uploadSchema),

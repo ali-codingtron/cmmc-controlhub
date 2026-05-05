@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useIsAssessor } from "@/lib/auth";
 import {
   useGetAllDocuments,
   getGetAllDocumentsQueryKey,
@@ -293,6 +294,7 @@ export default function DocumentsList() {
   const [domain, setDomain] = useState("all");
   const [sourceType, setSourceType] = useState("all");
   const [showAdd, setShowAdd] = useState(false);
+  const isAssessor = useIsAssessor();
 
   const { data: docs, isLoading } = useGetAllDocuments({
     type: type !== "all" ? type : undefined,
@@ -315,10 +317,12 @@ export default function DocumentsList() {
             {docs?.length ?? 0} item{(docs?.length ?? 0) !== 1 ? "s" : ""} — uploaded documents and evidence
           </p>
         </div>
-        <Button onClick={() => setShowAdd(true)}>
-          <FilePlus className="h-4 w-4 mr-2" />
-          Add Document
-        </Button>
+        {!isAssessor && (
+          <Button onClick={() => setShowAdd(true)}>
+            <FilePlus className="h-4 w-4 mr-2" />
+            Add Document
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -386,10 +390,12 @@ export default function DocumentsList() {
               <FileText className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p className="font-medium">No documents found</p>
               <p className="text-sm mt-1">Add a document to track policies, procedures, and compliance records.</p>
-              <Button className="mt-4" onClick={() => setShowAdd(true)}>
-                <FilePlus className="h-4 w-4 mr-2" />
-                Add First Document
-              </Button>
+              {!isAssessor && (
+                <Button className="mt-4" onClick={() => setShowAdd(true)}>
+                  <FilePlus className="h-4 w-4 mr-2" />
+                  Add First Document
+                </Button>
+              )}
             </div>
           ) : (
             <Table>
