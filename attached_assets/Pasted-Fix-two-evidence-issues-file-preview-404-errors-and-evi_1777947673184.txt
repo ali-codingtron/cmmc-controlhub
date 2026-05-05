@@ -1,0 +1,73 @@
+Fix two evidence issues: file preview 404 errors and evidence search behavior.
+
+1. Fix Evidence Preview 404
+
+Current issue:
+Evidence detail shows:
+“Preview unavailable: Server error 404”
+
+The uploaded file exists and can be downloaded, but preview fails.
+
+Requirements:
+- Inspect the preview endpoint and download endpoint.
+- The preview endpoint should use the same stored file path / storage key that download uses.
+- If download works, preview should resolve the same file.
+- Do not build a separate broken file lookup path for preview.
+
+Fix or create:
+
+GET /api/evidence/:id/preview
+
+Behavior:
+- verify the evidence exists
+- verify user has access to the organization
+- locate the uploaded file using the database file_path / storage_key / stored_filename
+- return the file with correct Content-Type
+- set Content-Disposition: inline
+- return 404 only if the evidence record or physical file truly does not exist
+
+Supported preview types:
+- PNG/JPG/JPEG/GIF: show inline image
+- PDF: show inline iframe/object
+- TXT: show readable text preview
+- DOC/DOCX/XLS/XLSX: show “Preview not available. Download to view.”
+
+Acceptance test:
+- Open an uploaded PNG evidence item
+- Preview displays inline
+- Download still works
+- No 404 if the file exists
+
+2. Fix Evidence Repository Search
+
+Current issue:
+Searching “VTC” returns too many records because it appears to match the owner name “VTCCORPUS.”
+
+Expected behavior:
+The main search box should search evidence content metadata, not owner names.
+
+Search should match:
+- evidence title
+- original filename
+- evidence type
+- linked control ID
+- security domain
+- tags
+- assessor summary
+- internal notes
+
+Search should NOT match:
+- owner name
+- organization name
+
+Owner should only be filtered using the Owner dropdown.
+
+3. Add Search Mode Clarity
+Update the placeholder to:
+“Search title, filename, control ID, type, tags, summary...”
+
+4. Acceptance Test
+- Search VTC
+- Only evidence with VTC in title, filename, tags, summary, type, domain, or control should appear
+- Evidence owned by VTCCORPUS should not appear only because owner contains VTC
+- Owner dropdown still filters by owner correctly

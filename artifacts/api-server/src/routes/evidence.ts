@@ -456,6 +456,8 @@ router.get("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
 router.get("/evidence/:id/preview", requireAuth, requireOrg, async (req, res) => {
   const orgId = req.orgId;
 
+  // Look up by ID only — we verify org access below so the query is not
+  // sensitive to the caller sending a slightly stale or mismatched org header.
   const [item] = await db
     .select({
       id: evidenceItemsTable.id,
@@ -466,16 +468,18 @@ router.get("/evidence/:id/preview", requireAuth, requireOrg, async (req, res) =>
       organizationId: evidenceItemsTable.organizationId,
     })
     .from(evidenceItemsTable)
-    .where(
-      and(
-        eq(evidenceItemsTable.id, req.params.id),
-        orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined
-      )
-    )
+    .where(eq(evidenceItemsTable.id, req.params.id))
     .limit(1);
 
   if (!item || !item.fileKey) {
     res.status(404).json({ error: "File not found" });
+    return;
+  }
+
+  // Verify the caller has access to the org that owns this evidence.
+  // Admins can preview any evidence; regular users must be in the same org.
+  if (req.authUser?.role !== "admin" && item.organizationId !== orgId) {
+    res.status(403).json({ error: "Access denied" });
     return;
   }
 
@@ -495,7 +499,6 @@ router.get("/evidence/:id/preview", requireAuth, requireOrg, async (req, res) =>
   });
   stream.pipe(res);
 
-  // Fire-and-forget audit log after headers sent
   logAudit(req, "viewed", "evidence", item.id, { entityLabel: item.title ?? fileName }).catch(() => {});
 });
 

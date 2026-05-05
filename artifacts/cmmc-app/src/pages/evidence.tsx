@@ -420,16 +420,18 @@ export default function Evidence() {
   const evidence = useMemo(() => {
     let items = evidenceRaw as EvidenceItem[];
 
-    // Full-text search across multiple fields
+    // Full-text search across content metadata (not owner/org names)
     const sq = normalizeStr(search.trim());
     if (sq) {
       items = items.filter((item) => {
         if (normalizeStr(item.title).includes(sq)) return true;
         if (item.fileName && normalizeStr(item.fileName).includes(sq)) return true;
         if (item.assessorSummary && normalizeStr(item.assessorSummary).includes(sq)) return true;
+        if (item.internalNotes && normalizeStr(item.internalNotes).includes(sq)) return true;
+        if (item.evidenceType && normalizeStr(item.evidenceType).includes(sq)) return true;
         if ((item.tags ?? []).some((t) => normalizeStr(t).includes(sq))) return true;
         if ((item.linkedControlLabels ?? []).some((l) => normalizeStr(l).includes(sq))) return true;
-        if (item.ownerName && normalizeStr(item.ownerName).includes(sq)) return true;
+        if ((item.domains ?? []).some((d) => normalizeStr(d.name).includes(sq) || normalizeStr(d.code).includes(sq))) return true;
         return false;
       });
     }
@@ -573,7 +575,7 @@ export default function Evidence() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search title, file name, summary, tags, control ID…"
+                placeholder="Search title, filename, control ID, type, tags, summary..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9"
