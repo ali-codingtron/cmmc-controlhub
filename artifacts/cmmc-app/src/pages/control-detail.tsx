@@ -11,7 +11,8 @@ import {
   getGetControlPoamsQueryKey,
 } from "@workspace/api-client-react";
 import { useOrg } from "@/context/OrgContext";
-import { Link } from "wouter";
+import { EvidencePreviewModal } from "@/components/EvidencePreviewModal";
+import { Link, useLocation } from "wouter";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusBadge, LevelBadge, RiskBadge } from "@/components/ui/badges";
@@ -65,6 +66,14 @@ import {
   Wand2,
   Files,
   Edit,
+  Search,
+  ArrowUpDown,
+  ChevronUp,
+  ChevronDown,
+  LayoutList,
+  LayoutGrid,
+  ScrollText,
+  Image as ImageIcon,
 } from "lucide-react";
 
 const EVIDENCE_TYPES = [
@@ -141,6 +150,40 @@ function formatDate(d: string | null | undefined) {
 
 function evidenceTypeLabel(v: string) {
   return EVIDENCE_TYPES.find((t) => t.value === v)?.label ?? v;
+}
+
+function expirationStatus(expiresAt: string | null | undefined): "expired" | "upcoming" | "ok" | "none" {
+  if (!expiresAt) return "none";
+  const d = new Date(expiresAt);
+  const now = new Date();
+  if (d < now) return "expired";
+  if (d < new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)) return "upcoming";
+  return "ok";
+}
+
+function ExpirationCell({ expiresAt }: { expiresAt: string | null | undefined }) {
+  const status = expirationStatus(expiresAt);
+  if (status === "none") return <span className="text-xs text-muted-foreground/40">—</span>;
+  const label = new Date(expiresAt!).toLocaleDateString();
+  if (status === "expired") return <span className="text-xs text-red-600 font-medium">{label}</span>;
+  if (status === "upcoming") return <span className="text-xs text-amber-600 font-medium">{label}</span>;
+  return <span className="text-xs text-muted-foreground">{label}</span>;
+}
+
+function EvidenceTypeIcon({ type }: { type: string }) {
+  const icons: Record<string, string> = {
+    policy: "text-blue-500",
+    procedure: "text-purple-500",
+    screenshot: "text-green-500",
+    log: "text-orange-500",
+    report: "text-cyan-500",
+    scan_report: "text-red-400",
+  };
+  const color = icons[type] ?? "text-muted-foreground";
+  if (type === "screenshot") return <ImageIcon className={`h-3.5 w-3.5 shrink-0 ${color}`} />;
+  if (type === "log") return <ScrollText className={`h-3.5 w-3.5 shrink-0 ${color}`} />;
+  if (type === "procedure") return <ClipboardList className={`h-3.5 w-3.5 shrink-0 ${color}`} />;
+  return <FileText className={`h-3.5 w-3.5 shrink-0 ${color}`} />;
 }
 
 // ─── Add Evidence Dialog ────────────────────────────────────────────────────
@@ -1167,6 +1210,7 @@ export default function ControlDetail({ id }: { id: string }) {
   const { activeOrg } = useOrg();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
 
   const { data: control, isLoading: isLoadingControl } = useGetControl(id);
   const { data: evidence = [] } = useGetControlEvidence(id);
@@ -1187,6 +1231,23 @@ export default function ControlDetail({ id }: { id: string }) {
   // Evidence bulk selection
   const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<Set<string>>(new Set());
   const [bulkStatusBusy, setBulkStatusBusy] = useState(false);
+
+  // Evidence table view state
+  const [evidenceView, setEvidenceView] = useState<"table" | "card">(() =>
+    (localStorage.getItem("ctrl-evidence-view") as "table" | "card") ?? "table"
+  );
+  const setEvidenceViewFn = (v: "table" | "card") => {
+    setEvidenceView(v);
+    localStorage.setItem("ctrl-evidence-view", v);
+  };
+  const [evSearch, setEvSearch] = useState("");
+  const [evType, setEvType] = useState("all");
+  const [evStatus, setEvStatus] = useState("all");
+  const [evExpiration, setEvExpiration] = useState("all");
+  const [sortBy, setSortBy] = useState("collectedAt");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [previewItem, setPreviewItem] = useState<any>(null);
+  const [evDensity, setEvDensity] = useState<"comfortable" | "compact">("comfortable");
 
   const toggleEvidenceSelection = (itemId: string) => {
     setSelectedEvidenceIds((prev) => {
@@ -1216,6 +1277,97 @@ export default function ControlDetail({ id }: { id: string }) {
       setBulkStatusBusy(false);
     }
   };
+
+  const handleBulkRemoveFromControl = async () => {
+    if (!selectedEvidenceIds.size) return;
+    setBulkStatusBusy(true);
+    try {
+      await Promise.all(
+        Array.from(selectedEvidenceIds).map((evId) =>
+          fetch(`/api/evidence/${evId}/controls/${id}`, {
+            method: "DELETE",
+            headers: apiHeaders(activeOrg?.id),
+          })
+        )
+      );
+      toast({ title: `${selectedEvidenceIds.size} item(s) removed from this control` });
+      setSelectedEvidenceIds(new Set());
+      invalidateEvidence();
+    } catch {
+      toast({ title: "Error", description: "Could not remove some evidence", variant: "destructive" });
+    } finally {
+      setBulkStatusBusy(false);
+    }
+  };
+
+  const downloadEvidence = (item: any) => {
+    const token = localStorage.getItem("auth_token");
+    const orgId = activeOrg?.id;
+    fetch(`/api/evidence/${item.id}/download`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(orgId ? { "X-Organization-ID": orgId } : {}),
+      },
+    })
+      .then((r) => r.blob())
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = item.fileName ?? "evidence-file";
+        a.click();
+        URL.revokeObjectURL(url);
+      })
+      .catch(() => {});
+  };
+
+  const filteredEvidence = useMemo(() => {
+    let items = [...evidence] as any[];
+    if (evSearch.trim()) {
+      const sq = evSearch.toLowerCase().trim();
+      items = items.filter(
+        (item) =>
+          item.title?.toLowerCase().includes(sq) ||
+          item.fileName?.toLowerCase().includes(sq) ||
+          item.assessorSummary?.toLowerCase().includes(sq) ||
+          evidenceTypeLabel(item.evidenceType).toLowerCase().includes(sq)
+      );
+    }
+    if (evType !== "all") items = items.filter((item) => item.evidenceType === evType);
+    if (evStatus !== "all") items = items.filter((item) => item.status === evStatus);
+    if (evExpiration !== "all") items = items.filter((item) => expirationStatus(item.expiresAt) === evExpiration);
+    items.sort((a, b) => {
+      let av: string, bv: string;
+      switch (sortBy) {
+        case "title": av = a.title ?? ""; bv = b.title ?? ""; break;
+        case "status": av = a.status ?? ""; bv = b.status ?? ""; break;
+        case "type": av = a.evidenceType ?? ""; bv = b.evidenceType ?? ""; break;
+        case "owner": av = a.ownerName ?? ""; bv = b.ownerName ?? ""; break;
+        case "expiresAt": av = a.expiresAt ?? ""; bv = b.expiresAt ?? ""; break;
+        default: av = a.collectedAt ?? ""; bv = b.collectedAt ?? "";
+      }
+      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return items;
+  }, [evidence, evSearch, evType, evStatus, evExpiration, sortBy, sortDir]);
+
+  const SortHeader = ({ label, field }: { label: string; field: string }) => (
+    <button
+      className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+      onClick={() => {
+        if (sortBy === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+        else { setSortBy(field); setSortDir("asc"); }
+      }}
+    >
+      {label}
+      {sortBy === field ? (
+        sortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+      ) : (
+        <ArrowUpDown className="h-3 w-3 opacity-40" />
+      )}
+    </button>
+  );
 
   // When control loads, initialise local state (only once per control load)
   const narrativeValue = narrative !== null ? narrative : (control?.implementationNarrative ?? "");
@@ -1388,21 +1540,25 @@ export default function ControlDetail({ id }: { id: string }) {
 
         {/* ── Evidence Tab ── */}
         <TabsContent value="evidence" className="mt-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-base">
-              Evidence Items
-              {selectedEvidenceIds.size > 0 && (
-                <span className="ml-2 text-xs font-normal text-muted-foreground">{selectedEvidenceIds.size} selected</span>
-              )}
-            </h3>
+
+          {/* ── Top bar ── */}
+          <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
             <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-base">Evidence Items</h3>
+              {selectedEvidenceIds.size > 0 && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                  {selectedEvidenceIds.size} selected
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
               {selectedEvidenceIds.size > 0 && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button size="sm" variant="outline" disabled={bulkStatusBusy}>
                       {bulkStatusBusy
                         ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />Updating…</>
-                        : <><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Bulk Action ({selectedEvidenceIds.size})</>
+                        : <><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Bulk ({selectedEvidenceIds.size})</>
                       }
                     </Button>
                   </DropdownMenuTrigger>
@@ -1412,11 +1568,37 @@ export default function ControlDetail({ id }: { id: string }) {
                     <DropdownMenuItem onClick={() => handleBulkStatusUpdate("assessor_ready")}>Mark Assessor Ready</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleBulkStatusUpdate("draft")}>Mark Draft</DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => handleBulkStatusUpdate("archived")} className="text-red-600">Mark Archived</DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleBulkRemoveFromControl} className="text-destructive">Remove from Control</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleBulkStatusUpdate("archived")} className="text-destructive">Archive</DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => setSelectedEvidenceIds(new Set())}>Clear Selection</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+              )}
+              {/* View toggle */}
+              <div className="flex items-center border rounded-md overflow-hidden h-8">
+                <button
+                  onClick={() => setEvidenceViewFn("table")}
+                  className={`px-2.5 h-full text-xs flex items-center gap-1 transition-colors ${evidenceView === "table" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                >
+                  <LayoutList className="h-3.5 w-3.5" />
+                  Table
+                </button>
+                <button
+                  onClick={() => setEvidenceViewFn("card")}
+                  className={`px-2.5 h-full text-xs flex items-center gap-1 border-l transition-colors ${evidenceView === "card" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                  Cards
+                </button>
+              </div>
+              {evidenceView === "table" && (
+                <button
+                  className="h-8 px-2.5 text-xs border rounded-md text-muted-foreground hover:bg-muted transition-colors"
+                  onClick={() => setEvDensity((d) => (d === "comfortable" ? "compact" : "comfortable"))}
+                >
+                  {evDensity === "comfortable" ? "Compact" : "Comfortable"}
+                </button>
               )}
               <Button size="sm" variant="outline" onClick={() => setShowBulkUpload(true)}>
                 <Files className="h-4 w-4 mr-1" />
@@ -1429,6 +1611,65 @@ export default function ControlDetail({ id }: { id: string }) {
             </div>
           </div>
 
+          {/* ── Filter bar ── */}
+          <div className="flex flex-wrap gap-2 mb-3">
+            <div className="relative min-w-[180px] flex-1">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Search evidence..."
+                value={evSearch}
+                onChange={(e) => setEvSearch(e.target.value)}
+                className="pl-8 h-8 text-sm"
+              />
+            </div>
+            <Select value={evType} onValueChange={setEvType}>
+              <SelectTrigger className="h-8 w-[140px] text-xs">
+                <SelectValue placeholder="All types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All types</SelectItem>
+                {EVIDENCE_TYPES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={evStatus} onValueChange={setEvStatus}>
+              <SelectTrigger className="h-8 w-[150px] text-xs">
+                <SelectValue placeholder="All statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                {EVIDENCE_STATUSES.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={evExpiration} onValueChange={setEvExpiration}>
+              <SelectTrigger className="h-8 w-[150px] text-xs">
+                <SelectValue placeholder="Expiration" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All expiration</SelectItem>
+                <SelectItem value="expired">Expired</SelectItem>
+                <SelectItem value="upcoming">Due within 30d</SelectItem>
+                <SelectItem value="ok">Healthy</SelectItem>
+                <SelectItem value="none">No expiration</SelectItem>
+              </SelectContent>
+            </Select>
+            {(evSearch || evType !== "all" || evStatus !== "all" || evExpiration !== "all") && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 text-xs"
+                onClick={() => { setEvSearch(""); setEvType("all"); setEvStatus("all"); setEvExpiration("all"); }}
+              >
+                <X className="h-3 w-3 mr-1" />
+                Clear
+              </Button>
+            )}
+          </div>
+
+          {/* ── Content ── */}
           {evidence.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
@@ -1443,36 +1684,239 @@ export default function ControlDetail({ id }: { id: string }) {
                 </Button>
               </CardContent>
             </Card>
+          ) : filteredEvidence.length === 0 ? (
+            <div className="text-center py-10 text-muted-foreground text-sm border rounded-md">
+              No evidence matches the current filters.{" "}
+              <button
+                className="text-primary hover:underline text-xs"
+                onClick={() => { setEvSearch(""); setEvType("all"); setEvStatus("all"); setEvExpiration("all"); }}
+              >
+                Clear filters
+              </button>
+            </div>
+          ) : evidenceView === "table" ? (
+
+            /* ── Table view ── */
+            <div className="border rounded-md overflow-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/40">
+                    <th className="w-8 px-3 py-2 text-left">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 cursor-pointer"
+                        checked={selectedEvidenceIds.size === filteredEvidence.length && filteredEvidence.length > 0}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedEvidenceIds(new Set(filteredEvidence.map((i: any) => i.id)));
+                          else setSelectedEvidenceIds(new Set());
+                        }}
+                      />
+                    </th>
+                    <th className={`px-3 ${evDensity === "compact" ? "py-1.5" : "py-2"} text-left`}>
+                      <SortHeader label="Title / Type" field="title" />
+                    </th>
+                    <th className={`px-3 ${evDensity === "compact" ? "py-1.5" : "py-2"} text-left`}>
+                      <SortHeader label="Status" field="status" />
+                    </th>
+                    <th className={`px-3 ${evDensity === "compact" ? "py-1.5" : "py-2"} text-left`}>
+                      <SortHeader label="Owner" field="owner" />
+                    </th>
+                    <th className={`px-3 ${evDensity === "compact" ? "py-1.5" : "py-2"} text-left`}>
+                      <SortHeader label="Collected" field="collectedAt" />
+                    </th>
+                    <th className={`px-3 ${evDensity === "compact" ? "py-1.5" : "py-2"} text-left`}>
+                      <SortHeader label="Expires" field="expiresAt" />
+                    </th>
+                    <th className={`px-3 ${evDensity === "compact" ? "py-1.5" : "py-2"} text-left text-xs font-medium text-muted-foreground`}>File</th>
+                    <th className={`px-3 ${evDensity === "compact" ? "py-1.5" : "py-2"} text-right text-xs font-medium text-muted-foreground`}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredEvidence.map((item: any) => {
+                    const isSelected = selectedEvidenceIds.has(item.id);
+                    const rowPy = evDensity === "compact" ? "py-1.5" : "py-2.5";
+                    return (
+                      <tr
+                        key={item.id}
+                        className={`border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer ${isSelected ? "bg-primary/5" : ""}`}
+                        onClick={() => navigate(`/evidence/${item.id}`)}
+                      >
+                        <td className={`px-3 ${rowPy}`} onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 cursor-pointer"
+                            checked={isSelected}
+                            onChange={() => toggleEvidenceSelection(item.id)}
+                          />
+                        </td>
+                        <td className={`px-3 ${rowPy} max-w-[260px]`}>
+                          <div className="flex items-start gap-2">
+                            <EvidenceTypeIcon type={item.evidenceType} />
+                            <div className="min-w-0">
+                              <Link
+                                href={`/evidence/${item.id}`}
+                                className="font-medium text-primary hover:underline line-clamp-1 text-sm"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {item.title}
+                              </Link>
+                              <div className="text-[11px] text-muted-foreground">{evidenceTypeLabel(item.evidenceType)}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className={`px-3 ${rowPy}`}>
+                          <StatusBadge status={item.status} />
+                        </td>
+                        <td className={`px-3 ${rowPy} text-xs text-muted-foreground whitespace-nowrap`}>
+                          {item.ownerName ?? "—"}
+                        </td>
+                        <td className={`px-3 ${rowPy} text-xs text-muted-foreground whitespace-nowrap`}>
+                          {formatDate(item.collectedAt)}
+                        </td>
+                        <td className={`px-3 ${rowPy}`}>
+                          <ExpirationCell expiresAt={item.expiresAt} />
+                        </td>
+                        <td className={`px-3 ${rowPy} max-w-[160px]`}>
+                          {item.fileName ? (
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Paperclip className="h-3 w-3 shrink-0" />
+                              <span className="truncate">{item.fileName}</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground/40">—</span>
+                          )}
+                        </td>
+                        <td className={`px-3 ${rowPy}`} onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-0.5">
+                            {item.fileKey && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                title="Quick preview"
+                                onClick={() => setPreviewItem(item)}
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {item.fileKey && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                title="Download"
+                                onClick={() => downloadEvidence(item)}
+                              >
+                                <Download className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7">
+                                  <MoreHorizontal className="h-3.5 w-3.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem asChild>
+                                  <Link href={`/evidence/${item.id}`} className="flex items-center gap-2">
+                                    <Eye className="h-4 w-4" />
+                                    View / Edit
+                                  </Link>
+                                </DropdownMenuItem>
+                                {item.fileKey && (
+                                  <DropdownMenuItem onClick={() => downloadEvidence(item)} className="flex items-center gap-2">
+                                    <Download className="h-4 w-4" />
+                                    Download File
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={async () => {
+                                    try {
+                                      const res = await fetch(`/api/evidence/${item.id}/controls/${id}`, {
+                                        method: "DELETE",
+                                        headers: apiHeaders(activeOrg?.id),
+                                      });
+                                      if (!res.ok) throw new Error("Failed to remove");
+                                      toast({ title: "Evidence removed from this control" });
+                                      invalidateEvidence();
+                                    } catch {
+                                      toast({ title: "Error", description: "Could not remove evidence", variant: "destructive" });
+                                    }
+                                  }}
+                                  className="flex items-center gap-2"
+                                >
+                                  <Unlink className="h-4 w-4" />
+                                  Remove from Control
+                                </DropdownMenuItem>
+                                {item.status !== "archived" && (
+                                  <DropdownMenuItem
+                                    onClick={async () => {
+                                      try {
+                                        const res = await fetch(`/api/evidence/${item.id}/archive`, {
+                                          method: "POST",
+                                          headers: apiHeaders(activeOrg?.id),
+                                        });
+                                        if (!res.ok) throw new Error("Failed to archive");
+                                        toast({ title: "Evidence archived" });
+                                        invalidateEvidence();
+                                      } catch {
+                                        toast({ title: "Error", description: "Could not archive evidence", variant: "destructive" });
+                                      }
+                                    }}
+                                    className="flex items-center gap-2"
+                                  >
+                                    <Archive className="h-4 w-4" />
+                                    Archive
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {evidence.map((item: any) => {
+
+            /* ── Card view — dense grid ── */
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {filteredEvidence.map((item: any) => {
                 const isSelected = selectedEvidenceIds.has(item.id);
                 return (
                   <Card
                     key={item.id}
-                    className={`hover:shadow-md transition-shadow ${isSelected ? "ring-2 ring-primary ring-offset-1" : ""}`}
+                    className={`hover:shadow-md transition-shadow cursor-pointer ${isSelected ? "ring-2 ring-primary ring-offset-1" : ""}`}
+                    onClick={() => navigate(`/evidence/${item.id}`)}
                   >
-                    <CardHeader className="pb-2">
-                      <div className="flex justify-between items-start gap-2">
-                        <div className="flex items-start gap-2 flex-1 min-w-0">
+                    <CardContent className="p-3">
+                      <div className="flex justify-between items-start gap-2 mb-2">
+                        <div className="flex items-start gap-1.5 flex-1 min-w-0">
                           <input
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => toggleEvidenceSelection(item.id)}
-                            className="mt-1 h-4 w-4 shrink-0 cursor-pointer"
+                            className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer"
+                            onClick={(e) => e.stopPropagation()}
                           />
-                          <CardTitle className="text-base leading-snug flex-1 min-w-0">
-                            <Link href={`/evidence/${item.id}`} className="hover:underline text-primary">
-                              {item.title}
-                            </Link>
-                          </CardTitle>
+                          <EvidenceTypeIcon type={item.evidenceType} />
+                          <Link
+                            href={`/evidence/${item.id}`}
+                            className="font-medium text-sm hover:underline text-primary line-clamp-2 leading-snug"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {item.title}
+                          </Link>
                         </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <StatusBadge status={item.status} />
+                        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-7 w-7">
-                                <MoreHorizontal className="h-4 w-4" />
+                              <Button variant="ghost" size="icon" className="h-6 w-6">
+                                <MoreHorizontal className="h-3.5 w-3.5" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
@@ -1483,62 +1927,46 @@ export default function ControlDetail({ id }: { id: string }) {
                                 </Link>
                               </DropdownMenuItem>
                               {item.fileKey && (
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    const token = localStorage.getItem("auth_token");
-                                    const orgId = activeOrg?.id;
-                                    fetch(`/api/evidence/${item.id}/download`, {
-                                      headers: {
-                                        Authorization: `Bearer ${token}`,
-                                        ...(orgId ? { "X-Organization-ID": orgId } : {}),
-                                      },
-                                    })
-                                      .then((r) => r.blob())
-                                      .then((blob) => {
-                                        const url = URL.createObjectURL(blob);
-                                        const a = document.createElement("a");
-                                        a.href = url;
-                                        a.download = item.fileName ?? "evidence-file";
-                                        a.click();
-                                        URL.revokeObjectURL(url);
-                                      })
-                                      .catch(() => {});
-                                  }}
-                                  className="flex items-center gap-2"
-                                >
+                                <DropdownMenuItem onClick={() => setPreviewItem(item)} className="flex items-center gap-2">
+                                  <Eye className="h-4 w-4" />
+                                  Quick Preview
+                                </DropdownMenuItem>
+                              )}
+                              {item.fileKey && (
+                                <DropdownMenuItem onClick={() => downloadEvidence(item)} className="flex items-center gap-2">
                                   <Download className="h-4 w-4" />
-                                  Download File
+                                  Download
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
-                                onClick={async () => {
+                                onClick={async (e) => {
+                                  e.stopPropagation();
                                   try {
-                                    const res = await fetch(`/api/evidence/${item.id}/controls/${id}`, {
+                                    await fetch(`/api/evidence/${item.id}/controls/${id}`, {
                                       method: "DELETE",
                                       headers: apiHeaders(activeOrg?.id),
                                     });
-                                    if (!res.ok) throw new Error("Failed to remove");
                                     toast({ title: "Evidence removed from this control" });
                                     invalidateEvidence();
                                   } catch {
-                                    toast({ title: "Error", description: "Could not remove evidence from this control", variant: "destructive" });
+                                    toast({ title: "Error", description: "Could not remove evidence", variant: "destructive" });
                                   }
                                 }}
                                 className="flex items-center gap-2"
                               >
                                 <Unlink className="h-4 w-4" />
-                                Remove from this Control
+                                Remove from Control
                               </DropdownMenuItem>
                               {item.status !== "archived" && (
                                 <DropdownMenuItem
-                                  onClick={async () => {
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
                                     try {
-                                      const res = await fetch(`/api/evidence/${item.id}/archive`, {
+                                      await fetch(`/api/evidence/${item.id}/archive`, {
                                         method: "POST",
                                         headers: apiHeaders(activeOrg?.id),
                                       });
-                                      if (!res.ok) throw new Error("Failed to archive");
                                       toast({ title: "Evidence archived" });
                                       invalidateEvidence();
                                     } catch {
@@ -1548,42 +1976,40 @@ export default function ControlDetail({ id }: { id: string }) {
                                   className="flex items-center gap-2"
                                 >
                                   <Archive className="h-4 w-4" />
-                                  Archive Evidence
+                                  Archive
                                 </DropdownMenuItem>
                               )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
                       </div>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      <Badge variant="outline" className="text-xs">
-                        {evidenceTypeLabel(item.evidenceType)}
-                      </Badge>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <StatusBadge status={item.status} />
+                        <span className="text-[11px] text-muted-foreground">{evidenceTypeLabel(item.evidenceType)}</span>
+                      </div>
                       {item.fileName && (
-                        <div className="flex items-center gap-1.5">
-                          <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
-                          <span className="text-xs text-muted-foreground truncate">{item.fileName}</span>
-                          {item.fileSize && (
-                            <span className="text-xs text-muted-foreground shrink-0">
-                              ({(item.fileSize / 1024).toFixed(0)} KB)
-                            </span>
-                          )}
+                        <div className="flex items-center gap-1 text-[11px] text-muted-foreground mb-1">
+                          <Paperclip className="h-2.5 w-2.5 shrink-0" />
+                          <span className="truncate">{item.fileName}</span>
                         </div>
                       )}
-                      {item.collectedAt && (
-                        <p className="text-xs text-muted-foreground">
-                          Collected: {formatDate(item.collectedAt)}
-                        </p>
-                      )}
-                      {item.ownerName && (
-                        <p className="text-xs text-muted-foreground">Owner: {item.ownerName}</p>
-                      )}
+                      <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-1.5 pt-1.5 border-t">
+                        <span>{item.collectedAt ? formatDate(item.collectedAt) : "—"}</span>
+                        <ExpirationCell expiresAt={item.expiresAt} />
+                      </div>
                     </CardContent>
                   </Card>
                 );
               })}
             </div>
+          )}
+
+          {/* ── Quick Preview Modal ── */}
+          {previewItem && (
+            <EvidencePreviewModal
+              item={previewItem}
+              onClose={() => setPreviewItem(null)}
+            />
           )}
 
           <AddEvidenceDialog

@@ -1,0 +1,126 @@
+Redesign the Control > Evidence tab to use a table-based layout instead of large cards.
+
+Keep cards as an optional toggle, but default to a table view optimized for audits.
+
+1. Add View Toggle
+
+At the top right of the Evidence tab, add:
+- Table View (default)
+- Card View (optional)
+
+Persist user preference.
+
+2. Replace Card Layout with Table
+
+Use a compact table layout.
+
+Columns:
+
+- Checkbox (for bulk actions)
+- Title
+- Type
+- Status
+- Linked Control (optional since we are in control view)
+- Owner
+- Collected Date
+- Next Review / Expiration
+- File (icon + filename)
+- Actions (view, edit, download, more menu)
+
+3. Row Design
+
+Each row should:
+- be compact
+- highlight on hover
+- clickable (opens evidence detail)
+- show status badge (Approved, Draft, etc.)
+- show evidence type badge (Policy, Screenshot, Procedure)
+
+4. Sorting
+
+Allow sorting by:
+- Title
+- Status
+- Type
+- Owner
+- Collected Date
+- Next Review
+
+5. Inline Filters (VERY IMPORTANT)
+
+Add filter row above table:
+- Search
+- Type
+- Status
+- Owner
+- Date range
+- Expiration status (expired / upcoming / none)
+
+Filters must combine.
+
+6. Bulk Actions
+
+Keep checkboxes and add bulk actions:
+
+- Change Status
+- Archive
+- Remove from Control
+
+Show bulk action bar when items are selected.
+
+7. Status Color Improvements
+
+Use consistent colors:
+- Draft = gray
+- Pending = yellow
+- Approved = blue
+- Active = green
+- Stale = orange
+- Archived = muted
+
+8. Expiration Highlighting
+
+Add visual cues:
+- Expired → red text/date
+- Due within 30 days → amber
+- Healthy → neutral
+
+9. Evidence Type Icons
+
+Add small icons:
+- 📄 Policy
+- 🧾 Procedure
+- 🖼 Screenshot
+- 📊 Log
+- 📁 Other
+
+10. Quick Preview
+
+Add a small “eye” icon in each row:
+- opens preview modal
+- avoids navigating away
+
+11. Compact Mode (Optional)
+
+Add toggle:
+- Comfortable (default spacing)
+- Compact (more rows visible)
+
+12. Keep Card View (but improve)
+
+If user switches to card view:
+- reduce card size
+- make them denser
+- 3–4 per row
+- less vertical padding
+
+13. Acceptance Test
+
+- Open control evidence tab
+- Table loads instead of cards
+- Can scan 20+ items without scrolling excessively
+- Sorting works
+- Filtering works
+- Bulk select works
+- Clicking a row opens detail
+- Preview works from table

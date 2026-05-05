@@ -427,7 +427,7 @@ export default function Evidence() {
         if (normalizeStr(item.title).includes(sq)) return true;
         if (item.fileName && normalizeStr(item.fileName).includes(sq)) return true;
         if (item.assessorSummary && normalizeStr(item.assessorSummary).includes(sq)) return true;
-        if (item.internalNotes && normalizeStr(item.internalNotes).includes(sq)) return true;
+        if ((item as any).internalNotes && normalizeStr((item as any).internalNotes).includes(sq)) return true;
         if (item.evidenceType && normalizeStr(item.evidenceType).includes(sq)) return true;
         if ((item.tags ?? []).some((t) => normalizeStr(t).includes(sq))) return true;
         if ((item.linkedControlLabels ?? []).some((l) => normalizeStr(l).includes(sq))) return true;

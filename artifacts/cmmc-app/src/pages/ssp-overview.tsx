@@ -36,6 +36,8 @@ interface SspDocument {
   isPrimary: boolean;
   extractedAt: string | null;
   nextReviewDate: string | null;
+  fileKey?: string | null;
+  originalFileName?: string | null;
 }
 
 interface SspStats {
