@@ -14,7 +14,7 @@ import {
   sspSectionsTable,
   sspControlMappingsTable,
 } from "@workspace/db";
-import { eq, and, desc, count, isNotNull, isNull, ne, lte, gte, sql } from "drizzle-orm";
+import { eq, and, desc, count, isNotNull, isNull, ne, lte, gte, sql, or } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 
@@ -448,59 +448,284 @@ router.get("/reports/monitoring", requireAuth, requireOrg, async (req, res) => {
   });
 });
 
-// ── 7. Domain Readiness Report ────────────────────────────────────────────────
+// ── 7. Domain Readiness & C3PAO Readiness Report ─────────────────────────────
 router.get("/reports/domain", requireAuth, requireOrg, async (req, res) => {
   const orgId = req.orgId!;
+  const now = new Date();
 
-  const controls = await db
-    .select({
+  const DOMAIN_CODE: Record<string, string> = {
+    "Access Control": "AC", "Awareness and Training": "AT", "Audit and Accountability": "AU",
+    "Configuration Management": "CM", "Identification and Authentication": "IA",
+    "Incident Response": "IR", "Maintenance": "MA", "Media Protection": "MP",
+    "Personnel Security": "PS", "Physical Protection": "PE", "Risk Assessment": "RA",
+    "Security Assessment": "CA", "System and Communications Protection": "SC",
+    "System and Information Integrity": "SI",
+  };
+
+  // Fetch all data in parallel
+  const [
+    orgResult,
+    controlsRaw,
+    evidenceLinksRaw,
+    allEvidenceRaw,
+    allPoamsRaw,
+    monitoringRaw,
+    sspResult,
+  ] = await Promise.all([
+    db.select({ name: organizationsTable.name, cmmcTargetLevel: organizationsTable.cmmcTargetLevel, legalName: organizationsTable.legalName })
+      .from(organizationsTable).where(eq(organizationsTable.id, orgId)).limit(1),
+
+    db.select({
+      id: controlsTable.id,
+      controlRef: controlsTable.controlId,
+      title: controlsTable.title,
       domainId: controlsTable.domainId,
       domainName: domainsTable.name,
       sortOrder: domainsTable.sortOrder,
-      status: controlAssessmentsTable.status,
       level: controlsTable.level,
+      status: controlAssessmentsTable.status,
+      implementationNarrative: controlAssessmentsTable.implementationNarrative,
     })
     .from(controlsTable)
     .leftJoin(domainsTable, eq(domainsTable.id, controlsTable.domainId))
     .leftJoin(controlAssessmentsTable, and(
       eq(controlAssessmentsTable.controlId, controlsTable.id),
       eq(controlAssessmentsTable.organizationId, orgId),
-    ));
+    ))
+    .where(eq(controlsTable.isActive, true)),
 
-  const domainMap = new Map<string, {
-    domain: string;
-    sortOrder: number;
-    total: number;
-    implemented: number;
-    inProgress: number;
-    notStarted: number;
-    atRisk: number;
-    l1: number;
-    l2: number;
-  }>();
+    db.select({
+      controlId: evidenceControlLinksTable.controlId,
+      status: evidenceItemsTable.status,
+      evidenceType: evidenceItemsTable.evidenceType,
+      fileKey: evidenceItemsTable.fileKey,
+      fileHash: evidenceItemsTable.fileHash,
+    })
+    .from(evidenceControlLinksTable)
+    .innerJoin(evidenceItemsTable, and(
+      eq(evidenceItemsTable.id, evidenceControlLinksTable.evidenceId),
+      eq(evidenceItemsTable.organizationId, orgId),
+      isNull(evidenceItemsTable.deletedAt),
+    )),
 
-  for (const c of controls) {
-    const key = c.domainName ?? "Unknown";
-    const e = domainMap.get(key) ?? { domain: key, sortOrder: c.sortOrder ?? 999, total: 0, implemented: 0, inProgress: 0, notStarted: 0, atRisk: 0, l1: 0, l2: 0 };
-    e.total++;
-    const s = c.status ?? "not_started";
-    if (s === "implemented" || s === "assessor_ready") e.implemented++;
-    else if (s === "in_progress" || s === "needs_review") e.inProgress++;
-    else if (s === "at_risk") e.atRisk++;
-    else e.notStarted++;
-    if (c.level === "L1") e.l1++;
-    else e.l2++;
-    domainMap.set(key, e);
+    db.select({ status: evidenceItemsTable.status, fileKey: evidenceItemsTable.fileKey, fileHash: evidenceItemsTable.fileHash })
+    .from(evidenceItemsTable)
+    .where(and(eq(evidenceItemsTable.organizationId, orgId), isNull(evidenceItemsTable.deletedAt))),
+
+    db.select({ status: poamsTable.status, linkedControlId: poamsTable.linkedControlId, scheduledCompletionDate: poamsTable.scheduledCompletionDate })
+    .from(poamsTable)
+    .where(eq(poamsTable.organizationId, orgId)),
+
+    db.select({ status: monitoringItemsTable.status, nextDue: monitoringItemsTable.nextDue, controlRef: monitoringItemsTable.controlRef })
+    .from(monitoringItemsTable)
+    .where(eq(monitoringItemsTable.organizationId, orgId)),
+
+    db.select({ id: sspDocumentsTable.id, title: sspDocumentsTable.title, revisionNumber: sspDocumentsTable.revisionNumber })
+    .from(sspDocumentsTable)
+    .where(and(eq(sspDocumentsTable.organizationId, orgId), eq(sspDocumentsTable.isPrimary, true)))
+    .limit(1),
+  ]);
+
+  const org = orgResult[0];
+  const ssp = sspResult[0];
+
+  const sspMappings = ssp
+    ? await db.select({ controlRef: sspControlMappingsTable.controlRef, implementationNarrative: sspControlMappingsTable.implementationNarrative })
+        .from(sspControlMappingsTable).where(eq(sspControlMappingsTable.sspDocumentId, ssp.id))
+    : [];
+
+  // Evidence links map per control
+  const evMapByControl = new Map<string, typeof evidenceLinksRaw>();
+  for (const link of evidenceLinksRaw) {
+    const arr = evMapByControl.get(link.controlId) ?? [];
+    arr.push(link);
+    evMapByControl.set(link.controlId, arr);
   }
 
-  const domains = [...domainMap.values()]
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map(d => ({
-      ...d,
-      pct: d.total > 0 ? Math.round((d.implemented / d.total) * 100) : 0,
-    }));
+  // Monitoring grouped by domain code
+  const monByDomainCode = new Map<string, { current: number; overdue: number; total: number }>();
+  for (const m of monitoringRaw) {
+    const code = (m.controlRef ?? "").split(".")[0] ?? "XX";
+    const e = monByDomainCode.get(code) ?? { current: 0, overdue: 0, total: 0 };
+    e.total++;
+    if (m.nextDue && new Date(m.nextDue) < now) e.overdue++;
+    else if (m.status === "current") e.current++;
+    monByDomainCode.set(code, e);
+  }
 
-  res.json({ reportDate: new Date().toISOString(), domains });
+  // Build control-id → domain name lookup from already-fetched controls
+  const controlIdToDomainName = new Map<string, string>(
+    controlsRaw.map(c => [c.id, c.domainName ?? "Unknown"])
+  );
+
+  // POA&Ms open by domain
+  const poamsByDomain = new Map<string, number>();
+  const openPoamTotal = allPoamsRaw.filter(p => p.status !== "closed" && p.status !== "accepted_risk").length;
+  for (const p of allPoamsRaw) {
+    if (p.status === "closed" || p.status === "accepted_risk") continue;
+    const domain = (p.linkedControlId ? controlIdToDomainName.get(p.linkedControlId) : null) ?? "Unlinked";
+    poamsByDomain.set(domain, (poamsByDomain.get(domain) ?? 0) + 1);
+  }
+
+  // Per-control aggregation
+  const totalControls = controlsRaw.length;
+  let implementedCount = 0, inProgressCount = 0, notStartedCount = 0, atRiskCount = 0;
+  let controlsWithEvidence = 0, controlsWithApprovedEvidence = 0, controlsWithNarrative = 0;
+  let controlsWithPolicyOrProc = 0;
+
+  type DomainAccum = {
+    name: string; code: string; sortOrder: number;
+    implemented: number; inProgress: number; notStarted: number; atRisk: number; total: number;
+    withEvidence: number; withApproved: number; withNarrative: number;
+  };
+  const domainAccum = new Map<string, DomainAccum>();
+  const exceptions: { controlId: string; title: string; domain: string; issues: string[] }[] = [];
+
+  for (const ctrl of controlsRaw) {
+    const status = ctrl.status ?? "not_started";
+    const hasNarrative = !!(ctrl.implementationNarrative?.trim());
+    const links = evMapByControl.get(ctrl.id) ?? [];
+    const hasEvidence = links.length > 0;
+    const hasApproved = links.some(l => l.status === "approved" || l.status === "assessor_ready");
+    const hasStale = links.some(l => l.status === "stale");
+    const hasPolicyOrProc = links.some(l => l.evidenceType === "policy" || l.evidenceType === "procedure");
+    const hasMissingHash = links.some(l => l.fileKey && !l.fileHash);
+
+    if (status === "implemented" || status === "assessor_ready") implementedCount++;
+    else if (status === "in_progress" || status === "needs_review") inProgressCount++;
+    else if (status === "at_risk") atRiskCount++;
+    else notStartedCount++;
+
+    if (hasEvidence) controlsWithEvidence++;
+    if (hasApproved) controlsWithApprovedEvidence++;
+    if (hasNarrative) controlsWithNarrative++;
+    if (hasPolicyOrProc) controlsWithPolicyOrProc++;
+
+    const domainName = ctrl.domainName ?? "Unknown";
+    const code = DOMAIN_CODE[domainName] ?? domainName.split(" ").map(w => w[0]).join("");
+    const acc = domainAccum.get(domainName) ?? { name: domainName, code, sortOrder: ctrl.sortOrder ?? 999, implemented: 0, inProgress: 0, notStarted: 0, atRisk: 0, total: 0, withEvidence: 0, withApproved: 0, withNarrative: 0 };
+    acc.total++;
+    if (status === "implemented" || status === "assessor_ready") acc.implemented++;
+    else if (status === "in_progress" || status === "needs_review") acc.inProgress++;
+    else if (status === "at_risk") acc.atRisk++;
+    else acc.notStarted++;
+    if (hasEvidence) acc.withEvidence++;
+    if (hasApproved) acc.withApproved++;
+    if (hasNarrative) acc.withNarrative++;
+    domainAccum.set(domainName, acc);
+
+    const issues: string[] = [];
+    if (!hasEvidence) issues.push("No evidence linked");
+    else if (!hasApproved) issues.push("No approved evidence");
+    if (!hasNarrative) issues.push("Missing SSP narrative");
+    if (hasStale) issues.push("Stale evidence present");
+    if (status === "at_risk") issues.push("Control marked At Risk");
+    if (hasMissingHash) issues.push("Evidence files missing hash");
+    if (issues.length > 0) exceptions.push({ controlId: ctrl.controlRef, title: ctrl.title ?? ctrl.controlRef, domain: domainName, issues });
+  }
+
+  // Evidence integrity stats
+  const totalEvidence = allEvidenceRaw.length;
+  const evWithFile = allEvidenceRaw.filter(e => !!e.fileKey).length;
+  const evWithHash = allEvidenceRaw.filter(e => !!e.fileHash).length;
+  const evStale = allEvidenceRaw.filter(e => e.status === "stale").length;
+  const evApproved = allEvidenceRaw.filter(e => e.status === "approved" || e.status === "assessor_ready").length;
+  const evPending = allEvidenceRaw.filter(e => e.status === "pending_review").length;
+  const evMissingHash = allEvidenceRaw.filter(e => !!e.fileKey && !e.fileHash).length;
+
+  // Projected CMMC Score
+  const maxScore = 110;
+  const notMet = notStartedCount + atRiskCount;
+  const projectedScore = Math.max(0, maxScore - notMet);
+
+  // Audit Confidence Score
+  const monitoringTotal = monitoringRaw.length;
+  const monitoringOverdue = monitoringRaw.filter(m => m.nextDue && new Date(m.nextDue) < now).length;
+  const stalePct = totalEvidence > 0 ? evStale / totalEvidence : 0;
+  const c1 = totalControls > 0 ? Math.round((implementedCount / totalControls) * 25) : 0;
+  const c2 = totalControls > 0 ? Math.round((controlsWithApprovedEvidence / totalControls) * 20) : 0;
+  const c3 = totalControls > 0 ? Math.round((controlsWithEvidence / totalControls) * 15) : 0;
+  const c4 = totalControls > 0 ? Math.round((controlsWithNarrative / totalControls) * 15) : 0;
+  const c5 = totalControls > 0 ? Math.round((controlsWithPolicyOrProc / totalControls) * 10) : 0;
+  const c6 = Math.round((1 - stalePct) * 5);
+  const c7 = monitoringTotal > 0 ? Math.round(((monitoringTotal - monitoringOverdue) / monitoringTotal) * 5) : 5;
+  const c8 = totalEvidence > 0 ? Math.round((evWithHash / totalEvidence) * 5) : 0;
+  const auditConfidence = c1 + c2 + c3 + c4 + c5 + c6 + c7 + c8;
+  const auditRating = auditConfidence >= 90 ? "Strong" : auditConfidence >= 75 ? "Moderate" : auditConfidence >= 50 ? "Needs Work" : "High Risk";
+
+  // Domain rows
+  const domains = [...domainAccum.values()]
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map(d => {
+      const readinessPct = d.total > 0 ? Math.round((d.implemented / d.total) * 100) : 0;
+      const evidenceQualityPct = d.total > 0 ? Math.round((d.withApproved / d.total) * 100) : 0;
+      const sspCoveragePct = d.total > 0 ? Math.round((d.withNarrative / d.total) * 100) : 0;
+      const monData = monByDomainCode.get(d.code);
+      const monitoringStatus = !monData ? "no_data" : monData.overdue > 0 ? "overdue" : "current";
+      const openPoams = poamsByDomain.get(d.name) ?? 0;
+      const riskRating = readinessPct >= 90 ? "low" : readinessPct >= 75 ? "medium" : readinessPct >= 50 ? "high" : "critical";
+      const nextAction = d.notStarted > 0
+        ? `Start ${d.notStarted} not-started control${d.notStarted > 1 ? "s" : ""}`
+        : d.withApproved < d.total
+        ? `Approve evidence for ${d.total - d.withApproved} control${(d.total - d.withApproved) > 1 ? "s" : ""}`
+        : d.withNarrative < d.total
+        ? `Add SSP narrative for ${d.total - d.withNarrative} control${(d.total - d.withNarrative) > 1 ? "s" : ""}`
+        : "Review evidence expiration dates";
+      return { domainCode: d.code, domainName: d.name, implemented: d.implemented, inProgress: d.inProgress, notStarted: d.notStarted, atRisk: d.atRisk, total: d.total, readinessPct, evidenceQualityPct, sspCoveragePct, monitoringStatus, openPoams, riskRating, nextAction };
+    });
+
+  const domainsReady = domains.filter(d => d.readinessPct === 100).length;
+  const monitoringGaps = monitoringTotal > 0 ? monitoringOverdue : 0;
+  const overallReadinessPct = totalControls > 0 ? Math.round((implementedCount / totalControls) * 100) : 0;
+  const overallStatus = overallReadinessPct >= 95 && openPoamTotal === 0 && monitoringOverdue === 0
+    ? "C3PAO Ready" : overallReadinessPct >= 75 ? "In Progress" : "At Risk";
+
+  const sspMappingsWithNarrative = sspMappings.filter(m => m.implementationNarrative?.trim()).length;
+
+  const c3paoChecklist = [
+    { item: "SSP uploaded and versioned", status: ssp ? "complete" : "missing" as const, count: ssp ? 1 : 0, total: 1, notes: ssp ? `${ssp.title} · rev ${ssp.revisionNumber ?? "1.0"}` : "No SSP document uploaded", link: "/ssp/documents" },
+    { item: "SSP mapped to controls", status: (sspMappingsWithNarrative >= totalControls * 0.8 ? "complete" : sspMappings.length > 0 ? "partial" : "missing") as "complete" | "partial" | "missing", count: sspMappingsWithNarrative, total: totalControls, notes: `${sspMappingsWithNarrative} of ${totalControls} controls have SSP narrative`, link: "/ssp/sections" },
+    { item: "Evidence mapped to controls", status: (controlsWithEvidence >= totalControls * 0.9 ? "complete" : controlsWithEvidence > 0 ? "partial" : "missing") as "complete" | "partial" | "missing", count: controlsWithEvidence, total: totalControls, notes: `${controlsWithEvidence} of ${totalControls} controls covered`, link: "/evidence" },
+    { item: "Evidence approved", status: (controlsWithApprovedEvidence >= totalControls * 0.9 ? "complete" : controlsWithApprovedEvidence > 0 ? "partial" : "missing") as "complete" | "partial" | "missing", count: controlsWithApprovedEvidence, total: totalControls, notes: `${controlsWithApprovedEvidence} of ${totalControls} controls have approved evidence`, link: "/evidence" },
+    { item: "Evidence hashes generated", status: (evWithFile === 0 ? "missing" : evWithHash >= evWithFile * 0.9 ? "complete" : "partial") as "complete" | "partial" | "missing", count: evWithHash, total: evWithFile || totalEvidence, notes: `${evWithHash} of ${evWithFile || totalEvidence} uploaded files have SHA-256 hash`, link: "/evidence" },
+    { item: "POA&M reviewed", status: (openPoamTotal === 0 ? "complete" : openPoamTotal <= 5 ? "partial" : "missing") as "complete" | "partial" | "missing", count: 0, total: openPoamTotal, notes: openPoamTotal === 0 ? "No open POA&M items" : `${openPoamTotal} open items require attention`, link: "/poams" },
+    { item: "Monitoring tracker current", status: (monitoringOverdue === 0 ? "complete" : monitoringOverdue <= 3 ? "partial" : "missing") as "complete" | "partial" | "missing", count: monitoringTotal - monitoringOverdue, total: monitoringTotal, notes: monitoringOverdue === 0 ? "All monitoring tasks current" : `${monitoringOverdue} overdue tasks`, link: "/monitoring" },
+    { item: "Report / export package ready", status: "partial" as const, count: 0, total: 0, notes: "Archive this report PDF for the audit package", link: "/reports/domain" },
+  ];
+
+  res.json({
+    reportDate: new Date().toISOString(),
+    org: { name: org?.name ?? "Unknown", cmmcTargetLevel: org?.cmmcTargetLevel ?? "Level 2", legalName: org?.legalName ?? null },
+    executiveSummary: {
+      overallReadinessPct, overallStatus,
+      controlsReady: implementedCount, totalControls,
+      domainsReady, totalDomains: domains.length,
+      openPoams: openPoamTotal,
+      evidenceGaps: totalControls - controlsWithEvidence,
+      monitoringGaps,
+    },
+    projectedScore: { max: maxScore, score: projectedScore, loss: maxScore - projectedScore, notMet, openPoams: openPoamTotal },
+    auditConfidence: {
+      score: auditConfidence, rating: auditRating,
+      breakdown: { implementedControls: c1, approvedEvidence: c2, evidenceCoverage: c3, sspNarrative: c4, policyProcedure: c5, freshEvidence: c6, monitoringCurrent: c7, artifactIntegrity: c8 },
+    },
+    c3paoChecklist,
+    domains,
+    evidenceIntegrity: { total: totalEvidence, withFile: evWithFile, withHash: evWithHash, missingHash: evMissingHash, stale: evStale, approved: evApproved, pendingReview: evPending },
+    exceptions: exceptions.slice(0, 60),
+    poamSummary: {
+      open: openPoamTotal,
+      overdue: allPoamsRaw.filter(p => p.status !== "closed" && p.scheduledCompletionDate && new Date(p.scheduledCompletionDate) < now).length,
+      scoreImpact: notMet,
+    },
+    monitoringSummary: {
+      total: monitoringTotal,
+      current: monitoringRaw.filter(m => m.status === "current").length,
+      overdue: monitoringOverdue,
+      dueSoon: monitoringRaw.filter(m => m.nextDue && new Date(m.nextDue) >= now && new Date(m.nextDue) <= new Date(Date.now() + 7 * 86400000)).length,
+    },
+    ssp: ssp ? { title: ssp.title, version: ssp.revisionNumber ?? null, mappingsCount: sspMappings.length, mappingsWithNarrative: sspMappingsWithNarrative } : null,
+  });
 });
 
 // ── 8. Audit Readiness Report ─────────────────────────────────────────────────
