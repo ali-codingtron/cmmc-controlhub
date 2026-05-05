@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import path from "path";
-import { mkdirSync } from "fs";
+import { createReadStream } from "fs";
 import {
   db,
   documentTemplatesTable,
@@ -25,18 +25,50 @@ import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 import { logAudit } from "../lib/audit";
 import { randomUUID } from "crypto";
+import { objectStorageClient, ObjectStorageService } from "../lib/objectStorage";
 
+const objectStorageService = new ObjectStorageService();
+
+// ── GCS upload helper (documents) ─────────────────────────────────────────
+async function uploadDocBufferToGCS(
+  buffer: Buffer,
+  mimeType: string,
+  ext: string,
+  originalFilename: string
+): Promise<string> {
+  const privateDir = objectStorageService.getPrivateObjectDir();
+  const normalised = privateDir.startsWith("/") ? privateDir : `/${privateDir}`;
+  const parts = normalised.split("/").filter(Boolean);
+  const bucketName = parts[0];
+  const prefix = parts.slice(1).join("/");
+
+  const objectId = randomUUID();
+  const objectName = prefix
+    ? `${prefix}/documents/${objectId}${ext}`
+    : `documents/${objectId}${ext}`;
+
+  await objectStorageClient
+    .bucket(bucketName)
+    .file(objectName)
+    .save(buffer, {
+      contentType: mimeType,
+      metadata: {
+        contentDisposition: `attachment; filename="${encodeURIComponent(originalFilename)}"`,
+      },
+    });
+
+  return `/objects/documents/${objectId}${ext}`;
+}
+
+function isGcsKey(fileKey: string): boolean {
+  return fileKey.startsWith("/objects/");
+}
+
+// Legacy local-disk path (backward-compat for pre-migration dev records only)
 const DOCS_UPLOADS_DIR = path.resolve(__dirname, "..", "uploads", "documents");
-mkdirSync(DOCS_UPLOADS_DIR, { recursive: true });
 
-const docStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, DOCS_UPLOADS_DIR),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${randomUUID()}${ext}`);
-  },
-});
-const docUpload = multer({ storage: docStorage, limits: { fileSize: 50 * 1024 * 1024 } });
+// multer buffers in memory — uploaded to GCS in the route handler
+const docUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 const router = Router();
 
@@ -344,7 +376,7 @@ router.post(
       assessorSummary: assessorSummary ?? null,
       internalNotes: internalNotes ?? null,
       tags,
-      fileKey: req.file ? req.file.filename : null,
+      fileKey: req.file ? await uploadDocBufferToGCS(req.file.buffer, req.file.mimetype, path.extname(req.file.originalname), req.file.originalname) : null,
       fileName: req.file ? req.file.originalname : null,
       fileSize: req.file ? String(req.file.size) : null,
       createdAt: new Date(),
@@ -378,13 +410,28 @@ router.get("/documents/:id/download", requireAuth, requireOrg, async (req, res) 
     return;
   }
 
-  const filePath = path.join(DOCS_UPLOADS_DIR, doc.fileKey);
   const downloadName = doc.fileName ?? doc.fileKey;
   res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(downloadName)}"`);
-  const { createReadStream } = await import("fs");
-  const stream = createReadStream(filePath);
-  stream.on("error", () => res.status(404).json({ error: "File not found" }));
-  stream.pipe(res);
+
+  if (isGcsKey(doc.fileKey)) {
+    try {
+      const file = await objectStorageService.getObjectEntityFile(doc.fileKey);
+      const nodeStream = file.createReadStream();
+      nodeStream.on("error", () => {
+        if (!res.headersSent) res.status(404).json({ error: "File not found in storage" });
+      });
+      nodeStream.pipe(res);
+    } catch {
+      if (!res.headersSent) res.status(404).json({ error: "File not found in storage" });
+    }
+  } else {
+    const filePath = path.join(DOCS_UPLOADS_DIR, doc.fileKey);
+    const stream = createReadStream(filePath);
+    stream.on("error", () => {
+      if (!res.headersSent) res.status(404).json({ error: "File not found" });
+    });
+    stream.pipe(res);
+  }
 });
 
 router.get("/documents/all", requireAuth, requireOrg, async (req, res) => {
@@ -980,6 +1027,7 @@ router.patch("/documents/:id", requireAuth, requireOrg, async (req, res) => {
   const {
     title, body, organizationName, systemName, reviewerId, nextReviewDate,
     internalNotes, comments, fieldValues, linkedControlIds,
+    fileKey, fileName, fileSize,
   } = req.body;
 
   const [prev] = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.id));
@@ -996,6 +1044,9 @@ router.patch("/documents/:id", requireAuth, requireOrg, async (req, res) => {
   if (comments !== undefined) updates.comments = comments;
   if (fieldValues !== undefined) updates.fieldValues = fieldValues;
   if (linkedControlIds !== undefined) updates.linkedControlIds = linkedControlIds;
+  if (fileKey !== undefined) updates.fileKey = fileKey ?? null;
+  if (fileName !== undefined) updates.fileName = fileName ?? null;
+  if (fileSize !== undefined) updates.fileSize = fileSize ?? null;
 
   const [updated] = await db
     .update(documentsTable)
