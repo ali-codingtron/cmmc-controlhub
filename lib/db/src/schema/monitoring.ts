@@ -18,7 +18,7 @@ export const monitoringFrequencyEnum = pgEnum("monitoring_frequency", [
 export const monitoringStatusEnum = pgEnum("monitoring_status", [
   "open",
   "in_progress",
-  "complete",
+  "current",
 ]);
 
 export const monitoringItemsTable = pgTable("monitoring_items", {

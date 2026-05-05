@@ -13,7 +13,7 @@ import {
   monitoringItemsTable,
   documentsTable,
 } from "@workspace/db";
-import { eq, and, or, count, lte, gte, ne, desc, sql, isNotNull } from "drizzle-orm";
+import { eq, and, or, count, lte, gte, desc, sql, isNotNull } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 
@@ -111,7 +111,6 @@ router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
     .where(
       and(
         orgId ? eq(monitoringItemsTable.organizationId, orgId) : undefined,
-        ne(monitoringItemsTable.status, "complete"),
         lte(monitoringItemsTable.nextDue, now),
         sql`${monitoringItemsTable.nextDue} IS NOT NULL`
       )
@@ -123,7 +122,6 @@ router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
     .where(
       and(
         orgId ? eq(monitoringItemsTable.organizationId, orgId) : undefined,
-        ne(monitoringItemsTable.status, "complete"),
         gte(monitoringItemsTable.nextDue, now),
         lte(monitoringItemsTable.nextDue, sevenDaysFromNow)
       )

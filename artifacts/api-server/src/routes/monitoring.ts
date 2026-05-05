@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, monitoringItemsTable, organizationsTable } from "@workspace/db";
-import { eq, and, ilike, or, lt, lte, gte, ne, count, sql } from "drizzle-orm";
+import { eq, and, ilike, or, lte, gte, count, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 import { randomUUID } from "crypto";
@@ -137,7 +137,6 @@ router.get("/monitoring/stats", requireAuth, requireOrg, async (req, res) => {
     .where(
       and(
         orgId ? eq(monitoringItemsTable.organizationId, orgId) : undefined,
-        ne(monitoringItemsTable.status, "complete"),
         lte(monitoringItemsTable.nextDue, now),
         sql`${monitoringItemsTable.nextDue} IS NOT NULL`
       )
@@ -149,26 +148,25 @@ router.get("/monitoring/stats", requireAuth, requireOrg, async (req, res) => {
     .where(
       and(
         orgId ? eq(monitoringItemsTable.organizationId, orgId) : undefined,
-        ne(monitoringItemsTable.status, "complete"),
         gte(monitoringItemsTable.nextDue, now),
         lte(monitoringItemsTable.nextDue, sevenDaysFromNow)
       )
     );
 
-  const [completedCount] = await db
+  const [currentCount] = await db
     .select({ value: count() })
     .from(monitoringItemsTable)
     .where(
       and(
         orgId ? eq(monitoringItemsTable.organizationId, orgId) : undefined,
-        eq(monitoringItemsTable.status, "complete")
+        eq(monitoringItemsTable.status, "current")
       )
     );
 
   res.json({
     overdue: Number(overdueCount?.value ?? 0),
     dueSoon: Number(dueSoonCount?.value ?? 0),
-    completed: Number(completedCount?.value ?? 0),
+    current: Number(currentCount?.value ?? 0),
   });
 });
 

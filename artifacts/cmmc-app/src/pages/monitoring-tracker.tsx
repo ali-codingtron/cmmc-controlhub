@@ -19,7 +19,7 @@ import { X, Activity, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type MonitoringFrequency = "daily" | "weekly" | "monthly" | "quarterly" | "annually";
-type MonitoringStatus = "open" | "in_progress" | "complete";
+type MonitoringStatus = "open" | "in_progress" | "current";
 
 interface MonitoringItem {
   id: string;
@@ -80,18 +80,21 @@ function calcNextDueFrom(frequency: MonitoringFrequency, baseDateStr: string): s
 
 function toDateInputValue(ts: string | null): string {
   if (!ts) return "";
-  // Handle both ISO timestamps and plain YYYY-MM-DD strings
   const s = ts.includes("T") ? ts.split("T")[0] : ts;
   return s ?? "";
 }
 
+/**
+ * An item is overdue whenever its nextDue has passed — regardless of status.
+ * A "current" item with a past nextDue is overdue for the new cycle.
+ */
 function isOverdue(item: MonitoringItem): boolean {
-  if (item.status === "complete" || !item.nextDue) return false;
+  if (!item.nextDue) return false;
   return toDateInputValue(item.nextDue) < todayStr();
 }
 
 function isDueSoon(item: MonitoringItem): boolean {
-  if (item.status === "complete" || !item.nextDue) return false;
+  if (!item.nextDue) return false;
   const due = toDateInputValue(item.nextDue);
   const today = todayStr();
   const sevenDays = calcNextDueFrom("weekly", today);
@@ -180,12 +183,13 @@ export default function MonitoringTracker() {
   const hasFilters = search || freqFilter !== "all" || statusFilter !== "all" || controlRefFilter !== "all";
 
   const overdueCount = items.filter(isOverdue).length;
-  const dueSoonCount = items.filter(isDueSoon).length;
-  const completeCount = items.filter((i) => i.status === "complete").length;
+  const dueSoonCount = items.filter((i) => !isOverdue(i) && isDueSoon(i)).length;
+  // "Current" = status is current AND not overdue yet
+  const currentCount = items.filter((i) => i.status === "current" && !isOverdue(i)).length;
 
   /**
    * Status change handler.
-   * When marking complete:
+   * When marking current:
    *   - Fill lastCompleted = today if currently blank
    *   - Always recalculate nextDue from the effective lastCompleted date
    */
@@ -197,7 +201,7 @@ export default function MonitoringTracker() {
       nextDue?: string | null;
     } = { status: newStatus };
 
-    if (newStatus === "complete") {
+    if (newStatus === "current") {
       const baseDate = item.lastCompleted
         ? toDateInputValue(item.lastCompleted)
         : today;
@@ -280,8 +284,8 @@ export default function MonitoringTracker() {
               <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-green-700 dark:text-green-400">{completeCount}</p>
-              <p className="text-xs text-muted-foreground">Complete</p>
+              <p className="text-2xl font-bold text-green-700 dark:text-green-400">{currentCount}</p>
+              <p className="text-xs text-muted-foreground">Current</p>
             </div>
           </CardContent>
         </Card>
@@ -320,7 +324,7 @@ export default function MonitoringTracker() {
                 <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="open">Open</SelectItem>
                 <SelectItem value="in_progress">In Progress</SelectItem>
-                <SelectItem value="complete">Complete</SelectItem>
+                <SelectItem value="current">Current</SelectItem>
               </SelectContent>
             </Select>
 
@@ -385,12 +389,12 @@ export default function MonitoringTracker() {
                 ) : (
                   filtered.map((item) => {
                     const overdue = isOverdue(item);
-                    const dueSoon = isDueSoon(item);
+                    const dueSoon = !overdue && isDueSoon(item);
                     return (
                       <TableRow
                         key={item.id}
                         className={cn(
-                          overdue && "bg-red-50/50 dark:bg-red-950/10",
+                          overdue && "bg-red-50/60 dark:bg-red-950/15",
                           !overdue && dueSoon && "bg-yellow-50/50 dark:bg-yellow-950/10"
                         )}
                       >
@@ -402,7 +406,17 @@ export default function MonitoringTracker() {
                         </TableCell>
 
                         {/* Task */}
-                        <TableCell className="font-medium text-sm">{item.task}</TableCell>
+                        <TableCell className="font-medium text-sm">
+                          <div className="flex items-center gap-1.5">
+                            {item.task}
+                            {overdue && (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full leading-none">
+                                <AlertTriangle className="h-2.5 w-2.5" />
+                                Overdue
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
 
                         {/* Control ID */}
                         <TableCell>
@@ -445,16 +459,16 @@ export default function MonitoringTracker() {
                           >
                             <SelectTrigger className={cn(
                               "h-8 text-xs",
-                              item.status === "complete" && "border-green-400 text-green-700 dark:text-green-400",
-                              item.status === "in_progress" && "border-yellow-400 text-yellow-700 dark:text-yellow-400",
-                              item.status === "open" && overdue && "border-red-400 text-red-700 dark:text-red-400"
+                              overdue && "border-red-400 text-red-700 dark:text-red-400",
+                              !overdue && item.status === "current" && "border-green-400 text-green-700 dark:text-green-400",
+                              !overdue && item.status === "in_progress" && "border-blue-400 text-blue-700 dark:text-blue-400"
                             )}>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="open">Open</SelectItem>
                               <SelectItem value="in_progress">In Progress</SelectItem>
-                              <SelectItem value="complete">Complete</SelectItem>
+                              <SelectItem value="current">Current</SelectItem>
                             </SelectContent>
                           </Select>
                         </TableCell>

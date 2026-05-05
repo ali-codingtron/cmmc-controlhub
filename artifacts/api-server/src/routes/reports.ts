@@ -123,13 +123,13 @@ router.get("/reports/executive", requireAuth, requireOrg, async (req, res) => {
     .where(eq(monitoringItemsTable.organizationId, orgId));
 
   const monTotal = monitoring.length;
-  const monComplete = monitoring.filter(m => m.status === "complete").length;
+  const monCurrent = monitoring.filter(m => m.status === "current").length;
   const monOverdue = monitoring.filter(m => {
-    if (m.status === "complete" || !m.nextDue) return false;
+    if (!m.nextDue) return false;
     return new Date(m.nextDue) < now;
   }).length;
   const monDueSoon = monitoring.filter(m => {
-    if (m.status === "complete" || !m.nextDue) return false;
+    if (!m.nextDue) return false;
     const due = new Date(m.nextDue);
     return due >= now && due <= sevenDaysFromNow();
   }).length;
@@ -141,7 +141,7 @@ router.get("/reports/executive", requireAuth, requireOrg, async (req, res) => {
     readinessPct,
     evidence: { total: evidenceTotal, approved: evidenceApproved, draft: evidenceDraft, stale: evidenceStale },
     poams: { total: poamTotal, open: poamOpen, overdue: poamOverdue, closingSoon: poamClosingSoon },
-    monitoring: { total: monTotal, complete: monComplete, overdue: monOverdue, dueSoon: monDueSoon },
+    monitoring: { total: monTotal, current: monCurrent, overdue: monOverdue, dueSoon: monDueSoon },
     topRiskDomains,
   });
 });
@@ -427,8 +427,8 @@ router.get("/reports/monitoring", requireAuth, requireOrg, async (req, res) => {
 
   const withMeta = items.map(m => {
     const due = m.nextDue ? new Date(m.nextDue) : null;
-    const isOverdue = due && due < now && m.status !== "complete";
-    const isDueSoon = due && due >= now && due <= sevenDaysFromNow() && m.status !== "complete";
+    const isOverdue = due && due < now;
+    const isDueSoon = due && due >= now && due <= sevenDaysFromNow();
     return {
       ...m,
       isOverdue: !!isOverdue,
@@ -442,7 +442,7 @@ router.get("/reports/monitoring", requireAuth, requireOrg, async (req, res) => {
       total: items.length,
       overdue: withMeta.filter(m => m.isOverdue).length,
       dueSoon: withMeta.filter(m => m.isDueSoon).length,
-      complete: withMeta.filter(m => m.status === "complete").length,
+      current: withMeta.filter(m => m.status === "current").length,
     },
     items: withMeta,
   });
@@ -567,7 +567,7 @@ router.get("/reports/audit", requireAuth, requireOrg, async (req, res) => {
     .from(monitoringItemsTable)
     .where(eq(monitoringItemsTable.organizationId, orgId));
 
-  const overdueMonitoring = monitoring.filter(m => m.status !== "complete" && m.nextDue && new Date(m.nextDue) < now).length;
+  const overdueMonitoring = monitoring.filter(m => m.nextDue && new Date(m.nextDue) < now).length;
 
   // Control-level audit items
   const controlAudit = controls.map(c => {

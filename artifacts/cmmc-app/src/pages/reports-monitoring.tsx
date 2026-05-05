@@ -14,7 +14,13 @@ const FREQ_LABEL: Record<string, string> = {
 const STATUS_COLOR: Record<string, string> = {
   open: "bg-gray-100 text-gray-700",
   in_progress: "bg-blue-100 text-blue-700",
-  complete: "bg-green-100 text-green-700",
+  current: "bg-green-100 text-green-700",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  open: "Open",
+  in_progress: "In Progress",
+  current: "Current",
 };
 
 interface MonItem {
@@ -38,7 +44,7 @@ export default function ReportsMonitoring() {
 
   const { data: raw, isLoading } = useQuery<{
     reportDate: string;
-    summary: { total: number; overdue: number; dueSoon: number; complete: number };
+    summary: { total: number; overdue: number; dueSoon: number; current: number };
     items: MonItem[];
   }>({
     queryKey: ["report-monitoring", activeOrg?.id],
@@ -65,7 +71,7 @@ export default function ReportsMonitoring() {
 
   const csvRows = items.map(m => ({
     "Task": m.task, "Frequency": FREQ_LABEL[m.frequency] ?? m.frequency,
-    "Control Ref": m.controlRef, "Status": m.status,
+    "Control Ref": m.controlRef, "Status": STATUS_LABEL[m.status] ?? m.status,
     "Last Completed": fmtDate(m.lastCompleted), "Next Due": fmtDate(m.nextDue),
     "Overdue": m.isOverdue ? "Yes" : "No", "Notes": m.notes ?? "",
   }));
@@ -80,7 +86,7 @@ export default function ReportsMonitoring() {
     >
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <ReportStatCard label="Total Tasks" value={raw.summary.total} />
-        <ReportStatCard label="Complete" value={raw.summary.complete} color="text-green-700" bg="bg-green-50" />
+        <ReportStatCard label="Current" value={raw.summary.current} color="text-green-700" bg="bg-green-50" sub="Up to date this cycle" />
         <ReportStatCard label="Overdue" value={raw.summary.overdue} color="text-red-700" bg="bg-red-50" sub="Past due date" />
         <ReportStatCard label="Due Within 7 Days" value={raw.summary.dueSoon} color="text-yellow-700" bg="bg-yellow-50" />
       </div>
@@ -98,7 +104,7 @@ export default function ReportsMonitoring() {
           <option value="overdue">Overdue Only</option>
           <option value="open">Open</option>
           <option value="in_progress">In Progress</option>
-          <option value="complete">Complete</option>
+          <option value="current">Current</option>
         </select>
         <select value={freqFilter} onChange={e => setFreqFilter(e.target.value)} className="border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring">
           <option value="all">All Frequencies</option>
@@ -132,7 +138,7 @@ export default function ReportsMonitoring() {
                   <td className="py-2 pr-3"><code className="text-[10px] bg-muted px-1 py-0.5 rounded">{m.controlRef}</code></td>
                   <td className="py-2 pr-3">
                     <span className={cn("text-[11px] font-medium px-2 py-0.5 rounded-full", STATUS_COLOR[m.status] ?? "bg-gray-100 text-gray-700")}>
-                      {m.status === "complete" ? "Complete" : m.status === "in_progress" ? "In Progress" : "Open"}
+                      {STATUS_LABEL[m.status] ?? m.status}
                     </span>
                   </td>
                   <td className="py-2 pr-3 text-xs text-muted-foreground">{fmtDate(m.lastCompleted)}</td>
@@ -144,8 +150,8 @@ export default function ReportsMonitoring() {
                       <span className="flex items-center gap-1 text-[11px] text-red-700 font-semibold"><AlertTriangle className="h-3 w-3" />Overdue</span>
                     ) : m.isDueSoon ? (
                       <span className="flex items-center gap-1 text-[11px] text-yellow-700 font-semibold"><Clock className="h-3 w-3" />Due Soon</span>
-                    ) : m.status === "complete" ? (
-                      <span className="flex items-center gap-1 text-[11px] text-green-700"><CheckCircle2 className="h-3 w-3" />Done</span>
+                    ) : m.status === "current" ? (
+                      <span className="flex items-center gap-1 text-[11px] text-green-700"><CheckCircle2 className="h-3 w-3" />Current</span>
                     ) : null}
                   </td>
                 </tr>
