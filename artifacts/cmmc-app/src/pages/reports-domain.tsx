@@ -63,7 +63,7 @@ interface DomainReport {
       policyProcedure: number;
       freshEvidence: number;
       monitoringCurrent: number;
-      artifactIntegrity: number;
+      poamStatus: number;
     };
   };
   c3paoChecklist: ChecklistItem[];
@@ -345,7 +345,7 @@ export default function ReportsDomain() {
                 { label: "Policy & Procedure", val: ac.breakdown.policyProcedure, max: 10 },
                 { label: "Fresh Evidence", val: ac.breakdown.freshEvidence, max: 5 },
                 { label: "Monitoring Current", val: ac.breakdown.monitoringCurrent, max: 5 },
-                { label: "Artifact Integrity", val: ac.breakdown.artifactIntegrity, max: 5 },
+                { label: "POA&M Status", val: ac.breakdown.poamStatus, max: 5 },
               ] as const).map(row => (
                 <div key={row.label} className="flex items-center justify-between text-xs gap-2">
                   <span className="text-muted-foreground w-36 shrink-0">{row.label}</span>
@@ -512,12 +512,12 @@ export default function ReportsDomain() {
         </div>
       )}
 
-      {/* ── 7. EVIDENCE INTEGRITY ─────────────────────────────────────────── */}
+      {/* ── 7. EVIDENCE STATUS ────────────────────────────────────────────── */}
       <Card className="mb-6">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
             <Lock className="h-4 w-4 text-primary" />
-            Evidence Integrity &amp; Chain of Custody
+            Evidence Status
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -531,35 +531,27 @@ export default function ReportsDomain() {
               <div className="text-xs text-muted-foreground">Approved</div>
             </div>
             <div>
-              <div className={`text-3xl font-bold ${ei.withHash >= ei.withFile * 0.9 ? "text-green-700" : "text-orange-700"}`}>{ei.withHash}</div>
-              <div className="text-xs text-muted-foreground">SHA-256 Hashed</div>
+              <div className={`text-3xl font-bold ${ei.pendingReview === 0 ? "text-green-700" : "text-yellow-700"}`}>{ei.pendingReview}</div>
+              <div className="text-xs text-muted-foreground">Pending Review</div>
             </div>
             <div>
               <div className={`text-3xl font-bold ${ei.stale === 0 ? "text-green-700" : "text-red-700"}`}>{ei.stale}</div>
               <div className="text-xs text-muted-foreground">Stale / Expired</div>
             </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-            <ProgressBar
-              pct={ei.total > 0 ? Math.round((ei.approved / ei.total) * 100) : 0}
-              label={`Approval rate: ${ei.approved}/${ei.total} artifacts`}
-              color="bg-green-500"
-            />
-            <ProgressBar
-              pct={ei.withFile > 0 ? Math.round((ei.withHash / ei.withFile) * 100) : 0}
-              label={`Hash coverage: ${ei.withHash}/${ei.withFile} uploaded files`}
-              color={ei.withHash >= ei.withFile ? "bg-green-500" : "bg-yellow-500"}
-            />
-          </div>
-          {(ei.missingHash > 0 || ei.stale > 0 || ei.pendingReview > 0) && (
-            <div className="flex flex-wrap gap-2 mt-1">
-              {ei.missingHash > 0 && <Badge className="bg-orange-100 text-orange-800 border-orange-200 text-xs">{ei.missingHash} files missing hash</Badge>}
+          <ProgressBar
+            pct={ei.total > 0 ? Math.round((ei.approved / ei.total) * 100) : 0}
+            label={`Approval rate: ${ei.approved}/${ei.total} artifacts`}
+            color="bg-green-500"
+          />
+          {(ei.stale > 0 || ei.pendingReview > 0) && (
+            <div className="flex flex-wrap gap-2 mt-3">
               {ei.stale > 0 && <Badge className="bg-red-100 text-red-800 border-red-200 text-xs">{ei.stale} stale artifacts</Badge>}
               {ei.pendingReview > 0 && <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 text-xs">{ei.pendingReview} pending review</Badge>}
             </div>
           )}
-          {ei.missingHash === 0 && ei.stale === 0 && ei.pendingReview === 0 && (
-            <p className="text-xs text-green-700 font-medium mt-1">All evidence artifacts have full integrity coverage.</p>
+          {ei.stale === 0 && ei.pendingReview === 0 && (
+            <p className="text-xs text-green-700 font-medium mt-3">All evidence artifacts are approved and current.</p>
           )}
         </CardContent>
       </Card>

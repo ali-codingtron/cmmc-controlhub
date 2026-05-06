@@ -589,8 +589,6 @@ router.get("/reports/domain", requireAuth, requireOrg, async (req, res) => {
     const hasApproved = links.some(l => l.status === "approved" || l.status === "assessor_ready");
     const hasStale = links.some(l => l.status === "stale");
     const hasPolicyOrProc = links.some(l => l.evidenceType === "policy" || l.evidenceType === "procedure");
-    const hasMissingHash = links.some(l => l.fileKey && !l.fileHash);
-
     if (status === "implemented" || status === "assessor_ready") implementedCount++;
     else if (status === "in_progress" || status === "needs_review") inProgressCount++;
     else if (status === "at_risk") atRiskCount++;
@@ -620,7 +618,6 @@ router.get("/reports/domain", requireAuth, requireOrg, async (req, res) => {
     if (!hasNarrative) issues.push("Missing SSP narrative");
     if (hasStale) issues.push("Stale evidence present");
     if (status === "at_risk") issues.push("Control marked At Risk");
-    if (hasMissingHash) issues.push("Evidence files missing hash");
     if (issues.length > 0) exceptions.push({ controlId: ctrl.controlRef, title: ctrl.title ?? ctrl.controlRef, domain: domainName, issues });
   }
 
@@ -638,7 +635,10 @@ router.get("/reports/domain", requireAuth, requireOrg, async (req, res) => {
   const notMet = notStartedCount + atRiskCount;
   const projectedScore = Math.max(0, maxScore - notMet);
 
-  // Audit Confidence Score
+  // Audit Confidence Score — 100 pts, compliance-focused only (no hash/archive factors)
+  // c1(25) implemented controls · c2(20) approved evidence · c3(15) evidence coverage
+  // c4(15) SSP narrative · c5(10) policy/procedure · c6(5) fresh evidence
+  // c7(5) monitoring current · c8(5) POA&M status
   const monitoringTotal = monitoringRaw.length;
   const monitoringOverdue = monitoringRaw.filter(m => m.nextDue && new Date(m.nextDue) < now).length;
   const stalePct = totalEvidence > 0 ? evStale / totalEvidence : 0;
@@ -649,7 +649,7 @@ router.get("/reports/domain", requireAuth, requireOrg, async (req, res) => {
   const c5 = totalControls > 0 ? Math.round((controlsWithPolicyOrProc / totalControls) * 10) : 0;
   const c6 = Math.round((1 - stalePct) * 5);
   const c7 = monitoringTotal > 0 ? Math.round(((monitoringTotal - monitoringOverdue) / monitoringTotal) * 5) : 5;
-  const c8 = totalEvidence > 0 ? Math.round((evWithHash / totalEvidence) * 5) : 0;
+  const c8 = openPoamTotal === 0 ? 5 : openPoamTotal <= 5 ? 3 : openPoamTotal <= 10 ? 1 : 0;
   const auditConfidence = c1 + c2 + c3 + c4 + c5 + c6 + c7 + c8;
   const auditRating = auditConfidence >= 90 ? "Strong" : auditConfidence >= 75 ? "Moderate" : auditConfidence >= 50 ? "Needs Work" : "High Risk";
 
@@ -687,10 +687,8 @@ router.get("/reports/domain", requireAuth, requireOrg, async (req, res) => {
     { item: "SSP mapped to controls", status: (sspMappingsWithNarrative >= totalControls * 0.8 ? "complete" : sspMappings.length > 0 ? "partial" : "missing") as "complete" | "partial" | "missing", count: sspMappingsWithNarrative, total: totalControls, notes: `${sspMappingsWithNarrative} of ${totalControls} controls have SSP narrative`, link: "/ssp/sections" },
     { item: "Evidence mapped to controls", status: (controlsWithEvidence >= totalControls * 0.9 ? "complete" : controlsWithEvidence > 0 ? "partial" : "missing") as "complete" | "partial" | "missing", count: controlsWithEvidence, total: totalControls, notes: `${controlsWithEvidence} of ${totalControls} controls covered`, link: "/evidence" },
     { item: "Evidence approved", status: (controlsWithApprovedEvidence >= totalControls * 0.9 ? "complete" : controlsWithApprovedEvidence > 0 ? "partial" : "missing") as "complete" | "partial" | "missing", count: controlsWithApprovedEvidence, total: totalControls, notes: `${controlsWithApprovedEvidence} of ${totalControls} controls have approved evidence`, link: "/evidence" },
-    { item: "Evidence hashes generated", status: (evWithFile === 0 ? "missing" : evWithHash >= evWithFile * 0.9 ? "complete" : "partial") as "complete" | "partial" | "missing", count: evWithHash, total: evWithFile || totalEvidence, notes: `${evWithHash} of ${evWithFile || totalEvidence} uploaded files have SHA-256 hash`, link: "/evidence" },
     { item: "POA&M reviewed", status: (openPoamTotal === 0 ? "complete" : openPoamTotal <= 5 ? "partial" : "missing") as "complete" | "partial" | "missing", count: 0, total: openPoamTotal, notes: openPoamTotal === 0 ? "No open POA&M items" : `${openPoamTotal} open items require attention`, link: "/poams" },
     { item: "Monitoring tracker current", status: (monitoringOverdue === 0 ? "complete" : monitoringOverdue <= 3 ? "partial" : "missing") as "complete" | "partial" | "missing", count: monitoringTotal - monitoringOverdue, total: monitoringTotal, notes: monitoringOverdue === 0 ? "All monitoring tasks current" : `${monitoringOverdue} overdue tasks`, link: "/monitoring" },
-    { item: "Report / export package ready", status: "partial" as const, count: 0, total: 0, notes: "Archive this report PDF for the audit package", link: "/reports/domain" },
   ];
 
   res.json({
@@ -707,7 +705,7 @@ router.get("/reports/domain", requireAuth, requireOrg, async (req, res) => {
     projectedScore: { max: maxScore, score: projectedScore, loss: maxScore - projectedScore, notMet, openPoams: openPoamTotal },
     auditConfidence: {
       score: auditConfidence, rating: auditRating,
-      breakdown: { implementedControls: c1, approvedEvidence: c2, evidenceCoverage: c3, sspNarrative: c4, policyProcedure: c5, freshEvidence: c6, monitoringCurrent: c7, artifactIntegrity: c8 },
+      breakdown: { implementedControls: c1, approvedEvidence: c2, evidenceCoverage: c3, sspNarrative: c4, policyProcedure: c5, freshEvidence: c6, monitoringCurrent: c7, poamStatus: c8 },
     },
     c3paoChecklist,
     domains,

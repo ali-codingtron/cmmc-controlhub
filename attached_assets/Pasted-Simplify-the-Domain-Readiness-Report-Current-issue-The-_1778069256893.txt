@@ -1,0 +1,80 @@
+Simplify the Domain Readiness Report.
+
+Current issue:
+The report includes:
+- Evidence hashes generated
+- Report / export package ready
+
+I do not want these included in the Domain Readiness Report and I do not want them to affect scoring/readiness calculations.
+
+Requirements:
+
+1. Remove These Sections from Domain Readiness Report
+Remove completely:
+- Evidence hashes generated
+- Report / export package ready
+
+Do not show them:
+- in executive summary
+- in readiness checklist
+- in domain heatmap
+- in scoring
+- in percentages
+
+2. Remove Hashes from Readiness Logic
+Evidence hashes should NOT affect:
+- readiness %
+- projected CMMC score
+- audit confidence score
+- domain score
+
+Hashes can exist internally for future use, but they are not part of the readiness calculation.
+
+3. Remove Report/Archive Readiness Logic
+“Report / export package ready” should NOT affect:
+- readiness %
+- audit confidence
+- dashboard metrics
+- domain readiness
+
+This is just an export convenience feature, not a compliance requirement.
+
+4. Keep Report Focused on Real Compliance Readiness
+
+Domain Readiness should focus on:
+- control implementation
+- SSP mapping
+- approved evidence
+- policies/procedures
+- monitoring tracker
+- POA&M status
+- stale/missing evidence
+- implementation narratives
+
+5. Updated Readiness Checklist
+The checklist should only include meaningful compliance items such as:
+- SSP uploaded and versioned
+- SSP mapped to controls
+- Evidence mapped to controls
+- Evidence approved
+- Monitoring tracker current
+- POA&M reviewed
+
+6. Updated Audit Confidence Score
+Remove hashes and report package from scoring formula.
+
+Use only:
+- implemented controls
+- approved evidence
+- SSP narrative coverage
+- policy/procedure coverage
+- monitoring current
+- stale evidence
+- open POA&M items
+
+7. Acceptance Test
+- Generate Domain Readiness Report
+- Evidence hashes section is gone
+- Report/export package section is gone
+- Readiness percentages remain correct
+- Audit confidence score no longer depends on hashes
