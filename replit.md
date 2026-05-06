@@ -134,6 +134,20 @@ All routes under `/api` prefix, JWT-authenticated:
 - `/api/automation/doc-status` — overview stats (org-scoped)
 - `/api/automation/run-doc-checks` — mark expired docs, generate overdue tasks (org-scoped)
 
+### Evidence File Preview
+
+`EvidenceFileViewer` (`artifacts/cmmc-app/src/components/evidence/EvidenceFileViewer.tsx`) handles all preview types:
+- **Image** (PNG/JPG/GIF/WebP/SVG): zoom (mouse-wheel + buttons), drag-to-pan, fullscreen modal
+- **PDF**: embedded iframe + fullscreen modal
+- **Text/CSV/Log/JSON/YAML**: monospace dark viewer, 200 KB limit, fullscreen modal
+- **DOCX**: server converts with `mammoth` → HTML, rendered with Tailwind prose, fullscreen modal
+- **XLSX**: server converts with `xlsx` → JSON, sheet-tab table view, fullscreen modal
+- **Unsupported**: shows download prompt
+
+Server endpoints:
+- `GET /api/evidence/:id/preview` — streams raw file (image/pdf/text)
+- `GET /api/evidence/:id/convert` — returns `{ type: "docx"|"xlsx"|"unsupported"|"too_large", html/sheets }` (20 MB file limit)
+
 ### Evidence File Storage
 
 Evidence files are stored in **Replit Object Storage (GCS-backed)** — persistent across deployments.

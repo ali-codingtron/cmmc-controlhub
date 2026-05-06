@@ -1,0 +1,117 @@
+Enhance the Evidence File Preview system.
+
+Current issue:
+- Image previews are too small and difficult to inspect
+- DOCX and XLSX files cannot be previewed
+- I need a more usable evidence review experience for audits
+
+Requirements:
+
+1. Image Preview Zoom / Expand
+
+For image evidence (PNG/JPG/JPEG/GIF):
+Add:
+- Zoom In
+- Zoom Out
+- Reset Zoom
+- Fullscreen / Expand button
+
+Behavior:
+- Clicking image opens a larger modal/lightbox
+- Mouse wheel zoom support if possible
+- Pan/drag when zoomed
+- Maintain image quality
+- ESC closes fullscreen preview
+
+2. Fullscreen Preview Modal
+
+Add a modal viewer for all previewable evidence.
+
+Features:
+- Large centered preview
+- File name
+- Evidence type
+- Download button
+- Next/Previous navigation (optional)
+- Zoom controls for images/PDFs
+
+3. PDF Preview Improvements
+
+For PDFs:
+- Embedded PDF viewer
+- Zoom controls
+- Page navigation
+- Fullscreen mode
+
+4. DOCX Preview Support
+
+Allow previewing DOCX files inside the app.
+
+Preferred approach:
+- Convert DOCX to HTML or PDF on upload or preview request
+OR
+- Use a document viewer library/component
+
+Requirements:
+- readable formatting
+- preserve headings/tables when possible
+- no forced download just to read content
+
+Fallback:
+If rendering fails:
+- show readable extracted text preview
+- still allow download
+
+5. XLSX Preview Support
+
+Allow previewing XLSX files.
+
+Requirements:
+- render spreadsheet table in-browser
+- show worksheets/tabs if possible
+- support scrolling
+- preserve basic formatting
+
+Fallback:
+- show first worksheet only
+- still allow download
+
+6. TXT / CSV / LOG Preview
+
+For text-based files:
+- render in monospaced scrollable viewer
+- preserve line breaks
+- support large logs efficiently
+
+7. Preview Type Detection
+
+Detect preview type automatically based on:
+- MIME type
+- file extension
+
+8. Performance
+
+Do not load giant previews automatically.
+For large files:
+- lazy load preview
+- show loading spinner
+
+9. Security
+
+Preview access must still respect organization permissions.
+
+10. UI Improvements
+
+Replace the current small preview box with:
+- responsive preview area
+- larger preview container
+- expandable preview modal
+
+11. Acceptance Tests
+
+- Open PNG → can zoom and fullscreen
+- Open PDF → can zoom and navigate
+- Open DOCX → can read document without downloading
+- Open XLSX → can view spreadsheet table
+- Open TXT/log → readable scrollable text
+- Download still works for all file types

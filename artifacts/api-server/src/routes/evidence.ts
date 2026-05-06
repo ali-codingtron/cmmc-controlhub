@@ -1,7 +1,9 @@
 import { Router } from "express";
 import multer from "multer";
 import path from "path";
-import { createReadStream } from "fs";
+import { createReadStream, readFileSync } from "fs";
+import mammoth from "mammoth";
+import * as XLSX from "xlsx";
 import {
   db,
   evidenceItemsTable,
@@ -563,6 +565,89 @@ router.get("/evidence/:id/preview", requireAuth, requireOrg, async (req, res) =>
   }
 
   logAudit(req, "viewed", "evidence", item.id, { entityLabel: item.title ?? fileName }).catch(() => {});
+});
+
+// ── Convert file for structured preview (DOCX → HTML, XLSX → JSON) ──────────
+router.get("/evidence/:id/convert", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
+
+  const [item] = await db
+    .select({
+      id: evidenceItemsTable.id,
+      fileKey: evidenceItemsTable.fileKey,
+      fileName: evidenceItemsTable.fileName,
+      mimeType: evidenceItemsTable.mimeType,
+      fileSize: evidenceItemsTable.fileSize,
+      organizationId: evidenceItemsTable.organizationId,
+    })
+    .from(evidenceItemsTable)
+    .where(eq(evidenceItemsTable.id, req.params.id))
+    .limit(1);
+
+  if (!item || !item.fileKey) {
+    res.status(404).json({ error: "File not found" });
+    return;
+  }
+
+  if (req.authUser?.role !== "admin" && item.organizationId !== orgId) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
+
+  const ext = (item.fileName?.split(".").pop() ?? "").toLowerCase();
+  const mime = item.mimeType ?? "";
+  const isDocx = ext === "docx" || mime.includes("wordprocessingml");
+  const isXlsx = ext === "xlsx" || mime.includes("spreadsheetml");
+
+  if (!isDocx && !isXlsx) {
+    res.json({ type: "unsupported" });
+    return;
+  }
+
+  if (item.fileSize && item.fileSize > 20 * 1024 * 1024) {
+    res.json({ type: "too_large", size: item.fileSize });
+    return;
+  }
+
+  let buffer: Buffer;
+  try {
+    if (isGcsKey(item.fileKey)) {
+      const file = await objectStorageService.getObjectEntityFile(item.fileKey);
+      const [downloaded] = await file.download();
+      buffer = downloaded as Buffer;
+    } else {
+      buffer = readFileSync(path.resolve(UPLOADS_DIR, "..", item.fileKey));
+    }
+  } catch {
+    res.status(500).json({ error: "Failed to read file" });
+    return;
+  }
+
+  if (isDocx) {
+    try {
+      const result = await mammoth.convertToHtml({ buffer });
+      res.json({ type: "docx", html: result.value });
+    } catch {
+      res.status(500).json({ error: "Failed to convert DOCX" });
+    }
+    return;
+  }
+
+  if (isXlsx) {
+    try {
+      const workbook = XLSX.read(buffer, { type: "buffer" });
+      const sheets = workbook.SheetNames.slice(0, 10).map(name => {
+        const ws = workbook.Sheets[name];
+        const data = XLSX.utils.sheet_to_json<(string | number)[]>(ws, { header: 1, defval: "" });
+        const totalRows = data.length;
+        return { name, data: data.slice(0, 1000), totalRows };
+      });
+      res.json({ type: "xlsx", sheets });
+    } catch {
+      res.status(500).json({ error: "Failed to parse XLSX" });
+    }
+    return;
+  }
 });
 
 // ── Download file ──────────────────────────────────────────────────────────

@@ -44,9 +44,8 @@ import {
   Link2,
   Calendar,
   FileText,
-  Loader2,
-  AlertCircle,
 } from "lucide-react";
+import { EvidenceFileViewer } from "@/components/evidence/EvidenceFileViewer";
 
 const EVIDENCE_TYPES = [
   { value: "policy", label: "Policy" },
@@ -121,155 +120,6 @@ function downloadFile(id: string, fileName: string, orgId: string | undefined | 
       URL.revokeObjectURL(url);
     })
     .catch(() => {});
-}
-
-// ─── Inline file preview ──────────────────────────────────────────────────────
-
-type PreviewState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "ready"; kind: "image" | "pdf" | "text"; url?: string; text?: string }
-  | { status: "unsupported" }
-  | { status: "error"; message: string };
-
-function getPreviewKindFromContentType(ct: string): "image" | "pdf" | "text" | "unsupported" {
-  const base = ct.split(";")[0].trim();
-  if (base === "application/pdf") return "pdf";
-  if (base.startsWith("image/")) return "image";
-  if (base.startsWith("text/")) return "text";
-  return "unsupported";
-}
-
-function getPreviewKindFromExtension(fileName: string): "image" | "pdf" | "text" | "unsupported" {
-  const ext = (fileName.split(".").pop() ?? "").toLowerCase();
-  if (["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(ext)) return "image";
-  if (ext === "pdf") return "pdf";
-  if (["txt", "log", "md", "yaml", "yml", "json", "xml", "csv"].includes(ext)) return "text";
-  return "unsupported";
-}
-
-function InlineFilePreview({
-  evidenceId,
-  fileName,
-  orgId,
-}: {
-  evidenceId: string;
-  fileName: string;
-  orgId: string | null | undefined;
-}) {
-  const [state, setState] = useState<PreviewState>({ status: "idle" });
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
-    };
-  }, [blobUrl]);
-
-  useEffect(() => {
-    setState({ status: "loading" });
-    if (blobUrl) {
-      URL.revokeObjectURL(blobUrl);
-      setBlobUrl(null);
-    }
-
-    const token = localStorage.getItem("auth_token");
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${token ?? ""}`,
-      ...(orgId ? { "X-Organization-ID": orgId } : {}),
-    };
-
-    fetch(`/api/evidence/${evidenceId}/preview`, { headers })
-      .then(async (res) => {
-        if (!res.ok) {
-          setState({ status: "error", message: `Server error ${res.status}` });
-          return;
-        }
-        const rawCt = res.headers.get("Content-Type") ?? "";
-        const kindFromCt = getPreviewKindFromContentType(rawCt);
-        const kind = kindFromCt !== "unsupported" ? kindFromCt : getPreviewKindFromExtension(fileName);
-
-        if (kind === "image" || kind === "pdf") {
-          const blob = await res.blob();
-          const url = URL.createObjectURL(blob);
-          setBlobUrl(url);
-          setState({ status: "ready", kind, url });
-        } else if (kind === "text") {
-          const text = await res.text();
-          setState({ status: "ready", kind, text });
-        } else {
-          setState({ status: "unsupported" });
-        }
-      })
-      .catch((err) => {
-        setState({ status: "error", message: err?.message ?? "Failed to load preview" });
-      });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [evidenceId, orgId]);
-
-  if (state.status === "idle") return null;
-
-  if (state.status === "loading") {
-    return (
-      <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground text-sm">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Loading preview…
-      </div>
-    );
-  }
-
-  if (state.status === "error") {
-    return (
-      <div className="flex items-center gap-2 py-6 px-3 text-sm text-muted-foreground">
-        <AlertCircle className="h-4 w-4 text-destructive/60 shrink-0" />
-        Preview unavailable: {state.message}
-      </div>
-    );
-  }
-
-  if (state.status === "unsupported") {
-    return (
-      <div className="py-6 px-3 text-sm text-muted-foreground text-center">
-        Preview not available for this file type.
-      </div>
-    );
-  }
-
-  if (state.kind === "image" && state.url) {
-    return (
-      <div className="flex items-center justify-center rounded-md border bg-muted/20 overflow-hidden p-2">
-        <img
-          src={state.url}
-          alt={fileName}
-          className="max-w-full max-h-[480px] object-contain rounded"
-        />
-      </div>
-    );
-  }
-
-  if (state.kind === "pdf" && state.url) {
-    return (
-      <div className="rounded-md border overflow-hidden bg-white">
-        <iframe
-          src={state.url}
-          title={fileName}
-          className="w-full h-[520px] border-0"
-        />
-      </div>
-    );
-  }
-
-  if (state.kind === "text" && state.text !== undefined) {
-    return (
-      <div className="rounded-md border bg-muted/20 overflow-auto max-h-[480px] p-3">
-        <pre className="text-xs font-mono whitespace-pre-wrap break-all leading-relaxed">
-          {state.text}
-        </pre>
-      </div>
-    );
-  }
-
-  return null;
 }
 
 export default function EvidenceDetail({ id }: { id: string }) {
@@ -642,24 +492,6 @@ export default function EvidenceDetail({ id }: { id: string }) {
                 </CardContent>
               </Card>
 
-              {/* Inline file preview */}
-              {showPreview && (
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Eye className="h-4 w-4" />
-                      File Preview
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <InlineFilePreview
-                      evidenceId={id}
-                      fileName={ev.fileName ?? ""}
-                      orgId={activeOrg?.id}
-                    />
-                  </CardContent>
-                </Card>
-              )}
             </>
           )}
 
@@ -722,6 +554,31 @@ export default function EvidenceDetail({ id }: { id: string }) {
           </Card>
         </div>
       </div>
+
+      {/* Full-width file preview — shown below the grid when toggled */}
+      {ev.fileKey && showPreview && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Eye className="h-4 w-4" />
+                File Preview — {ev.fileName ?? "File"}
+              </CardTitle>
+              <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={() => setShowPreview(false)}>
+                <EyeOff className="h-3.5 w-3.5" /> Hide
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <EvidenceFileViewer
+              evidenceId={id}
+              fileName={ev.fileName ?? ""}
+              orgId={activeOrg?.id}
+              onDownload={() => downloadFile(id, ev.fileName ?? "evidence-file", activeOrg?.id)}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
