@@ -46,6 +46,7 @@ import ReportsMonitoring from "@/pages/reports-monitoring";
 import ReportsDomain from "@/pages/reports-domain";
 import ReportsAudit from "@/pages/reports-audit";
 import ReportsSsp from "@/pages/reports-ssp";
+import AdminBackfill from "@/pages/admin-backfill";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -142,6 +143,7 @@ function AppRoutes() {
               <Route path="/reports/domain" component={ReportsDomain} />
               <Route path="/reports/audit" component={ReportsAudit} />
               <Route path="/reports/ssp" component={ReportsSsp} />
+              <Route path="/admin/backfill" component={AdminBackfill} />
               <Route component={NotFound} />
             </Switch>
           </Guard>
