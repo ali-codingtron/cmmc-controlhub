@@ -11,7 +11,7 @@ import {
   checklistItemsTable,
   organizationsTable,
 } from "@workspace/db";
-import { count, eq } from "drizzle-orm";
+import { count, eq, sql } from "drizzle-orm";
 import { seedMonitoringItemsForOrg } from "./routes/monitoring";
 import { logger } from "./lib/logger";
 import { DOCUMENT_TEMPLATES } from "./data/document-templates-data";
@@ -170,8 +170,24 @@ async function seedMonitoringItems() {
   }
 }
 
+async function migrateAuditEnum() {
+  const missingValues = [
+    "viewed", "deactivated", "activated", "password_reset", "org_access_changed",
+    "create", "update", "generate", "submit_review", "approve", "reject",
+    "activate", "archive", "complete", "complete_checklist", "run_doc_checks",
+  ];
+  for (const val of missingValues) {
+    try {
+      await db.execute(sql.raw(`ALTER TYPE audit_action ADD VALUE IF NOT EXISTS '${val}'`));
+    } catch (_e) {
+      // Already exists or concurrent add — safe to ignore
+    }
+  }
+}
+
 export async function runStartupSeed() {
   try {
+    await migrateAuditEnum();
     await seedDomainControls();
     await seedInitialAdmin();
     await seedDocumentTemplates();

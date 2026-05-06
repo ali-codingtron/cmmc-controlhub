@@ -16,6 +16,7 @@ import {
   Check,
   ScrollText,
   BarChart3,
+  DatabaseZap,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useOrg } from "@/context/OrgContext";
@@ -282,6 +283,7 @@ export function Sidebar() {
           <NavLink href="/audit-logs" icon={History} label="Audit Trail" />
           <NavLink href="/users" icon={Users} label="Users" />
           {isAdmin && <NavLink href="/organizations" icon={Building2} label="Organizations" />}
+          {isAdmin && <NavLink href="/admin/backfill" icon={DatabaseZap} label="Narrative Backfill" />}
           <NavLink href="/settings" icon={Settings} label="Settings" />
         </nav>
       </div>

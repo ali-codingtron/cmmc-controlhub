@@ -31,6 +31,22 @@ export const auditActionEnum = pgEnum("audit_action", [
   "superseded",
   "marked_stale",
   "reopened",
+  "viewed",
+  "deactivated",
+  "activated",
+  "password_reset",
+  "org_access_changed",
+  "create",
+  "update",
+  "generate",
+  "submit_review",
+  "approve",
+  "reject",
+  "activate",
+  "archive",
+  "complete",
+  "complete_checklist",
+  "run_doc_checks",
 ]);
 
 export const auditLogsTable = pgTable("audit_logs", {
