@@ -18,6 +18,7 @@ import {
   BarChart3,
   DatabaseZap,
 } from "lucide-react";
+
 import { useAuth } from "@/lib/auth";
 import { useOrg } from "@/context/OrgContext";
 import { useState, useRef, useEffect } from "react";
@@ -151,7 +152,11 @@ export function Sidebar() {
   return (
     <div className="no-print flex flex-col w-64 bg-sidebar border-r border-sidebar-border text-sidebar-foreground h-screen sticky top-0">
       <div className="p-4 flex items-center gap-2 border-b border-sidebar-border h-14">
-        <ShieldCheck className="h-6 w-6 text-primary" />
+        <img
+          src="/assets/control-hub-icon.png"
+          alt="Control HUB"
+          className="h-7 w-7 rounded-lg object-cover shrink-0"
+        />
         <span className="font-semibold tracking-tight">Control HUB</span>
       </div>
 

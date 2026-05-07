@@ -260,6 +260,11 @@ export default function Dashboard() {
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 pb-2 border-b border-border">
         <div className="space-y-1">
           <div className="flex items-center gap-3 flex-wrap">
+            <img
+              src="/assets/control-hub-icon.png"
+              alt="Control HUB"
+              className="h-8 w-8 rounded-lg object-cover shrink-0 hidden sm:block"
+            />
             <h1 className="text-2xl font-bold tracking-tight">{activeOrg?.name ?? "—"} Compliance Dashboard</h1>
             {activeOrg?.cmmcTargetLevel && (
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-900 text-white dark:bg-white dark:text-slate-900">

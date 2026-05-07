@@ -53,10 +53,17 @@ export function ReportShell({ title, subtitle, children, csvRows, csvFilename, r
             {subtitle && <p className="text-sm text-gray-600">{subtitle}</p>}
             {orgName && <p className="text-sm font-medium mt-1">{orgName}</p>}
           </div>
-          <div className="text-right text-sm text-gray-500">
-            <p className="font-semibold">Control HUB</p>
-            <p>CMMC Compliance Platform</p>
-            {reportDate && <p>{new Date(reportDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>}
+          <div className="flex items-center gap-3 text-right text-sm text-gray-500">
+            <div>
+              <p className="font-semibold">Control HUB</p>
+              <p>CMMC Compliance Platform</p>
+              {reportDate && <p>{new Date(reportDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>}
+            </div>
+            <img
+              src="/assets/control-hub-icon.png"
+              alt="Control HUB"
+              className="h-12 w-12 rounded-xl object-cover"
+            />
           </div>
         </div>
       </div>

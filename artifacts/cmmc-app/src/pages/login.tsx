@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
-import { Shield, Eye, EyeOff, Loader2, Lock, Network, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, Loader2, Lock, Network, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const loginSchema = z.object({
@@ -110,9 +110,11 @@ export default function Login() {
 
         <div className="relative z-10">
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-400/30">
-              <Shield className="h-5 w-5 text-blue-300" />
-            </div>
+            <img
+              src="/assets/control-hub-icon.png"
+              alt="Control HUB"
+              className="h-10 w-10 rounded-xl object-cover shadow-lg shadow-blue-900/40"
+            />
             <span className="text-white font-bold text-xl tracking-tight">Control HUB</span>
           </div>
         </div>
@@ -153,9 +155,11 @@ export default function Login() {
         <div className="w-full max-w-sm space-y-8">
           {/* Mobile logo */}
           <div className="flex flex-col items-center gap-3 lg:hidden">
-            <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20">
-              <Shield className="h-6 w-6 text-primary" />
-            </div>
+            <img
+              src="/assets/control-hub-icon.png"
+              alt="Control HUB"
+              className="h-14 w-14 rounded-2xl object-cover shadow-md"
+            />
             <div className="text-center">
               <h1 className="text-2xl font-bold tracking-tight">Control HUB</h1>
               <p className="text-sm text-muted-foreground">CMMC Compliance &amp; Evidence Management</p>
@@ -163,9 +167,16 @@ export default function Login() {
           </div>
 
           {/* Desktop heading */}
-          <div className="hidden lg:block space-y-1">
-            <h1 className="text-2xl font-bold tracking-tight">Sign in to your account</h1>
-            <p className="text-sm text-muted-foreground">CMMC Compliance &amp; Evidence Management</p>
+          <div className="hidden lg:flex items-center gap-4">
+            <img
+              src="/assets/control-hub-icon.png"
+              alt="Control HUB"
+              className="h-14 w-14 rounded-2xl object-cover shadow-md shrink-0"
+            />
+            <div className="space-y-0.5">
+              <h1 className="text-2xl font-bold tracking-tight">Sign in to your account</h1>
+              <p className="text-sm text-muted-foreground">CMMC Compliance &amp; Evidence Management</p>
+            </div>
           </div>
 
           <Form {...form}>
