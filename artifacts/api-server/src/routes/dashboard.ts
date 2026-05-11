@@ -102,17 +102,18 @@ router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
       )
     );
 
-  const now = new Date();
-  const sevenDaysFromNow = new Date(now.getTime() + 7 * 86400000);
-
+  // Use DATE-only comparison to avoid timestamp vs midnight-UTC mismatch.
+  // Items due today are NOT overdue; only strictly-past dates count.
+  // Items with status = 'current' are never overdue or due-soon.
   const [monitoringOverdueStats] = await db
     .select({ total: count() })
     .from(monitoringItemsTable)
     .where(
       and(
         orgId ? eq(monitoringItemsTable.organizationId, orgId) : undefined,
-        lte(monitoringItemsTable.nextDue, now),
-        sql`${monitoringItemsTable.nextDue} IS NOT NULL`
+        sql`${monitoringItemsTable.nextDue} IS NOT NULL`,
+        sql`DATE(${monitoringItemsTable.nextDue}) < CURRENT_DATE`,
+        sql`${monitoringItemsTable.status} != 'current'`
       )
     );
 
@@ -122,8 +123,20 @@ router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
     .where(
       and(
         orgId ? eq(monitoringItemsTable.organizationId, orgId) : undefined,
-        gte(monitoringItemsTable.nextDue, now),
-        lte(monitoringItemsTable.nextDue, sevenDaysFromNow)
+        sql`${monitoringItemsTable.nextDue} IS NOT NULL`,
+        sql`DATE(${monitoringItemsTable.nextDue}) >= CURRENT_DATE`,
+        sql`DATE(${monitoringItemsTable.nextDue}) <= CURRENT_DATE + INTERVAL '7 days'`,
+        sql`${monitoringItemsTable.status} != 'current'`
+      )
+    );
+
+  const [monitoringCurrentStats] = await db
+    .select({ total: count() })
+    .from(monitoringItemsTable)
+    .where(
+      and(
+        orgId ? eq(monitoringItemsTable.organizationId, orgId) : undefined,
+        eq(monitoringItemsTable.status, "current")
       )
     );
 
@@ -222,6 +235,7 @@ router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
     criticalPoams: Number(criticalPoamStats?.total ?? 0),
     monitoringOverdue: Number(monitoringOverdueStats?.total ?? 0),
     monitoringDueSoon: Number(monitoringDueSoonStats?.total ?? 0),
+    monitoringCurrent: Number(monitoringCurrentStats?.total ?? 0),
     monitoringTotal: Number(monitoringTotalStats?.total ?? 0),
     controlsWithNoEvidence: 0,
     controlsWithNoPolicy: 0,

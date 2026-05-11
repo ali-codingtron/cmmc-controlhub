@@ -87,15 +87,22 @@ function toDateInputValue(ts: string | null): string {
 }
 
 /**
- * An item is overdue whenever its nextDue has passed — regardless of status.
+ * An item is overdue only if its nextDue is strictly before today
+ * AND its status is not 'current'. Items marked current are never overdue.
  */
 function isOverdue(item: MonitoringItem): boolean {
   if (!item.nextDue) return false;
+  if (item.status === "current") return false;
   return toDateInputValue(item.nextDue) < todayStr();
 }
 
+/**
+ * An item is due soon if nextDue is today through 7 days from now
+ * AND its status is not 'current'.
+ */
 function isDueSoon(item: MonitoringItem): boolean {
   if (!item.nextDue) return false;
+  if (item.status === "current") return false;
   const due = toDateInputValue(item.nextDue);
   const today = todayStr();
   const sevenDays = calcNextDueFrom("weekly", today);
@@ -191,7 +198,8 @@ export default function MonitoringTracker() {
 
   const overdueCount = items.filter(isOverdue).length;
   const dueSoonCount = items.filter((i) => !isOverdue(i) && isDueSoon(i)).length;
-  const currentCount = items.filter((i) => i.status === "current" && !isOverdue(i)).length;
+  // Current = any item with status 'current' (they can never be overdue by the rule above)
+  const currentCount = items.filter((i) => i.status === "current").length;
 
   // Checkbox helpers
   const filteredIds = filtered.map((i) => i.id);

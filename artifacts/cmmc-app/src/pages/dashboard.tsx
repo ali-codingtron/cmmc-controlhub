@@ -220,6 +220,7 @@ export default function Dashboard() {
 
   const monitoringOverdue = summary.monitoringOverdue ?? 0;
   const monitoringDueSoon = summary.monitoringDueSoon ?? 0;
+  const monitoringCurrent = (summary as any).monitoringCurrent ?? 0;
   const monitoringTotal = summary.monitoringTotal ?? 0;
   const overduePoams = summary.overduePoams ?? 0;
   const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
@@ -404,18 +405,23 @@ export default function Dashboard() {
             <StatRow
               icon={<CircleCheck className="h-3.5 w-3.5 text-emerald-500" />}
               label="Current"
-              value={Math.max(0, monitoringTotal - monitoringOverdue - monitoringDueSoon)}
+              value={monitoringCurrent}
               colorClass="text-emerald-700"
             />
           </div>
-          {monitoringOverdue > 0 && (
-            <div className="mt-3 pt-3 border-t border-border/50">
+          <div className="mt-3 pt-3 border-t border-border/50">
+            {monitoringOverdue > 0 ? (
               <div className="flex items-center gap-1.5 text-[10px] font-medium text-red-600">
                 <AlertTriangle className="h-3 w-3" />
                 {monitoringOverdue} task{monitoringOverdue !== 1 ? "s" : ""} need immediate attention
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="flex items-center gap-1.5 text-[10px] font-medium text-emerald-600">
+                <CircleCheck className="h-3 w-3" />
+                No overdue monitoring items
+              </div>
+            )}
+          </div>
         </KpiCard>
 
         {/* 5. POA&M Health */}

@@ -129,17 +129,19 @@ router.patch("/monitoring/:id", requireAuth, requireOrg, async (req, res) => {
 
 router.get("/monitoring/stats", requireAuth, requireOrg, async (req, res) => {
   const orgId = req.orgId;
-  const now = new Date();
-  const sevenDaysFromNow = new Date(now.getTime() + 7 * 86400000);
 
+  // Use DATE-only comparison to avoid timestamp vs midnight-UTC mismatch.
+  // Items due today are NOT overdue; only strictly-past dates count.
+  // Items with status = 'current' are never overdue or due-soon.
   const [overdueCount] = await db
     .select({ value: count() })
     .from(monitoringItemsTable)
     .where(
       and(
         orgId ? eq(monitoringItemsTable.organizationId, orgId) : undefined,
-        lte(monitoringItemsTable.nextDue, now),
-        sql`${monitoringItemsTable.nextDue} IS NOT NULL`
+        sql`${monitoringItemsTable.nextDue} IS NOT NULL`,
+        sql`DATE(${monitoringItemsTable.nextDue}) < CURRENT_DATE`,
+        sql`${monitoringItemsTable.status} != 'current'`
       )
     );
 
@@ -149,8 +151,10 @@ router.get("/monitoring/stats", requireAuth, requireOrg, async (req, res) => {
     .where(
       and(
         orgId ? eq(monitoringItemsTable.organizationId, orgId) : undefined,
-        gte(monitoringItemsTable.nextDue, now),
-        lte(monitoringItemsTable.nextDue, sevenDaysFromNow)
+        sql`${monitoringItemsTable.nextDue} IS NOT NULL`,
+        sql`DATE(${monitoringItemsTable.nextDue}) >= CURRENT_DATE`,
+        sql`DATE(${monitoringItemsTable.nextDue}) <= CURRENT_DATE + INTERVAL '7 days'`,
+        sql`${monitoringItemsTable.status} != 'current'`
       )
     );
 
