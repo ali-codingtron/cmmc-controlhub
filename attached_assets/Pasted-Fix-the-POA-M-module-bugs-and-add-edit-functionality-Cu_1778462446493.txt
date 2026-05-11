@@ -1,0 +1,95 @@
+Fix the POA&M module bugs and add edit functionality.
+
+Current issues:
+1. In Add POA&M, the Linked Control dropdown is too tall and I cannot scroll/select controls lower in the list.
+2. There is no way to edit an existing POA&M.
+3. When I create a POA&M and select Status = Closed, the saved POA&M still displays as Open.
+
+Fix requirements:
+
+1. Fix Linked Control Dropdown
+Replace the current dropdown with a searchable, scrollable dropdown.
+
+Requirements:
+- Max height should be limited
+- Dropdown list must scroll
+- Search by control ID and title
+- Display format:
+  AC.L1-3.1.1 — Authorized Access Control
+- Allow selecting the correct control without the menu extending off-screen
+- Clicking outside closes the dropdown
+
+2. Save Selected Status Correctly
+Fix the Add POA&M save logic.
+
+The status selected in the form must be saved exactly.
+
+Statuses:
+- Open
+- In Progress
+- Pending Validation
+- Closed
+- Accepted Risk
+
+Acceptance test:
+- Add a POA&M
+- Select Status = Closed
+- Save
+- POA&M table shows Closed
+- Open POA&M count does not include Closed items
+
+3. Add Edit POA&M
+Add actions column or row menu for each POA&M:
+- View
+- Edit
+- Delete/Archive
+
+Edit POA&M should allow updating:
+- POA&M Number
+- Title
+- Deficiency Description / Gap
+- Risk Level
+- Linked Control
+- Status
+- Owner
+- Scheduled Completion Date
+- Remediation Plan
+- Required Evidence
+- Notes
+
+4. Edit Save Behavior
+When editing:
+- Save changes to database
+- Update table immediately
+- Update dashboard counts
+- Update linked control POA&M tab
+- Write audit log entry
+
+5. POA&M Counts
+Fix summary cards:
+- Open Items = status Open or In Progress or Pending Validation
+- In Progress = status In Progress only
+- Critical / High Risk = risk Critical or High AND status is not Closed
+- Closed items should not count as open
+
+6. Control Linking
+If a POA&M is linked to a control:
+- show control ID in POA&M table
+- show POA&M on that control’s POA&M tab
+- allow editing linked control later
+
+7. Validation
+Required fields:
+- Title
+- Deficiency Description / Gap
+- Risk Level
+- Status
+
+Linked Control may be optional, but if selected it must save correctly.
+
+8. Acceptance Tests
+- Add POA&M with Status = Closed → table shows Closed
+- Add POA&M linked to SI.L2-3.14.7 → control displays correctly
+- Dropdown can scroll/search to SI.L2-3.14.7
+- Edit existing POA&M → changes persist after refresh
+- Closed POA&M does not count as Open

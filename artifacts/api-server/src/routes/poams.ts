@@ -57,6 +57,7 @@ router.post("/poams", requireAuth, requireOrg, async (req, res) => {
   const {
     title, deficiencyDescription, riskLevel, linkedControlId,
     ownerId, scheduledCompletionDate, remediationPlan, resourcesRequired, notes,
+    status: bodyStatus, poamNumber: bodyPoamNumber,
   } = req.body;
   const orgId = req.orgId;
 
@@ -66,12 +67,18 @@ router.post("/poams", requireAuth, requireOrg, async (req, res) => {
   }
 
   const id = randomUUID();
-  const existing = await db
-    .select({ id: poamsTable.id })
-    .from(poamsTable)
-    .where(orgId ? eq(poamsTable.organizationId, orgId) : undefined);
-  const prefix = orgId ? "POA&M" : "POA&M";
-  const poamNumber = `${prefix}-${String(existing.length + 1).padStart(4, "0")}`;
+
+  let poamNumber = bodyPoamNumber?.trim() || null;
+  if (!poamNumber) {
+    const existing = await db
+      .select({ id: poamsTable.id })
+      .from(poamsTable)
+      .where(orgId ? eq(poamsTable.organizationId, orgId) : undefined);
+    poamNumber = `POA&M-${String(existing.length + 1).padStart(4, "0")}`;
+  }
+
+  const validStatuses = ["open", "in_progress", "waiting_on_vendor", "mitigated", "accepted_risk", "closed"];
+  const status = validStatuses.includes(bodyStatus) ? bodyStatus : "open";
 
   await db.insert(poamsTable).values({
     id,
@@ -79,21 +86,45 @@ router.post("/poams", requireAuth, requireOrg, async (req, res) => {
     poamNumber,
     title,
     deficiencyDescription,
-    status: "open",
+    status,
     riskLevel: riskLevel ?? "medium",
-    linkedControlId,
-    ownerId,
+    linkedControlId: linkedControlId || null,
+    ownerId: ownerId || null,
     scheduledCompletionDate: scheduledCompletionDate ? new Date(scheduledCompletionDate) : undefined,
-    remediationPlan,
-    resourcesRequired,
-    notes,
+    remediationPlan: remediationPlan || null,
+    resourcesRequired: resourcesRequired || null,
+    notes: notes || null,
     createdAt: new Date(),
     updatedAt: new Date(),
   });
 
   await logAudit(req, "created", "poam", id, { entityLabel: title });
 
-  const [created] = await db.select().from(poamsTable).where(eq(poamsTable.id, id)).limit(1);
+  const [created] = await db
+    .select({
+      id: poamsTable.id,
+      poamNumber: poamsTable.poamNumber,
+      title: poamsTable.title,
+      deficiencyDescription: poamsTable.deficiencyDescription,
+      status: poamsTable.status,
+      riskLevel: poamsTable.riskLevel,
+      linkedControlId: poamsTable.linkedControlId,
+      linkedControlLabel: controlsTable.controlId,
+      ownerId: poamsTable.ownerId,
+      ownerName: usersTable.name,
+      scheduledCompletionDate: poamsTable.scheduledCompletionDate,
+      completedDate: poamsTable.completedDate,
+      remediationPlan: poamsTable.remediationPlan,
+      resourcesRequired: poamsTable.resourcesRequired,
+      notes: poamsTable.notes,
+      createdAt: poamsTable.createdAt,
+      updatedAt: poamsTable.updatedAt,
+    })
+    .from(poamsTable)
+    .leftJoin(controlsTable, eq(controlsTable.id, poamsTable.linkedControlId))
+    .leftJoin(usersTable, eq(usersTable.id, poamsTable.ownerId))
+    .where(eq(poamsTable.id, id))
+    .limit(1);
   res.status(201).json(created);
 });
 

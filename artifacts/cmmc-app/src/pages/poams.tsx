@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useIsAssessor } from "@/lib/auth";
 import {
@@ -22,7 +22,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Link } from "wouter";
-import { Plus, AlertTriangle, Loader2, X } from "lucide-react";
+import { Plus, AlertTriangle, Loader2, X, Eye, Pencil, ChevronDown, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useOrg } from "@/context/OrgContext";
 import { cn } from "@/lib/utils";
@@ -42,6 +42,8 @@ const RISK_LEVELS = [
   { value: "medium", label: "Medium" },
   { value: "low", label: "Low" },
 ];
+
+const OPEN_STATUSES = new Set(["open", "in_progress", "waiting_on_vendor", "mitigated"]);
 
 function PoamStatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
@@ -79,9 +81,116 @@ function formatDate(d: string | Date | null | undefined) {
   return new Date(d).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-// ─── Add POA&M Dialog ─────────────────────────────────────────────────────────
+// ─── Searchable Control Combobox ──────────────────────────────────────────────
 
-interface AddPoamForm {
+function ControlCombobox({
+  value,
+  onChange,
+  controls,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  controls: any[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const selected = controls.find((c) => c.id === value);
+  const filtered = controls.filter((c) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      (c.controlId ?? "").toLowerCase().includes(q) ||
+      (c.title ?? "").toLowerCase().includes(q)
+    );
+  });
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+      setTimeout(() => searchRef.current?.focus(), 50);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <span className={cn("truncate", !value && "text-muted-foreground")}>
+          {selected ? `${selected.controlId} — ${selected.title}` : "No linked control"}
+        </span>
+        <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg">
+          <div className="p-2 border-b">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+              <input
+                ref={searchRef}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by ID or title..."
+                className="w-full rounded-sm border border-input bg-background pl-8 pr-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+          </div>
+          <div className="max-h-56 overflow-y-auto">
+            <button
+              type="button"
+              className={cn(
+                "w-full text-left px-3 py-2 text-sm hover:bg-accent cursor-pointer",
+                !value && "bg-accent/50 font-medium"
+              )}
+              onMouseDown={(e) => { e.preventDefault(); onChange(""); setOpen(false); setSearch(""); }}
+            >
+              No linked control
+            </button>
+            {filtered.length === 0 ? (
+              <p className="px-3 py-4 text-sm text-muted-foreground text-center">No controls match</p>
+            ) : (
+              filtered.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={cn(
+                    "w-full text-left px-3 py-2 text-sm hover:bg-accent cursor-pointer",
+                    value === c.id && "bg-accent/50 font-medium"
+                  )}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    onChange(c.id);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                >
+                  <span className="font-mono text-xs text-primary mr-1">{c.controlId}</span>
+                  <span className="text-muted-foreground"> — {(c.title ?? "").slice(0, 60)}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Shared POA&M Form ────────────────────────────────────────────────────────
+
+interface PoamForm {
   poamNumber: string;
   title: string;
   deficiencyDescription: string;
@@ -95,7 +204,7 @@ interface AddPoamForm {
   notes: string;
 }
 
-const EMPTY_FORM: AddPoamForm = {
+const EMPTY_FORM: PoamForm = {
   poamNumber: "",
   title: "",
   deficiencyDescription: "",
@@ -109,31 +218,47 @@ const EMPTY_FORM: AddPoamForm = {
   notes: "",
 };
 
-function AddPoamDialog({
+function PoamFormDialog({
   open,
   onClose,
   onSaved,
-  defaultControlId,
+  initialValues,
+  editId,
 }: {
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
-  defaultControlId?: string;
+  initialValues?: Partial<PoamForm>;
+  editId?: string;
 }) {
   const { toast } = useToast();
   const { activeOrg } = useOrg();
-  const [form, setForm] = useState<AddPoamForm>({ ...EMPTY_FORM, linkedControlId: defaultControlId ?? "" });
+  const isEdit = !!editId;
+
+  const [form, setForm] = useState<PoamForm>({ ...EMPTY_FORM, ...initialValues });
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) setForm({ ...EMPTY_FORM, ...initialValues });
+  }, [open, editId]);
 
   const { data: users = [] } = useListUsers();
   const { data: controlsData } = useListControls();
   const controls = (controlsData as any[]) ?? [];
 
-  const set = (k: keyof AddPoamForm) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const set = (k: keyof PoamForm) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
-    if (!form.title.trim() || !form.deficiencyDescription.trim()) {
-      toast({ title: "Title and description are required", variant: "destructive" });
+    if (!form.title.trim()) {
+      toast({ title: "Title is required", variant: "destructive" });
+      return;
+    }
+    if (!form.deficiencyDescription.trim()) {
+      toast({ title: "Deficiency description is required", variant: "destructive" });
+      return;
+    }
+    if (!form.riskLevel) {
+      toast({ title: "Risk level is required", variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -145,31 +270,30 @@ function AddPoamDialog({
       };
       if (activeOrg?.id) headers["X-Organization-ID"] = activeOrg.id;
 
-      const res = await fetch("/api/poams", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          poamNumber: form.poamNumber || undefined,
-          title: form.title,
-          deficiencyDescription: form.deficiencyDescription,
-          linkedControlId: form.linkedControlId || undefined,
-          riskLevel: form.riskLevel,
-          status: form.status,
-          ownerId: form.ownerId || undefined,
-          scheduledCompletionDate: form.scheduledCompletionDate || undefined,
-          remediationPlan: form.remediationPlan || undefined,
-          resourcesRequired: form.resourcesRequired || undefined,
-          notes: form.notes || undefined,
-        }),
-      });
+      const body = {
+        poamNumber: form.poamNumber || undefined,
+        title: form.title,
+        deficiencyDescription: form.deficiencyDescription,
+        linkedControlId: form.linkedControlId || undefined,
+        riskLevel: form.riskLevel,
+        status: form.status,
+        ownerId: form.ownerId || undefined,
+        scheduledCompletionDate: form.scheduledCompletionDate || undefined,
+        remediationPlan: form.remediationPlan || undefined,
+        resourcesRequired: form.resourcesRequired || undefined,
+        notes: form.notes || undefined,
+      };
+
+      const url = isEdit ? `/api/poams/${editId}` : "/api/poams";
+      const method = isEdit ? "PATCH" : "POST";
+      const res = await fetch(url, { method, headers, body: JSON.stringify(body) });
 
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
-        throw new Error(e.error ?? "Failed to save POA&M");
+        throw new Error(e.error ?? `Failed to ${isEdit ? "update" : "save"} POA&M`);
       }
 
-      toast({ title: "POA&M created" });
-      setForm({ ...EMPTY_FORM, linkedControlId: defaultControlId ?? "" });
+      toast({ title: isEdit ? "POA&M updated" : "POA&M created" });
       onSaved();
       onClose();
     } catch (err: any) {
@@ -183,17 +307,17 @@ function AddPoamDialog({
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader className="shrink-0">
-          <DialogTitle>Add POA&amp;M Item</DialogTitle>
+          <DialogTitle>{isEdit ? "Edit POA&M Item" : "Add POA&M Item"}</DialogTitle>
         </DialogHeader>
 
-        <div className="overflow-y-auto flex-1 min-h-0 py-2 space-y-4">
+        <div className="overflow-y-auto flex-1 min-h-0 py-2 space-y-4 pr-1">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>POA&amp;M Number <span className="text-muted-foreground text-xs">(auto-generated if blank)</span></Label>
               <Input value={form.poamNumber} onChange={(e) => set("poamNumber")(e.target.value)} placeholder="POA&amp;M-0001" />
             </div>
             <div className="space-y-1.5">
-              <Label>Risk Level</Label>
+              <Label>Risk Level <span className="text-red-500">*</span></Label>
               <Select value={form.riskLevel} onValueChange={set("riskLevel")}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -222,18 +346,14 @@ function AddPoamDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Linked Control</Label>
-              <Select value={form.linkedControlId || "__none__"} onValueChange={(v) => set("linkedControlId")(v === "__none__" ? "" : v)}>
-                <SelectTrigger><SelectValue placeholder="Select control..." /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">No linked control</SelectItem>
-                  {controls.map((c: any) => (
-                    <SelectItem key={c.id} value={c.id}>{c.controlId} — {(c.title ?? "").slice(0, 50)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <ControlCombobox
+                value={form.linkedControlId}
+                onChange={set("linkedControlId")}
+                controls={controls}
+              />
             </div>
             <div className="space-y-1.5">
-              <Label>Status</Label>
+              <Label>Status <span className="text-red-500">*</span></Label>
               <Select value={form.status} onValueChange={set("status")}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -297,11 +417,11 @@ function AddPoamDialog({
           </div>
         </div>
 
-        <DialogFooter className="shrink-0">
+        <DialogFooter className="shrink-0 pt-2 border-t">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Save POA&amp;M
+            {isEdit ? "Save Changes" : "Save POA&amp;M"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -317,6 +437,7 @@ export default function Poams() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterRisk, setFilterRisk] = useState("all");
   const [showAdd, setShowAdd] = useState(false);
+  const [editPoam, setEditPoam] = useState<any | null>(null);
   const isAssessor = useIsAssessor();
 
   const { data: poams = [], isLoading } = useListPoams({
@@ -334,9 +455,32 @@ export default function Poams() {
     );
   });
 
-  const openCount = poams.filter((p) => p.status === "open").length;
-  const highCritCount = poams.filter((p) => p.riskLevel === "critical" || p.riskLevel === "high").length;
-  const inProgressCount = poams.filter((p) => p.status === "in_progress").length;
+  const allPoams = poams;
+  const openCount = allPoams.filter((p) => OPEN_STATUSES.has(p.status ?? "")).length;
+  const inProgressCount = allPoams.filter((p) => p.status === "in_progress").length;
+  const highCritCount = allPoams.filter(
+    (p) => (p.riskLevel === "critical" || p.riskLevel === "high") && p.status !== "closed" && p.status !== "accepted_risk"
+  ).length;
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: getListPoamsQueryKey() });
+
+  function toFormValues(poam: any): Partial<PoamForm> {
+    return {
+      poamNumber: poam.poamNumber ?? "",
+      title: poam.title ?? "",
+      deficiencyDescription: poam.deficiencyDescription ?? "",
+      linkedControlId: poam.linkedControlId ?? "",
+      riskLevel: poam.riskLevel ?? "medium",
+      status: poam.status ?? "open",
+      ownerId: poam.ownerId ?? "",
+      scheduledCompletionDate: poam.scheduledCompletionDate
+        ? new Date(poam.scheduledCompletionDate).toISOString().slice(0, 10)
+        : "",
+      remediationPlan: poam.remediationPlan ?? "",
+      resourcesRequired: poam.resourcesRequired ?? "",
+      notes: poam.notes ?? "",
+    };
+  }
 
   return (
     <div className="space-y-6">
@@ -360,6 +504,7 @@ export default function Poams() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Open Items</p>
+                <p className="text-xs text-muted-foreground/70 mb-1">Open · In Progress · Waiting · Mitigated</p>
                 <p className="text-2xl font-bold text-red-600">{openCount}</p>
               </div>
               <AlertTriangle className="h-8 w-8 text-red-400 opacity-60" />
@@ -371,6 +516,7 @@ export default function Poams() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">In Progress</p>
+                <p className="text-xs text-muted-foreground/70 mb-1">Active remediation underway</p>
                 <p className="text-2xl font-bold text-yellow-600">{inProgressCount}</p>
               </div>
               <AlertTriangle className="h-8 w-8 text-yellow-400 opacity-60" />
@@ -382,6 +528,7 @@ export default function Poams() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Critical / High Risk</p>
+                <p className="text-xs text-muted-foreground/70 mb-1">Excluding closed &amp; accepted</p>
                 <p className="text-2xl font-bold text-orange-600">{highCritCount}</p>
               </div>
               <AlertTriangle className="h-8 w-8 text-orange-400 opacity-60" />
@@ -444,10 +591,12 @@ export default function Poams() {
               <AlertTriangle className="h-12 w-12 mx-auto mb-3 opacity-25" />
               <p className="font-medium">No POA&amp;M items found</p>
               <p className="text-sm mt-1">Add a POA&amp;M to track remediation of a gap or finding.</p>
-              <Button className="mt-4" onClick={() => setShowAdd(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add First POA&amp;M
-              </Button>
+              {!isAssessor && (
+                <Button className="mt-4" onClick={() => setShowAdd(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add First POA&amp;M
+                </Button>
+              )}
             </div>
           ) : (
             <Table>
@@ -455,11 +604,12 @@ export default function Poams() {
                 <TableRow>
                   <TableHead className="w-28">POA&amp;M #</TableHead>
                   <TableHead>Title</TableHead>
-                  <TableHead className="w-32">Status</TableHead>
+                  <TableHead className="w-36">Status</TableHead>
                   <TableHead className="w-24">Risk</TableHead>
                   <TableHead className="w-36">Control</TableHead>
                   <TableHead className="w-32">Owner</TableHead>
                   <TableHead className="w-32">Target Date</TableHead>
+                  {!isAssessor && <TableHead className="w-20 text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -491,6 +641,24 @@ export default function Poams() {
                     <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                       {formatDate(poam.scheduledCompletionDate)}
                     </TableCell>
+                    {!isAssessor && (
+                      <TableCell>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" asChild title="View">
+                            <Link href={`/poams/${poam.id}`}><Eye className="h-3.5 w-3.5" /></Link>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            title="Edit"
+                            onClick={() => setEditPoam(poam)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -499,11 +667,23 @@ export default function Poams() {
         </CardContent>
       </Card>
 
-      <AddPoamDialog
+      {/* Add dialog */}
+      <PoamFormDialog
         open={showAdd}
         onClose={() => setShowAdd(false)}
-        onSaved={() => qc.invalidateQueries({ queryKey: getListPoamsQueryKey() })}
+        onSaved={invalidate}
       />
+
+      {/* Edit dialog */}
+      {editPoam && (
+        <PoamFormDialog
+          open={!!editPoam}
+          onClose={() => setEditPoam(null)}
+          onSaved={() => { invalidate(); setEditPoam(null); }}
+          initialValues={toFormValues(editPoam)}
+          editId={editPoam.id}
+        />
+      )}
     </div>
   );
 }
