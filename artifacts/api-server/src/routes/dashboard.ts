@@ -104,7 +104,7 @@ router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
 
   // Use DATE-only comparison to avoid timestamp vs midnight-UTC mismatch.
   // Items due today are NOT overdue; only strictly-past dates count.
-  // Items with status = 'current' are never overdue or due-soon.
+  // Status is NOT excluded — if nextDue passed, the item needs redoing regardless.
   const [monitoringOverdueStats] = await db
     .select({ total: count() })
     .from(monitoringItemsTable)
@@ -112,8 +112,7 @@ router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
       and(
         orgId ? eq(monitoringItemsTable.organizationId, orgId) : undefined,
         sql`${monitoringItemsTable.nextDue} IS NOT NULL`,
-        sql`DATE(${monitoringItemsTable.nextDue}) < CURRENT_DATE`,
-        sql`${monitoringItemsTable.status} != 'current'`
+        sql`DATE(${monitoringItemsTable.nextDue}) < CURRENT_DATE`
       )
     );
 

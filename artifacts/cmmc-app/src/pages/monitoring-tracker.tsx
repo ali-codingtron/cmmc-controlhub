@@ -87,12 +87,11 @@ function toDateInputValue(ts: string | null): string {
 }
 
 /**
- * An item is overdue only if its nextDue is strictly before today
- * AND its status is not 'current'. Items marked current are never overdue.
+ * An item is overdue if its nextDue date is strictly before today.
+ * Status does not matter — if the date passed, the task needs redoing.
  */
 function isOverdue(item: MonitoringItem): boolean {
   if (!item.nextDue) return false;
-  if (item.status === "current") return false;
   return toDateInputValue(item.nextDue) < todayStr();
 }
 
