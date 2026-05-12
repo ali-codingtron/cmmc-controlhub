@@ -640,11 +640,18 @@ export default function MonitoringTracker() {
                           >
                             <SelectTrigger className={cn(
                               "h-8 text-xs",
-                              overdue && "border-red-400 text-red-700 dark:text-red-400",
+                              overdue && "border-red-400 bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400",
                               !overdue && item.status === "current" && "border-green-400 text-green-700 dark:text-green-400",
                               !overdue && item.status === "in_progress" && "border-blue-400 text-blue-700 dark:text-blue-400"
                             )}>
-                              <SelectValue />
+                              {overdue ? (
+                                <span className="flex items-center gap-1 font-medium">
+                                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                                  Overdue
+                                </span>
+                              ) : (
+                                <SelectValue />
+                              )}
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="open">Open</SelectItem>
