@@ -197,8 +197,8 @@ export default function MonitoringTracker() {
 
   const overdueCount = items.filter(isOverdue).length;
   const dueSoonCount = items.filter((i) => !isOverdue(i) && isDueSoon(i)).length;
-  // Current = any item with status 'current' (they can never be overdue by the rule above)
-  const currentCount = items.filter((i) => i.status === "current").length;
+  // Current = status 'current' AND not overdue (overdue items show as "Overdue", not "Current")
+  const currentCount = items.filter((i) => i.status === "current" && !isOverdue(i)).length;
 
   // Checkbox helpers
   const filteredIds = filtered.map((i) => i.id);

@@ -130,13 +130,15 @@ router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
       )
     );
 
+  // Current = status 'current' AND not overdue (past-due items display as "Overdue")
   const [monitoringCurrentStats] = await db
     .select({ total: count() })
     .from(monitoringItemsTable)
     .where(
       and(
         orgId ? eq(monitoringItemsTable.organizationId, orgId) : undefined,
-        eq(monitoringItemsTable.status, "current")
+        eq(monitoringItemsTable.status, "current"),
+        sql`(${monitoringItemsTable.nextDue} IS NULL OR DATE(${monitoringItemsTable.nextDue}) >= CURRENT_DATE)`
       )
     );
 
