@@ -97,12 +97,12 @@ function isOverdue(item: MonitoringItem): boolean {
 }
 
 /**
- * An item is due soon if nextDue is today through 7 days from now
- * AND its status is not 'current'.
+ * An item is due soon if nextDue is today through 7 days from now.
+ * Includes 'current' items — monitoring tasks are recurring, so even a
+ * completed item whose next cycle is approaching should appear here.
  */
 function isDueSoon(item: MonitoringItem): boolean {
   if (!item.nextDue) return false;
-  if (item.status === "current") return false;
   const due = toDateInputValue(item.nextDue);
   const today = todayStr();
   const sevenDays = calcNextDueFrom("weekly", today);

@@ -117,6 +117,8 @@ router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
       )
     );
 
+  // Due-soon counts ALL items whose next cycle falls within 7 days — including
+  // 'current' ones, because monitoring tasks recur and the upcoming cycle matters.
   const [monitoringDueSoonStats] = await db
     .select({ total: count() })
     .from(monitoringItemsTable)
@@ -125,8 +127,7 @@ router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
         orgId ? eq(monitoringItemsTable.organizationId, orgId) : undefined,
         sql`${monitoringItemsTable.nextDue} IS NOT NULL`,
         sql`DATE(${monitoringItemsTable.nextDue}) >= CURRENT_DATE`,
-        sql`DATE(${monitoringItemsTable.nextDue}) <= CURRENT_DATE + INTERVAL '7 days'`,
-        sql`${monitoringItemsTable.status} != 'current'`
+        sql`DATE(${monitoringItemsTable.nextDue}) <= CURRENT_DATE + INTERVAL '7 days'`
       )
     );
 
