@@ -10,6 +10,7 @@ import { eq, and, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 import { randomUUID } from "crypto";
+import { CONFIGURE_SEED_PART2 } from "../data/configure-seed-part2";
 
 const router = Router();
 
@@ -464,7 +465,7 @@ export async function seedControlConfigure(): Promise<void> {
   const allControls = await db.select({ id: controlsTable.id, controlId: controlsTable.controlId }).from(controlsTable);
   const controlMap = new Map(allControls.map((c) => [c.controlId, c.id]));
 
-  for (const seed of CONFIGURE_SEED) {
+  for (const seed of [...CONFIGURE_SEED, ...CONFIGURE_SEED_PART2]) {
     const dbControlId = controlMap.get(seed.controlId);
     if (!dbControlId) continue; // control not found in DB
 
