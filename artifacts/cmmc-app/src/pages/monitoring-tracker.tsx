@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrg } from "@/context/OrgContext";
 import { useIsAssessor } from "@/lib/auth";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -17,11 +18,28 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { X, Activity, CheckCircle2, Clock, AlertTriangle, RefreshCw } from "lucide-react";
+import {
+  X,
+  Activity,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  RefreshCw,
+  ChevronRight,
+  ChevronDown,
+  BookOpen,
+  FlaskConical,
+  FileText,
+  ShieldCheck,
+  ShieldX,
+  TriangleAlert,
+  Link2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type MonitoringFrequency = "daily" | "weekly" | "monthly" | "quarterly" | "annually";
-type MonitoringStatus = "open" | "in_progress" | "current";
+type MonitoringStatus = "open" | "in_progress" | "current" | "failed_validation" | "escalated";
+type ValidationStatus = "pass" | "fail" | "pass_with_exception";
 
 interface MonitoringItem {
   id: string;
@@ -35,6 +53,22 @@ interface MonitoringItem {
   status: MonitoringStatus;
   notes: string | null;
   sortOrder: number;
+  operatingProcedure: string | null;
+  testProcedure: string | null;
+  evidenceToRetain: string | null;
+  validationStatus: ValidationStatus | null;
+  validationDate: string | null;
+  reviewerNotes: string | null;
+  escalationNotes: string | null;
+  linkedPoamId: string | null;
+  reviewedBy: string | null;
+  reviewDate: string | null;
+}
+
+interface Poam {
+  id: string;
+  weakness: string;
+  status: string;
 }
 
 const FREQUENCY_DAYS: Record<MonitoringFrequency, number> = {
@@ -61,14 +95,18 @@ const FREQUENCY_COLOR: Record<MonitoringFrequency, string> = {
   annually: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
 };
 
+const STATUS_LABEL: Record<MonitoringStatus, string> = {
+  open: "Open",
+  in_progress: "In Progress",
+  current: "Current",
+  failed_validation: "Failed Validation",
+  escalated: "Escalated",
+};
+
 function todayStr(): string {
   return new Date().toISOString().split("T")[0];
 }
 
-/**
- * Calculate Next Due by adding the frequency's days to a given base date string (YYYY-MM-DD).
- * Uses local calendar arithmetic so the date doesn't shift due to UTC offset.
- */
 function calcNextDueFrom(frequency: MonitoringFrequency, baseDateStr: string): string {
   const days = FREQUENCY_DAYS[frequency];
   const [y, m, d] = baseDateStr.split("-").map(Number);
@@ -86,20 +124,11 @@ function toDateInputValue(ts: string | null): string {
   return s ?? "";
 }
 
-/**
- * An item is overdue if its nextDue date is strictly before today.
- * Status does not matter — if the date passed, the task needs redoing.
- */
 function isOverdue(item: MonitoringItem): boolean {
   if (!item.nextDue) return false;
   return toDateInputValue(item.nextDue) < todayStr();
 }
 
-/**
- * An item is due soon if nextDue is today through 7 days from now.
- * Includes 'current' items — monitoring tasks are recurring, so even a
- * completed item whose next cycle is approaching should appear here.
- */
 function isDueSoon(item: MonitoringItem): boolean {
   if (!item.nextDue) return false;
   const due = toDateInputValue(item.nextDue);
@@ -117,6 +146,283 @@ function makeHeaders(orgId: string) {
   };
 }
 
+/** Renders a multi-line text block (numbered or bulleted) */
+function ProcedureText({ text }: { text: string }) {
+  const lines = text.split("\n").filter((l) => l.trim());
+  return (
+    <div className="space-y-1.5 text-sm text-foreground leading-relaxed">
+      {lines.map((line, i) => (
+        <div key={i} className={cn("flex gap-2", line.trim().startsWith("•") ? "items-start" : "")}>
+          <span className={cn("shrink-0", line.trim().startsWith("•") ? "text-primary mt-0.5" : "")}>
+            {line.trim().startsWith("•") ? "" : ""}
+          </span>
+          <span>{line}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Expandable workbook panel shown below a monitoring row */
+function WorkbookPanel({
+  item,
+  orgId,
+  poams,
+  isAssessor,
+  onUpdate,
+}: {
+  item: MonitoringItem;
+  orgId: string;
+  poams: Poam[];
+  isAssessor: boolean;
+  onUpdate: (patch: Partial<MonitoringItem>) => void;
+}) {
+  const [reviewerNotes, setReviewerNotes] = useState(item.reviewerNotes ?? "");
+  const [escalationNotes, setEscalationNotes] = useState(item.escalationNotes ?? "");
+
+  // Sync local state when item changes
+  useEffect(() => { setReviewerNotes(item.reviewerNotes ?? ""); }, [item.reviewerNotes]);
+  useEffect(() => { setEscalationNotes(item.escalationNotes ?? ""); }, [item.escalationNotes]);
+
+  const valStatusColor: Record<ValidationStatus, string> = {
+    pass: "bg-green-100 text-green-700 border-green-300 dark:bg-green-950/30 dark:text-green-400",
+    fail: "bg-red-100 text-red-700 border-red-300 dark:bg-red-950/30 dark:text-red-400",
+    pass_with_exception: "bg-yellow-100 text-yellow-700 border-yellow-300 dark:bg-yellow-950/30 dark:text-yellow-400",
+  };
+
+  const valStatusIcon: Record<ValidationStatus, React.ReactNode> = {
+    pass: <ShieldCheck className="h-3.5 w-3.5" />,
+    fail: <ShieldX className="h-3.5 w-3.5" />,
+    pass_with_exception: <TriangleAlert className="h-3.5 w-3.5" />,
+  };
+
+  const hasGuidance = item.operatingProcedure || item.testProcedure || item.evidenceToRetain;
+
+  return (
+    <div className="bg-muted/30 border-t border-border px-4 py-4 space-y-0">
+      <Tabs defaultValue="procedure">
+        <TabsList className="mb-4 h-8">
+          <TabsTrigger value="procedure" className="text-xs gap-1.5 h-7">
+            <BookOpen className="h-3.5 w-3.5" />
+            Operating Procedure
+          </TabsTrigger>
+          <TabsTrigger value="test" className="text-xs gap-1.5 h-7">
+            <FlaskConical className="h-3.5 w-3.5" />
+            Test Procedure
+          </TabsTrigger>
+          <TabsTrigger value="evidence" className="text-xs gap-1.5 h-7">
+            <FileText className="h-3.5 w-3.5" />
+            Evidence to Retain
+          </TabsTrigger>
+          <TabsTrigger value="validation" className="text-xs gap-1.5 h-7">
+            <ShieldCheck className="h-3.5 w-3.5" />
+            Validation & Review
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Operating Procedure */}
+        <TabsContent value="procedure" className="mt-0">
+          {hasGuidance && item.operatingProcedure ? (
+            <div className="rounded-lg border bg-background p-4">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                Step-by-Step Operating Procedure
+              </h3>
+              <ProcedureText text={item.operatingProcedure} />
+            </div>
+          ) : (
+            <div className="rounded-lg border bg-muted/40 p-6 text-center text-muted-foreground text-sm">
+              No operating procedure defined for this task.
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Test Procedure */}
+        <TabsContent value="test" className="mt-0">
+          {hasGuidance && item.testProcedure ? (
+            <div className="rounded-lg border bg-background p-4">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                Validation / Test Procedure
+              </h3>
+              <ProcedureText text={item.testProcedure} />
+            </div>
+          ) : (
+            <div className="rounded-lg border bg-muted/40 p-6 text-center text-muted-foreground text-sm">
+              No test procedure defined for this task.
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Evidence to Retain */}
+        <TabsContent value="evidence" className="mt-0">
+          {hasGuidance && item.evidenceToRetain ? (
+            <div className="rounded-lg border bg-background p-4">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                Required Evidence to Retain
+              </h3>
+              <ProcedureText text={item.evidenceToRetain} />
+            </div>
+          ) : (
+            <div className="rounded-lg border bg-muted/40 p-6 text-center text-muted-foreground text-sm">
+              No evidence requirements defined for this task.
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Validation & Review */}
+        <TabsContent value="validation" className="mt-0">
+          <div className="rounded-lg border bg-background p-4 space-y-5">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Validation & Review Record
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Validation Result */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Validation Result</label>
+                {isAssessor ? (
+                  <div className={cn(
+                    "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-xs font-medium",
+                    item.validationStatus ? valStatusColor[item.validationStatus] : "text-muted-foreground"
+                  )}>
+                    {item.validationStatus && valStatusIcon[item.validationStatus]}
+                    {item.validationStatus
+                      ? item.validationStatus === "pass_with_exception" ? "Pass with Exception"
+                        : item.validationStatus === "pass" ? "Pass" : "Fail"
+                      : "Not recorded"}
+                  </div>
+                ) : (
+                  <Select
+                    value={item.validationStatus ?? "none"}
+                    onValueChange={(v) =>
+                      onUpdate({ validationStatus: v === "none" ? null : (v as ValidationStatus) })
+                    }
+                  >
+                    <SelectTrigger className={cn(
+                      "h-8 text-xs",
+                      item.validationStatus && valStatusColor[item.validationStatus]
+                    )}>
+                      <SelectValue placeholder="Select result..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">— Not recorded —</SelectItem>
+                      <SelectItem value="pass">
+                        <span className="flex items-center gap-1.5 text-green-700">
+                          <ShieldCheck className="h-3.5 w-3.5" /> Pass
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="fail">
+                        <span className="flex items-center gap-1.5 text-red-700">
+                          <ShieldX className="h-3.5 w-3.5" /> Fail
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="pass_with_exception">
+                        <span className="flex items-center gap-1.5 text-yellow-700">
+                          <TriangleAlert className="h-3.5 w-3.5" /> Pass with Exception
+                        </span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
+              {/* Validation Date */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Validation Date</label>
+                <input
+                  type="date"
+                  className="w-full text-xs border border-input rounded-md px-2 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60 disabled:cursor-not-allowed"
+                  value={toDateInputValue(item.validationDate)}
+                  disabled={isAssessor}
+                  onChange={(e) => onUpdate({ validationDate: e.target.value || null })}
+                />
+              </div>
+
+              {/* Linked POA&M */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <Link2 className="h-3 w-3" /> Linked POA&M
+                </label>
+                {isAssessor ? (
+                  <p className="text-xs text-muted-foreground">
+                    {item.linkedPoamId
+                      ? poams.find((p) => p.id === item.linkedPoamId)?.weakness ?? item.linkedPoamId
+                      : "None"}
+                  </p>
+                ) : (
+                  <Select
+                    value={item.linkedPoamId ?? "none"}
+                    onValueChange={(v) => onUpdate({ linkedPoamId: v === "none" ? null : v })}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Link a POA&M..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">— None —</SelectItem>
+                      {poams.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          <span className="truncate max-w-[200px] block">
+                            {p.weakness.length > 50 ? p.weakness.slice(0, 50) + "…" : p.weakness}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            </div>
+
+            {/* Reviewer Notes */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Reviewer Notes</label>
+              <Textarea
+                className="text-xs min-h-[3rem] resize-none disabled:opacity-60"
+                rows={3}
+                placeholder="Document review observations, findings, and actions taken..."
+                value={reviewerNotes}
+                disabled={isAssessor}
+                onChange={(e) => setReviewerNotes(e.target.value)}
+                onBlur={() => !isAssessor && onUpdate({ reviewerNotes })}
+              />
+            </div>
+
+            {/* Escalation Notes — shown when status is failed_validation or escalated, or when there's existing content */}
+            {(item.status === "failed_validation" || item.status === "escalated" || item.escalationNotes) && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-red-600 dark:text-red-400 flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  Escalation Notes
+                  {item.validationStatus === "fail" && (
+                    <span className="text-muted-foreground font-normal ml-1">(required when validation fails)</span>
+                  )}
+                </label>
+                <Textarea
+                  className="text-xs min-h-[3rem] resize-none border-red-300 focus-visible:ring-red-400 disabled:opacity-60"
+                  rows={3}
+                  placeholder="Document escalation reason, actions required, and responsible parties..."
+                  value={escalationNotes}
+                  disabled={isAssessor}
+                  onChange={(e) => setEscalationNotes(e.target.value)}
+                  onBlur={() => !isAssessor && onUpdate({ escalationNotes })}
+                />
+              </div>
+            )}
+
+            {/* Fail-requires-POAM warning */}
+            {item.validationStatus === "fail" && !item.linkedPoamId && !isAssessor && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-400">
+                <ShieldX className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Action required:</strong> A failed validation should have a linked POA&M. Link an existing POA&M above or create a new one from the POA&M module.
+                </span>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
 export default function MonitoringTracker() {
   const { activeOrg } = useOrg();
   const { toast } = useToast();
@@ -128,6 +434,7 @@ export default function MonitoringTracker() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [controlRefFilter, setControlRefFilter] = useState("all");
   const [pendingNotes, setPendingNotes] = useState<Record<string, string>>({});
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -146,18 +453,38 @@ export default function MonitoringTracker() {
     enabled: !!activeOrg?.id,
   });
 
+  // Fetch POA&Ms for linking
+  const { data: poams = [] } = useQuery<Poam[]>({
+    queryKey: ["poams-for-monitoring", activeOrg?.id],
+    queryFn: async () => {
+      if (!activeOrg?.id) return [];
+      const r = await fetch("/api/poams?status=open&status=in_progress", {
+        headers: makeHeaders(activeOrg.id),
+      });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: !!activeOrg?.id,
+  });
+
+  // Backfill guidance for existing orgs (runs once when items load without guidance)
+  useEffect(() => {
+    if (!activeOrg?.id || items.length === 0) return;
+    const needsBackfill = items.some((i) => !i.operatingProcedure);
+    if (!needsBackfill) return;
+    fetch("/api/monitoring/backfill-guidance", {
+      method: "POST",
+      headers: makeHeaders(activeOrg.id),
+    }).then((r) => {
+      if (r.ok) queryClient.invalidateQueries({ queryKey: ["monitoring", activeOrg.id] });
+    });
+  }, [activeOrg?.id, items.length]);
+
   const updateMutation = useMutation({
     mutationFn: async ({
       id,
       ...data
-    }: {
-      id: string;
-      lastCompleted?: string | null;
-      nextDue?: string | null;
-      status?: MonitoringStatus;
-      notes?: string;
-      frequency?: MonitoringFrequency;
-    }) => {
+    }: { id: string } & Partial<MonitoringItem>) => {
       if (!activeOrg?.id) throw new Error("No org selected");
       const r = await fetch(`/api/monitoring/${id}`, {
         method: "PATCH",
@@ -183,7 +510,13 @@ export default function MonitoringTracker() {
   const filtered = useMemo(() => {
     return items.filter((item) => {
       if (freqFilter !== "all" && item.frequency !== freqFilter) return false;
-      if (statusFilter !== "all" && item.status !== statusFilter) return false;
+      if (statusFilter !== "all") {
+        if (statusFilter === "overdue") {
+          if (!isOverdue(item)) return false;
+        } else {
+          if (item.status !== statusFilter) return false;
+        }
+      }
       if (controlRefFilter !== "all" && item.controlRef !== controlRefFilter) return false;
       if (search) {
         const q = search.toLowerCase();
@@ -197,13 +530,22 @@ export default function MonitoringTracker() {
 
   const overdueCount = items.filter(isOverdue).length;
   const dueSoonCount = items.filter((i) => !isOverdue(i) && isDueSoon(i)).length;
-  // Current = status 'current' AND not overdue (overdue items show as "Overdue", not "Current")
   const currentCount = items.filter((i) => i.status === "current" && !isOverdue(i)).length;
+  const failedCount = items.filter((i) => i.status === "failed_validation").length;
 
   // Checkbox helpers
   const filteredIds = filtered.map((i) => i.id);
   const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id));
   const someSelected = filteredIds.some((id) => selectedIds.has(id));
+
+  function toggleExpand(id: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   function toggleSelectAll() {
     if (allSelected) {
@@ -230,10 +572,6 @@ export default function MonitoringTracker() {
     });
   }
 
-  /**
-   * Frequency change handler for a single row.
-   * Recalculates nextDue from lastCompleted (or today if none).
-   */
   function handleFrequencyChange(item: MonitoringItem, newFreq: MonitoringFrequency) {
     const baseDate = item.lastCompleted
       ? toDateInputValue(item.lastCompleted)
@@ -243,18 +581,12 @@ export default function MonitoringTracker() {
       { id: item.id, frequency: newFreq, nextDue },
       {
         onSuccess: () => {
-          toast({
-            title: "Frequency updated",
-            description: "Frequency updated and next due recalculated",
-          });
+          toast({ title: "Frequency updated", description: "Next due recalculated" });
         },
       }
     );
   }
 
-  /**
-   * Bulk frequency change — applies to all selected rows.
-   */
   async function handleBulkFrequencyChange() {
     if (!bulkFreq || selectedIds.size === 0 || !activeOrg?.id) return;
     const targets = items.filter((i) => selectedIds.has(i.id));
@@ -282,16 +614,9 @@ export default function MonitoringTracker() {
     });
   }
 
-  /**
-   * Status change handler.
-   */
   function handleStatusChange(item: MonitoringItem, newStatus: MonitoringStatus) {
     const today = todayStr();
-    const patch: {
-      status: MonitoringStatus;
-      lastCompleted?: string | null;
-      nextDue?: string | null;
-    } = { status: newStatus };
+    const patch: Partial<MonitoringItem> & { id: string } = { id: item.id, status: newStatus };
 
     if (newStatus === "current") {
       const baseDate = item.lastCompleted
@@ -301,7 +626,7 @@ export default function MonitoringTracker() {
       patch.nextDue = calcNextDueFrom(item.frequency, baseDate);
     }
 
-    updateMutation.mutate({ id: item.id, ...patch });
+    updateMutation.mutate(patch);
   }
 
   function handleLastCompletedChange(item: MonitoringItem, value: string) {
@@ -341,7 +666,7 @@ export default function MonitoringTracker() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-4 pb-4 flex items-center gap-3">
             <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-red-100 dark:bg-red-950/30 shrink-0">
@@ -375,6 +700,26 @@ export default function MonitoringTracker() {
             </div>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="pt-4 pb-4 flex items-center gap-3">
+            <div className={cn(
+              "flex items-center justify-center w-9 h-9 rounded-lg shrink-0",
+              failedCount > 0 ? "bg-orange-100 dark:bg-orange-950/30" : "bg-muted"
+            )}>
+              <ShieldX className={cn(
+                "h-5 w-5",
+                failedCount > 0 ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground"
+              )} />
+            </div>
+            <div>
+              <p className={cn(
+                "text-2xl font-bold",
+                failedCount > 0 ? "text-orange-700 dark:text-orange-400" : "text-muted-foreground"
+              )}>{failedCount}</p>
+              <p className="text-xs text-muted-foreground">Failed Validation</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
@@ -403,14 +748,17 @@ export default function MonitoringTracker() {
             </Select>
 
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-36">
+              <SelectTrigger className="w-40">
                 <SelectValue placeholder="All Statuses" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="overdue">Overdue</SelectItem>
                 <SelectItem value="open">Open</SelectItem>
                 <SelectItem value="in_progress">In Progress</SelectItem>
                 <SelectItem value="current">Current</SelectItem>
+                <SelectItem value="failed_validation">Failed Validation</SelectItem>
+                <SelectItem value="escalated">Escalated</SelectItem>
               </SelectContent>
             </Select>
 
@@ -443,7 +791,7 @@ export default function MonitoringTracker() {
             </span>
           </div>
 
-          {/* Bulk action toolbar — shown when rows are selected (write-only, hidden for assessors) */}
+          {/* Bulk action toolbar */}
           {!isAssessor && someSelected && selectedCount > 0 && (
             <div className="mt-3 flex items-center gap-3 p-3 bg-muted/60 rounded-lg border border-border">
               <RefreshCw className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -463,11 +811,7 @@ export default function MonitoringTracker() {
                   <SelectItem value="annually">Annually</SelectItem>
                 </SelectContent>
               </Select>
-              <Button
-                size="sm"
-                disabled={!bulkFreq}
-                onClick={handleBulkFrequencyChange}
-              >
+              <Button size="sm" disabled={!bulkFreq} onClick={handleBulkFrequencyChange}>
                 Apply
               </Button>
               <Button
@@ -482,9 +826,9 @@ export default function MonitoringTracker() {
           )}
         </CardContent>
 
-        <CardContent className="pt-4 overflow-x-auto">
+        <CardContent className="pt-4 overflow-x-auto p-0">
           {isLoading ? (
-            <div className="space-y-2">
+            <div className="space-y-2 p-4">
               {[...Array(6)].map((_, i) => (
                 <div key={i} className="h-12 animate-pulse bg-muted rounded" />
               ))}
@@ -493,7 +837,7 @@ export default function MonitoringTracker() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10">
+                  <TableHead className="w-8 pl-4">
                     <Checkbox
                       checked={allSelected}
                       onCheckedChange={toggleSelectAll}
@@ -501,20 +845,21 @@ export default function MonitoringTracker() {
                       className={someSelected && !allSelected ? "opacity-50" : ""}
                     />
                   </TableHead>
+                  <TableHead className="w-8" />
                   <TableHead className="w-32">Frequency</TableHead>
-                  <TableHead className="w-48">Task</TableHead>
+                  <TableHead className="w-52">Task</TableHead>
                   <TableHead className="w-24">Control ID</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead className="w-36">Last Completed</TableHead>
                   <TableHead className="w-36">Next Due</TableHead>
-                  <TableHead className="w-36">Status</TableHead>
-                  <TableHead className="w-52">Notes</TableHead>
+                  <TableHead className="w-40">Status</TableHead>
+                  <TableHead className="w-48 pr-4">Notes</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center text-muted-foreground py-10">
+                    <TableCell colSpan={10} className="text-center text-muted-foreground py-10">
                       No monitoring items match the current filters.
                     </TableCell>
                   </TableRow>
@@ -523,159 +868,223 @@ export default function MonitoringTracker() {
                     const overdue = isOverdue(item);
                     const dueSoon = !overdue && isDueSoon(item);
                     const isSelected = selectedIds.has(item.id);
+                    const isExpanded = expandedIds.has(item.id);
+                    const hasFailed = item.status === "failed_validation";
+                    const isEscalated = item.status === "escalated";
+
                     return (
-                      <TableRow
-                        key={item.id}
-                        className={cn(
-                          overdue && "bg-red-50/60 dark:bg-red-950/15",
-                          !overdue && dueSoon && "bg-yellow-50/50 dark:bg-yellow-950/10",
-                          isSelected && "bg-primary/5 dark:bg-primary/10"
-                        )}
-                      >
-                        {/* Checkbox */}
-                        <TableCell>
-                          <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={() => toggleSelectOne(item.id)}
-                            aria-label={`Select ${item.task}`}
-                          />
-                        </TableCell>
+                      <>
+                        <TableRow
+                          key={item.id}
+                          className={cn(
+                            overdue && "bg-red-50/60 dark:bg-red-950/15",
+                            !overdue && dueSoon && "bg-yellow-50/50 dark:bg-yellow-950/10",
+                            hasFailed && "bg-orange-50/60 dark:bg-orange-950/15",
+                            isEscalated && "bg-purple-50/60 dark:bg-purple-950/15",
+                            isSelected && "bg-primary/5 dark:bg-primary/10",
+                            isExpanded && "border-b-0"
+                          )}
+                        >
+                          {/* Checkbox */}
+                          <TableCell className="pl-4">
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleSelectOne(item.id)}
+                              aria-label={`Select ${item.task}`}
+                            />
+                          </TableCell>
 
-                        {/* Frequency — inline editable dropdown */}
-                        <TableCell>
-                          <Select
-                            value={item.frequency}
-                            onValueChange={(v) => handleFrequencyChange(item, v as MonitoringFrequency)}
-                            disabled={isAssessor}
-                          >
-                            <SelectTrigger className="h-7 w-28 border-0 shadow-none p-0 focus:ring-0 bg-transparent hover:bg-muted/60 rounded px-1.5">
-                              <Badge className={cn("text-[11px] font-medium cursor-pointer", FREQUENCY_COLOR[item.frequency])}>
-                                {FREQUENCY_LABEL[item.frequency]}
-                              </Badge>
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="daily">
-                                <span className="flex items-center gap-2">
-                                  <span className={cn("inline-block px-1.5 py-0.5 rounded text-[11px] font-medium", FREQUENCY_COLOR["daily"])}>Daily</span>
-                                </span>
-                              </SelectItem>
-                              <SelectItem value="weekly">
-                                <span className="flex items-center gap-2">
-                                  <span className={cn("inline-block px-1.5 py-0.5 rounded text-[11px] font-medium", FREQUENCY_COLOR["weekly"])}>Weekly</span>
-                                </span>
-                              </SelectItem>
-                              <SelectItem value="monthly">
-                                <span className="flex items-center gap-2">
-                                  <span className={cn("inline-block px-1.5 py-0.5 rounded text-[11px] font-medium", FREQUENCY_COLOR["monthly"])}>Monthly</span>
-                                </span>
-                              </SelectItem>
-                              <SelectItem value="quarterly">
-                                <span className="flex items-center gap-2">
-                                  <span className={cn("inline-block px-1.5 py-0.5 rounded text-[11px] font-medium", FREQUENCY_COLOR["quarterly"])}>Quarterly</span>
-                                </span>
-                              </SelectItem>
-                              <SelectItem value="annually">
-                                <span className="flex items-center gap-2">
-                                  <span className={cn("inline-block px-1.5 py-0.5 rounded text-[11px] font-medium", FREQUENCY_COLOR["annually"])}>Annually</span>
-                                </span>
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
+                          {/* Expand toggle */}
+                          <TableCell>
+                            <button
+                              onClick={() => toggleExpand(item.id)}
+                              className="flex items-center justify-center w-6 h-6 rounded hover:bg-muted transition-colors"
+                              title={isExpanded ? "Collapse workbook" : "Open workbook"}
+                            >
+                              {isExpanded
+                                ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                : <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                              }
+                            </button>
+                          </TableCell>
 
-                        {/* Task */}
-                        <TableCell className="font-medium text-sm">
-                          <div className="flex items-center gap-1.5">
-                            {item.task}
-                            {overdue && (
-                              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full leading-none">
-                                <AlertTriangle className="h-2.5 w-2.5" />
-                                Overdue
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
+                          {/* Frequency */}
+                          <TableCell>
+                            <Select
+                              value={item.frequency}
+                              onValueChange={(v) => handleFrequencyChange(item, v as MonitoringFrequency)}
+                              disabled={isAssessor}
+                            >
+                              <SelectTrigger className="h-7 w-28 border-0 shadow-none p-0 focus:ring-0 bg-transparent hover:bg-muted/60 rounded px-1.5">
+                                <Badge className={cn("text-[11px] font-medium cursor-pointer", FREQUENCY_COLOR[item.frequency])}>
+                                  {FREQUENCY_LABEL[item.frequency]}
+                                </Badge>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(["daily", "weekly", "monthly", "quarterly", "annually"] as MonitoringFrequency[]).map((f) => (
+                                  <SelectItem key={f} value={f}>
+                                    <span className={cn("inline-block px-1.5 py-0.5 rounded text-[11px] font-medium", FREQUENCY_COLOR[f])}>
+                                      {FREQUENCY_LABEL[f]}
+                                    </span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
 
-                        {/* Control ID */}
-                        <TableCell>
-                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
-                            {item.controlRef}
-                          </code>
-                        </TableCell>
+                          {/* Task */}
+                          <TableCell className="font-medium text-sm">
+                            <div className="flex flex-col gap-0.5">
+                              <span>{item.task}</span>
+                              <div className="flex items-center gap-1 flex-wrap">
+                                {overdue && (
+                                  <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full leading-none">
+                                    <AlertTriangle className="h-2.5 w-2.5" />
+                                    Overdue
+                                  </span>
+                                )}
+                                {hasFailed && (
+                                  <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded-full leading-none">
+                                    <ShieldX className="h-2.5 w-2.5" />
+                                    Failed
+                                  </span>
+                                )}
+                                {isEscalated && (
+                                  <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded-full leading-none">
+                                    <TriangleAlert className="h-2.5 w-2.5" />
+                                    Escalated
+                                  </span>
+                                )}
+                                {item.validationStatus && (
+                                  <span className={cn(
+                                    "inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none",
+                                    item.validationStatus === "pass" && "text-green-700 bg-green-100",
+                                    item.validationStatus === "fail" && "text-red-700 bg-red-100",
+                                    item.validationStatus === "pass_with_exception" && "text-yellow-700 bg-yellow-100",
+                                  )}>
+                                    {item.validationStatus === "pass" && <><ShieldCheck className="h-2.5 w-2.5" />Pass</>}
+                                    {item.validationStatus === "fail" && <><ShieldX className="h-2.5 w-2.5" />Fail</>}
+                                    {item.validationStatus === "pass_with_exception" && <><TriangleAlert className="h-2.5 w-2.5" />Exception</>}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
 
-                        {/* Description */}
-                        <TableCell className="text-sm text-muted-foreground">{item.description}</TableCell>
+                          {/* Control ID */}
+                          <TableCell>
+                            <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
+                              {item.controlRef}
+                            </code>
+                          </TableCell>
 
-                        {/* Last Completed — triggers nextDue recalculation on change */}
-                        <TableCell>
-                          <input
-                            type="date"
-                            className="w-full text-sm border border-input rounded-md px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60 disabled:cursor-not-allowed"
-                            value={toDateInputValue(item.lastCompleted)}
-                            onChange={(e) => handleLastCompletedChange(item, e.target.value)}
-                            disabled={isAssessor}
-                          />
-                        </TableCell>
+                          {/* Description */}
+                          <TableCell className="text-sm text-muted-foreground">{item.description}</TableCell>
 
-                        {/* Next Due — manual override, shown with red border if overdue */}
-                        <TableCell>
-                          <input
-                            type="date"
-                            className={cn(
-                              "w-full text-sm border border-input rounded-md px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60 disabled:cursor-not-allowed",
-                              overdue && "border-red-400 text-red-700 dark:text-red-400"
-                            )}
-                            value={toDateInputValue(item.nextDue)}
-                            onChange={(e) => handleNextDueChange(item.id, e.target.value)}
-                            disabled={isAssessor}
-                          />
-                        </TableCell>
+                          {/* Last Completed */}
+                          <TableCell>
+                            <input
+                              type="date"
+                              className="w-full text-sm border border-input rounded-md px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60 disabled:cursor-not-allowed"
+                              value={toDateInputValue(item.lastCompleted)}
+                              onChange={(e) => handleLastCompletedChange(item, e.target.value)}
+                              disabled={isAssessor}
+                            />
+                          </TableCell>
 
-                        {/* Status */}
-                        <TableCell>
-                          <Select
-                            value={item.status}
-                            onValueChange={(v) => handleStatusChange(item, v as MonitoringStatus)}
-                            disabled={isAssessor}
-                          >
-                            <SelectTrigger className={cn(
-                              "h-8 text-xs",
-                              overdue && "border-red-400 bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400",
-                              !overdue && item.status === "current" && "border-green-400 text-green-700 dark:text-green-400",
-                              !overdue && item.status === "in_progress" && "border-blue-400 text-blue-700 dark:text-blue-400"
-                            )}>
-                              {overdue ? (
-                                <span className="flex items-center gap-1 font-medium">
-                                  <AlertTriangle className="h-3 w-3 shrink-0" />
-                                  Overdue
-                                </span>
-                              ) : (
-                                <SelectValue />
+                          {/* Next Due */}
+                          <TableCell>
+                            <input
+                              type="date"
+                              className={cn(
+                                "w-full text-sm border border-input rounded-md px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60 disabled:cursor-not-allowed",
+                                overdue && "border-red-400 text-red-700 dark:text-red-400"
                               )}
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="open">Open</SelectItem>
-                              <SelectItem value="in_progress">In Progress</SelectItem>
-                              <SelectItem value="current">Current</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
+                              value={toDateInputValue(item.nextDue)}
+                              onChange={(e) => handleNextDueChange(item.id, e.target.value)}
+                              disabled={isAssessor}
+                            />
+                          </TableCell>
 
-                        {/* Notes */}
-                        <TableCell>
-                          <Textarea
-                            className="text-xs min-h-[2rem] resize-none disabled:opacity-60 disabled:cursor-not-allowed"
-                            rows={2}
-                            placeholder="Add notes..."
-                            value={pendingNotes[item.id] ?? (item.notes ?? "")}
-                            onChange={(e) =>
-                              setPendingNotes((prev) => ({ ...prev, [item.id]: e.target.value }))
-                            }
-                            onBlur={() => !isAssessor && handleNotesSave(item.id)}
-                            disabled={isAssessor}
-                          />
-                        </TableCell>
-                      </TableRow>
+                          {/* Status */}
+                          <TableCell>
+                            <Select
+                              value={item.status}
+                              onValueChange={(v) => handleStatusChange(item, v as MonitoringStatus)}
+                              disabled={isAssessor}
+                            >
+                              <SelectTrigger className={cn(
+                                "h-8 text-xs",
+                                overdue && "border-red-400 bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400",
+                                !overdue && item.status === "current" && "border-green-400 text-green-700 dark:text-green-400",
+                                !overdue && item.status === "in_progress" && "border-blue-400 text-blue-700 dark:text-blue-400",
+                                item.status === "failed_validation" && "border-orange-400 text-orange-700 dark:text-orange-400",
+                                item.status === "escalated" && "border-purple-400 text-purple-700 dark:text-purple-400",
+                              )}>
+                                {overdue ? (
+                                  <span className="flex items-center gap-1 font-medium">
+                                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                                    Overdue
+                                  </span>
+                                ) : (
+                                  <SelectValue />
+                                )}
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="open">Open</SelectItem>
+                                <SelectItem value="in_progress">In Progress</SelectItem>
+                                <SelectItem value="current">Current</SelectItem>
+                                <SelectItem value="failed_validation">
+                                  <span className="flex items-center gap-1.5 text-orange-700">
+                                    <ShieldX className="h-3.5 w-3.5" /> Failed Validation
+                                  </span>
+                                </SelectItem>
+                                <SelectItem value="escalated">
+                                  <span className="flex items-center gap-1.5 text-purple-700">
+                                    <TriangleAlert className="h-3.5 w-3.5" /> Escalated
+                                  </span>
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+
+                          {/* Notes */}
+                          <TableCell className="pr-4">
+                            <Textarea
+                              className="text-xs min-h-[2rem] resize-none disabled:opacity-60 disabled:cursor-not-allowed"
+                              rows={2}
+                              placeholder="Add notes..."
+                              value={pendingNotes[item.id] ?? (item.notes ?? "")}
+                              onChange={(e) =>
+                                setPendingNotes((prev) => ({ ...prev, [item.id]: e.target.value }))
+                              }
+                              onBlur={() => !isAssessor && handleNotesSave(item.id)}
+                              disabled={isAssessor}
+                            />
+                          </TableCell>
+                        </TableRow>
+
+                        {/* Expandable workbook panel */}
+                        {isExpanded && (
+                          <TableRow key={`${item.id}-workbook`} className={cn(
+                            overdue && "bg-red-50/40 dark:bg-red-950/10",
+                            hasFailed && "bg-orange-50/40 dark:bg-orange-950/10",
+                            isEscalated && "bg-purple-50/40 dark:bg-purple-950/10",
+                          )}>
+                            <TableCell colSpan={10} className="p-0">
+                              <WorkbookPanel
+                                item={item}
+                                orgId={activeOrg?.id ?? ""}
+                                poams={poams}
+                                isAssessor={isAssessor}
+                                onUpdate={(patch) =>
+                                  updateMutation.mutate({ id: item.id, ...patch })
+                                }
+                              />
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </>
                     );
                   })
                 )}
