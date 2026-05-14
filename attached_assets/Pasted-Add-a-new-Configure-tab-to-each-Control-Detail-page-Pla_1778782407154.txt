@@ -1,0 +1,375 @@
+Add a new “Configure” tab to each Control Detail page.
+
+Placement:
+The tab order should be:
+
+Implementation | Configure | Evidence | Tasks | POA&Ms | Monitoring | SSP
+
+The Configure tab must appear between Implementation and Evidence.
+
+Purpose:
+The Configure tab should provide detailed step-by-step implementation instructions for each CMMC control. This should guide me through exactly how to configure the control, what systems/portals to use, what settings to verify, what evidence to capture, and what tests to perform.
+
+This is not the same as the Implementation tab.
+
+Implementation tab = high-level control narrative and organization-specific implementation statement.
+
+Configure tab = practical step-by-step technical/operational instructions.
+
+1. Configure Tab Layout
+
+For each control, show these sections:
+
+A. Implementation Approach
+- Plain-English explanation of what the control requires
+- Recommended approach for a Microsoft 365 / Entra / Intune / Defender / firewall environment
+- Notes for small businesses
+- Common mistakes to avoid
+
+B. Systems / Portals Used
+Show a list of systems that may be involved.
+
+Examples:
+- Microsoft Entra Admin Center
+- Microsoft 365 Admin Center
+- Microsoft Intune Admin Center
+- Microsoft Defender Portal
+- Microsoft Purview Portal
+- SharePoint Admin Center
+- Exchange Admin Center
+- Firewall / Network Console
+- Endpoint / Device Management
+- Ticketing System
+- HR / Training System
+
+C. Step-by-Step Configuration Instructions
+Show numbered steps.
+
+Each step should include:
+- step number
+- step title
+- detailed instruction
+- system/portal
+- navigation path
+- recommended setting
+- expected result
+- screenshot/evidence reminder
+- optional notes
+
+Example:
+1. Open Microsoft Entra Admin Center
+2. Go to Identity > Users > All Users
+3. Review active accounts and confirm each account belongs to an authorized user
+4. Verify guest accounts are approved
+5. Export user list as evidence
+6. Save evidence using the naming convention
+
+D. Evidence to Capture
+List the evidence that should be captured for this control.
+
+For each evidence item include:
+- evidence title
+- evidence type
+- recommended filename
+- where to capture it
+- what must be visible
+- linked control
+- recommended status
+- review frequency
+
+E. Required Documents
+List the documents that should exist for this control.
+
+Examples:
+- policy
+- procedure
+- review log
+- checklist
+- approval record
+- access review record
+- configuration export
+- test result
+
+F. Test / Validation Steps
+Show detailed testing instructions.
+
+Each test should include:
+- test name
+- steps to perform
+- expected result
+- pass/fail criteria
+- evidence to retain
+- what to do if test fails
+
+G. Closeout Checklist
+Add a checklist for the control.
+
+Example:
+- Implementation narrative completed
+- Configuration steps completed
+- Required policy linked
+- Required procedure linked
+- Required evidence uploaded
+- Evidence approved
+- Test performed
+- Monitoring item linked if recurring
+- No open POA&M blocking readiness
+
+2. Step Completion Tracking
+
+For each organization/control, allow me to mark configuration steps as:
+- Not Started
+- In Progress
+- Complete
+- Not Applicable
+
+Track:
+- completed by
+- completed date
+- notes
+- linked evidence
+
+This must be organization-specific.
+
+The global control can have standard configuration guidance, but completion status must be per organization.
+
+3. Data Model
+
+Add models similar to:
+
+ControlConfigurationTemplate
+- id
+- control_id
+- section
+- title
+- description
+- sort_order
+- created_at
+- updated_at
+
+ControlConfigurationStep
+- id
+- control_id
+- step_number
+- title
+- instruction
+- system_or_portal
+- navigation_path
+- recommended_setting
+- expected_result
+- evidence_hint
+- sort_order
+
+OrganizationControlConfigurationProgress
+- id
+- organization_id
+- control_id
+- step_id
+- status
+- notes
+- completed_by
+- completed_at
+- linked_evidence_id
+- created_at
+- updated_at
+
+ControlEvidenceRequirement
+- id
+- control_id
+- evidence_type
+- title
+- description
+- recommended_filename
+- capture_location
+- required_visibility
+- review_frequency
+
+ControlDocumentRequirement
+- id
+- control_id
+- document_type
+- title
+- description
+- recommended_filename
+- review_frequency
+
+ControlTestProcedure
+- id
+- control_id
+- test_name
+- test_steps
+- expected_result
+- pass_fail_criteria
+- evidence_to_retain
+- sort_order
+
+4. UI Requirements
+
+The Configure tab should be clean and audit-friendly.
+
+Use cards or accordions:
+- Implementation Approach
+- Systems / Portals
+- Configuration Steps
+- Evidence to Capture
+- Required Documents
+- Test / Validation
+- Closeout Checklist
+
+Each configuration step should have:
+- checkbox/status dropdown
+- notes field
+- link evidence button
+- completion timestamp
+
+Add buttons:
+- Mark Step Complete
+- Link Evidence
+- Add Note
+- Add Custom Step
+- Edit Step
+- Reset Progress
+
+5. Customization
+
+Allow Admin or Compliance Manager to:
+- edit the default configuration guidance
+- add custom organization-specific steps
+- mark steps not applicable
+- add notes explaining why
+
+Assessor role must be read-only.
+
+6. Evidence Integration
+
+From the Configure tab, I should be able to click:
+“Upload Evidence for this Step”
+
+When uploading evidence from a configuration step:
+- auto-link to the current control
+- auto-link to the current configuration step
+- auto-fill evidence type if known
+- auto-suggest filename
+- auto-tag domain, level, control ID
+
+7. Readiness Integration
+
+The Readiness / Dashboard logic should consider configuration progress.
+
+A control should not be considered fully internally ready unless:
+- required configuration steps are complete or marked not applicable
+- required evidence exists
+- required documents exist
+- SSP narrative exists
+- testing/validation is complete where required
+
+8. Seed Initial Configure Content
+
+Seed detailed configuration guidance for at least these controls first:
+
+- AC.L1-3.1.1
+- AC.L1-3.1.2
+- AC.L1-3.1.20
+- AC.L1-3.1.22
+- IA.L1-3.5.1
+- IA.L1-3.5.2
+- SI.L1-3.14.1
+- SI.L1-3.14.2
+- AU.L2-3.3.1
+- AU.L2-3.3.5
+- AC.L2-3.1.3
+- AC.L2-3.1.5
+- AC.L2-3.1.8
+- AC.L2-3.1.9
+- AC.L2-3.1.10
+- AC.L2-3.1.11
+- SI.L2-3.14.3
+- SI.L2-3.14.6
+- RA.L2-3.11.2
+- CA.L2-3.12.3
+
+For controls not yet seeded with detailed guidance:
+- still show the Configure tab
+- show a message:
+  “No detailed configuration guidance has been added for this control yet.”
+- provide Add Configuration Guidance button for admins
+
+9. Example for AC.L1-3.1.1
+
+For AC.L1-3.1.1 — Authorized Access Control, seed something like:
+
+Implementation Approach:
+Limit access to systems and data to approved users, approved devices, and approved roles only. Use named user accounts, role-based access groups, MFA, access reviews, and documented approvals.
+
+Systems / Portals:
+- Microsoft Entra Admin Center
+- Microsoft 365 Admin Center
+- SharePoint Admin Center
+- Intune Admin Center
+- Ticketing / Approval System
+
+Configuration Steps:
+1. Review all active Entra ID users
+2. Confirm each account has a named owner
+3. Identify guest, shared, stale, and disabled accounts
+4. Review group memberships for CUI-related systems
+5. Confirm privileged accounts are assigned only to approved administrators
+6. Confirm MFA / Conditional Access applies to users
+7. Remove or disable unauthorized accounts
+8. Export user and group lists
+9. Upload access review evidence
+10. Update SSP narrative and access control procedure if needed
+
+Evidence to Capture:
+- Entra ID active user export
+- privileged role assignment export
+- group membership export
+- access review worksheet
+- screenshot of disabled/stale account review
+- approval tickets for access changes
+
+Recommended Naming:
+- AC-3.1.1_User_Access_Review_YYYY-MM-DD.xlsx
+- AC-3.1.1_Entra_User_Export_YYYY-MM-DD.csv
+- AC-3.1.1_Privileged_Role_Assignments_YYYY-MM-DD.png
+- AC-3.1.1_Access_Removal_Evidence_YYYY-MM-DD.png
+
+Test / Validation:
+1. Sample at least 10 users or all users if fewer
+2. Confirm each user has business need
+3. Confirm guest users are approved
+4. Confirm privileged accounts are approved
+5. Confirm removed users no longer have access
+6. Confirm evidence is uploaded and approved
+
+Pass Criteria:
+- all active accounts are authorized
+- no unauthorized guests
+- no stale accounts without justification
+- privileged access is approved
+- evidence is current and approved
+
+10. Acceptance Tests
+
+Test A:
+- Open AC.L1-3.1.1
+- See tab order: Implementation, Configure, Evidence, Tasks, POA&Ms, Monitoring, SSP
+- Configure tab shows detailed sections and steps
+
+Test B:
+- Mark a configuration step Complete
+- Refresh page
+- Step remains Complete with timestamp
+
+Test C:
+- Upload evidence from a configuration step
+- Evidence links to the current control and step
+
+Test D:
+- Assessor user opens Configure tab
+- Assessor can view only
+- Assessor cannot edit steps or mark complete
+
+Test E:
+- Open a control with no seeded guidance
+- Configure tab still appears with empty state and Add Guidance button

@@ -94,6 +94,69 @@ export const controlAssessmentsTable = pgTable("control_assessments", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// ── Configure Tab ──────────────────────────────────────────────────────────
+
+export const configStepStatusEnum = pgEnum("config_step_status", [
+  "not_started",
+  "in_progress",
+  "complete",
+  "not_applicable",
+]);
+
+/** Global per-control configure guidance (approach, evidence list, test procedures) */
+export const controlConfigureContentTable = pgTable("control_configure_content", {
+  id: text("id").primaryKey(),
+  controlId: text("control_id")
+    .notNull()
+    .unique()
+    .references(() => controlsTable.id, { onDelete: "cascade" }),
+  implementationApproach: text("implementation_approach"),
+  systemsUsed: text("systems_used"),        // JSON string[]
+  evidenceRequirements: text("evidence_requirements"), // JSON {title,type,filename,location,mustShow}[]
+  testProcedures: text("test_procedures"),  // JSON {name,steps,expectedResult,passCriteria}[]
+  closeoutChecklist: text("closeout_checklist"), // JSON string[]
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/** Global numbered configuration steps for a control */
+export const controlConfigStepsTable = pgTable("control_config_steps", {
+  id: text("id").primaryKey(),
+  controlId: text("control_id")
+    .notNull()
+    .references(() => controlsTable.id, { onDelete: "cascade" }),
+  stepNumber: integer("step_number").notNull(),
+  title: text("title").notNull(),
+  instruction: text("instruction").notNull(),
+  systemPortal: text("system_portal"),
+  navigationPath: text("navigation_path"),
+  recommendedSetting: text("recommended_setting"),
+  expectedResult: text("expected_result"),
+  evidenceHint: text("evidence_hint"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+/** Org-specific completion state per step */
+export const orgControlStepProgressTable = pgTable("org_control_step_progress", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").references(
+    () => organizationsTable.id,
+    { onDelete: "cascade" }
+  ),
+  stepId: text("step_id")
+    .notNull()
+    .references(() => controlConfigStepsTable.id, { onDelete: "cascade" }),
+  status: configStepStatusEnum("status").notNull().default("not_started"),
+  notes: text("notes"),
+  completedBy: text("completed_by").references(() => usersTable.id, {
+    onDelete: "set null",
+  }),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const insertControlSchema = createInsertSchema(controlsTable).omit({
   createdAt: true,
   updatedAt: true,
@@ -102,3 +165,6 @@ export const insertControlSchema = createInsertSchema(controlsTable).omit({
 export type InsertControl = z.infer<typeof insertControlSchema>;
 export type Control = typeof controlsTable.$inferSelect;
 export type ControlAssessment = typeof controlAssessmentsTable.$inferSelect;
+export type ControlConfigureContent = typeof controlConfigureContentTable.$inferSelect;
+export type ControlConfigStep = typeof controlConfigStepsTable.$inferSelect;
+export type OrgControlStepProgress = typeof orgControlStepProgressTable.$inferSelect;

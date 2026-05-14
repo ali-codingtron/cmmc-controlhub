@@ -13,6 +13,7 @@ import {
 import { useOrg } from "@/context/OrgContext";
 import { useIsAssessor } from "@/lib/auth";
 import { EvidencePreviewModal } from "@/components/EvidencePreviewModal";
+import { ConfigureTab } from "@/components/configure/ConfigureTab";
 import { Link, useLocation } from "wouter";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -1438,6 +1439,7 @@ export default function ControlDetail({ id }: { id: string }) {
       <Tabs defaultValue="implementation" className="w-full">
         <TabsList>
           <TabsTrigger value="implementation">Implementation</TabsTrigger>
+          <TabsTrigger value="configure">Configure</TabsTrigger>
           <TabsTrigger value="evidence">Evidence ({evidence.length})</TabsTrigger>
           <TabsTrigger value="tasks">Tasks ({tasks.length})</TabsTrigger>
           <TabsTrigger value="poams">POA&Ms ({poams.length})</TabsTrigger>
@@ -1540,6 +1542,18 @@ export default function ControlDetail({ id }: { id: string }) {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ── Configure Tab ── */}
+        <TabsContent value="configure" className="mt-6">
+          {activeOrg?.id && (
+            <ConfigureTab
+              controlDbId={(control as any).id}
+              controlId={(control as any).controlId}
+              orgId={activeOrg.id}
+              isAssessor={isAssessor}
+            />
+          )}
         </TabsContent>
 
         {/* ── Evidence Tab ── */}

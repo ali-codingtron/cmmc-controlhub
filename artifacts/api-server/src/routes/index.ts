@@ -16,6 +16,7 @@ import monitoringRouter from "./monitoring";
 import sspRouter from "./ssp";
 import reportsRouter from "./reports";
 import adminRouter from "./admin";
+import configureRouter from "./configure";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use(monitoringRouter);
 router.use(sspRouter);
 router.use(reportsRouter);
 router.use(adminRouter);
+router.use(configureRouter);
 
 export default router;
