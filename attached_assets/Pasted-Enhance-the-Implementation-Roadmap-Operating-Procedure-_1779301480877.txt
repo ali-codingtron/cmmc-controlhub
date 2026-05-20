@@ -1,0 +1,512 @@
+Enhance the Implementation Roadmap Operating Procedure section.
+
+Current issue:
+The Operating Procedure steps are too high-level. They say things like “Enroll all Windows devices in Microsoft Intune” or “Deploy the Microsoft Security Baseline,” but they do not tell me exactly where to go, what to configure, what screenshots/evidence to capture, what the expected result is, or what to do if the step fails.
+
+Goal:
+Each Operating Procedure should become a detailed implementation playbook that walks the user through exactly how to perform the action.
+
+This should be manual guidance only. Do not build Microsoft 365 / Intune / Defender API integrations yet.
+
+1. Replace Simple Bullet Steps With Detailed Procedure Steps
+
+Each operating procedure step should include:
+
+- Step number
+- Step title
+- Purpose
+- System / portal
+- Exact navigation path
+- Detailed action instructions
+- Recommended setting / expected configuration
+- Expected result
+- Evidence to capture
+- Suggested evidence filename
+- Related controls
+- Owner role
+- Completion status
+- Notes
+- Troubleshooting / if this fails
+- Link evidence button
+
+2. Use Expandable Step Cards
+
+Instead of showing only one-line bullets, show each step as an expandable card.
+
+Collapsed view:
+- Step number
+- Step title
+- Status
+- Related portal
+- Evidence required indicator
+
+Expanded view:
+- Purpose
+- Detailed instructions
+- Navigation path
+- Expected result
+- Evidence to capture
+- Suggested filename
+- Related controls
+- Notes
+- Mark complete
+- Upload/link evidence
+
+3. Add Step Status Tracking
+
+Each step should have organization-specific progress:
+
+Statuses:
+- Not Started
+- In Progress
+- Complete
+- Blocked
+- Not Applicable
+
+Track:
+- completed by
+- completed date
+- notes
+- linked evidence
+
+4. Add Evidence Capture Guidance Per Step
+
+For each step, show exactly what evidence should be captured.
+
+Evidence guidance should include:
+- evidence type
+- screenshot/export/report required
+- what must be visible
+- recommended filename
+- where the evidence should be linked
+- suggested evidence status
+
+Example filename format:
+CONTROLID_ActionName_YYYY-MM-DD.ext
+
+Example:
+CM-3.4.1_Intune_Device_Compliance_Policy_2026-05-10.png
+
+5. Add “If This Fails” Guidance
+
+Each step should include instructions for exceptions or failures.
+
+Examples:
+- create POA&M
+- create remediation ticket
+- mark step Blocked
+- document exception
+- attach compensating control evidence
+- escalate to compliance manager
+
+6. Add Procedure Editor for Admins
+
+Admin and Compliance Manager users should be able to:
+- edit procedure steps
+- add custom steps
+- reorder steps
+- mark steps required or optional
+- add evidence requirements
+- add troubleshooting notes
+
+Assessor users must be read-only.
+
+7. Seed More Detailed Procedure for “Configure Endpoint Compliance and Device Management”
+
+Replace the current high-level steps with detailed steps like this:
+
+Action:
+Configure Endpoint Compliance and Device Management
+
+Category:
+Endpoint Security
+
+Step 1: Confirm Endpoint Scope
+
+Purpose:
+Identify which devices are in scope for CMMC and CUI access.
+
+System / Portal:
+Control HUB, Intune Admin Center, asset inventory
+
+Navigation:
+Control HUB > Assessment Scope / Assets
+Intune Admin Center > Devices > All Devices
+
+Instructions:
+- Review the organization’s in-scope asset inventory.
+- Identify all Windows endpoints that store, process, or access CUI.
+- Confirm each device has an assigned owner.
+- Confirm each device appears in Intune or the approved management platform.
+- Identify unmanaged, stale, duplicate, or unknown devices.
+- Document any devices that require remediation or exclusion.
+
+Expected Result:
+All CUI-scoped devices are identified, owned, and listed in the asset inventory.
+
+Evidence to Capture:
+- device inventory export
+- screenshot of Intune All Devices filtered to in-scope devices
+- asset inventory showing assigned owner and scope
+
+Suggested Filename:
+CM-3.4.3_Device_Inventory_YYYY-MM-DD.xlsx
+
+Related Controls:
+- CM.L2-3.4.3
+- IA.L1-3.5.1
+- AC.L2-3.1.18
+
+If This Fails:
+Create a POA&M or remediation task for unmanaged or unknown devices.
+
+Step 2: Enroll Devices in Intune
+
+Purpose:
+Ensure in-scope endpoints are centrally managed.
+
+System / Portal:
+Microsoft Intune Admin Center
+
+Navigation:
+Intune Admin Center > Devices > Windows > Windows enrollment
+
+Instructions:
+- Confirm enrollment method is configured.
+- Confirm users or device groups are assigned to enrollment policies.
+- Verify existing devices are enrolled.
+- Identify devices not enrolled.
+- For missing devices, initiate enrollment or document approved exception.
+- Confirm enrollment status is current.
+
+Expected Result:
+All in-scope Windows endpoints are enrolled or have documented exceptions.
+
+Evidence to Capture:
+- enrollment policy screenshot
+- enrolled device list
+- exception list if applicable
+
+Suggested Filename:
+CM-3.4.1_Intune_Enrollment_Status_YYYY-MM-DD.png
+
+Related Controls:
+- CM.L2-3.4.1
+- CM.L2-3.4.2
+- AC.L2-3.1.18
+
+Step 3: Create Device Compliance Policy
+
+Purpose:
+Require managed devices to meet baseline security requirements.
+
+System / Portal:
+Microsoft Intune Admin Center
+
+Navigation:
+Devices > Compliance policies > Policies > Create Policy
+
+Instructions:
+- Create or review Windows compliance policy.
+- Require BitLocker or device encryption.
+- Require active antivirus.
+- Require firewall enabled.
+- Require OS version or patch compliance.
+- Require TPM where applicable.
+- Assign policy to in-scope device group.
+- Save policy and confirm assignment.
+
+Recommended Settings:
+- BitLocker required
+- Antivirus required
+- Firewall required
+- Secure boot/TPM preferred where supported
+- Mark devices noncompliant if policy evaluation fails
+
+Expected Result:
+Compliance policy exists and is assigned to in-scope devices.
+
+Evidence to Capture:
+- policy settings screenshot
+- assignment screenshot
+- compliance summary screenshot
+
+Suggested Filename:
+CM-3.4.2_Device_Compliance_Policy_YYYY-MM-DD.png
+
+Related Controls:
+- CM.L2-3.4.2
+- SI.L1-3.14.2
+- SI.L1-3.14.5
+- AC.L2-3.1.18
+
+Step 4: Deploy Security Baseline
+
+Purpose:
+Apply standardized secure configuration to endpoints.
+
+System / Portal:
+Microsoft Intune Admin Center
+
+Navigation:
+Endpoint Security > Security baselines
+
+Instructions:
+- Review available Microsoft security baseline.
+- Create or verify baseline profile.
+- Configure settings according to organizational baseline.
+- Assign baseline to in-scope Windows devices.
+- Review profile assignment and deployment status.
+- Document deviations or exceptions.
+
+Expected Result:
+Security baseline is assigned and reporting deployment status.
+
+Evidence to Capture:
+- security baseline configuration screenshot
+- assignment screenshot
+- deployment status screenshot
+- exception list if applicable
+
+Suggested Filename:
+CM-3.4.1_Security_Baseline_Assignment_YYYY-MM-DD.png
+
+Related Controls:
+- CM.L2-3.4.1
+- CM.L2-3.4.2
+- CM.L2-3.4.6
+- CM.L2-3.4.7
+
+Step 5: Enable Microsoft Defender Protection
+
+Purpose:
+Verify endpoints have anti-malware protection enabled and reporting.
+
+System / Portal:
+Microsoft Defender Portal / Intune Admin Center
+
+Navigation:
+Defender Portal > Assets > Devices
+Intune > Endpoint Security > Antivirus
+
+Instructions:
+- Confirm Defender Antivirus is active.
+- Confirm real-time protection is enabled.
+- Confirm cloud-delivered protection is enabled.
+- Confirm signature updates are current.
+- Review unhealthy or inactive devices.
+- Create remediation tasks for gaps.
+
+Expected Result:
+All in-scope endpoints show active malware protection.
+
+Evidence to Capture:
+- Defender device security status
+- antivirus policy screenshot
+- unhealthy device report if applicable
+
+Suggested Filename:
+SI-3.14.2_Defender_Antivirus_Status_YYYY-MM-DD.png
+
+Related Controls:
+- SI.L1-3.14.2
+- SI.L1-3.14.4
+- SI.L1-3.14.5
+- SI.L2-3.14.6
+
+Step 6: Configure Automatic Updates
+
+Purpose:
+Ensure endpoints receive security updates on schedule.
+
+System / Portal:
+Microsoft Intune Admin Center
+
+Navigation:
+Devices > Windows > Update rings
+
+Instructions:
+- Review or create Windows update ring.
+- Confirm security updates are applied automatically.
+- Configure restart behavior.
+- Define deadlines or grace periods.
+- Assign update ring to in-scope devices.
+- Review update compliance.
+
+Expected Result:
+Security update policy exists and is assigned.
+
+Evidence to Capture:
+- update ring settings
+- assignment screenshot
+- update compliance report
+
+Suggested Filename:
+SI-3.14.1_Update_Ring_Compliance_YYYY-MM-DD.png
+
+Related Controls:
+- SI.L1-3.14.1
+- RA.L2-3.11.2
+- RA.L2-3.11.3
+
+Step 7: Enable Disk Encryption
+
+Purpose:
+Protect CUI at rest on endpoints.
+
+System / Portal:
+Microsoft Intune Admin Center
+
+Navigation:
+Endpoint Security > Disk encryption
+
+Instructions:
+- Review BitLocker policy.
+- Require encryption for fixed drives.
+- Confirm recovery keys are escrowed.
+- Assign policy to in-scope devices.
+- Review encryption status.
+- Remediate devices that are not encrypted.
+
+Expected Result:
+All in-scope Windows devices are encrypted or have approved exceptions.
+
+Evidence to Capture:
+- BitLocker policy screenshot
+- device encryption status report
+- exception/remediation list
+
+Suggested Filename:
+SC-3.13.16_BitLocker_Encryption_Status_YYYY-MM-DD.png
+
+Related Controls:
+- SC.L2-3.13.16
+- MP.L2-3.8.1
+- AC.L2-3.1.19
+
+Step 8: Review Noncompliant Devices
+
+Purpose:
+Ensure devices that do not meet requirements cannot access CUI without remediation.
+
+System / Portal:
+Microsoft Intune Admin Center
+
+Navigation:
+Devices > Monitor > Noncompliant devices
+
+Instructions:
+- Filter for noncompliant, unknown, stale, or error devices.
+- Review each noncompliant device.
+- Determine whether the device has CUI access.
+- Create remediation ticket or document approved exception.
+- Confirm Conditional Access or access restriction applies where required.
+
+Expected Result:
+All noncompliant devices are remediated, blocked, or documented as exceptions.
+
+Evidence to Capture:
+- noncompliant device report
+- remediation tickets
+- Conditional Access restriction screenshot
+- exception approval
+
+Suggested Filename:
+CM-3.4.2_Noncompliant_Device_Review_YYYY-MM-DD.xlsx
+
+Related Controls:
+- CM.L2-3.4.2
+- AC.L2-3.1.18
+- CA.L2-3.12.3
+
+Step 9: Export Compliance Evidence
+
+Purpose:
+Create audit-ready evidence showing endpoint compliance.
+
+System / Portal:
+Microsoft Intune Admin Center
+
+Navigation:
+Devices > Compliance > Reports
+
+Instructions:
+- Export device compliance report.
+- Capture screenshots of compliance summary.
+- Save evidence using naming convention.
+- Upload evidence to Control HUB.
+- Link evidence to all mapped controls.
+
+Expected Result:
+Approved evidence exists in Control HUB for endpoint compliance.
+
+Evidence to Capture:
+- compliance report
+- screenshots of compliance dashboard
+- remediation/exception notes
+
+Suggested Filename:
+CM-Endpoint_Compliance_Report_YYYY-MM-DD.xlsx
+
+Related Controls:
+- CM.L2-3.4.1
+- CM.L2-3.4.2
+- SI.L1-3.14.1
+- SI.L1-3.14.2
+- CA.L2-3.12.3
+
+Step 10: Document Baseline Approval
+
+Purpose:
+Ensure the endpoint baseline is documented, approved, and reviewable.
+
+System / Portal:
+Control HUB / Documentation
+
+Instructions:
+- Upload or create endpoint baseline procedure.
+- Link it to applicable controls.
+- Confirm owner and review date.
+- Add approval evidence if applicable.
+- Update SSP narrative if implementation changed.
+
+Expected Result:
+Endpoint baseline documentation is approved and linked to controls.
+
+Evidence to Capture:
+- endpoint baseline procedure
+- approval record
+- SSP update note
+- change log
+
+Suggested Filename:
+CM-Endpoint_Baseline_Approval_YYYY-MM-DD.docx
+
+Related Controls:
+- CM.L2-3.4.1
+- CM.L2-3.4.2
+- CA.L2-3.12.4
+
+8. Apply This Same Detail Pattern to All Roadmap Actions
+
+Every roadmap action should have detailed steps with:
+- purpose
+- system/portal
+- navigation
+- instructions
+- expected result
+- evidence to capture
+- suggested filename
+- related controls
+- if this fails
+
+9. Acceptance Test
+
+- Open Configure Endpoint Compliance and Device Management
+- Click Procedure tab
+- Each procedure step is expandable
+- Each step has detailed guidance, not a short bullet
+- Each step shows evidence to capture and suggested filename
+- I can mark individual steps complete
+- I can upload/link evidence to a step
+- Progress updates correctly

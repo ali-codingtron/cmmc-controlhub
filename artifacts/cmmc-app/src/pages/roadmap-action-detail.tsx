@@ -2,11 +2,13 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrg } from "@/context/OrgContext";
+import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -16,6 +18,13 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   ArrowLeft,
   Target,
@@ -28,12 +37,29 @@ import {
   CheckSquare,
   ClipboardCheck,
   ChevronRight,
+  ChevronDown,
   Zap,
   AlertTriangle,
   Info,
   BookOpen,
   Upload,
   ExternalLink,
+  MapPin,
+  Cpu,
+  ClipboardList,
+  CheckCircle2,
+  Circle,
+  Clock,
+  Ban,
+  MinusCircle,
+  Trash2,
+  Pencil,
+  Plus,
+  Navigation,
+  Camera,
+  AlertCircle,
+  User,
+  ArrowRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -76,6 +102,37 @@ interface ChecklistItem {
   label: string;
   sortOrder: number;
   completed: boolean;
+}
+
+interface StepProgress {
+  id: string;
+  status: string;
+  completedBy: string | null;
+  completedAt: string | null;
+  notes: string | null;
+  updatedAt: string;
+}
+
+interface ProcedureStep {
+  id: string;
+  actionId: string;
+  stepNumber: number;
+  title: string;
+  purpose: string;
+  systemPortal: string;
+  navigationPath: string;
+  instructions: string;
+  recommendedSettings: string | null;
+  expectedResult: string;
+  evidenceToCapture: string;
+  suggestedFilename: string;
+  relatedControls: string[];
+  ownerRole: string;
+  ifThisFails: string;
+  isRequired: boolean;
+  isCustom: boolean;
+  sortOrder: number;
+  progress: StepProgress | null;
 }
 
 interface Progress {
@@ -145,6 +202,50 @@ const RESULT_OPTIONS = [
   { value: "needs_follow_up", label: "Needs Follow-Up" },
 ];
 
+const STEP_STATUS_OPTIONS = [
+  { value: "not_started", label: "Not Started" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "complete", label: "Complete" },
+  { value: "blocked", label: "Blocked" },
+  { value: "not_applicable", label: "N/A" },
+];
+
+const STEP_STATUS_CONFIG: Record<
+  string,
+  { label: string; color: string; bg: string; Icon: React.ElementType }
+> = {
+  not_started: {
+    label: "Not Started",
+    color: "text-slate-400",
+    bg: "bg-slate-500/15 border-slate-500/30",
+    Icon: Circle,
+  },
+  in_progress: {
+    label: "In Progress",
+    color: "text-blue-400",
+    bg: "bg-blue-500/15 border-blue-500/30",
+    Icon: Clock,
+  },
+  complete: {
+    label: "Complete",
+    color: "text-emerald-400",
+    bg: "bg-emerald-500/15 border-emerald-500/30",
+    Icon: CheckCircle2,
+  },
+  blocked: {
+    label: "Blocked",
+    color: "text-red-400",
+    bg: "bg-red-500/15 border-red-500/30",
+    Icon: Ban,
+  },
+  not_applicable: {
+    label: "N/A",
+    color: "text-slate-500",
+    bg: "bg-slate-600/15 border-slate-600/30",
+    Icon: MinusCircle,
+  },
+};
+
 function StepList({ text }: { text: string }) {
   const lines = text.split("\n").filter(Boolean);
   return (
@@ -166,8 +267,798 @@ function StepList({ text }: { text: string }) {
   );
 }
 
+function DetailSection({
+  icon: Icon,
+  label,
+  children,
+  className,
+}: {
+  icon: React.ElementType;
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("space-y-1.5", className)}>
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </div>
+      <div className="text-sm text-foreground/80 leading-relaxed">{children}</div>
+    </div>
+  );
+}
+
+function MultiLineText({ text }: { text: string }) {
+  const lines = text.split("\n").filter(Boolean);
+  if (lines.length <= 1) return <span>{text}</span>;
+  return (
+    <ul className="space-y-1 mt-0.5">
+      {lines.map((line, i) => {
+        const content = line.replace(/^[-•]\s*/, "").replace(/^\d+\.\s*/, "");
+        const isBullet = /^[-•]/.test(line);
+        const isNum = /^\d+\./.test(line);
+        return (
+          <li key={i} className="flex gap-2">
+            <span className="shrink-0 text-muted-foreground mt-0.5">
+              {isBullet ? "•" : isNum ? `${i + 1}.` : "•"}
+            </span>
+            <span>{content}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+interface StepEditState {
+  title: string;
+  purpose: string;
+  systemPortal: string;
+  navigationPath: string;
+  instructions: string;
+  recommendedSettings: string;
+  expectedResult: string;
+  evidenceToCapture: string;
+  suggestedFilename: string;
+  relatedControls: string;
+  ownerRole: string;
+  ifThisFails: string;
+  isRequired: boolean;
+  sortOrder: string;
+}
+
+function emptyEditState(): StepEditState {
+  return {
+    title: "",
+    purpose: "",
+    systemPortal: "",
+    navigationPath: "",
+    instructions: "",
+    recommendedSettings: "",
+    expectedResult: "",
+    evidenceToCapture: "",
+    suggestedFilename: "",
+    relatedControls: "",
+    ownerRole: "Compliance Manager",
+    ifThisFails: "",
+    isRequired: true,
+    sortOrder: "0",
+  };
+}
+
+function stepToEditState(step: ProcedureStep): StepEditState {
+  return {
+    title: step.title,
+    purpose: step.purpose,
+    systemPortal: step.systemPortal,
+    navigationPath: step.navigationPath,
+    instructions: step.instructions,
+    recommendedSettings: step.recommendedSettings ?? "",
+    expectedResult: step.expectedResult,
+    evidenceToCapture: step.evidenceToCapture,
+    suggestedFilename: step.suggestedFilename,
+    relatedControls: step.relatedControls.join(", "),
+    ownerRole: step.ownerRole,
+    ifThisFails: step.ifThisFails,
+    isRequired: step.isRequired,
+    sortOrder: String(step.sortOrder),
+  };
+}
+
+function StepEditorDialog({
+  open,
+  onClose,
+  onSave,
+  initialState,
+  title,
+  isPending,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSave: (state: StepEditState) => void;
+  initialState: StepEditState;
+  title: string;
+  isPending: boolean;
+}) {
+  const [s, setS] = useState<StepEditState>(initialState);
+  const f = <K extends keyof StepEditState>(k: K, v: StepEditState[K]) =>
+    setS((prev) => ({ ...prev, [k]: v }));
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2 space-y-1.5">
+              <Label>Step Title *</Label>
+              <Input value={s.title} onChange={(e) => f("title", e.target.value)} placeholder="e.g. Enroll Devices in Intune" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>System / Portal</Label>
+              <Input value={s.systemPortal} onChange={(e) => f("systemPortal", e.target.value)} placeholder="Microsoft Intune Admin Center" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Owner Role</Label>
+              <Input value={s.ownerRole} onChange={(e) => f("ownerRole", e.target.value)} placeholder="Compliance Manager" />
+            </div>
+            <div className="col-span-2 space-y-1.5">
+              <Label>Navigation Path</Label>
+              <Input value={s.navigationPath} onChange={(e) => f("navigationPath", e.target.value)} placeholder="Devices → Compliance → Policies" />
+            </div>
+            <div className="col-span-2 space-y-1.5">
+              <Label>Purpose</Label>
+              <Textarea value={s.purpose} onChange={(e) => f("purpose", e.target.value)} placeholder="Why this step is required..." className="min-h-16 resize-none" />
+            </div>
+            <div className="col-span-2 space-y-1.5">
+              <Label>Instructions (one per line)</Label>
+              <Textarea value={s.instructions} onChange={(e) => f("instructions", e.target.value)} placeholder="1. Navigate to...\n2. Configure..." className="min-h-28 resize-none font-mono text-xs" />
+            </div>
+            <div className="col-span-2 space-y-1.5">
+              <Label>Recommended Settings</Label>
+              <Textarea value={s.recommendedSettings} onChange={(e) => f("recommendedSettings", e.target.value)} placeholder="BitLocker: Required\nAntivirus: Required..." className="min-h-16 resize-none font-mono text-xs" />
+            </div>
+            <div className="col-span-2 space-y-1.5">
+              <Label>Expected Result</Label>
+              <Textarea value={s.expectedResult} onChange={(e) => f("expectedResult", e.target.value)} className="min-h-14 resize-none" />
+            </div>
+            <div className="col-span-2 space-y-1.5">
+              <Label>Evidence to Capture (one per line)</Label>
+              <Textarea value={s.evidenceToCapture} onChange={(e) => f("evidenceToCapture", e.target.value)} className="min-h-16 resize-none" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Suggested Filename</Label>
+              <Input value={s.suggestedFilename} onChange={(e) => f("suggestedFilename", e.target.value)} placeholder="CM-3.4.1_Evidence_YYYY-MM-DD.png" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Related Controls (comma-separated)</Label>
+              <Input value={s.relatedControls} onChange={(e) => f("relatedControls", e.target.value)} placeholder="CM.L2-3.4.1, AC.L2-3.1.18" />
+            </div>
+            <div className="col-span-2 space-y-1.5">
+              <Label>If This Fails</Label>
+              <Textarea value={s.ifThisFails} onChange={(e) => f("ifThisFails", e.target.value)} className="min-h-14 resize-none" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Sort Order</Label>
+              <Input type="number" value={s.sortOrder} onChange={(e) => f("sortOrder", e.target.value)} />
+            </div>
+            <div className="flex items-center gap-2 pt-5">
+              <Checkbox checked={s.isRequired} onCheckedChange={(v) => f("isRequired", !!v)} id="req" />
+              <Label htmlFor="req">Required step</Label>
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={() => onSave(s)} disabled={isPending || !s.title.trim()}>
+            {isPending ? "Saving…" : "Save Step"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ProcedureStepCard({
+  step,
+  orgId,
+  canEdit,
+  canUpdateStatus,
+  onEdit,
+  onDelete,
+  onProgressUpdate,
+}: {
+  step: ProcedureStep;
+  orgId: string;
+  canEdit: boolean;
+  canUpdateStatus: boolean;
+  onEdit: (step: ProcedureStep) => void;
+  onDelete: (stepId: string) => void;
+  onProgressUpdate: (stepId: string, status: string, notes: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [statusLocal, setStatusLocal] = useState(step.progress?.status ?? "not_started");
+  const [notesLocal, setNotesLocal] = useState(step.progress?.notes ?? "");
+
+  const statusCfg = STEP_STATUS_CONFIG[statusLocal] ?? STEP_STATUS_CONFIG.not_started;
+  const StatusIcon = statusCfg.Icon;
+  const isComplete = statusLocal === "complete";
+
+  return (
+    <div
+      className={cn(
+        "rounded-lg border transition-colors",
+        isComplete
+          ? "border-emerald-500/30 bg-emerald-950/10"
+          : "border-border bg-card"
+      )}
+    >
+      {/* Collapsed header — always visible */}
+      <button
+        className="w-full flex items-center gap-3 p-4 text-left group"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        {/* Step number */}
+        <span
+          className={cn(
+            "shrink-0 w-8 h-8 rounded-full border text-xs font-bold flex items-center justify-center",
+            isComplete
+              ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
+              : "bg-primary/10 border-primary/20 text-primary"
+          )}
+        >
+          {step.stepNumber}
+        </span>
+
+        {/* Title + meta */}
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={cn(
+                "font-semibold text-sm",
+                isComplete ? "text-emerald-200" : "text-foreground"
+              )}
+            >
+              {step.title}
+            </span>
+            {!step.isRequired && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded border border-slate-500/30 bg-slate-500/10 text-slate-400">
+                Optional
+              </span>
+            )}
+            {step.isCustom && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded border border-purple-500/30 bg-purple-500/10 text-purple-400">
+                Custom
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-3 mt-1">
+            {step.systemPortal && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Cpu className="h-3 w-3 shrink-0" />
+                {step.systemPortal.split(",")[0].split("/")[0].trim()}
+              </span>
+            )}
+            {step.relatedControls.length > 0 && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <ShieldCheck className="h-3 w-3 shrink-0" />
+                {step.relatedControls.slice(0, 2).join(", ")}
+                {step.relatedControls.length > 2 && ` +${step.relatedControls.length - 2}`}
+              </span>
+            )}
+            {step.suggestedFilename && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Camera className="h-3 w-3 shrink-0" />
+                Evidence required
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Status badge + chevron */}
+        <div className="shrink-0 flex items-center gap-2">
+          <span
+            className={cn(
+              "flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border",
+              statusCfg.bg,
+              statusCfg.color
+            )}
+          >
+            <StatusIcon className="h-3 w-3" />
+            {statusCfg.label}
+          </span>
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 text-muted-foreground transition-transform",
+              expanded && "rotate-180"
+            )}
+          />
+        </div>
+      </button>
+
+      {/* Expanded body */}
+      {expanded && (
+        <div className="border-t border-border px-4 pb-5 pt-4 space-y-5">
+          {/* Admin controls */}
+          {canEdit && (
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                onClick={() => onEdit(step)}
+              >
+                <Pencil className="h-3 w-3" />
+                Edit Step
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                onClick={() => onDelete(step.id)}
+              >
+                <Trash2 className="h-3 w-3" />
+                Delete
+              </Button>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* Left column */}
+            <div className="space-y-4">
+              {step.purpose && (
+                <DetailSection icon={Target} label="Purpose">
+                  {step.purpose}
+                </DetailSection>
+              )}
+
+              {step.systemPortal && (
+                <DetailSection icon={Cpu} label="System / Portal">
+                  {step.systemPortal}
+                </DetailSection>
+              )}
+
+              {step.navigationPath && (
+                <DetailSection icon={Navigation} label="Navigation">
+                  <div className="font-mono text-xs bg-muted/40 border rounded px-3 py-2 whitespace-pre-line text-muted-foreground leading-relaxed">
+                    {step.navigationPath}
+                  </div>
+                </DetailSection>
+              )}
+
+              {step.instructions && (
+                <DetailSection icon={ClipboardList} label="Instructions">
+                  <MultiLineText text={step.instructions} />
+                </DetailSection>
+              )}
+
+              {step.recommendedSettings && (
+                <DetailSection icon={CheckCircle2} label="Recommended Settings">
+                  <div className="font-mono text-xs bg-muted/40 border rounded px-3 py-2 whitespace-pre-line text-muted-foreground">
+                    {step.recommendedSettings}
+                  </div>
+                </DetailSection>
+              )}
+            </div>
+
+            {/* Right column */}
+            <div className="space-y-4">
+              {step.expectedResult && (
+                <DetailSection icon={CheckCircle2} label="Expected Result">
+                  <div className="rounded border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-emerald-200">
+                    {step.expectedResult}
+                  </div>
+                </DetailSection>
+              )}
+
+              {step.evidenceToCapture && (
+                <DetailSection icon={Camera} label="Evidence to Capture">
+                  <MultiLineText text={step.evidenceToCapture} />
+                </DetailSection>
+              )}
+
+              {step.suggestedFilename && (
+                <DetailSection icon={FileText} label="Suggested Filename">
+                  <span className="font-mono text-xs bg-muted/50 border px-2 py-1 rounded text-muted-foreground">
+                    {step.suggestedFilename}
+                  </span>
+                </DetailSection>
+              )}
+
+              {step.relatedControls.length > 0 && (
+                <DetailSection icon={ShieldCheck} label="Related Controls">
+                  <div className="flex flex-wrap gap-1.5">
+                    {step.relatedControls.map((ctrl) => (
+                      <Link key={ctrl} href={`/controls/${ctrl}`}>
+                        <span className="font-mono text-xs px-2 py-0.5 rounded border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer transition-colors">
+                          {ctrl}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                </DetailSection>
+              )}
+
+              {step.ownerRole && (
+                <DetailSection icon={User} label="Owner Role">
+                  {step.ownerRole}
+                </DetailSection>
+              )}
+
+              {step.ifThisFails && (
+                <DetailSection icon={AlertCircle} label="If This Fails">
+                  <div className="rounded border border-yellow-500/20 bg-yellow-500/5 px-3 py-2 text-yellow-200">
+                    {step.ifThisFails}
+                  </div>
+                </DetailSection>
+              )}
+            </div>
+          </div>
+
+          {/* Status update + evidence upload row */}
+          <div className="border-t border-border pt-4 space-y-3">
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Step Progress
+            </div>
+            <div className="flex flex-wrap gap-3 items-start">
+              <div className="flex gap-1.5 flex-wrap">
+                {STEP_STATUS_OPTIONS.map((opt) => {
+                  const cfg = STEP_STATUS_CONFIG[opt.value];
+                  const Ic = cfg.Icon;
+                  const active = statusLocal === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      disabled={!canUpdateStatus}
+                      onClick={() => {
+                        if (!canUpdateStatus) return;
+                        setStatusLocal(opt.value);
+                      }}
+                      className={cn(
+                        "flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium transition-all",
+                        active
+                          ? cn(cfg.bg, cfg.color, "ring-1 ring-offset-1 ring-offset-background ring-current")
+                          : "border-border bg-muted/20 text-muted-foreground hover:border-border/80",
+                        !canUpdateStatus && "opacity-50 cursor-not-allowed"
+                      )}
+                    >
+                      <Ic className="h-3 w-3" />
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {canUpdateStatus && (
+                <div className="flex-1 flex gap-2 min-w-52">
+                  <Input
+                    placeholder="Notes (optional)…"
+                    value={notesLocal}
+                    onChange={(e) => setNotesLocal(e.target.value)}
+                    className="h-8 text-xs flex-1"
+                  />
+                  <Button
+                    size="sm"
+                    className="h-8 shrink-0 gap-1.5"
+                    onClick={() => onProgressUpdate(step.id, statusLocal, notesLocal)}
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Save
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {step.progress?.completedAt && (
+              <div className="text-xs text-muted-foreground">
+                Marked complete{step.progress.completedBy ? ` by ${step.progress.completedBy}` : ""}{" "}
+                on {new Date(step.progress.completedAt).toLocaleDateString()}
+              </div>
+            )}
+
+            {step.suggestedFilename && (
+              <Link href="/evidence/upload">
+                <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs mt-1">
+                  <Upload className="h-3.5 w-3.5" />
+                  Upload Evidence for This Step
+                </Button>
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProcedureStepsSection({
+  actionId,
+  orgId,
+  fallbackText,
+  canEdit,
+  canUpdateStatus,
+}: {
+  actionId: string;
+  orgId: string;
+  fallbackText: string;
+  canEdit: boolean;
+  canUpdateStatus: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [editStep, setEditStep] = useState<ProcedureStep | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  const { data: steps = [], isLoading } = useQuery<ProcedureStep[]>({
+    queryKey: ["procedure-steps", actionId, orgId],
+    enabled: !!orgId && !!actionId,
+    queryFn: async () => {
+      const res = await fetch(`/api/roadmap/actions/${actionId}/procedure-steps`, {
+        headers: makeHeaders(orgId),
+      });
+      if (!res.ok) throw new Error("Failed to load steps");
+      return res.json();
+    },
+  });
+
+  const progressMutation = useMutation({
+    mutationFn: async ({
+      stepId,
+      status,
+      notes,
+    }: {
+      stepId: string;
+      status: string;
+      notes: string;
+    }) => {
+      const res = await fetch(`/api/roadmap/procedure-steps/${stepId}/progress`, {
+        method: "PATCH",
+        headers: makeHeaders(orgId),
+        body: JSON.stringify({ status, notes: notes || null }),
+      });
+      if (!res.ok) throw new Error("Failed to update step");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["procedure-steps", actionId] });
+      toast({ title: "Step progress saved" });
+    },
+    onError: () => toast({ title: "Failed to save step", variant: "destructive" }),
+  });
+
+  const addMutation = useMutation({
+    mutationFn: async (state: StepEditState) => {
+      const res = await fetch(`/api/roadmap/actions/${actionId}/procedure-steps`, {
+        method: "POST",
+        headers: makeHeaders(orgId),
+        body: JSON.stringify({
+          stepNumber: steps.length + 1,
+          title: state.title,
+          purpose: state.purpose,
+          systemPortal: state.systemPortal,
+          navigationPath: state.navigationPath,
+          instructions: state.instructions,
+          recommendedSettings: state.recommendedSettings || null,
+          expectedResult: state.expectedResult,
+          evidenceToCapture: state.evidenceToCapture,
+          suggestedFilename: state.suggestedFilename,
+          relatedControls: state.relatedControls
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+          ownerRole: state.ownerRole,
+          ifThisFails: state.ifThisFails,
+          isRequired: state.isRequired,
+          sortOrder: parseInt(state.sortOrder) || steps.length,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to add step");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["procedure-steps", actionId] });
+      setAddOpen(false);
+      toast({ title: "Step added" });
+    },
+    onError: () => toast({ title: "Failed to add step", variant: "destructive" }),
+  });
+
+  const editMutation = useMutation({
+    mutationFn: async ({ stepId, state }: { stepId: string; state: StepEditState }) => {
+      const res = await fetch(`/api/roadmap/procedure-steps/${stepId}`, {
+        method: "PUT",
+        headers: makeHeaders(orgId),
+        body: JSON.stringify({
+          title: state.title,
+          purpose: state.purpose,
+          systemPortal: state.systemPortal,
+          navigationPath: state.navigationPath,
+          instructions: state.instructions,
+          recommendedSettings: state.recommendedSettings || null,
+          expectedResult: state.expectedResult,
+          evidenceToCapture: state.evidenceToCapture,
+          suggestedFilename: state.suggestedFilename,
+          relatedControls: state.relatedControls
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+          ownerRole: state.ownerRole,
+          ifThisFails: state.ifThisFails,
+          isRequired: state.isRequired,
+          sortOrder: parseInt(state.sortOrder) || 0,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to update step");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["procedure-steps", actionId] });
+      setEditStep(null);
+      toast({ title: "Step updated" });
+    },
+    onError: () => toast({ title: "Failed to update step", variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (stepId: string) => {
+      const res = await fetch(`/api/roadmap/procedure-steps/${stepId}`, {
+        method: "DELETE",
+        headers: makeHeaders(orgId),
+      });
+      if (!res.ok) throw new Error("Failed to delete step");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["procedure-steps", actionId] });
+      setDeleteConfirm(null);
+      toast({ title: "Step deleted" });
+    },
+    onError: () => toast({ title: "Failed to delete step", variant: "destructive" }),
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-10">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
+  const completedCount = steps.filter((s) => s.progress?.status === "complete").length;
+  const totalRequired = steps.filter((s) => s.isRequired).length;
+  const completedRequired = steps.filter(
+    (s) => s.isRequired && s.progress?.status === "complete"
+  ).length;
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="rounded-lg border bg-card overflow-hidden">
+        <div className="p-4 border-b bg-muted/20 flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <BookOpen className="h-4 w-4 text-primary" />
+              Implementation Procedure
+            </h3>
+            {steps.length > 0 ? (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {completedCount} of {steps.length} steps complete
+                {totalRequired > 0 && ` · ${completedRequired}/${totalRequired} required`}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                High-level procedure steps below. Detailed playbook steps not yet configured.
+              </p>
+            )}
+          </div>
+          {canEdit && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 h-8 text-xs"
+              onClick={() => setAddOpen(true)}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add Step
+            </Button>
+          )}
+        </div>
+
+        {/* Progress bar */}
+        {steps.length > 0 && (
+          <div className="px-4 py-2 bg-muted/10 border-b">
+            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full rounded-full bg-emerald-500 transition-all"
+                style={{
+                  width: steps.length ? `${(completedCount / steps.length) * 100}%` : "0%",
+                }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Step cards */}
+      {steps.length > 0 ? (
+        <div className="space-y-2">
+          {steps.map((step) => (
+            <ProcedureStepCard
+              key={step.id}
+              step={step}
+              orgId={orgId}
+              canEdit={canEdit}
+              canUpdateStatus={canUpdateStatus}
+              onEdit={setEditStep}
+              onDelete={setDeleteConfirm}
+              onProgressUpdate={(stepId, status, notes) =>
+                progressMutation.mutate({ stepId, status, notes })
+              }
+            />
+          ))}
+        </div>
+      ) : (
+        /* Fallback: show legacy plain text procedure */
+        <div className="rounded-lg border bg-card p-5">
+          <StepList text={fallbackText} />
+        </div>
+      )}
+
+      {/* Add step dialog */}
+      {addOpen && (
+        <StepEditorDialog
+          open={addOpen}
+          onClose={() => setAddOpen(false)}
+          onSave={(state) => addMutation.mutate(state)}
+          initialState={emptyEditState()}
+          title="Add Procedure Step"
+          isPending={addMutation.isPending}
+        />
+      )}
+
+      {/* Edit step dialog */}
+      {editStep && (
+        <StepEditorDialog
+          open={!!editStep}
+          onClose={() => setEditStep(null)}
+          onSave={(state) => editMutation.mutate({ stepId: editStep.id, state })}
+          initialState={stepToEditState(editStep)}
+          title={`Edit Step ${editStep.stepNumber}: ${editStep.title}`}
+          isPending={editMutation.isPending}
+        />
+      )}
+
+      {/* Delete confirm dialog */}
+      <Dialog open={!!deleteConfirm} onOpenChange={(o) => !o && setDeleteConfirm(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete Step</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Are you sure? This will permanently remove this procedure step and all
+            organization progress records for it.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteConfirm && deleteMutation.mutate(deleteConfirm)}
+              disabled={deleteMutation.isPending}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 export default function RoadmapActionDetail({ id }: { id: string }) {
   const { activeOrg } = useOrg();
+  const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
@@ -178,6 +1069,10 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
   const [localResult, setLocalResult] = useState<string | null>(null);
   const [localNotes, setLocalNotes] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
+
+  const canEdit =
+    user?.role === "admin" || user?.role === "compliance_manager";
+  const canUpdateStatus = user?.role !== "assessor";
 
   const { data: action, isLoading } = useQuery<ActionDetail>({
     queryKey: ["roadmap-action", id, activeOrg?.id],
@@ -376,7 +1271,6 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      {/* Tabs */}
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="overview" className="gap-1.5">
@@ -503,15 +1397,17 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
           </div>
         </TabsContent>
 
-        {/* C. Operating Procedure */}
+        {/* C. Operating Procedure — detailed expandable step cards */}
         <TabsContent value="procedure">
-          <div className="rounded-lg border bg-card p-5">
-            <div className="flex items-center gap-2 text-sm font-semibold mb-4">
-              <BookOpen className="h-4 w-4 text-primary" />
-              Operating Procedure
-            </div>
-            <StepList text={action.operatingProcedure} />
-          </div>
+          {activeOrg?.id && (
+            <ProcedureStepsSection
+              actionId={id}
+              orgId={activeOrg.id}
+              fallbackText={action.operatingProcedure}
+              canEdit={canEdit}
+              canUpdateStatus={canUpdateStatus}
+            />
+          )}
         </TabsContent>
 
         {/* D. Test Procedure */}

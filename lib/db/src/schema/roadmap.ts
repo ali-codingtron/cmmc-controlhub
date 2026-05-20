@@ -151,3 +151,56 @@ export const orgRoadmapChecklistProgressTable = pgTable(
     completedAt: timestamp("completed_at"),
   }
 );
+
+// ── Detailed Procedure Steps ───────────────────────────────────────────────────
+
+export const procedureStepStatusEnum = pgEnum("procedure_step_status", [
+  "not_started",
+  "in_progress",
+  "complete",
+  "blocked",
+  "not_applicable",
+]);
+
+export const roadmapProcedureStepsTable = pgTable("roadmap_procedure_steps", {
+  id: text("id").primaryKey(),
+  actionId: text("action_id")
+    .notNull()
+    .references(() => roadmapActionsTable.id, { onDelete: "cascade" }),
+  stepNumber: integer("step_number").notNull(),
+  title: text("title").notNull(),
+  purpose: text("purpose").notNull().default(""),
+  systemPortal: text("system_portal").notNull().default(""),
+  navigationPath: text("navigation_path").notNull().default(""),
+  instructions: text("instructions").notNull().default(""),
+  recommendedSettings: text("recommended_settings"),
+  expectedResult: text("expected_result").notNull().default(""),
+  evidenceToCapture: text("evidence_to_capture").notNull().default(""),
+  suggestedFilename: text("suggested_filename").notNull().default(""),
+  relatedControls: text("related_controls").array().notNull().default([]),
+  ownerRole: text("owner_role").notNull().default("Compliance Manager"),
+  ifThisFails: text("if_this_fails").notNull().default(""),
+  isRequired: boolean("is_required").notNull().default(true),
+  isCustom: boolean("is_custom").notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const orgProcedureStepProgressTable = pgTable(
+  "org_procedure_step_progress",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizationsTable.id, { onDelete: "cascade" }),
+    stepId: text("step_id")
+      .notNull()
+      .references(() => roadmapProcedureStepsTable.id, { onDelete: "cascade" }),
+    status: procedureStepStatusEnum("status").notNull().default("not_started"),
+    completedBy: text("completed_by"),
+    completedAt: timestamp("completed_at"),
+    notes: text("notes"),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  }
+);

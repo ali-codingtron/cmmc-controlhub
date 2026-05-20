@@ -10,12 +10,15 @@ import {
   roadmapActionChecklistItemsTable,
   orgRoadmapProgressTable,
   orgRoadmapChecklistProgressTable,
+  roadmapProcedureStepsTable,
+  orgProcedureStepProgressTable,
 } from "@workspace/db";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, asc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 import { randomUUID } from "crypto";
 import { ROADMAP_SEED } from "../data/roadmap-seed";
+import { PROCEDURE_STEPS_SEED } from "../data/roadmap-procedure-steps-seed";
 
 const router = Router();
 
@@ -491,6 +494,187 @@ router.get(
   }
 );
 
+// ── Procedure Steps ────────────────────────────────────────────────────────────
+
+router.get(
+  "/roadmap/actions/:id/procedure-steps",
+  requireAuth,
+  requireOrg,
+  async (req, res) => {
+    const { id } = req.params;
+    const orgId = req.orgId!;
+
+    const steps = await db
+      .select()
+      .from(roadmapProcedureStepsTable)
+      .where(eq(roadmapProcedureStepsTable.actionId, id))
+      .orderBy(asc(roadmapProcedureStepsTable.sortOrder));
+
+    if (!steps.length) return res.json([]);
+
+    const stepIds = steps.map((s) => s.id);
+    const progress = await db
+      .select()
+      .from(orgProcedureStepProgressTable)
+      .where(
+        and(
+          eq(orgProcedureStepProgressTable.organizationId, orgId),
+          inArray(orgProcedureStepProgressTable.stepId, stepIds)
+        )
+      );
+
+    const progressMap = new Map(progress.map((p) => [p.stepId, p]));
+    return res.json(steps.map((s) => ({ ...s, progress: progressMap.get(s.id) ?? null })));
+  }
+);
+
+router.patch(
+  "/roadmap/procedure-steps/:stepId/progress",
+  requireAuth,
+  requireOrg,
+  async (req, res) => {
+    const { stepId } = req.params;
+    const orgId = req.orgId!;
+    const { status, notes, completedBy } = req.body;
+
+    const [step] = await db
+      .select({ id: roadmapProcedureStepsTable.id })
+      .from(roadmapProcedureStepsTable)
+      .where(eq(roadmapProcedureStepsTable.id, stepId))
+      .limit(1);
+
+    if (!step) return res.status(404).json({ error: "Step not found" });
+
+    const [existing] = await db
+      .select({ id: orgProcedureStepProgressTable.id })
+      .from(orgProcedureStepProgressTable)
+      .where(
+        and(
+          eq(orgProcedureStepProgressTable.organizationId, orgId),
+          eq(orgProcedureStepProgressTable.stepId, stepId)
+        )
+      )
+      .limit(1);
+
+    const completedAt = status === "complete" ? new Date() : null;
+
+    if (existing) {
+      await db
+        .update(orgProcedureStepProgressTable)
+        .set({ status, notes: notes ?? null, completedBy: completedBy ?? null, completedAt, updatedAt: new Date() })
+        .where(eq(orgProcedureStepProgressTable.id, existing.id));
+    } else {
+      await db.insert(orgProcedureStepProgressTable).values({
+        id: randomUUID(),
+        organizationId: orgId,
+        stepId,
+        status,
+        notes: notes ?? null,
+        completedBy: completedBy ?? null,
+        completedAt,
+        updatedAt: new Date(),
+      });
+    }
+    return res.json({ ok: true });
+  }
+);
+
+router.post(
+  "/roadmap/actions/:id/procedure-steps",
+  requireAuth,
+  requireOrg,
+  async (req, res) => {
+    const role = req.authUser?.role;
+    if (role !== "admin" && role !== "compliance_manager") {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const { id } = req.params;
+    const {
+      stepNumber, title, purpose, systemPortal, navigationPath,
+      instructions, recommendedSettings, expectedResult, evidenceToCapture,
+      suggestedFilename, relatedControls, ownerRole, ifThisFails, isRequired, sortOrder,
+    } = req.body;
+
+    const [newStep] = await db
+      .insert(roadmapProcedureStepsTable)
+      .values({
+        id: randomUUID(),
+        actionId: id,
+        stepNumber: stepNumber ?? 1,
+        title,
+        purpose: purpose ?? "",
+        systemPortal: systemPortal ?? "",
+        navigationPath: navigationPath ?? "",
+        instructions: instructions ?? "",
+        recommendedSettings: recommendedSettings ?? null,
+        expectedResult: expectedResult ?? "",
+        evidenceToCapture: evidenceToCapture ?? "",
+        suggestedFilename: suggestedFilename ?? "",
+        relatedControls: relatedControls ?? [],
+        ownerRole: ownerRole ?? "Compliance Manager",
+        ifThisFails: ifThisFails ?? "",
+        isRequired: isRequired ?? true,
+        isCustom: true,
+        sortOrder: sortOrder ?? 0,
+      })
+      .returning();
+
+    return res.json(newStep);
+  }
+);
+
+router.put(
+  "/roadmap/procedure-steps/:stepId",
+  requireAuth,
+  requireOrg,
+  async (req, res) => {
+    const role = req.authUser?.role;
+    if (role !== "admin" && role !== "compliance_manager") {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const { stepId } = req.params;
+    const {
+      title, purpose, systemPortal, navigationPath, instructions,
+      recommendedSettings, expectedResult, evidenceToCapture, suggestedFilename,
+      relatedControls, ownerRole, ifThisFails, isRequired, sortOrder,
+    } = req.body;
+
+    const [updated] = await db
+      .update(roadmapProcedureStepsTable)
+      .set({
+        title, purpose, systemPortal, navigationPath, instructions,
+        recommendedSettings: recommendedSettings ?? null,
+        expectedResult, evidenceToCapture, suggestedFilename,
+        relatedControls: relatedControls ?? [],
+        ownerRole, ifThisFails,
+        isRequired: isRequired ?? true,
+        sortOrder: sortOrder ?? 0,
+        updatedAt: new Date(),
+      })
+      .where(eq(roadmapProcedureStepsTable.id, stepId))
+      .returning();
+
+    if (!updated) return res.status(404).json({ error: "Step not found" });
+    return res.json(updated);
+  }
+);
+
+router.delete(
+  "/roadmap/procedure-steps/:stepId",
+  requireAuth,
+  requireOrg,
+  async (req, res) => {
+    const role = req.authUser?.role;
+    if (role !== "admin" && role !== "compliance_manager") {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    await db
+      .delete(roadmapProcedureStepsTable)
+      .where(eq(roadmapProcedureStepsTable.id, req.params.stepId));
+    return res.json({ ok: true });
+  }
+);
+
 // ── Seed Function ─────────────────────────────────────────────────────────────
 export async function seedRoadmapActions(): Promise<void> {
   const [existing] = await db
@@ -566,6 +750,38 @@ export async function seedRoadmapActions(): Promise<void> {
         sortOrder: i,
       });
     }
+  }
+}
+
+export async function seedProcedureSteps(): Promise<void> {
+  const [existing] = await db
+    .select({ id: roadmapProcedureStepsTable.id })
+    .from(roadmapProcedureStepsTable)
+    .limit(1);
+
+  if (existing) return;
+
+  for (const step of PROCEDURE_STEPS_SEED) {
+    await db.insert(roadmapProcedureStepsTable).values({
+      id: step.id,
+      actionId: step.actionId,
+      stepNumber: step.stepNumber,
+      title: step.title,
+      purpose: step.purpose,
+      systemPortal: step.systemPortal,
+      navigationPath: step.navigationPath,
+      instructions: step.instructions,
+      recommendedSettings: step.recommendedSettings ?? null,
+      expectedResult: step.expectedResult,
+      evidenceToCapture: step.evidenceToCapture,
+      suggestedFilename: step.suggestedFilename,
+      relatedControls: step.relatedControls,
+      ownerRole: step.ownerRole,
+      ifThisFails: step.ifThisFails,
+      isRequired: step.isRequired,
+      isCustom: false,
+      sortOrder: step.sortOrder,
+    });
   }
 }
 

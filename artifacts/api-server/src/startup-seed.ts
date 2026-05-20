@@ -14,7 +14,7 @@ import {
 import { count, eq, sql } from "drizzle-orm";
 import { seedMonitoringItemsForOrg } from "./routes/monitoring";
 import { seedControlConfigure } from "./routes/configure";
-import { seedRoadmapActions } from "./routes/roadmap";
+import { seedRoadmapActions, seedProcedureSteps } from "./routes/roadmap";
 import { logger } from "./lib/logger";
 import { DOCUMENT_TEMPLATES } from "./data/document-templates-data";
 
@@ -196,6 +196,7 @@ export async function runStartupSeed() {
     await seedMonitoringItems();
     await seedControlConfigure();
     await seedRoadmapActions();
+    await seedProcedureSteps();
   } catch (err) {
     logger.error({ err }, "Startup seed failed — app will continue but may lack reference data");
   }
