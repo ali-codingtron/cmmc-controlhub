@@ -332,14 +332,14 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
                 className="h-8 text-sm"
               />
               <Select
-                value={localResult ?? ""}
-                onValueChange={setLocalResult}
+                value={localResult ?? "none"}
+                onValueChange={(v) => setLocalResult(v === "none" ? null : v)}
               >
                 <SelectTrigger className="h-8 text-sm">
                   <SelectValue placeholder="Result (optional)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No result yet</SelectItem>
+                  <SelectItem value="none">No result yet</SelectItem>
                   {RESULT_OPTIONS.map((o) => (
                     <SelectItem key={o.value} value={o.value}>
                       {o.label}
