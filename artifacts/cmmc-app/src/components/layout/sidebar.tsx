@@ -181,42 +181,46 @@ export function Sidebar() {
           <NavLink href="/monitoring" icon={Activity} label="Monitoring Tracker" />
           <NavLink href="/poams" icon={AlertTriangle} label="POA&Ms" />
 
-          {/* Implementation Roadmap section */}
-          <button
-            onClick={() => setRoadmapExpanded((v) => !v)}
-            className={cn(
-              "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
-              isRoadmapActive
-                ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-            )}
-          >
-            <Map className="h-4 w-4 shrink-0" />
-            <span className="flex-1 text-left">Impl. Roadmap</span>
-            <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", roadmapExpanded && "rotate-90")} />
-          </button>
-          {roadmapExpanded && (
-            <div className="ml-3 pl-3 border-l border-sidebar-border space-y-0.5">
-              {roadmapItems.map((item) => {
-                const isActive = item.href === "/roadmap"
-                  ? location === "/roadmap" || (location.startsWith("/roadmap/") && !location.startsWith("/roadmap/coverage") && !location.startsWith("/roadmap/progress"))
-                  : location.startsWith(item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "flex items-center px-3 py-1.5 rounded-md text-xs transition-colors",
-                      isActive
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                        : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                    )}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </div>
+          {/* Implementation Roadmap section — admin only */}
+          {isAdmin && (
+            <>
+              <button
+                onClick={() => setRoadmapExpanded((v) => !v)}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                  isRoadmapActive
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                )}
+              >
+                <Map className="h-4 w-4 shrink-0" />
+                <span className="flex-1 text-left">Impl. Roadmap</span>
+                <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", roadmapExpanded && "rotate-90")} />
+              </button>
+              {roadmapExpanded && (
+                <div className="ml-3 pl-3 border-l border-sidebar-border space-y-0.5">
+                  {roadmapItems.map((item) => {
+                    const isActive = item.href === "/roadmap"
+                      ? location === "/roadmap" || (location.startsWith("/roadmap/") && !location.startsWith("/roadmap/coverage") && !location.startsWith("/roadmap/progress"))
+                      : location.startsWith(item.href);
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={cn(
+                          "flex items-center px-3 py-1.5 rounded-md text-xs transition-colors",
+                          isActive
+                            ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                            : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                        )}
+                      >
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
 
           {/* Documentation section */}
@@ -335,7 +339,6 @@ export function Sidebar() {
           <NavLink href="/audit-logs" icon={History} label="Audit Trail" />
           <NavLink href="/users" icon={Users} label="Users" />
           {isAdmin && <NavLink href="/organizations" icon={Building2} label="Organizations" />}
-          {isAdmin && <NavLink href="/admin/backfill" icon={DatabaseZap} label="Narrative Backfill" />}
           <NavLink href="/settings" icon={Settings} label="Settings" />
         </nav>
       </div>
