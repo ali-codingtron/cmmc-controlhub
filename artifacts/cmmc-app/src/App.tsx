@@ -47,6 +47,10 @@ import ReportsDomain from "@/pages/reports-domain";
 import ReportsAudit from "@/pages/reports-audit";
 import ReportsSsp from "@/pages/reports-ssp";
 import AdminBackfill from "@/pages/admin-backfill";
+import RoadmapActions from "@/pages/roadmap-actions";
+import RoadmapActionDetail from "@/pages/roadmap-action-detail";
+import RoadmapCoverage from "@/pages/roadmap-coverage";
+import RoadmapProgress from "@/pages/roadmap-progress";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -144,6 +148,14 @@ function AppRoutes() {
               <Route path="/reports/audit" component={ReportsAudit} />
               <Route path="/reports/ssp" component={ReportsSsp} />
               <Route path="/admin/backfill" component={AdminBackfill} />
+              <Route path="/roadmap">
+                {() => <RoadmapActions />}
+              </Route>
+              <Route path="/roadmap/coverage" component={RoadmapCoverage} />
+              <Route path="/roadmap/progress" component={RoadmapProgress} />
+              <Route path="/roadmap/:id">
+                {(params: { id: string }) => <RoadmapActionDetail id={params.id} />}
+              </Route>
               <Route component={NotFound} />
             </Switch>
           </Guard>

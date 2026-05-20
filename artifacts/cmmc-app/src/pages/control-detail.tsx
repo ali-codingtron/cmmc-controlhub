@@ -1445,6 +1445,7 @@ export default function ControlDetail({ id }: { id: string }) {
           <TabsTrigger value="poams">POA&Ms ({poams.length})</TabsTrigger>
           <TabsTrigger value="monitoring">Monitoring</TabsTrigger>
           <TabsTrigger value="ssp">SSP</TabsTrigger>
+          <TabsTrigger value="roadmap">Roadmap</TabsTrigger>
         </TabsList>
 
         {/* ── Implementation Tab ── */}
@@ -2202,6 +2203,9 @@ export default function ControlDetail({ id }: { id: string }) {
 
         {/* ── SSP Tab ── */}
         <SspTab controlRef={control?.controlId ?? ""} orgId={activeOrg?.id} />
+
+        {/* ── Roadmap Tab ── */}
+        <RoadmapTab controlCmmcId={control?.controlId ?? ""} orgId={activeOrg?.id} />
       </Tabs>
     </div>
   );
@@ -2406,6 +2410,148 @@ function SspTab({ controlRef, orgId }: { controlRef: string; orgId?: string }) {
           <p className="text-xs text-muted-foreground text-right">
             <a href="/ssp/mappings" className="text-primary hover:underline">View all control mappings →</a>
           </p>
+        </div>
+      )}
+    </TabsContent>
+  );
+}
+
+// ─── Roadmap Tab Component ─────────────────────────────────────────────────────
+
+interface RoadmapActionRow {
+  id: string;
+  title: string;
+  category: string;
+  priority: string;
+  phase: number;
+  phaseName: string;
+  impactScore: number;
+  supportType: string;
+  status: string;
+  owner: string | null;
+  targetDate: string | null;
+}
+
+const ROADMAP_STATUS_STYLES: Record<string, string> = {
+  not_started: "bg-gray-100 text-gray-600",
+  in_progress: "bg-blue-100 text-blue-700",
+  completed: "bg-green-100 text-green-700",
+  blocked: "bg-red-100 text-red-700",
+};
+
+const ROADMAP_SUPPORT_STYLES: Record<string, string> = {
+  primary: "bg-indigo-100 text-indigo-700",
+  partial_support: "bg-yellow-100 text-yellow-700",
+  audit_evidence: "bg-purple-100 text-purple-700",
+};
+
+function RoadmapTab({ controlCmmcId, orgId }: { controlCmmcId: string; orgId?: string }) {
+  const { data: actions = [], isLoading } = useQuery<RoadmapActionRow[]>({
+    queryKey: ["roadmap-control-actions", controlCmmcId, orgId],
+    queryFn: async () => {
+      if (!orgId || !controlCmmcId) return [];
+      const token = localStorage.getItem("auth_token");
+      const r = await fetch(
+        `/api/roadmap/controls/${encodeURIComponent(controlCmmcId)}/actions`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "X-Organization-ID": orgId,
+          },
+        }
+      );
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: !!orgId && !!controlCmmcId,
+  });
+
+  return (
+    <TabsContent value="roadmap" className="mt-6">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="font-semibold text-base">Roadmap Actions</h3>
+          <p className="text-sm text-muted-foreground">Implementation roadmap actions that support this control.</p>
+        </div>
+        <a href="/roadmap" className="text-sm text-primary hover:underline flex items-center gap-1">
+          View full roadmap →
+        </a>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-10">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : actions.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Target className="h-10 w-10 mx-auto mb-3 text-muted-foreground/40" />
+            <p className="text-muted-foreground font-medium">No roadmap actions linked to this control.</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Actions from the Implementation Roadmap that support this control will appear here.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {actions.map((action) => (
+            <Card key={action.id} className="hover:shadow-sm transition-shadow">
+              <CardContent className="py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="text-xs font-medium text-muted-foreground">Phase {action.phase}</span>
+                      <span className="text-xs text-muted-foreground">·</span>
+                      <span className="text-xs text-muted-foreground">{action.phaseName}</span>
+                      <span
+                        className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                          ROADMAP_SUPPORT_STYLES[action.supportType] ?? "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {action.supportType === "primary"
+                          ? "Primary"
+                          : action.supportType === "partial_support"
+                          ? "Partial Support"
+                          : "Audit Evidence"}
+                      </span>
+                      <span
+                        className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                          ROADMAP_STATUS_STYLES[action.status] ?? "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {action.status === "not_started"
+                          ? "Not Started"
+                          : action.status === "in_progress"
+                          ? "In Progress"
+                          : action.status === "completed"
+                          ? "Completed"
+                          : action.status === "blocked"
+                          ? "Blocked"
+                          : action.status}
+                      </span>
+                    </div>
+                    <a
+                      href={`/roadmap/${action.id}`}
+                      className="font-medium hover:text-primary hover:underline text-sm"
+                    >
+                      {action.title}
+                    </a>
+                    <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                      <span>{action.category}</span>
+                      {action.owner && <span>· Owner: {action.owner}</span>}
+                      {action.targetDate && (
+                        <span>· Due: {new Date(action.targetDate).toLocaleDateString()}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <div className="text-lg font-bold text-primary">{action.impactScore}</div>
+                    <div className="text-[10px] text-muted-foreground">Impact</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
     </TabsContent>

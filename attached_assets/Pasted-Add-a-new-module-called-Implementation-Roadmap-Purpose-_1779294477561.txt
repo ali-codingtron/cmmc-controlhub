@@ -1,0 +1,629 @@
+Add a new module called “Implementation Roadmap.”
+
+Purpose:
+This section should show me which high-impact actions I should perform first to make progress across multiple CMMC Level 2 controls.
+
+This should help me answer:
+- What should I do first?
+- Which controls does this action support?
+- What evidence should I capture?
+- Where should the evidence be linked?
+- What documents should be created or updated?
+- What tests should be performed?
+- Which controls become fully supported, partially supported, or still missing items?
+
+Important:
+Do not say that one action automatically “closes” a control.
+Use the terms:
+- Supports
+- Partially Supports
+- Evidence Collected
+- Documentation Collected
+- Ready for Review
+- Candidate for Implemented
+
+A control should only become Implemented if all required conditions are met:
+- implementation narrative exists
+- SSP narrative exists
+- required evidence exists
+- evidence is approved/current
+- required policy/procedure exists where applicable
+- testing/validation is complete where applicable
+- no blocking POA&M exists
+
+1. Add Navigation
+
+Add a sidebar section called:
+
+Implementation Roadmap
+
+Pages:
+- Priority Actions
+- Action Detail
+- Coverage Matrix
+- Evidence Placement
+- Roadmap Progress
+
+2. Priority Actions Page
+
+Create a dashboard/table of recommended actions sorted by impact.
+
+Each action should show:
+- action title
+- category
+- priority
+- estimated effort
+- number of controls supported
+- number of controls partially supported
+- number of evidence items required
+- number of documents required
+- related domains
+- current progress
+- status
+- owner
+- target date
+
+Statuses:
+- Not Started
+- In Progress
+- Evidence Needed
+- Ready for Review
+- Complete
+- Blocked
+
+Priority levels:
+- Critical
+- High
+- Medium
+- Low
+
+Effort levels:
+- Low
+- Medium
+- High
+
+3. Action Impact Scoring
+
+Create an impact score for each roadmap action.
+
+Suggested formula:
+- +3 points for every control directly supported
+- +2 points for every control partially supported
+- +2 points for every missing evidence item it helps create
+- +2 points for every missing document it helps create
+- +1 point for every monitoring activity it helps satisfy
+- -1 to -5 points based on complexity/effort
+
+Display:
+- Impact Score
+- Estimated Effort
+- Recommended Order
+
+Example:
+Action: Perform User Access Review
+Impact Score: 42
+Effort: Medium
+Controls Supported: 12
+Recommended Priority: High
+
+4. Action Detail Page
+
+Each action should have a detailed page with these sections:
+
+A. Purpose
+Explain what this action accomplishes.
+
+B. Why This Action Matters
+Explain why this should be done early and what compliance areas it supports.
+
+C. Linked Controls
+Show all controls supported by this action.
+
+For each control show:
+- control ID
+- control title
+- domain
+- level
+- support type:
+  - Full Support
+  - Partial Support
+  - Evidence Only
+  - Documentation Only
+  - Monitoring Only
+- current control status
+- evidence status
+- documentation status
+
+D. Operating Procedure
+Step-by-step instructions for performing the action.
+
+E. Test Procedure
+Step-by-step instructions for validating that the action worked.
+
+F. Evidence to Capture
+List all evidence that should be captured.
+
+For each evidence item show:
+- evidence title
+- evidence type
+- suggested file name
+- source system
+- what must be visible
+- linked controls
+- linked assessment objectives, if available
+- recommended status
+
+G. Documents to Create or Update
+Show required documents:
+- policy
+- procedure
+- review log
+- checklist
+- approval record
+- risk record
+- POA&M if needed
+
+H. Completion Checklist
+Checklist items:
+- action performed
+- evidence captured
+- evidence uploaded
+- evidence approved
+- documents uploaded/updated
+- test performed
+- exceptions documented
+- POA&M created if needed
+- affected controls reviewed
+
+I. Result
+Allow setting action result:
+- Passed
+- Passed with Exceptions
+- Failed
+- Needs Follow-Up
+
+If result = Failed:
+- require POA&M creation or linkage
+
+5. Evidence Placement Guidance
+
+Create a section called:
+
+Where This Evidence Goes
+
+For each action, show:
+- evidence item
+- linked controls
+- linked domain
+- document/evidence type
+- suggested filename
+- upload button
+- link existing evidence button
+
+Example:
+
+Evidence:
+User access review export
+
+Suggested filename:
+AC-Access-Review-2026-05-10.xlsx
+
+Link to controls:
+- AC.L1-3.1.1
+- AC.L1-3.1.2
+- AC.L2-3.1.5
+- AC.L2-3.1.6
+- AC.L2-3.1.7
+- IA.L1-3.5.1
+- IA.L1-3.5.2
+- IA.L2-3.5.5
+- IA.L2-3.5.6
+- CA.L2-3.12.3
+
+6. Create High-Impact Action Templates
+
+Seed the system with these initial roadmap actions:
+
+A. Define Assessment Scope and SSP Baseline
+Category: Foundation
+Supports:
+- CA.L2-3.12.4
+- all controls indirectly through SSP narratives
+- scope-dependent evidence organization
+
+Documents:
+- SSP
+- assessment scope
+- asset inventory
+- CUI data flow
+- system boundary
+
+Evidence:
+- SSP
+- asset inventory
+- network/data flow diagram
+- external provider list
+
+B. Perform User and Access Review
+Category: Identity and Access
+Supports:
+- AC.L1-3.1.1
+- AC.L1-3.1.2
+- AC.L2-3.1.5
+- AC.L2-3.1.6
+- AC.L2-3.1.7
+- AC.L2-3.1.8
+- IA.L1-3.5.1
+- IA.L1-3.5.2
+- IA.L2-3.5.5
+- IA.L2-3.5.6
+- CA.L2-3.12.3
+
+Documents:
+- access control policy
+- account management procedure
+- access review log
+- access approval record
+
+Evidence:
+- user account export
+- privileged role export
+- access review worksheet
+- disabled/stale account evidence
+- approval records
+
+C. Configure MFA and Conditional Access Baseline
+Category: Identity Security
+Supports:
+- IA.L1-3.5.2
+- IA.L2-3.5.3
+- IA.L2-3.5.4
+- AC.L2-3.1.8
+- AC.L2-3.1.12
+- AC.L2-3.1.13
+- AC.L2-3.1.14
+
+Documents:
+- identification and authentication policy
+- remote access procedure
+- MFA procedure
+
+Evidence:
+- MFA policy screenshots
+- Conditional Access policy screenshots
+- sign-in log validation
+- legacy authentication block evidence
+
+D. Configure Endpoint Compliance and Device Management
+Category: Endpoint Security
+Supports:
+- CM.L2-3.4.1
+- CM.L2-3.4.2
+- CM.L2-3.4.6
+- CM.L2-3.4.7
+- CM.L2-3.4.9
+- IA.L1-3.5.1
+- AC.L2-3.1.18
+- AC.L2-3.1.19
+- SI.L1-3.14.1
+- SI.L1-3.14.2
+- SI.L1-3.14.4
+- SI.L1-3.14.5
+
+Documents:
+- configuration management policy
+- endpoint baseline procedure
+- device compliance procedure
+
+Evidence:
+- device compliance screenshots
+- device inventory
+- security baseline screenshots
+- encryption evidence
+- antivirus evidence
+- patch status evidence
+
+E. Configure Logging and Audit Review
+Category: Audit and Accountability
+Supports:
+- AU.L2-3.3.1
+- AU.L2-3.3.2
+- AU.L2-3.3.3
+- AU.L2-3.3.4
+- AU.L2-3.3.5
+- AU.L2-3.3.6
+- AU.L2-3.3.7
+- AU.L2-3.3.8
+- AU.L2-3.3.9
+- SI.L2-3.14.6
+- CA.L2-3.12.3
+
+Documents:
+- audit and accountability policy
+- log review procedure
+- audit log review record
+
+Evidence:
+- audit log configuration screenshots
+- log review export
+- log retention evidence
+- alert configuration evidence
+- review notes
+
+F. Review Vulnerabilities and Patch Compliance
+Category: Vulnerability Management
+Supports:
+- RA.L2-3.11.2
+- RA.L2-3.11.3
+- SI.L1-3.14.1
+- SI.L2-3.14.3
+- CA.L2-3.12.3
+
+Documents:
+- risk assessment policy
+- vulnerability management procedure
+- patch management procedure
+
+Evidence:
+- vulnerability report
+- patch compliance report
+- remediation tickets
+- exception approvals
+- before/after remediation evidence
+
+G. Review Firewall and External Connections
+Category: Network Security
+Supports:
+- AC.L1-3.1.20
+- SC.L1-3.13.1
+- SC.L2-3.13.6
+- SC.L2-3.13.7
+- SC.L2-3.13.8
+- SC.L2-3.13.15
+
+Documents:
+- system communications protection policy
+- firewall review procedure
+- external connection approval record
+
+Evidence:
+- firewall rule export
+- external connection list
+- approved rule matrix
+- change approvals
+- network diagram
+
+H. Perform Backup Verification
+Category: Backup / Media Protection
+Supports:
+- MP.L2-3.8.9
+- SC.L2-3.13.16
+- CA.L2-3.12.3
+
+Documents:
+- backup procedure
+- media protection policy
+- recovery procedure
+
+Evidence:
+- backup job status report
+- restore test result
+- encryption/access evidence
+- failure remediation tickets
+
+I. Conduct Incident Response Tabletop
+Category: Incident Response
+Supports:
+- IR.L2-3.6.1
+- IR.L2-3.6.2
+- IR.L2-3.6.3
+- SI.L2-3.14.3
+- SI.L2-3.14.6
+
+Documents:
+- incident response policy
+- incident response procedure
+- incident response test plan
+
+Evidence:
+- tabletop scenario
+- attendee list
+- after-action report
+- lessons learned
+- updated POA&M items if needed
+
+J. Complete Security Awareness and Role-Based Training
+Category: Training
+Supports:
+- AT.L2-3.2.1
+- AT.L2-3.2.2
+- AT.L2-3.2.3
+- PS.L2-3.9.1
+
+Documents:
+- awareness and training policy
+- training procedure
+- training register
+
+Evidence:
+- training completion report
+- training content
+- roster reconciliation
+- overdue training remediation
+
+K. Perform Policy and Procedure Review
+Category: Documentation
+Supports:
+- all domains
+- especially CA.L2-3.12.3 and CA.L2-3.12.4
+
+Documents:
+- policy inventory
+- procedure inventory
+- approval records
+- review log
+
+Evidence:
+- policy review record
+- approval evidence
+- version history
+- communication/acknowledgment record
+
+L. Perform Risk Assessment and POA&M Review
+Category: Risk / Remediation
+Supports:
+- RA.L2-3.11.1
+- RA.L2-3.11.3
+- CA.L2-3.12.2
+- CA.L2-3.12.3
+
+Documents:
+- risk register
+- risk assessment
+- POA&M
+- risk acceptance records
+
+Evidence:
+- updated risk register
+- POA&M export
+- management review notes
+- remediation evidence
+
+7. Coverage Matrix Page
+
+Create a matrix showing:
+
+Rows:
+- roadmap actions
+
+Columns:
+- CMMC controls
+
+Each cell should show:
+- Full Support
+- Partial Support
+- Evidence Only
+- Documentation Only
+- Monitoring Only
+- No Coverage
+
+Allow filtering by:
+- domain
+- control
+- action
+- priority
+- status
+
+8. Suggested Order Logic
+
+Create a recommended implementation sequence:
+
+Phase 1: Foundation
+- Assessment scope
+- SSP baseline
+- asset inventory
+- policy inventory
+
+Phase 2: Identity and Access
+- user/access review
+- MFA/Conditional Access
+- privileged access review
+
+Phase 3: Endpoint and System Security
+- endpoint compliance
+- patching
+- Defender/malware protection
+- device inventory
+
+Phase 4: Logging and Monitoring
+- audit logging
+- sign-in review
+- Defender alerts
+- monitoring tracker
+
+Phase 5: Risk and Remediation
+- vulnerability review
+- POA&M
+- risk assessment
+
+Phase 6: Audit Preparation
+- evidence review
+- test procedures
+- control readiness review
+- report package
+
+9. Integration with Controls
+
+On each Control Detail page, add a section showing:
+
+Roadmap Actions Supporting This Control
+
+For each related action:
+- action title
+- action status
+- evidence status
+- document status
+- test status
+- link to action detail
+
+10. Integration with Evidence
+
+When evidence is uploaded from a roadmap action:
+- link it to all mapped controls automatically
+- allow user to remove controls if needed
+- auto-tag evidence with:
+  - action name
+  - domain
+  - control IDs
+  - evidence type
+  - review date
+
+11. Integration with Documents
+
+When a document is uploaded or created from a roadmap action:
+- link it to all mapped controls
+- show where it satisfies policy/procedure requirements
+- include it in Documentation > All Documents
+
+12. Integration with Monitoring Tracker
+
+If a roadmap action is recurring:
+- link it to the Monitoring Tracker
+- show last completed
+- next due
+- current/overdue status
+
+13. Do Not Auto-Mark Implemented Without Validation
+
+The system may recommend that controls are ready for review, but it should not automatically mark a control Implemented unless readiness rules are met.
+
+Readiness rules:
+- SSP narrative exists
+- required evidence exists and is approved
+- required documents exist and are approved
+- testing is complete where applicable
+- monitoring is current where applicable
+- no blocking POA&M exists
+
+14. Acceptance Tests
+
+Test A:
+- Open Implementation Roadmap
+- See high-impact actions sorted by priority and impact score
+
+Test B:
+- Open Perform User and Access Review
+- See linked controls, required documents, evidence to capture, operating procedure, test procedure, and completion checklist
+
+Test C:
+- Upload evidence from the User Access Review action
+- Evidence is linked to all mapped controls
+- Evidence appears under each control’s Evidence tab
+
+Test D:
+- Complete an action
+- Related controls show Partial Support or Ready for Review, not automatically Implemented unless all readiness rules are satisfied
+
+Test E:
+- Open a control
+- See which roadmap actions support that control

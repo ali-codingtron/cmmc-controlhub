@@ -17,6 +17,7 @@ import sspRouter from "./ssp";
 import reportsRouter from "./reports";
 import adminRouter from "./admin";
 import configureRouter from "./configure";
+import roadmapRouter from "./roadmap";
 
 const router: IRouter = Router();
 
@@ -38,5 +39,6 @@ router.use(sspRouter);
 router.use(reportsRouter);
 router.use(adminRouter);
 router.use(configureRouter);
+router.use(roadmapRouter);
 
 export default router;

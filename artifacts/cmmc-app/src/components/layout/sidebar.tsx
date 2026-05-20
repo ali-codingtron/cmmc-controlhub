@@ -17,6 +17,7 @@ import {
   ScrollText,
   BarChart3,
   DatabaseZap,
+  Map,
 } from "lucide-react";
 
 import { useAuth } from "@/lib/auth";
@@ -24,6 +25,12 @@ import { useOrg } from "@/context/OrgContext";
 import { useState, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+
+const roadmapItems = [
+  { href: "/roadmap", label: "Priority Actions" },
+  { href: "/roadmap/coverage", label: "Coverage Matrix" },
+  { href: "/roadmap/progress", label: "Roadmap Progress" },
+];
 
 const documentationItems = [
   { href: "/documents", label: "Overview" },
@@ -143,9 +150,11 @@ export function Sidebar() {
   const isDocsActive = location.startsWith("/documents");
   const isSspActive = location.startsWith("/ssp");
   const isReportsActive = location.startsWith("/reports");
+  const isRoadmapActive = location.startsWith("/roadmap");
   const [docsExpanded, setDocsExpanded] = useState(isDocsActive);
   const [sspExpanded, setSspExpanded] = useState(isSspActive);
   const [reportsExpanded, setReportsExpanded] = useState(isReportsActive);
+  const [roadmapExpanded, setRoadmapExpanded] = useState(isRoadmapActive);
 
   const isAdmin = user?.role === "admin";
 
@@ -171,6 +180,44 @@ export function Sidebar() {
           <NavLink href="/evidence" icon={FileText} label="Evidence" />
           <NavLink href="/monitoring" icon={Activity} label="Monitoring Tracker" />
           <NavLink href="/poams" icon={AlertTriangle} label="POA&Ms" />
+
+          {/* Implementation Roadmap section */}
+          <button
+            onClick={() => setRoadmapExpanded((v) => !v)}
+            className={cn(
+              "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+              isRoadmapActive
+                ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+            )}
+          >
+            <Map className="h-4 w-4 shrink-0" />
+            <span className="flex-1 text-left">Impl. Roadmap</span>
+            <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", roadmapExpanded && "rotate-90")} />
+          </button>
+          {roadmapExpanded && (
+            <div className="ml-3 pl-3 border-l border-sidebar-border space-y-0.5">
+              {roadmapItems.map((item) => {
+                const isActive = item.href === "/roadmap"
+                  ? location === "/roadmap" || (location.startsWith("/roadmap/") && !location.startsWith("/roadmap/coverage") && !location.startsWith("/roadmap/progress"))
+                  : location.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center px-3 py-1.5 rounded-md text-xs transition-colors",
+                      isActive
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                        : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                    )}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
 
           {/* Documentation section */}
           <button
