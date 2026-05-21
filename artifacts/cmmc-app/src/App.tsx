@@ -51,6 +51,10 @@ import RoadmapActions from "@/pages/roadmap-actions";
 import RoadmapActionDetail from "@/pages/roadmap-action-detail";
 import RoadmapCoverage from "@/pages/roadmap-coverage";
 import RoadmapProgress from "@/pages/roadmap-progress";
+import ReadinessList from "@/pages/readiness-list";
+import ReadinessNew from "@/pages/readiness-new";
+import ReadinessAssess from "@/pages/readiness-assess";
+import ReadinessResults from "@/pages/readiness-results";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -155,6 +159,14 @@ function AppRoutes() {
               <Route path="/roadmap/progress" component={RoadmapProgress} />
               <Route path="/roadmap/:id">
                 {(params: { id: string }) => <RoadmapActionDetail id={params.id} />}
+              </Route>
+              <Route path="/readiness" component={ReadinessList} />
+              <Route path="/readiness/new" component={ReadinessNew} />
+              <Route path="/readiness/:id/assess">
+                {(params: { id: string }) => <ReadinessAssess id={params.id} />}
+              </Route>
+              <Route path="/readiness/:id/results">
+                {(params: { id: string }) => <ReadinessResults id={params.id} />}
               </Route>
               <Route component={NotFound} />
             </Switch>

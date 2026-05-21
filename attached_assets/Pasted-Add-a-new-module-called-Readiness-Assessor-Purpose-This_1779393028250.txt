@@ -1,0 +1,444 @@
+Add a new module called “Readiness Assessor.”
+
+Purpose:
+This module should allow an organization to run an internal CMMC readiness assessment before configuring controls.
+
+This is NOT an official C3PAO assessment.
+It is an internal baseline assessment that helps determine:
+- where the organization currently stands
+- which controls appear implemented
+- which controls are partially implemented
+- which controls are not started
+- what evidence already exists
+- what documentation is missing
+- what actions should be prioritized first
+- what projected CMMC score may look like
+
+Do not automatically mark controls as fully implemented unless readiness rules are met.
+
+1. Navigation
+
+Add sidebar section:
+
+Readiness Assessor
+
+Pages:
+- Start Assessment
+- Assessment Wizard
+- Assessment Results
+- Control Findings
+- Evidence Requests
+- Recommended Roadmap
+- Assessment History
+
+2. Assessment Types
+
+Allow the user to choose:
+
+A. Quick Baseline Assessment
+Purpose:
+Fast current-state assessment based on interview-style questions.
+
+B. Full Control Assessment
+Purpose:
+Control-by-control assessment across all CMMC L1/L2 requirements.
+
+C. Objective-Level Assessment
+Purpose:
+Detailed review by assessment objective, using Examine / Interview / Test logic.
+
+D. Reassessment
+Purpose:
+Re-run an assessment after remediation.
+
+3. Assessment Setup
+
+Before starting, collect:
+
+- organization
+- CMMC target level
+- assessment scope name
+- assessment date
+- assessor/internal reviewer
+- system name
+- environment type
+- primary tools
+- whether CUI is stored, processed, or transmitted
+- whether Microsoft 365 is used
+- whether endpoints are managed
+- whether MFA is enforced
+- whether policies exist
+- whether SSP exists
+- whether POA&M exists
+- whether evidence exists
+
+4. Scope Readiness Questions
+
+Ask baseline scoping questions:
+
+- Has the CUI boundary been defined?
+- Has the SSP been created?
+- Are in-scope systems documented?
+- Are users with CUI access identified?
+- Are external service providers documented?
+- Are cloud services documented?
+- Are assets inventoried?
+- Are data flows documented?
+- Are policies and procedures documented?
+
+Each question should support:
+- Yes
+- No
+- Partial
+- Unknown
+- Not Applicable
+
+5. Control Assessment Question Engine
+
+For each control, ask structured questions.
+
+Each control should include:
+- control ID
+- title
+- domain
+- plain-English question
+- implementation questions
+- evidence questions
+- policy/procedure questions
+- testing questions
+- monitoring questions
+- POA&M questions
+
+Answer options:
+- Met
+- Partially Met
+- Not Met
+- Unknown
+- Not Applicable
+
+Also allow:
+- notes
+- evidence upload
+- link existing evidence
+- create POA&M
+- assign owner
+- create roadmap action
+
+6. Examine / Interview / Test Structure
+
+For each control or objective, organize questions into:
+
+A. Examine
+Ask what documents or evidence exist.
+
+Examples:
+- Is there an approved policy?
+- Is there a procedure?
+- Is there a screenshot/export/configuration report?
+- Is the evidence current?
+
+B. Interview
+Ask whether responsible personnel can explain the process.
+
+Examples:
+- Who owns this control?
+- Who performs the review?
+- How often is it performed?
+- What happens when an exception is found?
+
+C. Test
+Ask whether the control has been tested.
+
+Examples:
+- Was the configuration validated?
+- Was a sample tested?
+- Was access denied/allowed as expected?
+- Was the test result documented?
+
+7. Assessment Objective Mapping
+
+If assessment objectives exist in the data model, map each answer to the related objective.
+
+Each objective should have:
+- objective ID
+- objective text
+- result: Met / Partially Met / Not Met / Unknown / N/A
+- evidence linked
+- notes
+- finding
+- remediation action
+
+8. Scoring Logic
+
+Add projected internal scoring.
+
+Important:
+Label this as:
+“Projected Internal Readiness Score”
+
+Do NOT call it an official CMMC score.
+
+For CMMC Level 2:
+- max score = 110
+- subtract point values for controls assessed Not Met
+- if point weights are available, use 1 / 3 / 5 point values
+- if point weights are not available, default to 1 point per control until weights are added
+
+Show:
+- projected score
+- readiness percentage
+- controls met
+- controls partially met
+- controls not met
+- controls unknown
+- POA&M candidates
+- blocking gaps
+
+9. Partial Credit / Confidence
+
+Add a separate confidence score.
+
+Confidence Score should consider:
+- evidence exists
+- evidence approved
+- policy exists
+- procedure exists
+- SSP narrative exists
+- test completed
+- monitoring current
+- no open POA&M
+
+This score is separate from projected CMMC score.
+
+Example:
+Projected Score: 82 / 110
+Audit Confidence: 61 / 100
+
+10. Results Dashboard
+
+After assessment, show:
+
+- Projected Internal Readiness Score
+- Audit Confidence Score
+- Controls Met
+- Controls Partially Met
+- Controls Not Met
+- Unknown Controls
+- Missing Evidence
+- Missing Policies
+- Missing Procedures
+- Missing SSP Narratives
+- Open POA&M Needed
+- Top 10 Priority Actions
+- Estimated effort
+- Recommended implementation phase
+
+11. Findings Generation
+
+For each Not Met or Partially Met item, generate a finding.
+
+Finding fields:
+- finding title
+- linked control
+- linked assessment objective
+- finding type
+- gap description
+- risk level
+- recommended remediation
+- required evidence
+- owner
+- target date
+- create POA&M checkbox
+
+12. POA&M Creation
+
+Allow findings to create POA&M items.
+
+When creating POA&M:
+- link to organization
+- link to control
+- link to finding
+- carry over risk level
+- carry over remediation recommendation
+- assign owner and target date
+
+13. Evidence Request Generation
+
+For missing evidence, create Evidence Requests.
+
+Evidence Request fields:
+- title
+- linked control
+- evidence type
+- instructions
+- suggested filename
+- owner
+- due date
+- status
+
+14. Roadmap Integration
+
+Assessment results should feed the Implementation Roadmap.
+
+For each gap:
+- map to existing roadmap action if possible
+- show which high-impact action resolves the gap
+- prioritize actions by controls impacted
+
+Example:
+If access review, MFA, and account management gaps exist:
+Recommend:
+“Perform User and Access Review”
+“Configure MFA and Conditional Access Baseline”
+
+15. Control Status Updates
+
+Do not automatically mark controls Implemented.
+
+Instead, after assessment, set suggested status:
+
+- Met with approved evidence → Candidate for Implemented
+- Met without evidence → Needs Evidence
+- Partially Met → In Progress
+- Not Met → Not Started or Gap Identified
+- Unknown → Needs Review
+- N/A → Not Applicable
+
+Allow Admin/Compliance Manager to approve updates.
+
+16. Assessment History
+
+Save each assessment as a historical record.
+
+Track:
+- assessment date
+- organization
+- target level
+- assessor
+- projected score
+- confidence score
+- number of findings
+- number of POA&Ms created
+- report file
+- notes
+
+Allow comparison:
+- previous assessment vs current assessment
+- score trend
+- findings closed
+- evidence added since last assessment
+
+17. Reports
+
+Generate downloadable reports:
+
+A. Baseline Readiness Report
+Client-facing summary.
+
+B. Detailed Control Findings Report
+Control-by-control findings.
+
+C. Evidence Request Report
+List of needed artifacts.
+
+D. POA&M Draft Report
+Items recommended for remediation tracking.
+
+E. Roadmap Recommendation Report
+What to do first and why.
+
+18. Built-In Question Examples
+
+For AC.L1-3.1.1, ask:
+
+- Are all users uniquely identified?
+- Is access limited to authorized users?
+- Is there an access control policy?
+- Is there an account management procedure?
+- Is there a current user access list?
+- Are privileged users documented?
+- Are guest/external users reviewed?
+- Is there evidence of access approval?
+- Has access been reviewed recently?
+- Is evidence uploaded and approved?
+
+For IA.L2-3.5.3, ask:
+
+- Is MFA enforced for all users?
+- Is MFA enforced for privileged users?
+- Is MFA enforced for remote access?
+- Are legacy authentication methods blocked?
+- Is there evidence from Conditional Access or identity settings?
+- Has MFA enforcement been tested?
+
+For AU.L2-3.3.5, ask:
+
+- Are audit logs reviewed?
+- Is there a log review procedure?
+- Is there evidence of recurring review?
+- Are findings documented?
+- Are alerts/tickets generated for issues?
+
+19. UI Requirements
+
+Make the Assessment Wizard easy to use.
+
+Use:
+- progress bar
+- domain-by-domain navigation
+- save and resume
+- filters
+- unanswered questions view
+- bulk mark unknown
+- add notes
+- upload evidence inline
+- create POA&M inline
+- create evidence request inline
+
+20. Permissions
+
+Admin / Compliance Manager:
+- create assessments
+- edit responses
+- approve status updates
+- generate reports
+
+IT Contributor:
+- answer assigned technical questions
+- upload evidence
+
+Reviewer:
+- review findings and evidence
+
+Assessor Read-Only:
+- view completed assessment reports only
+- no edits
+
+21. Acceptance Tests
+
+Test A:
+- Create new Baseline Assessment
+- Select organization
+- Select target level L2
+- Complete scope questions
+- Answer several control questions
+- Save and resume
+
+Test B:
+- Mark one control Not Met
+- System creates finding
+- System offers POA&M creation
+- POA&M links to control
+
+Test C:
+- Mark one control Met but no evidence exists
+- System marks it Needs Evidence
+- Evidence Request is created
+
+Test D:
+- Complete assessment
+- Results page shows projected score, confidence score, gaps, and recommended roadmap actions
+
+Test E:
+- Generate Baseline Readiness Report
+- Report shows where the organization currently sits before configuration work begins
