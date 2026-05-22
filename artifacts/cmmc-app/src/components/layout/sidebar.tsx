@@ -18,6 +18,7 @@ import {
   BarChart3,
   DatabaseZap,
   Map,
+  Bot,
 } from "lucide-react";
 
 import { useAuth } from "@/lib/auth";
@@ -156,6 +157,9 @@ export function Sidebar() {
   const [reportsExpanded, setReportsExpanded] = useState(isReportsActive);
   const [roadmapExpanded, setRoadmapExpanded] = useState(isRoadmapActive);
   const isAdmin = user?.role === "admin";
+  const canRunAssessment = user?.role === "admin" || user?.role === "compliance_manager" || user?.role === "reviewer";
+  const isAutoAssessorActive = location.startsWith("/auto-assessor");
+  const [autoAssessorExpanded, setAutoAssessorExpanded] = useState(isAutoAssessorActive);
 
   return (
     <div className="no-print flex flex-col w-64 bg-sidebar border-r border-sidebar-border text-sidebar-foreground h-screen sticky top-0">
@@ -202,6 +206,52 @@ export function Sidebar() {
                     const isActive = item.href === "/roadmap"
                       ? location === "/roadmap" || (location.startsWith("/roadmap/") && !location.startsWith("/roadmap/coverage") && !location.startsWith("/roadmap/progress"))
                       : location.startsWith(item.href);
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={cn(
+                          "flex items-center px-3 py-1.5 rounded-md text-xs transition-colors",
+                          isActive
+                            ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                            : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                        )}
+                      >
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Automated Assessor section */}
+          {canRunAssessment && (
+            <>
+              <button
+                onClick={() => setAutoAssessorExpanded((v) => !v)}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                  isAutoAssessorActive
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                )}
+              >
+                <Bot className="h-4 w-4 shrink-0" />
+                <span className="flex-1 text-left">Auto Assessor</span>
+                <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", autoAssessorExpanded && "rotate-90")} />
+              </button>
+              {autoAssessorExpanded && (
+                <div className="ml-3 pl-3 border-l border-sidebar-border space-y-0.5">
+                  {[
+                    { href: "/auto-assessor", label: "My Assessments" },
+                    { href: "/auto-assessor/new", label: "Run Assessment" },
+                  ].map((item) => {
+                    const isActive =
+                      item.href === "/auto-assessor/new"
+                        ? location === "/auto-assessor/new"
+                        : location === "/auto-assessor";
                     return (
                       <Link
                         key={item.href}

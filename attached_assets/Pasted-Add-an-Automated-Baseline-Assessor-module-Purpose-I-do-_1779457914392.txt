@@ -1,0 +1,582 @@
+Add an Automated Baseline Assessor module.
+
+Purpose:
+I do not want to manually assess 110 controls one by one.
+
+The system should assess an organization by implementation area, uploaded evidence, documents, SSP content, POA&M data, and monitoring tracker data.
+
+The goal is to quickly determine:
+- current readiness
+- likely implemented controls
+- partially implemented controls
+- missing evidence
+- missing documents
+- missing SSP narratives
+- monitoring gaps
+- POA&M candidates
+- recommended next actions
+
+Important:
+This is an internal readiness assessor, not an official C3PAO certification tool.
+
+The module should generate recommended findings and suggested statuses, but it should require Admin or Compliance Manager approval before changing actual control statuses.
+
+1. Add Navigation
+
+Add sidebar section:
+
+Automated Assessor
+
+Pages:
+- Start Baseline Assessment
+- Assessment Intake
+- Artifact Review
+- Assessment Packs
+- Findings
+- Evidence Requests
+- Recommended Roadmap
+- Results
+- Assessment History
+
+2. Assessment Method
+
+Use an automated “assessment pack” model instead of control-by-control assessment.
+
+Assessment packs should group related controls together.
+
+Create these assessment packs:
+
+A. Scope and SSP Pack
+Covers:
+- assessment scope
+- system boundary
+- CUI flow
+- asset inventory
+- external providers
+- SSP existence
+- SSP control narratives
+
+B. Policies and Procedures Pack
+Covers:
+- policy inventory
+- procedure inventory
+- approvals
+- review dates
+- versioning
+- control mappings
+
+C. Identity and Access Pack
+Covers:
+- users
+- groups
+- privileged users
+- access reviews
+- stale accounts
+- guest users
+- service accounts
+- account approvals
+
+D. MFA and Authentication Pack
+Covers:
+- MFA
+- password policy
+- account lockout
+- legacy authentication
+- remote access authentication
+- session controls
+
+E. Endpoint and Configuration Pack
+Covers:
+- device inventory
+- endpoint management
+- compliance policies
+- baseline configurations
+- patching
+- antivirus
+- encryption
+
+F. Logging and Audit Pack
+Covers:
+- audit logging
+- log retention
+- log review
+- alerting
+- audit protection
+- traceability
+
+G. Vulnerability and System Integrity Pack
+Covers:
+- vulnerability scanning
+- patch remediation
+- malware protection
+- security alerts
+- monitoring for attacks
+
+H. Network and External Connections Pack
+Covers:
+- firewall rules
+- external connections
+- secure communications
+- network diagrams
+- segmentation
+- default deny
+
+I. Incident Response Pack
+Covers:
+- incident response policy
+- incident handling
+- reporting
+- tabletop testing
+- after-action records
+
+J. Risk and POA&M Pack
+Covers:
+- risk assessment
+- risk register
+- POA&M
+- remediation tracking
+- risk acceptance
+
+K. Backup, Media, and Data Protection Pack
+Covers:
+- backups
+- restore testing
+- media protection
+- removable media
+- sanitization
+- encryption at rest
+
+L. Personnel, Physical, and Training Pack
+Covers:
+- awareness training
+- role-based training
+- physical access
+- visitor logs
+- personnel screening
+- offboarding
+
+3. Assessment Intake Wizard
+
+The assessment should start with a guided intake wizard.
+
+Ask organization-level questions first:
+
+- Is an SSP uploaded?
+- Is the assessment scope defined?
+- Are in-scope assets documented?
+- Is CUI stored, processed, or transmitted?
+- Are users and privileged users documented?
+- Are policies uploaded?
+- Are procedures uploaded?
+- Is evidence already uploaded?
+- Is a POA&M available?
+- Is a monitoring tracker active?
+- Are endpoints centrally managed?
+- Is MFA enforced?
+- Are audit logs reviewed?
+- Are vulnerabilities reviewed?
+- Are backups tested?
+- Has incident response been tested?
+
+Answer options:
+- Yes
+- No
+- Partial
+- Unknown
+- Not Applicable
+
+Each answer should support:
+- notes
+- upload evidence
+- link existing evidence
+- create evidence request
+- create POA&M
+- assign owner
+
+4. Artifact-Based Automation
+
+The assessor should inspect existing app data automatically before asking questions.
+
+It should review:
+
+- Controls
+- Evidence
+- Documents
+- SSP mappings
+- POA&Ms
+- Monitoring Tracker
+- Roadmap Actions
+- Assessment Scope
+- Users / owners
+- Audit logs
+
+For each control, automatically detect:
+- evidence exists
+- approved evidence exists
+- policy exists
+- procedure exists
+- SSP narrative exists
+- monitoring item exists
+- monitoring item is current
+- POA&M exists
+- evidence is stale
+- evidence is draft/pending
+- no evidence exists
+
+5. Uploaded Document/Evidence Analysis
+
+Add an “Analyze Uploaded Artifacts” function.
+
+When I upload or already have documents/evidence, the system should suggest:
+
+- likely document type
+- likely evidence type
+- related control IDs
+- related domain
+- whether it supports policy/procedure/evidence
+- missing metadata
+- suggested assessor summary
+- suggested filename if current name is weak
+
+Examples:
+- A file named “MFA Policy Screenshot.png” should suggest IA.L2-3.5.3 and AC.L2-3.1.13
+- A document named “Access Control Policy.docx” should suggest AC controls
+- A “Risk Register.xlsx” should suggest RA.L2-3.11.1 and CA.L2-3.12.2
+- A “POA&M.xlsx” should suggest CA.L2-3.12.2
+
+Do not automatically apply mappings without confirmation.
+Show suggested mappings and allow user to approve/reject.
+
+6. Assessment Pack Questions
+
+Instead of asking 110 controls manually, each pack should ask higher-level questions that map to multiple controls.
+
+Example: Identity and Access Pack
+
+Questions:
+- Are all users uniquely identified?
+- Is there a current user inventory?
+- Are privileged users documented?
+- Are guest users reviewed?
+- Are stale/inactive accounts disabled?
+- Are access approvals documented?
+- Are access reviews performed periodically?
+- Are shared accounts prohibited or controlled?
+- Are service accounts documented?
+- Are leavers removed within policy timeframe?
+
+For each answer, map results to related controls:
+- AC.L1-3.1.1
+- AC.L1-3.1.2
+- AC.L2-3.1.5
+- AC.L2-3.1.6
+- AC.L2-3.1.7
+- IA.L1-3.5.1
+- IA.L1-3.5.2
+- IA.L2-3.5.5
+- IA.L2-3.5.6
+- CA.L2-3.12.3
+
+7. Examine / Interview / Test Automation
+
+For each assessment pack, organize results by:
+
+A. Examine
+Documents and evidence that exist.
+
+Examples:
+- policy exists
+- procedure exists
+- screenshots exist
+- exports exist
+- logs exist
+- review records exist
+
+B. Interview
+People/process answers.
+
+Examples:
+- owner identified
+- frequency known
+- exception process known
+- escalation process known
+
+C. Test
+Validation results.
+
+Examples:
+- sample tested
+- configuration verified
+- log review performed
+- access denied/allowed as expected
+- remediation verified
+
+Use the uploaded Monitoring Tracker procedure matrix as a source structure because it already separates Operating Procedure, Test Procedure, and Evidence to Retain. :contentReference[oaicite:2]{index=2}
+
+8. Rules Engine
+
+Create a rules engine that determines suggested readiness.
+
+For each control, suggested status should be:
+
+Not Started:
+- no evidence
+- no documentation
+- no SSP narrative
+- no positive assessment answers
+
+In Progress:
+- partial evidence exists
+- or documentation exists but no test/evidence
+- or answers are Partial
+
+Needs Evidence:
+- user says implemented
+- but no approved evidence exists
+
+Needs Documentation:
+- evidence exists
+- but policy/procedure is missing
+
+Needs Validation:
+- evidence and documentation exist
+- but no test/validation is recorded
+
+Candidate for Implemented:
+- SSP narrative exists
+- approved evidence exists
+- required policy/procedure exists if applicable
+- test/validation exists if applicable
+- no blocking POA&M exists
+
+Implemented:
+- only after user approves suggested status
+
+9. Confidence Score
+
+For each control and assessment pack, calculate a confidence score.
+
+Suggested formula:
+- 25% implementation answer
+- 20% approved evidence
+- 15% SSP narrative
+- 15% required policy/procedure
+- 10% test/validation
+- 10% monitoring current if applicable
+- 5% no blocking POA&M
+
+Show:
+- High Confidence
+- Medium Confidence
+- Low Confidence
+- Unknown
+
+10. Projected Score
+
+Generate an internal projected CMMC score.
+
+Important:
+Label it:
+Projected Internal Readiness Score
+
+Do not label it as an official CMMC score.
+
+For Level 2:
+- max score = 110
+- subtract point values for controls assessed Not Met
+- use 1 / 3 / 5 point values if stored
+- if point values are not stored yet, add control_score_weight to the Control model
+
+Show:
+- projected score
+- controls likely met
+- controls partially met
+- controls not met
+- controls unknown
+- POA&M candidates
+- blocking gaps
+
+11. Automated Findings
+
+For each gap, automatically create a finding.
+
+Finding fields:
+- finding title
+- linked control
+- linked assessment pack
+- finding type
+- severity
+- gap description
+- recommended remediation
+- required evidence
+- required document
+- owner
+- target date
+- create POA&M button
+
+Finding types:
+- Missing Evidence
+- Missing Policy
+- Missing Procedure
+- Missing SSP Narrative
+- Failed Test
+- Monitoring Gap
+- Open POA&M
+- Unknown Implementation
+- Stale Evidence
+
+12. Automated Evidence Requests
+
+For every missing artifact, create an Evidence Request.
+
+Fields:
+- title
+- linked controls
+- evidence type
+- instructions
+- suggested filename
+- owner
+- due date
+- status
+
+Example:
+Title:
+Upload MFA Conditional Access Policy Screenshot
+
+Suggested filename:
+IA-3.5.3_MFA_Conditional_Access_Policy_YYYY-MM-DD.png
+
+Linked controls:
+- IA.L2-3.5.3
+- AC.L2-3.1.13
+- AC.L2-3.1.14
+
+13. Roadmap Recommendations
+
+Assessment results should automatically feed the Implementation Roadmap.
+
+If many gaps relate to identity:
+Recommend:
+- Perform User and Access Review
+- Configure MFA and Conditional Access Baseline
+
+If many gaps relate to endpoint security:
+Recommend:
+- Configure Endpoint Compliance and Device Management
+
+If many gaps relate to logs:
+Recommend:
+- Configure Logging and Audit Review
+
+Show:
+- recommended action
+- controls impacted
+- evidence created
+- documents needed
+- estimated effort
+- priority
+
+14. Bulk Apply Suggested Results
+
+After assessment, show a review screen:
+
+Suggested Updates:
+- controls to set In Progress
+- controls to set Needs Evidence
+- controls to set Candidate for Implemented
+- evidence requests to create
+- POA&M items to create
+- roadmap actions to prioritize
+
+Allow Admin/Compliance Manager to:
+- approve all
+- approve selected
+- reject selected
+- edit before applying
+
+Do not automatically change statuses without approval.
+
+15. Results Dashboard
+
+After running the automated assessor, show:
+
+- Projected Internal Readiness Score
+- Audit Confidence Score
+- Controls Candidate for Implemented
+- Controls Needing Evidence
+- Controls Needing Documentation
+- Controls Needing Validation
+- Controls Not Started
+- Unknown Controls
+- Missing Evidence Requests
+- Suggested POA&Ms
+- Recommended Roadmap Actions
+
+16. Assessment History
+
+Save every automated assessment run.
+
+Track:
+- organization
+- assessment date
+- assessment type
+- user who ran it
+- score
+- confidence
+- findings generated
+- evidence requests generated
+- POA&Ms generated
+- approved status changes
+- report
+
+17. Reports
+
+Generate:
+
+- Automated Baseline Assessment Report
+- Assessment Pack Summary Report
+- Findings Report
+- Evidence Request Report
+- Roadmap Recommendation Report
+- Projected Score Report
+
+18. Permissions
+
+Admin / Compliance Manager:
+- run assessment
+- approve suggested updates
+- create findings
+- create POA&M
+
+IT Contributor:
+- answer assigned questions
+- upload evidence
+
+Reviewer:
+- review results
+
+Assessor Read-Only:
+- view completed results only
+- no edits
+
+19. Acceptance Tests
+
+Test A:
+- Start Automated Baseline Assessment
+- System scans existing SSP, evidence, documents, monitoring, and POA&M
+- System shows initial findings without requiring control-by-control answers
+
+Test B:
+- Answer Identity and Access Pack questions
+- System maps answers to multiple AC and IA controls
+
+Test C:
+- Upload one access review evidence file
+- System suggests linking it to multiple related controls
+
+Test D:
+- Complete assessment
+- System produces projected score, confidence score, findings, evidence requests, and roadmap recommendations
+
+Test E:
+- System does not automatically mark controls Implemented unless Admin approves suggested updates
