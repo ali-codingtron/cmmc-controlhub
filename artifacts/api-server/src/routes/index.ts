@@ -18,7 +18,6 @@ import reportsRouter from "./reports";
 import adminRouter from "./admin";
 import configureRouter from "./configure";
 import roadmapRouter from "./roadmap";
-import readinessRouter from "./readiness";
 
 const router: IRouter = Router();
 
@@ -41,6 +40,5 @@ router.use(reportsRouter);
 router.use(adminRouter);
 router.use(configureRouter);
 router.use(roadmapRouter);
-router.use(readinessRouter);
 
 export default router;
