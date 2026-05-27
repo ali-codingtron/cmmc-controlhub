@@ -18,7 +18,7 @@ import {
   BarChart3,
   DatabaseZap,
   Map,
-  Bot,
+  Cable,
 } from "lucide-react";
 
 import { useAuth } from "@/lib/auth";
@@ -158,8 +158,8 @@ export function Sidebar() {
   const [roadmapExpanded, setRoadmapExpanded] = useState(isRoadmapActive);
   const isAdmin = user?.role === "admin";
   const canRunAssessment = user?.role === "admin" || user?.role === "compliance_manager" || user?.role === "reviewer";
-  const isAutoAssessorActive = location.startsWith("/auto-assessor");
-  const [autoAssessorExpanded, setAutoAssessorExpanded] = useState(isAutoAssessorActive);
+  const isPreAssessmentActive = location.startsWith("/pre-assessment");
+  const [preAssessmentExpanded, setPreAssessmentExpanded] = useState(isPreAssessmentActive);
 
   return (
     <div className="no-print flex flex-col w-64 bg-sidebar border-r border-sidebar-border text-sidebar-foreground h-screen sticky top-0">
@@ -226,32 +226,34 @@ export function Sidebar() {
             </>
           )}
 
-          {/* Automated Assessor section */}
+          {/* Pre-Assessment section */}
           {canRunAssessment && (
             <>
               <button
-                onClick={() => setAutoAssessorExpanded((v) => !v)}
+                onClick={() => setPreAssessmentExpanded((v) => !v)}
                 className={cn(
                   "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
-                  isAutoAssessorActive
+                  isPreAssessmentActive
                     ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
                     : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                 )}
               >
-                <Bot className="h-4 w-4 shrink-0" />
-                <span className="flex-1 text-left">Auto Assessor</span>
-                <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", autoAssessorExpanded && "rotate-90")} />
+                <Cable className="h-4 w-4 shrink-0" />
+                <span className="flex-1 text-left">Pre-Assessment</span>
+                <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", preAssessmentExpanded && "rotate-90")} />
               </button>
-              {autoAssessorExpanded && (
+              {preAssessmentExpanded && (
                 <div className="ml-3 pl-3 border-l border-sidebar-border space-y-0.5">
                   {[
-                    { href: "/auto-assessor", label: "My Assessments" },
-                    { href: "/auto-assessor/new", label: "Run Assessment" },
+                    { href: "/pre-assessment/manual", label: "Manual Pre-Assessment" },
+                    { href: "/pre-assessment/run", label: "Tenant-Connected Assessment" },
+                    { href: "/pre-assessment/connections", label: "Tenant Connections" },
+                    { href: "/pre-assessment/history", label: "Assessment History" },
+                    { href: "/pre-assessment/findings", label: "Findings" },
+                    { href: "/pre-assessment/evidence-requests", label: "Evidence Requests" },
+                    { href: "/pre-assessment/roadmap", label: "Recommended Roadmap" },
                   ].map((item) => {
-                    const isActive =
-                      item.href === "/auto-assessor/new"
-                        ? location === "/auto-assessor/new"
-                        : location === "/auto-assessor";
+                    const isActive = location === item.href || location.startsWith(item.href + "/");
                     return (
                       <Link
                         key={item.href}

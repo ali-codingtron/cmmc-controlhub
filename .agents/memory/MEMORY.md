@@ -1,0 +1,1 @@
+- [Pre-Assessment module](pre-assessment.md) — Tenant-Connected Pre-Assessment replaced Auto Assessor; key decisions on auth, rules engine, and DB enum pitfalls.

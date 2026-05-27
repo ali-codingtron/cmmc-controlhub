@@ -18,7 +18,7 @@ import reportsRouter from "./reports";
 import adminRouter from "./admin";
 import configureRouter from "./configure";
 import roadmapRouter from "./roadmap";
-import autoAssessorRouter from "./auto-assessor";
+import preAssessmentRouter from "./pre-assessment";
 
 const router: IRouter = Router();
 
@@ -41,6 +41,6 @@ router.use(reportsRouter);
 router.use(adminRouter);
 router.use(configureRouter);
 router.use(roadmapRouter);
-router.use("/auto-assessor", autoAssessorRouter);
+router.use("/pre-assessment", preAssessmentRouter);
 
 export default router;

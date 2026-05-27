@@ -51,10 +51,14 @@ import RoadmapActions from "@/pages/roadmap-actions";
 import RoadmapActionDetail from "@/pages/roadmap-action-detail";
 import RoadmapCoverage from "@/pages/roadmap-coverage";
 import RoadmapProgress from "@/pages/roadmap-progress";
-import AutoAssessorList from "@/pages/auto-assessor-list";
-import AutoAssessorNew from "@/pages/auto-assessor-new";
-import AutoAssessorResults from "@/pages/auto-assessor-results";
-import AutoAssessorFindings from "@/pages/auto-assessor-findings";
+import PaHistory from "@/pages/pa-history";
+import PaRun from "@/pages/pa-run";
+import PaManual from "@/pages/pa-manual";
+import PaConnections from "@/pages/pa-connections";
+import PaResults from "@/pages/pa-results";
+import PaFindings from "@/pages/pa-findings";
+import PaEvidenceRequests from "@/pages/pa-evidence-requests";
+import PaRoadmap from "@/pages/pa-roadmap";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -160,10 +164,19 @@ function AppRoutes() {
               <Route path="/roadmap/:id">
                 {(params: { id: string }) => <RoadmapActionDetail id={params.id} />}
               </Route>
-              <Route path="/auto-assessor" component={AutoAssessorList} />
-              <Route path="/auto-assessor/new" component={AutoAssessorNew} />
-              <Route path="/auto-assessor/:id/results" component={AutoAssessorResults} />
-              <Route path="/auto-assessor/:id/findings" component={AutoAssessorFindings} />
+              <Route path="/pre-assessment">
+                {() => <Redirect to="/pre-assessment/history" />}
+              </Route>
+              <Route path="/pre-assessment/history" component={PaHistory} />
+              <Route path="/pre-assessment/run" component={PaRun} />
+              <Route path="/pre-assessment/manual" component={PaManual} />
+              <Route path="/pre-assessment/connections" component={PaConnections} />
+              <Route path="/pre-assessment/findings" component={PaFindings} />
+              <Route path="/pre-assessment/evidence-requests" component={PaEvidenceRequests} />
+              <Route path="/pre-assessment/roadmap" component={PaRoadmap} />
+              <Route path="/pre-assessment/results/:id">
+                {(params: { id: string }) => <PaResults id={params.id} />}
+              </Route>
               <Route component={NotFound} />
             </Switch>
           </Guard>

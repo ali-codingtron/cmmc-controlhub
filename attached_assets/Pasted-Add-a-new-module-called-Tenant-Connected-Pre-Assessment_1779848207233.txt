@@ -1,0 +1,757 @@
+Add a new module called “Tenant-Connected Pre-Assessment.”
+
+Purpose:
+I want Control HUB to connect to an organization’s Microsoft 365 / Entra / Intune / Defender tenant in read-only mode and perform an automated CMMC readiness pre-assessment.
+
+This is NOT an official C3PAO assessment.
+This is an internal current-state pre-assessment that helps determine where an organization currently sits before implementation work begins.
+
+The module should:
+- connect to a Microsoft tenant
+- pull configuration and posture data
+- map data to CMMC controls
+- generate findings
+- generate evidence requests
+- recommend implementation roadmap actions
+- produce a pre-assessment report
+- avoid making any changes to the Microsoft tenant
+
+Do not build remediation/write-back yet.
+This must be read-only.
+
+1. Navigation
+
+Add sidebar section:
+
+Pre-Assessment
+
+Under it add:
+- Manual Pre-Assessment
+- Tenant-Connected Assessment
+- Tenant Connections
+- Assessment Results
+- Findings
+- Evidence Requests
+- Recommended Roadmap
+- Assessment History
+
+2. Tenant Connection Page
+
+Create a page:
+
+Tenant Connections
+
+For each organization, allow adding a Microsoft tenant connection.
+
+Fields:
+- organization
+- tenant name
+- Microsoft tenant ID
+- primary domain
+- connection status
+- last successful scan
+- last failed scan
+- permission status
+- connected by
+- connected date
+- notes
+
+Buttons:
+- Connect Microsoft Tenant
+- Test Connection
+- Run Assessment
+- Disconnect Tenant
+- View Permissions
+- View Last Scan
+
+3. Authentication Model
+
+Use Microsoft identity platform / Microsoft Graph.
+
+Support two modes:
+
+A. Delegated Assessment Mode
+- user signs in with Microsoft admin account
+- app reads only what that user is authorized to read
+- good for quick assessments
+
+B. App-Only Assessment Mode
+- tenant admin grants application permissions
+- app can run scheduled/background scans
+- good for repeat assessments
+
+Use MSAL or Microsoft-supported authentication library.
+
+Do not store Microsoft admin passwords.
+
+Store tokens/secrets securely.
+Encrypt any refresh tokens or credentials at rest.
+Allow tenant disconnect/revoke.
+
+4. Permission Design
+
+Use least-privilege read-only permissions.
+
+Create permission groups by assessment pack so I do not need to request every permission at once.
+
+Permission packs:
+
+A. Identity Pack
+Used for:
+- users
+- groups
+- guests
+- disabled accounts
+- stale accounts
+- admin roles
+- role assignments
+
+B. Authentication Pack
+Used for:
+- MFA registration
+- authentication methods
+- password/authentication posture
+
+C. Conditional Access Pack
+Used for:
+- Conditional Access policies
+- MFA enforcement
+- legacy authentication blocking
+- session controls
+
+D. Device / Intune Pack
+Used for:
+- managed devices
+- compliance status
+- encryption/compliance
+- ownership
+- OS/version data
+
+E. Audit / Sign-in Pack
+Used for:
+- sign-in logs
+- audit logs
+- risky sign-ins if available
+- admin changes
+
+F. Security Score / Defender Pack
+Used for:
+- Secure Score
+- Defender alerts if available
+- security recommendations if available
+
+G. SharePoint / Collaboration Pack
+Used for:
+- sites
+- external sharing posture
+- guest access
+- sensitive repositories
+
+Important:
+Show the permissions being requested before admin consent.
+Explain what each permission is used for.
+Keep all permissions read-only.
+
+5. Data Sources to Pull
+
+Phase 1 — Build these first:
+
+Identity:
+- users
+- disabled users
+- guest users
+- admin users
+- group membership
+- role assignments
+- stale/inactive users if sign-in data is available
+
+Authentication:
+- MFA registration / authentication method registration
+- users missing MFA registration
+- users with weak methods if available
+
+Conditional Access:
+- policy names
+- policy state
+- assignments
+- grant controls
+- session controls
+- exclusions
+- legacy authentication blocking if detectable
+
+Devices / Intune:
+- managed devices
+- compliance state
+- encryption status if available
+- OS version
+- last check-in
+- device ownership
+- primary user
+- noncompliant/stale devices
+
+Audit / Sign-ins:
+- sign-in logs
+- failed sign-ins
+- risky or unusual sign-ins if available
+- admin sign-ins
+- directory audit logs
+- role changes
+- group membership changes
+- Conditional Access policy changes
+
+Secure Score:
+- current secure score
+- max score
+- control scores
+- recommended improvement actions
+
+Phase 2 — Add later:
+- Defender vulnerability recommendations
+- Defender incidents/alerts
+- Purview audit/search exports
+- SharePoint external sharing posture
+- Exchange mail flow/security settings
+- Teams guest/external access
+- DLP/sensitivity labels
+
+6. Scan Runs
+
+Create a new concept:
+
+TenantAssessmentScan
+
+Each scan should store:
+- scan ID
+- organization ID
+- tenant ID
+- scan type
+- started at
+- completed at
+- status
+- permission set used
+- total checks run
+- passed checks
+- failed checks
+- warnings
+- unknowns
+- raw snapshot location
+- generated evidence count
+- generated finding count
+
+Statuses:
+- Not Started
+- Running
+- Completed
+- Completed with Warnings
+- Failed
+
+7. Store Snapshots
+
+Do not only display live data.
+
+Every scan should create a point-in-time snapshot.
+
+Store:
+- normalized JSON results
+- raw Graph response where safe
+- summary results
+- generated findings
+- generated evidence records
+- scan timestamp
+
+This is important because I need to prove what was observed at the time of assessment.
+
+8. Evidence Creation
+
+For each assessment pack, create generated evidence records.
+
+Examples:
+- Microsoft Tenant User Inventory Snapshot
+- MFA Registration Snapshot
+- Conditional Access Policy Snapshot
+- Intune Device Compliance Snapshot
+- Sign-in Log Review Snapshot
+- Directory Audit Log Snapshot
+- Secure Score Snapshot
+
+Each generated evidence record should include:
+- title
+- evidence type = Tenant Assessment Snapshot
+- source = Microsoft Graph
+- organization
+- scan run ID
+- linked controls
+- collection date
+- owner
+- status = Draft or Pending Review
+- assessor summary
+- raw data attachment or generated PDF/JSON/CSV
+- related findings
+
+Generated evidence should not automatically be marked Approved.
+Require internal review before Approved.
+
+9. Rules Engine
+
+Create an assessment rules engine.
+
+Each rule should include:
+- rule ID
+- name
+- description
+- Microsoft data source
+- logic
+- related CMMC controls
+- evidence generated
+- finding generated if failed
+- severity
+- confidence
+
+Rule result statuses:
+- Pass
+- Fail
+- Partial
+- Unknown
+- Not Applicable
+
+10. Example Rules
+
+Identity / Access:
+
+Rule: All users have unique named accounts
+Data source:
+Microsoft Graph users
+
+Logic:
+- flag shared/generic accounts based on naming patterns:
+  admin
+  test
+  shared
+  temp
+  generic
+  user
+  service
+  contractor
+- flag accounts without owner or department if available
+
+Related controls:
+- AC.L1-3.1.1
+- AC.L1-3.1.2
+- IA.L1-3.5.1
+
+Rule: Disabled or stale users reviewed
+Data source:
+users + sign-in logs
+
+Logic:
+- identify users with no sign-in in 60/90 days
+- identify disabled accounts
+- identify accounts still licensed but stale
+
+Related controls:
+- AC.L1-3.1.1
+- IA.L2-3.5.6
+- CA.L2-3.12.3
+
+Rule: Guest users reviewed
+Data source:
+users where userType = Guest
+
+Logic:
+- identify all guest users
+- flag guest users with access but no recent review evidence
+
+Related controls:
+- AC.L1-3.1.1
+- AC.L2-3.1.5
+- AC.L2-3.1.12
+
+Authentication:
+
+Rule: MFA registration coverage
+Data source:
+authentication registration details
+
+Logic:
+- count users registered for MFA
+- count privileged users registered for MFA
+- flag users not registered
+
+Related controls:
+- IA.L2-3.5.3
+- IA.L1-3.5.2
+- AC.L2-3.1.13
+
+Conditional Access:
+
+Rule: MFA Conditional Access policy exists
+Data source:
+Conditional Access policies
+
+Logic:
+- detect enabled policy requiring MFA
+- flag if disabled, report-only, scoped too narrowly, or broad exclusions exist
+
+Related controls:
+- IA.L2-3.5.3
+- AC.L2-3.1.12
+- AC.L2-3.1.13
+
+Rule: Legacy authentication blocked
+Data source:
+Conditional Access policies and sign-in logs if available
+
+Logic:
+- detect policy blocking legacy/client app authentication
+- flag legacy sign-ins if observed
+
+Related controls:
+- IA.L2-3.5.4
+- AC.L2-3.1.8
+- SC.L2-3.13.8
+
+Devices / Intune:
+
+Rule: Managed devices inventory exists
+Data source:
+Intune managed devices
+
+Logic:
+- pull managed devices
+- flag devices with stale check-in
+- flag noncompliant devices
+- flag unknown ownership
+
+Related controls:
+- CM.L2-3.4.3
+- IA.L1-3.5.1
+- AC.L2-3.1.18
+
+Rule: Device compliance is enforced
+Data source:
+Intune managed devices / compliance state
+
+Logic:
+- count compliant vs noncompliant devices
+- flag noncompliant CUI-scoped devices
+- flag devices with no compliance state
+
+Related controls:
+- CM.L2-3.4.1
+- CM.L2-3.4.2
+- CM.L2-3.4.6
+- SI.L1-3.14.1
+
+Audit / Logs:
+
+Rule: Sign-in logs available and reviewed
+Data source:
+Graph sign-ins
+
+Logic:
+- confirm sign-in logs can be retrieved
+- identify failed sign-ins
+- identify high-risk patterns if available
+- create evidence request for review notes
+
+Related controls:
+- AU.L2-3.3.1
+- AU.L2-3.3.5
+- SI.L2-3.14.6
+- CA.L2-3.12.3
+
+Rule: Directory audit logs available
+Data source:
+directory audit logs
+
+Logic:
+- confirm audit logs can be retrieved
+- summarize admin changes
+- summarize user/group/role changes
+
+Related controls:
+- AU.L2-3.3.1
+- AU.L2-3.3.2
+- AU.L2-3.3.8
+- AU.L2-3.3.9
+
+Secure Score:
+
+Rule: Microsoft Secure Score snapshot
+Data source:
+Secure Score
+
+Logic:
+- pull current score, max score, control recommendations
+- map selected recommendations to CMMC-related categories
+- do not treat Secure Score as CMMC compliance by itself
+
+Related controls:
+- multiple, depending on recommendation
+
+11. CMMC Mapping
+
+Each automated rule should map to:
+- domain
+- control IDs
+- support type:
+  - Strong Evidence
+  - Partial Evidence
+  - Configuration Indicator
+  - Needs Human Review
+  - Not Sufficient Alone
+
+Example:
+MFA registration data is strong technical evidence for MFA posture, but the app should still require policy/procedure and validation before marking IA.L2-3.5.3 implemented.
+
+12. Automated Classification
+
+After scan, classify controls as:
+
+Likely Implemented:
+- technical data strongly supports implementation
+- approved policy/procedure exists
+- SSP narrative exists
+- no critical gap detected
+
+Partially Implemented:
+- technical control exists but missing evidence/documentation/testing
+
+Needs Evidence:
+- data suggests control is configured
+- but no approved evidence exists in Control HUB
+
+Needs Documentation:
+- technical data exists
+- but policy/procedure missing
+
+Needs Validation:
+- configuration exists
+- but testing/review evidence missing
+
+Not Implemented:
+- technical data shows control missing
+
+Unknown:
+- data source unavailable
+- permission missing
+- control cannot be assessed from Microsoft tenant alone
+
+13. Human Approval Required
+
+Do not automatically mark controls Implemented.
+
+Instead:
+- create suggested control updates
+- show review screen
+- allow Admin/Compliance Manager to approve or reject
+
+Suggested updates:
+- set control In Progress
+- set control Needs Evidence
+- set control Candidate for Implemented
+- create evidence request
+- create POA&M
+- link generated evidence
+
+14. Findings
+
+Automatically create findings for failed or partial rules.
+
+Finding fields:
+- finding title
+- severity
+- linked rule
+- linked controls
+- observed condition
+- expected condition
+- evidence source
+- recommended remediation
+- suggested roadmap action
+- create POA&M button
+- create evidence request button
+
+Examples:
+- Users missing MFA registration
+- Conditional Access MFA policy not enabled
+- Noncompliant devices detected
+- Guest users require review
+- Stale accounts detected
+- Audit logs not retrievable
+- Sign-in log review evidence missing
+
+15. Evidence Requests
+
+Automatically generate evidence requests for items that require human-provided artifacts.
+
+Examples:
+- Upload Access Review Worksheet
+- Upload MFA Conditional Access Policy Screenshot
+- Upload Device Compliance Report
+- Upload Log Review Notes
+- Upload POA&M Export
+- Upload Policy/Procedure
+- Upload SSP or Scope Diagram
+
+Each evidence request should include:
+- title
+- linked controls
+- source finding
+- instructions
+- suggested filename
+- due date
+- owner
+- status
+
+16. Recommended Roadmap
+
+Use scan findings to recommend roadmap actions.
+
+Examples:
+
+If many identity gaps:
+Recommend:
+- Perform User and Access Review
+- Configure MFA and Conditional Access Baseline
+
+If device gaps:
+Recommend:
+- Configure Endpoint Compliance and Device Management
+
+If audit/log gaps:
+Recommend:
+- Configure Logging and Audit Review
+
+If Secure Score shows many security recommendations:
+Recommend:
+- Run Microsoft Security Baseline Review
+
+17. Pre-Assessment Results Page
+
+Show:
+
+- Organization
+- Microsoft tenant
+- scan date
+- permissions used
+- overall pre-assessment readiness
+- projected internal readiness score
+- confidence score
+- controls likely implemented
+- controls partially implemented
+- controls not implemented
+- controls unknown
+- findings by severity
+- evidence requests
+- recommended roadmap actions
+
+Add tabs:
+- Summary
+- Identity
+- Authentication
+- Devices
+- Conditional Access
+- Audit Logs
+- Secure Score
+- Findings
+- Evidence Requests
+- Control Mapping
+
+18. Reports
+
+Generate:
+
+A. Tenant-Connected Pre-Assessment Report
+Client-facing summary.
+
+B. Technical Findings Report
+Detailed findings and Graph-observed results.
+
+C. Evidence Request Report
+What client still needs to provide.
+
+D. CMMC Control Mapping Report
+Which controls were supported by tenant scan data.
+
+E. Roadmap Recommendation Report
+What to do first.
+
+19. Security Requirements
+
+This integration handles sensitive tenant data.
+
+Implement:
+- read-only Graph permissions only
+- admin consent screen
+- least privilege permission groups
+- encrypted token/secret storage
+- tenant disconnect
+- audit logs for every scan
+- audit logs for preview/download/export
+- no password collection
+- no write-back to Microsoft tenant
+- no automatic remediation
+- no sharing data across organizations
+
+20. Error Handling
+
+If permissions are missing:
+- show which permission is missing
+- show which assessment pack is affected
+- continue running other packs
+
+If tenant lacks license:
+- show “Unavailable due to license or permission”
+- do not fail the whole scan
+
+If API is throttled:
+- retry with backoff
+- show partial results
+
+21. Data Retention
+
+Allow storing:
+- scan summary forever
+- raw snapshots configurable by organization
+- option to delete raw scan data
+- option to retain only generated evidence summary
+
+22. Acceptance Tests
+
+Test A:
+- Connect a Microsoft tenant
+- Admin grants read-only consent
+- Connection status shows Connected
+
+Test B:
+- Run Identity Pack
+- Users and guest users are discovered
+- Findings are generated for stale/guest/shared accounts if applicable
+
+Test C:
+- Run Conditional Access Pack
+- CA policies are discovered
+- MFA-related controls receive suggested mapping
+
+Test D:
+- Run Intune Pack
+- Managed devices and compliance status are imported
+- Noncompliant/stale devices generate findings
+
+Test E:
+- Run Audit Pack
+- Sign-in and directory audit logs are summarized
+- Generated evidence snapshot is created
+
+Test F:
+- Complete scan
+- Results page shows projected readiness, confidence, findings, evidence requests, and roadmap recommendations
+
+Test G:
+- No control status changes automatically
+- Admin must approve suggested updates
+
+Test H:
+- Disconnect tenant
+- Scheduled scans stop
+- Existing historical assessment results remain
