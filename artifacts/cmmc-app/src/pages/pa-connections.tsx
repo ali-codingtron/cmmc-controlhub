@@ -187,6 +187,7 @@ export default function PaConnections() {
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, { success: boolean; error?: string; displayName?: string }>>({});
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+  const [confirmDisconnectId, setConfirmDisconnectId] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
@@ -275,14 +276,25 @@ export default function PaConnections() {
     load();
   }
 
-  async function disconnect(id: string, name: string) {
-    if (!activeOrg || !confirm(`Disconnect "${name}"? Historical scans are preserved but scheduled scans will stop.`)) return;
+  async function disconnect(id: string) {
+    if (!activeOrg) return;
     setDisconnectingId(id);
+    setConfirmDisconnectId(null);
     const token = localStorage.getItem("auth_token");
-    await fetch(`/api/pre-assessment/connections/${id}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}`, "X-Organization-ID": activeOrg.id },
-    });
+    try {
+      const res = await fetch(`/api/pre-assessment/connections/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}`, "X-Organization-ID": activeOrg.id },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setBanner({ type: "error", message: data.error ?? `Disconnect failed (${res.status})` });
+      } else {
+        setBanner({ type: "success", message: "Tenant disconnected. Historical scans are preserved." });
+      }
+    } catch {
+      setBanner({ type: "error", message: "Network error while disconnecting. Please try again." });
+    }
     setDisconnectingId(null);
     setLoaded(false);
     load();
@@ -399,14 +411,34 @@ export default function PaConnections() {
                 {testingId === conn.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                 Test Connection
               </button>
-              <button
-                onClick={() => disconnect(conn.id, conn.tenantName)}
-                disabled={disconnectingId === conn.id}
-                className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-50"
-              >
-                {disconnectingId === conn.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                Disconnect
-              </button>
+              {confirmDisconnectId === conn.id ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-600 mr-1">Disconnect?</span>
+                  <button
+                    onClick={() => disconnect(conn.id)}
+                    disabled={disconnectingId === conn.id}
+                    className="inline-flex items-center gap-1 rounded-md bg-red-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {disconnectingId === conn.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                    Yes, disconnect
+                  </button>
+                  <button
+                    onClick={() => setConfirmDisconnectId(null)}
+                    className="inline-flex items-center rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmDisconnectId(conn.id)}
+                  disabled={disconnectingId === conn.id}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Disconnect
+                </button>
+              )}
             </div>
           </div>
 
