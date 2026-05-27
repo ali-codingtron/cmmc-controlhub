@@ -1,0 +1,182 @@
+Fix the production Microsoft tenant connection configuration.
+
+Current production error:
+MICROSOFT_CLIENT_ID environment variable is not set.
+
+This means the Connect Microsoft Tenant workflow is present, but production is missing the Microsoft app registration environment variables.
+
+Do not ask the customer to create an app registration.
+Do not ask the customer to enter client ID or client secret.
+Control HUB should use one Control HUB-owned multi-tenant Microsoft app registration.
+
+1. Add Production Environment Variable Checks
+
+The app should check for these environment variables:
+
+- MICROSOFT_CLIENT_ID
+- MICROSOFT_CLIENT_SECRET
+- MICROSOFT_REDIRECT_URI
+- MICROSOFT_AUTHORITY
+- APP_BASE_URL
+
+Expected values:
+
+MICROSOFT_AUTHORITY:
+https://login.microsoftonline.com/organizations
+
+APP_BASE_URL:
+https://controlhub.carmetechnology.com
+
+MICROSOFT_REDIRECT_URI:
+Use the exact callback route implemented in the app, likely:
+https://controlhub.carmetechnology.com/api/pre-assessment/microsoft/callback
+
+If the actual callback route is different, tell me exactly what redirect URI must be added to the Microsoft app registration.
+
+2. Improve the Error Message
+
+Current message:
+MICROSOFT_CLIENT_ID environment variable is not set.
+
+Replace with a clearer admin-only setup message:
+
+“Microsoft tenant connection is not configured yet. Missing MICROSOFT_CLIENT_ID. Add the Microsoft app registration values to production environment variables before connecting tenants.”
+
+Show which variables are missing:
+- MICROSOFT_CLIENT_ID
+- MICROSOFT_CLIENT_SECRET
+- MICROSOFT_REDIRECT_URI
+- MICROSOFT_AUTHORITY
+- APP_BASE_URL
+
+Do not expose secret values.
+
+3. Add Setup Checklist Page or Admin Notice
+
+On the Tenant Connections page, if Microsoft environment variables are missing, show:
+
+Microsoft Connection Setup Required
+
+Steps:
+1. Create or confirm the Control HUB Microsoft multi-tenant app registration.
+2. Add the production redirect URI.
+3. Add required read-only Microsoft Graph application permissions.
+4. Grant admin consent in the Control HUB owner tenant if needed.
+5. Add production secrets in Replit.
+6. Restart/redeploy production.
+7. Test Microsoft tenant connection.
+
+4. Microsoft App Registration Requirements
+
+The Control HUB Microsoft app registration must be configured as:
+
+Supported account types:
+Accounts in any organizational directory
+
+Redirect URI:
+Use the production callback URL implemented in this app.
+
+Authentication:
+Confidential client with client secret or certificate.
+
+Permissions:
+Use read-only Microsoft Graph application permissions only.
+
+Initial permission set:
+- User.Read.All
+- Group.Read.All
+- Directory.Read.All
+- Reports.Read.All
+- UserAuthenticationMethod.Read.All
+- Policy.Read.All
+- DeviceManagementManagedDevices.Read.All
+- AuditLog.Read.All
+- SecurityEvents.Read.All if used by the Security Score pack
+
+Do not request write permissions.
+
+Do not request:
+- User.ReadWrite.All
+- Group.ReadWrite.All
+- Directory.ReadWrite.All
+- Policy.ReadWrite.*
+- DeviceManagementManagedDevices.ReadWrite.All
+- Application.ReadWrite.All
+
+5. Replit Production Secrets
+
+Add support/documentation for adding these to Replit production secrets:
+
+MICROSOFT_CLIENT_ID=<Application client ID>
+MICROSOFT_CLIENT_SECRET=<client secret value>
+MICROSOFT_REDIRECT_URI=<production callback URL>
+MICROSOFT_AUTHORITY=https://login.microsoftonline.com/organizations
+APP_BASE_URL=https://controlhub.carmetechnology.com
+
+Make sure the production deployment uses these environment variables, not only the development environment.
+
+6. Connection Flow
+
+After environment variables are configured:
+
+- User clicks Connect Microsoft Tenant
+- App builds Microsoft admin consent URL using MICROSOFT_CLIENT_ID and MICROSOFT_REDIRECT_URI
+- User is redirected to Microsoft
+- Tenant admin signs in directly with Microsoft
+- Tenant admin grants consent
+- Microsoft redirects back to Control HUB callback
+- Control HUB validates state
+- Control HUB stores tenant connection metadata
+- Tenant appears as Connected
+
+7. Do Not Collect Microsoft Admin Passwords
+
+Make sure Control HUB never asks for or stores:
+- Microsoft admin password
+- Microsoft MFA code
+- Microsoft refresh token in plain text
+
+8. Backend Validation
+
+Add a startup/config validation helper:
+
+getMicrosoftConfig()
+
+It should:
+- verify required variables exist
+- return safe missing-variable errors
+- never log client secret
+- prevent broken connection attempts if config is incomplete
+
+9. Acceptance Tests
+
+Test A:
+- Remove MICROSOFT_CLIENT_ID
+- Open Tenant Connections
+- Page shows clear setup required message
+- Connect button is disabled or shows clear missing config message
+
+Test B:
+- Add all required production environment variables
+- Redeploy/restart
+- Open Tenant Connections
+- Error disappears
+
+Test C:
+- Click Connect Microsoft Tenant
+- App redirects to Microsoft admin consent page
+
+Test D:
+- After admin consent
+- Callback succeeds
+- Tenant connection record is created
+
+Test E:
+- Run Test Connection
+- Read-only Graph call succeeds
+
+10. Important
+
+This is a production configuration issue, not a customer tenant issue.
+
+Do not restore the old manual form asking for customer-provided client ID and client secret.

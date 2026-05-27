@@ -151,14 +151,15 @@ export function invalidateTokenCache(tenantId: string, clientId: string) {
 }
 
 export async function getGraphTokenForTenant(tenantId: string): Promise<string> {
-  const clientId = process.env.MICROSOFT_CLIENT_ID;
-  const clientSecret = process.env.MICROSOFT_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
+  const { getMicrosoftConfig } = await import("./ms-config");
+  const cfg = getMicrosoftConfig();
+  if (!cfg.ok) {
     throw new Error(
-      "Microsoft app credentials not configured. Set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET environment variables."
+      `Microsoft tenant connection is not configured. Missing environment variables: ${cfg.missing.join(", ")}. ` +
+        "Add the Microsoft app registration values to production environment variables."
     );
   }
-  return getGraphToken(tenantId, clientId, clientSecret);
+  return getGraphToken(tenantId, cfg.clientId, cfg.clientSecret);
 }
 
 export function invalidateTokenCacheForTenant(tenantId: string): void {

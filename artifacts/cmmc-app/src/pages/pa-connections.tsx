@@ -14,6 +14,8 @@ import {
   ShieldCheck,
   ExternalLink,
   Info,
+  Settings,
+  Lock,
 } from "lucide-react";
 import { useOrg } from "@/context/OrgContext";
 import { useLocation } from "wouter";
@@ -33,6 +35,11 @@ type Connection = {
   connectedAt: string | null;
   notes: string | null;
   createdAt: string;
+};
+
+type ConfigStatus = {
+  configured: boolean;
+  missingVars: string[];
 };
 
 const PERMISSION_PACKS = [
@@ -104,12 +111,77 @@ function statusBadge(status: string) {
   );
 }
 
+const SETUP_STEPS = [
+  "Create or confirm the Control HUB Microsoft multi-tenant app registration (Accounts in any organizational directory).",
+  "Add the production redirect URI to the app registration: https://controlhub.carmetechnology.com/api/pre-assessment/microsoft/callback",
+  "Grant read-only Microsoft Graph application permissions (User.Read.All, Group.Read.All, Directory.Read.All, Reports.Read.All, UserAuthenticationMethod.Read.All, Policy.Read.All, DeviceManagementManagedDevices.Read.All, AuditLog.Read.All, SecurityEvents.Read.All).",
+  "Grant admin consent in the Control HUB owner tenant.",
+  "Add required production secrets in Replit: MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, MICROSOFT_REDIRECT_URI, MICROSOFT_AUTHORITY, APP_BASE_URL.",
+  "Redeploy production.",
+  "Return here and test a Microsoft tenant connection.",
+];
+
+function SetupRequiredPanel({ missingVars }: { missingVars: string[] }) {
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 space-y-4">
+      <div className="flex items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100">
+          <Settings className="h-5 w-5 text-amber-600" />
+        </div>
+        <div>
+          <h2 className="text-sm font-semibold text-amber-900">Microsoft Connection Setup Required</h2>
+          <p className="text-xs text-amber-700 mt-0.5">
+            Control HUB is not yet configured with a Microsoft app registration. An administrator must
+            complete this one-time setup before tenants can be connected.
+          </p>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-amber-200 bg-white px-4 py-3">
+        <p className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
+          <Lock className="h-3.5 w-3.5 text-amber-500" />
+          Missing production environment variables
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {missingVars.map((v) => (
+            <span key={v} className="inline-block rounded bg-red-50 border border-red-200 px-2 py-0.5 text-[11px] font-mono text-red-700">
+              {v}
+            </span>
+          ))}
+        </div>
+        <p className="text-[11px] text-gray-400 mt-2">Values are never shown here. Add them via Replit production secrets.</p>
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold text-gray-700 mb-2">Setup checklist</p>
+        <ol className="space-y-2">
+          {SETUP_STEPS.map((step, i) => (
+            <li key={i} className="flex items-start gap-2.5 text-xs text-gray-700">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-[10px] font-semibold text-amber-700 mt-0.5">
+                {i + 1}
+              </span>
+              <span>{step}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      <div className="rounded-md border border-amber-200 bg-amber-100/50 px-3 py-2 text-[11px] text-amber-800">
+        <strong>Important:</strong> Control HUB uses one shared multi-tenant Microsoft app registration owned by Control HUB.
+        Customer tenant admins grant consent through Microsoft's standard admin consent flow — no passwords or secrets are
+        ever collected from customers.
+      </div>
+    </div>
+  );
+}
+
 export default function PaConnections() {
   const { activeOrg } = useOrg();
   const [, navigate] = useLocation();
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [configStatus, setConfigStatus] = useState<ConfigStatus | null>(null);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -138,6 +210,17 @@ export default function PaConnections() {
       });
       window.history.replaceState({}, "", "/pre-assessment/connections");
     }
+  }, []);
+
+  useEffect(() => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
+    fetch("/api/pre-assessment/microsoft/config-status", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((d: ConfigStatus) => setConfigStatus(d))
+      .catch(() => setConfigStatus({ configured: false, missingVars: ["MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET"] }));
   }, []);
 
   const load = useCallback(() => {
@@ -205,6 +288,8 @@ export default function PaConnections() {
     load();
   }
 
+  const configReady = configStatus?.configured ?? true;
+
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <div className="flex items-start justify-between">
@@ -219,8 +304,9 @@ export default function PaConnections() {
         </div>
         <button
           onClick={startConsent}
-          disabled={starting}
-          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+          disabled={starting || !configReady}
+          title={!configReady ? "Microsoft environment variables must be configured before connecting tenants" : undefined}
+          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
           {starting ? "Redirecting to Microsoft…" : "Connect Microsoft Tenant"}
@@ -246,13 +332,19 @@ export default function PaConnections() {
         </div>
       )}
 
-      <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800 flex items-start gap-2">
-        <ShieldCheck className="h-4 w-4 mt-0.5 shrink-0" />
-        <span>
-          <strong>Read-only access.</strong> Control HUB uses read-only Microsoft Graph permissions for assessment purposes.
-          No tenant configuration changes are made. Your Microsoft admin password is never collected or stored.
-        </span>
-      </div>
+      {configStatus && !configStatus.configured && (
+        <SetupRequiredPanel missingVars={configStatus.missingVars} />
+      )}
+
+      {configReady && (
+        <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800 flex items-start gap-2">
+          <ShieldCheck className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>
+            <strong>Read-only access.</strong> Control HUB uses read-only Microsoft Graph permissions for assessment purposes.
+            No tenant configuration changes are made. Your Microsoft admin password is never collected or stored.
+          </span>
+        </div>
+      )}
 
       {loading && (
         <div className="flex items-center justify-center py-20 text-gray-400">
@@ -260,7 +352,7 @@ export default function PaConnections() {
         </div>
       )}
 
-      {loaded && connections.length === 0 && (
+      {loaded && connections.length === 0 && configReady && (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50 py-16 text-center">
           <Cable className="h-12 w-12 text-gray-300 mb-4" />
           <p className="text-base font-medium text-gray-700">No tenant connections yet</p>

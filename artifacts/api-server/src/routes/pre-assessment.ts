@@ -16,6 +16,7 @@ import { requireOrg } from "../middleware/org";
 import { runTenantScan, testTenantConnection } from "../lib/pa-rules-engine";
 import { getGraphTokenForTenant, invalidateTokenCacheForTenant, graphGet } from "../lib/graph-client";
 import { PACK_DEFINITIONS } from "../data/assessment-rules";
+import { getMicrosoftConfig, getMicrosoftConfigStatus } from "../lib/ms-config";
 
 const router = Router();
 
@@ -38,6 +39,11 @@ router.get("/packs", requireAuth, (_req, res) => {
   res.json({ packs: Object.entries(PACK_DEFINITIONS).map(([id, p]) => ({ id, ...p })) });
 });
 
+router.get("/microsoft/config-status", requireAuth, (_req, res) => {
+  const status = getMicrosoftConfigStatus();
+  res.json(status);
+});
+
 router.get("/connections", requireAuth, requireOrg, async (req, res) => {
   try {
     const rows = await db
@@ -55,17 +61,16 @@ router.get("/connections", requireAuth, requireOrg, async (req, res) => {
 });
 
 router.post("/microsoft/connect/start", requireAuth, requireOrg, async (req, res) => {
-  const clientId = process.env.MICROSOFT_CLIENT_ID;
-  if (!clientId) {
+  const cfg = getMicrosoftConfig();
+  if (!cfg.ok) {
     return res.status(503).json({
-      error: "Microsoft integration not configured",
-      detail: "MICROSOFT_CLIENT_ID environment variable is not set.",
+      error: "Microsoft tenant connection is not configured yet",
+      detail:
+        `Microsoft tenant connection is not configured yet. Missing: ${cfg.missing.join(", ")}. ` +
+        "Add the Microsoft app registration values to production environment variables before connecting tenants.",
+      missingVars: cfg.missing,
     });
   }
-
-  const redirectUri =
-    process.env.MICROSOFT_REDIRECT_URI ||
-    `https://${req.get("x-forwarded-host") || req.get("host")}/api/pre-assessment/microsoft/callback`;
 
   const user = (req as any).user as { id?: string; email?: string } | undefined;
   const state = randomUUID();
@@ -77,14 +82,13 @@ router.post("/microsoft/connect/start", requireAuth, requireOrg, async (req, res
     expiresAt: Date.now() + 15 * 60 * 1000,
   });
 
-  const authority = process.env.MICROSOFT_AUTHORITY || "https://login.microsoftonline.com/organizations";
   const params = new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: redirectUri,
+    client_id: cfg.clientId,
+    redirect_uri: cfg.redirectUri,
     state,
   });
 
-  const authUrl = `${authority}/v2.0/adminconsent?${params.toString()}`;
+  const authUrl = `${cfg.authority}/v2.0/adminconsent?${params.toString()}`;
   res.json({ authUrl });
 });
 
