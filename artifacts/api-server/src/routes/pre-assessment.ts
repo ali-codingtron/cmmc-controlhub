@@ -72,7 +72,7 @@ router.post("/microsoft/connect/start", requireAuth, requireOrg, async (req, res
     });
   }
 
-  const user = (req as any).user as { id?: string; email?: string } | undefined;
+  const user = req.authUser;
   const state = randomUUID();
 
   oauthStateStore.set(state, {
@@ -236,7 +236,7 @@ router.post("/connections/:id/test", requireAuth, requireOrg, async (req, res) =
 });
 
 router.delete("/connections/:id", requireAuth, requireOrg, async (req, res) => {
-  const user = (req as any).user as { role?: string } | undefined;
+  const user = req.authUser;
   if (user?.role !== "admin" && user?.role !== "compliance_manager") {
     return res.status(403).json({ error: "Only admins and compliance managers can disconnect tenants" });
   }
@@ -288,7 +288,7 @@ router.get("/scans", requireAuth, requireOrg, async (req, res) => {
 });
 
 router.post("/scans", requireAuth, requireOrg, async (req, res) => {
-  const user = (req as any).user as { email?: string; role?: string } | undefined;
+  const user = req.authUser;
   if (user?.role !== "admin" && user?.role !== "compliance_manager") {
     return res.status(403).json({ error: "Only admins and compliance managers can run scans" });
   }
@@ -410,7 +410,7 @@ router.get("/scans/:id/snapshots", requireAuth, requireOrg, async (req, res) => 
 });
 
 router.patch("/findings/:id", requireAuth, requireOrg, async (req, res) => {
-  const user = (req as any).user as { email?: string; role?: string } | undefined;
+  const user = req.authUser;
   if (user?.role !== "admin" && user?.role !== "compliance_manager") {
     return res.status(403).json({ error: "Insufficient permissions" });
   }
@@ -456,7 +456,7 @@ router.patch("/findings/:id", requireAuth, requireOrg, async (req, res) => {
 });
 
 router.patch("/evidence-records/:id", requireAuth, requireOrg, async (req, res) => {
-  const user = (req as any).user as { email?: string; role?: string } | undefined;
+  const user = req.authUser;
   if (user?.role !== "admin" && user?.role !== "compliance_manager") {
     return res.status(403).json({ error: "Insufficient permissions" });
   }
