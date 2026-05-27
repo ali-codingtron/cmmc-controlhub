@@ -41,3 +41,12 @@ externalPort = 3000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+MICROSOFT_CLIENT_ID = "d85e4e33-865a-4bcb-8312-354392c13d39"
+MICROSOFT_CLIENT_SECRET = "sDj8Q~fTmBC2otBDN4itKRR4GOBvnVeCr7xm7aLZ"
+MICROSOFT_REDIRECT_URI = "https://controlhub.carmetechnology.com/api/pre-assessment/microsoft/callback"
+MICROSOFT_AUTHORITY = "https://login.microsoftonline.com/organizations"
+APP_BASE_URL = "https://controlhub.carmetechnology.com"
