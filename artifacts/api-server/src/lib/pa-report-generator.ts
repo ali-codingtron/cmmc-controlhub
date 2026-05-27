@@ -333,8 +333,8 @@ export function generatePaReportPdf(data: PaReportData, res: Response): void {
     "Microsoft Intune managed device inventory and compliance state (if Intune is licensed and enrolled devices exist)",
   ];
   for (const item of evaluated) {
-    doc.fillColor(C.green).font("Helvetica-Bold").fontSize(9).text("✓", MARGIN, y);
-    doc.fillColor(C.gray).font("Helvetica").fontSize(9).text(item, MARGIN + 14, y, { width: CONTENT_W - 14 });
+    doc.fillColor(C.green).font("Helvetica-Bold").fontSize(9).text("[+]", MARGIN, y, { width: 18 });
+    doc.fillColor(C.gray).font("Helvetica").fontSize(9).text(item, MARGIN + 22, y, { width: CONTENT_W - 22 });
     y = doc.y + 3;
     y = safePage(y, 40);
   }
@@ -357,8 +357,8 @@ export function generatePaReportPdf(data: PaReportData, res: Response): void {
   ];
   for (const item of notEvaluated) {
     y = safePage(y, 30);
-    doc.fillColor(C.critical).font("Helvetica-Bold").fontSize(9).text("✗", MARGIN, y);
-    doc.fillColor(C.gray).font("Helvetica").fontSize(9).text(item, MARGIN + 14, y, { width: CONTENT_W - 14 });
+    doc.fillColor(C.critical).font("Helvetica-Bold").fontSize(9).text("[-]", MARGIN, y, { width: 18 });
+    doc.fillColor(C.gray).font("Helvetica").fontSize(9).text(item, MARGIN + 22, y, { width: CONTENT_W - 22 });
     y = doc.y + 3;
   }
   y += 6;
@@ -382,37 +382,46 @@ export function generatePaReportPdf(data: PaReportData, res: Response): void {
   y = heading1("Assessment Pack Summary", y);
 
   for (const packId of (data.scan.packsRequested ?? [])) {
-    y = safePage(y, 70);
     const name = PACK_NAMES[packId] ?? packId;
     const isCompleted = (data.scan.packsCompleted ?? []).includes(packId);
     const isFailed = (data.scan.packsFailed ?? []).includes(packId);
     const packFindings = data.findings.filter((f) => f.packId === packId);
     const packEvidence = data.evidenceRecords.filter((e) => e.packId === packId);
 
-    doc.rect(MARGIN, y, CONTENT_W, 56).fill(isFailed ? C.criticalBg : C.grayBg).strokeColor(C.grayBorder).lineWidth(0.5).stroke();
+    const packFindings_fail = packFindings.filter((f) => f.result === "fail").length;
+    const packFindings_all = packFindings.length;
+    const packEvidence_count = packEvidence.length;
+    // "passed checks" = evidence records that have no corresponding failure finding (approximate)
+    const passedCount = Math.max(0, packEvidence_count - packFindings_fail);
+
+    const boxH = isFailed ? 56 : 64;
+    y = safePage(y, boxH + 8);
+
+    doc.rect(MARGIN, y, CONTENT_W, boxH).fill(isFailed ? C.criticalBg : C.grayBg).strokeColor(C.grayBorder).lineWidth(0.5).stroke();
     doc.fillColor(C.black).font("Helvetica-Bold").fontSize(10).text(name, MARGIN + 10, y + 8);
     statusBadge(isFailed ? "failed" : isCompleted ? "completed" : "not_started", MARGIN + CONTENT_W - 90, y + 7);
 
-    const cols = ["Checks", "Passed", "Gaps", "Findings", "Evidence"];
-    const vals = [
-      packEvidence.length.toString(),
-      packEvidence.filter((e) => e.status !== "draft" || true).length.toString(),
-      packFindings.filter((f) => f.result === "fail").length.toString(),
-      packFindings.length.toString(),
-      packEvidence.length.toString(),
-    ];
-    const colW = (CONTENT_W - 20) / cols.length;
-    cols.forEach((col, i) => {
-      const cx = MARGIN + 10 + i * colW;
-      doc.fillColor(C.grayLight).font("Helvetica").fontSize(7).text(col, cx, y + 30, { width: colW - 4 });
-      doc.fillColor(C.black).font("Helvetica-Bold").fontSize(9).text(vals[i], cx, y + 40, { width: colW - 4 });
-    });
-
     if (isFailed) {
-      doc.fillColor(C.critical).font("Helvetica").fontSize(8)
-        .text("Data unavailable — check permissions, licensing, or tenant configuration", MARGIN + 10, y + 42);
+      doc.fillColor(C.critical).font("Helvetica").fontSize(8.5)
+        .text("Data unavailable — check tenant permissions, licensing, or configuration", MARGIN + 10, y + 32, { width: CONTENT_W - 110 });
+    } else {
+      const cols = ["Evidence Snapshots", "Findings", "Gaps Found", "Passed Checks"];
+      const vals = [
+        packEvidence_count.toString(),
+        packFindings_all.toString(),
+        packFindings_fail.toString(),
+        passedCount.toString(),
+      ];
+      const colW = (CONTENT_W - 20) / cols.length;
+      cols.forEach((col, i) => {
+        const cx = MARGIN + 10 + i * colW;
+        doc.fillColor(C.grayLight).font("Helvetica").fontSize(7).text(col, cx, y + 30, { width: colW - 4 });
+        const valColor = (col === "Gaps Found" && parseInt(vals[i]) > 0) ? C.critical :
+          (col === "Passed Checks") ? C.green : C.black;
+        doc.fillColor(valColor).font("Helvetica-Bold").fontSize(11).text(vals[i], cx, y + 42, { width: colW - 4 });
+      });
     }
-    y += 64;
+    y += boxH + 8;
   }
 
   // ─── CONTROL COVERAGE ───────────────────────────────────────────────────────
