@@ -6,6 +6,7 @@ export type MicrosoftConfig =
       redirectUri: string;
       authority: string;
       appBaseUrl: string;
+      graphScope: string;
     }
   | { ok: false; missing: string[] };
 
@@ -26,6 +27,9 @@ export function getMicrosoftConfig(): MicrosoftConfig {
     process.env.MICROSOFT_REDIRECT_URI ??
     `${appBaseUrl}/api/pre-assessment/microsoft/callback`;
 
+  const graphScope =
+    process.env.MICROSOFT_GRAPH_SCOPE ?? "https://graph.microsoft.com/.default";
+
   return {
     ok: true,
     clientId: process.env.MICROSOFT_CLIENT_ID!,
@@ -33,6 +37,7 @@ export function getMicrosoftConfig(): MicrosoftConfig {
     redirectUri,
     authority,
     appBaseUrl,
+    graphScope,
   };
 }
 

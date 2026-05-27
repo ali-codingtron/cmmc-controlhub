@@ -84,11 +84,23 @@ router.post("/microsoft/connect/start", requireAuth, requireOrg, async (req, res
 
   const params = new URLSearchParams({
     client_id: cfg.clientId,
+    scope: cfg.graphScope,
     redirect_uri: cfg.redirectUri,
     state,
   });
 
   const authUrl = `${cfg.authority}/v2.0/adminconsent?${params.toString()}`;
+
+  req.log.info({
+    msg: "pa: building admin consent URL",
+    authority: cfg.authority,
+    hasClientId: !!cfg.clientId,
+    hasRedirectUri: !!cfg.redirectUri,
+    hasScope: !!cfg.graphScope,
+    scope: cfg.graphScope,
+    stateGenerated: state,
+  });
+
   res.json({ authUrl });
 });
 

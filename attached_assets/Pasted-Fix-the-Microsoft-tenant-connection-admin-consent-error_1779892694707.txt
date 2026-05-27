@@ -1,0 +1,115 @@
+Fix the Microsoft tenant connection admin consent error.
+
+Current Microsoft error:
+AADSTS900144: The request body must contain the following parameter: 'scope'.
+
+Root cause:
+The Connect Microsoft Tenant flow is redirecting to Microsoft without a required scope parameter.
+
+Fix requirements:
+
+1. Admin consent URL must include scope
+
+When building the Microsoft admin consent URL, include:
+
+scope=https://graph.microsoft.com/.default
+
+The admin consent URL should be built like this:
+
+https://login.microsoftonline.com/organizations/v2.0/adminconsent
+  ?client_id=<MICROSOFT_CLIENT_ID>
+  &scope=https%3A%2F%2Fgraph.microsoft.com%2F.default
+  &redirect_uri=<url_encoded_MICROSOFT_REDIRECT_URI>
+  &state=<secure_state_value>
+
+Important:
+- URL encode the scope value
+- URL encode the redirect_uri
+- include state
+- do not omit scope
+
+2. Add environment variable for scope if needed
+
+Add optional environment variable:
+
+MICROSOFT_GRAPH_SCOPE=https://graph.microsoft.com/.default
+
+If not set, default to:
+
+https://graph.microsoft.com/.default
+
+3. Fix connect/start endpoint
+
+Update:
+
+POST /api/pre-assessment/microsoft/connect/start
+
+It must generate the Microsoft admin consent redirect URL with:
+- client_id
+- scope
+- redirect_uri
+- state
+
+4. Fix token request after consent
+
+When acquiring app-only tokens for Microsoft Graph, the token request must also include:
+
+scope=https://graph.microsoft.com/.default
+
+Token request should include:
+- client_id
+- client_secret
+- grant_type=client_credentials
+- scope=https://graph.microsoft.com/.default
+
+5. Validate config before redirect
+
+Before redirecting to Microsoft, check that these exist:
+- MICROSOFT_CLIENT_ID
+- MICROSOFT_CLIENT_SECRET
+- MICROSOFT_REDIRECT_URI
+- MICROSOFT_AUTHORITY
+- APP_BASE_URL
+
+Also ensure scope is available:
+- MICROSOFT_GRAPH_SCOPE or default value
+
+6. Add debug-safe logging
+
+Add server-side debug logging that shows:
+- admin consent URL path
+- whether client_id exists
+- whether redirect_uri exists
+- whether scope exists
+- state generated
+
+Do NOT log:
+- client secret
+- access tokens
+- refresh tokens
+
+7. Acceptance test
+
+Test A:
+- Click Connect Microsoft Tenant
+- Microsoft sign-in/admin consent page opens
+- No AADSTS900144 scope error appears
+
+Test B:
+- Inspect generated admin consent URL
+- Confirm it includes:
+  scope=https%3A%2F%2Fgraph.microsoft.com%2F.default
+
+Test C:
+- Complete admin consent
+- Callback succeeds
+- Tenant connection is saved
+
+Test D:
+- Run Test Connection
+- Graph token acquisition succeeds using:
+  scope=https://graph.microsoft.com/.default
+
+Important:
+Do not bring back the old manual client ID/client secret form.
+This is only a bug in the Microsoft admin consent URL and token request.
