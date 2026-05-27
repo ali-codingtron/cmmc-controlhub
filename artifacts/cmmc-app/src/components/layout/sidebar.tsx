@@ -245,8 +245,7 @@ export function Sidebar() {
               {preAssessmentExpanded && (
                 <div className="ml-3 pl-3 border-l border-sidebar-border space-y-0.5">
                   {[
-                    { href: "/pre-assessment/manual", label: "Manual Pre-Assessment" },
-                    { href: "/pre-assessment/run", label: "Tenant-Connected Assessment" },
+                    { href: "/pre-assessment/run", label: "Run Assessment" },
                     { href: "/pre-assessment/connections", label: "Tenant Connections" },
                     { href: "/pre-assessment/history", label: "Assessment History" },
                     { href: "/pre-assessment/findings", label: "Findings" },

@@ -53,7 +53,6 @@ import RoadmapCoverage from "@/pages/roadmap-coverage";
 import RoadmapProgress from "@/pages/roadmap-progress";
 import PaHistory from "@/pages/pa-history";
 import PaRun from "@/pages/pa-run";
-import PaManual from "@/pages/pa-manual";
 import PaConnections from "@/pages/pa-connections";
 import PaResults from "@/pages/pa-results";
 import PaFindings from "@/pages/pa-findings";
@@ -169,7 +168,6 @@ function AppRoutes() {
               </Route>
               <Route path="/pre-assessment/history" component={PaHistory} />
               <Route path="/pre-assessment/run" component={PaRun} />
-              <Route path="/pre-assessment/manual" component={PaManual} />
               <Route path="/pre-assessment/connections" component={PaConnections} />
               <Route path="/pre-assessment/findings" component={PaFindings} />
               <Route path="/pre-assessment/evidence-requests" component={PaEvidenceRequests} />

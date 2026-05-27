@@ -3,8 +3,14 @@ name: Pre-Assessment Module
 description: Tenant-Connected Pre-Assessment module — architecture decisions, auth model, rules engine, DB migration notes
 ---
 
-## Auth model
-App-only mode uses direct OAuth2 client credentials flow (fetch to login.microsoftonline.com token endpoint, no MSAL library needed). Client secret encrypted at rest with AES-256-GCM via `crypto-utils.ts`. Token cached in-process with 60s safety margin.
+## Auth model — OAuth Admin Consent Flow (current)
+Control HUB owns ONE multi-tenant app registration (env vars: MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, MICROSOFT_REDIRECT_URI, MICROSOFT_AUTHORITY). Customers click "Connect Microsoft Tenant" → redirected to `login.microsoftonline.com/organizations/v2.0/adminconsent` → after consent, callback stores the tenant connection. Scans then use client_credentials grant against each customer's tenantId using the Control HUB app creds. No per-customer clientId/clientSecret stored.
+
+**OAuth state**: In-memory Map with 15-minute TTL, keyed by state UUID, storing {orgId, userEmail, userId}. Cleaned up every 60s via setInterval.
+
+**Callback redirect**: After successful consent, API redirects to `/pre-assessment/connections?connected=true&tenantName=xxx`. SPA reads query params on mount via `window.location.search` and shows a success/error banner, then clears params via `window.history.replaceState`.
+
+**MICROSOFT_CLIENT_ID not set**: `POST /microsoft/connect/start` returns 503 with clear error message. This is the expected dev state until the operator configures their app registration.
 
 ## Rules engine
 11 Phase 1 rules (PA-001 to PA-011) live in `assessment-rules.ts`. Each rule has an `evaluate(input: RuleEvalInput)` method that accepts pre-fetched Graph data and returns a structured result. The runner (`pa-rules-engine.ts`) fetches data per pack, stores snapshots, then evaluates all rules matching the requested packs.

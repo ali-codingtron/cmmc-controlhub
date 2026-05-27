@@ -149,3 +149,19 @@ export async function graphGetAll<T>(
 export function invalidateTokenCache(tenantId: string, clientId: string) {
   tokenCache.delete(`${tenantId}:${clientId}`);
 }
+
+export async function getGraphTokenForTenant(tenantId: string): Promise<string> {
+  const clientId = process.env.MICROSOFT_CLIENT_ID;
+  const clientSecret = process.env.MICROSOFT_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    throw new Error(
+      "Microsoft app credentials not configured. Set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET environment variables."
+    );
+  }
+  return getGraphToken(tenantId, clientId, clientSecret);
+}
+
+export function invalidateTokenCacheForTenant(tenantId: string): void {
+  const clientId = process.env.MICROSOFT_CLIENT_ID;
+  if (clientId) tokenCache.delete(`${tenantId}:${clientId}`);
+}

@@ -13,11 +13,26 @@ import { eq, and, desc } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
-import { encryptSecret, decryptSecret } from "../lib/crypto-utils";
 import { runTenantScan, testTenantConnection } from "../lib/pa-rules-engine";
+import { getGraphTokenForTenant, invalidateTokenCacheForTenant, graphGet } from "../lib/graph-client";
 import { PACK_DEFINITIONS } from "../data/assessment-rules";
 
 const router = Router();
+
+interface OAuthState {
+  orgId: string;
+  userEmail: string;
+  userId: string;
+  expiresAt: number;
+}
+const oauthStateStore = new Map<string, OAuthState>();
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of oauthStateStore) {
+    if (now > val.expiresAt) oauthStateStore.delete(key);
+  }
+}, 60_000);
 
 router.get("/packs", requireAuth, (_req, res) => {
   res.json({ packs: Object.entries(PACK_DEFINITIONS).map(([id, p]) => ({ id, ...p })) });
@@ -39,66 +54,143 @@ router.get("/connections", requireAuth, requireOrg, async (req, res) => {
   }
 });
 
-router.post("/connections", requireAuth, requireOrg, async (req, res) => {
-  const user = (req as any).user as { email?: string; role?: string } | undefined;
-  if (user?.role !== "admin" && user?.role !== "compliance_manager") {
-    return res.status(403).json({ error: "Only admins and compliance managers can add tenant connections" });
-  }
-
-  const {
-    tenantName,
-    microsoftTenantId,
-    primaryDomain,
-    authMode = "app_only",
-    clientId,
-    clientSecret,
-    notes,
-  } = req.body as Record<string, string | undefined>;
-
-  if (!tenantName?.trim() || !microsoftTenantId?.trim()) {
-    return res.status(400).json({ error: "tenantName and microsoftTenantId are required" });
-  }
-
-  const id = randomUUID();
-  const encSecret = clientSecret?.trim() ? encryptSecret(clientSecret.trim()) : null;
-
-  try {
-    await db.insert(tenantConnectionsTable).values({
-      id,
-      organizationId: req.orgId!,
-      tenantName: tenantName.trim(),
-      microsoftTenantId: microsoftTenantId.trim(),
-      primaryDomain: primaryDomain?.trim() || null,
-      authMode: (authMode as "app_only" | "delegated") ?? "app_only",
-      clientId: clientId?.trim() || null,
-      encryptedClientSecret: encSecret,
-      connectionStatus: "pending",
-      connectedBy: user?.email ?? null,
-      connectedAt: new Date(),
-      notes: notes?.trim() || null,
-      updatedAt: new Date(),
+router.post("/microsoft/connect/start", requireAuth, requireOrg, async (req, res) => {
+  const clientId = process.env.MICROSOFT_CLIENT_ID;
+  if (!clientId) {
+    return res.status(503).json({
+      error: "Microsoft integration not configured",
+      detail: "MICROSOFT_CLIENT_ID environment variable is not set.",
     });
-
-    const [row] = await db
-      .select()
-      .from(tenantConnectionsTable)
-      .where(eq(tenantConnectionsTable.id, id));
-
-    res.status(201).json({ ...row, encryptedClientSecret: undefined });
-  } catch (err) {
-    req.log.error(err, "pa: create connection failed");
-    res.status(500).json({ error: "Failed to create connection" });
   }
+
+  const redirectUri =
+    process.env.MICROSOFT_REDIRECT_URI ||
+    `https://${req.get("x-forwarded-host") || req.get("host")}/api/pre-assessment/microsoft/callback`;
+
+  const user = (req as any).user as { id?: string; email?: string } | undefined;
+  const state = randomUUID();
+
+  oauthStateStore.set(state, {
+    orgId: req.orgId!,
+    userEmail: user?.email ?? "",
+    userId: user?.id ?? "",
+    expiresAt: Date.now() + 15 * 60 * 1000,
+  });
+
+  const authority = process.env.MICROSOFT_AUTHORITY || "https://login.microsoftonline.com/organizations";
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    state,
+  });
+
+  const authUrl = `${authority}/v2.0/adminconsent?${params.toString()}`;
+  res.json({ authUrl });
 });
 
-router.patch("/connections/:id", requireAuth, requireOrg, async (req, res) => {
-  const user = (req as any).user as { email?: string; role?: string } | undefined;
-  if (user?.role !== "admin" && user?.role !== "compliance_manager") {
-    return res.status(403).json({ error: "Insufficient permissions" });
+router.get("/microsoft/callback", async (req, res) => {
+  const { state, tenant, error, error_description } = req.query as Record<string, string | undefined>;
+
+  const frontendBase = process.env.FRONTEND_BASE_URL || "";
+
+  if (!state || !oauthStateStore.has(state)) {
+    return res.redirect(`${frontendBase}/pre-assessment/connections?error=invalid_state`);
+  }
+
+  const stateData = oauthStateStore.get(state)!;
+  oauthStateStore.delete(state);
+
+  if (Date.now() > stateData.expiresAt) {
+    return res.redirect(`${frontendBase}/pre-assessment/connections?error=state_expired`);
+  }
+
+  if (error) {
+    const reason =
+      error === "access_denied"
+        ? "Admin consent was declined. A global administrator must approve the permissions."
+        : error_description ?? error;
+    return res.redirect(
+      `${frontendBase}/pre-assessment/connections?error=${encodeURIComponent(reason)}`
+    );
+  }
+
+  if (!tenant) {
+    return res.redirect(`${frontendBase}/pre-assessment/connections?error=missing_tenant`);
+  }
+
+  let tenantName: string = tenant;
+  let primaryDomain: string | null = null;
+
+  try {
+    const token = await getGraphTokenForTenant(tenant);
+    const orgResp = await graphGet<{
+      value: { displayName?: string; verifiedDomains?: { name: string; isDefault: boolean }[] }[];
+    }>(token, "/organization", { $top: "1" });
+    const msOrg = orgResp.value?.[0];
+    if (msOrg?.displayName) tenantName = msOrg.displayName;
+    primaryDomain =
+      msOrg?.verifiedDomains?.find((d) => d.isDefault)?.name ??
+      msOrg?.verifiedDomains?.[0]?.name ??
+      null;
+  } catch {
+    /* best-effort — proceed without display name */
   }
 
   try {
-    const [existing] = await db
+    const existing = await db
+      .select({ id: tenantConnectionsTable.id })
+      .from(tenantConnectionsTable)
+      .where(
+        and(
+          eq(tenantConnectionsTable.organizationId, stateData.orgId),
+          eq(tenantConnectionsTable.microsoftTenantId, tenant)
+        )
+      );
+
+    if (existing.length > 0) {
+      await db
+        .update(tenantConnectionsTable)
+        .set({
+          tenantName,
+          primaryDomain,
+          connectionStatus: "connected",
+          connectedBy: stateData.userEmail || null,
+          connectedAt: new Date(),
+          authMode: "delegated",
+          clientId: null,
+          encryptedClientSecret: null,
+          lastFailedReason: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(tenantConnectionsTable.id, existing[0].id));
+    } else {
+      await db.insert(tenantConnectionsTable).values({
+        id: randomUUID(),
+        organizationId: stateData.orgId,
+        tenantName,
+        microsoftTenantId: tenant,
+        primaryDomain,
+        authMode: "delegated",
+        clientId: null,
+        encryptedClientSecret: null,
+        connectionStatus: "connected",
+        connectedBy: stateData.userEmail || null,
+        connectedAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+  } catch (err) {
+    return res.redirect(
+      `${frontendBase}/pre-assessment/connections?error=${encodeURIComponent("Failed to save connection")}`
+    );
+  }
+
+  res.redirect(`${frontendBase}/pre-assessment/connections?connected=true&tenantName=${encodeURIComponent(tenantName)}`);
+});
+
+router.post("/connections/:id/test", requireAuth, requireOrg, async (req, res) => {
+  try {
+    const [conn] = await db
       .select()
       .from(tenantConnectionsTable)
       .where(
@@ -107,46 +199,35 @@ router.patch("/connections/:id", requireAuth, requireOrg, async (req, res) => {
           eq(tenantConnectionsTable.organizationId, req.orgId!)
         )
       );
-    if (!existing) return res.status(404).json({ error: "Connection not found" });
+    if (!conn) return res.status(404).json({ error: "Connection not found" });
 
-    const { tenantName, primaryDomain, clientId, clientSecret, notes } =
-      req.body as Record<string, string | undefined>;
-
-    const updates: Partial<typeof tenantConnectionsTable.$inferInsert> = {
-      updatedAt: new Date(),
-    };
-    if (tenantName?.trim()) updates.tenantName = tenantName.trim();
-    if (primaryDomain !== undefined) updates.primaryDomain = primaryDomain.trim() || null;
-    if (clientId !== undefined) updates.clientId = clientId.trim() || null;
-    if (clientSecret?.trim()) updates.encryptedClientSecret = encryptSecret(clientSecret.trim());
-    if (notes !== undefined) updates.notes = notes.trim() || null;
+    const result = await testTenantConnection(conn.microsoftTenantId);
 
     await db
       .update(tenantConnectionsTable)
-      .set(updates)
+      .set({
+        connectionStatus: result.success ? "connected" : "error",
+        lastFailedReason: result.success ? null : (result.error ?? null),
+        updatedAt: new Date(),
+      })
       .where(eq(tenantConnectionsTable.id, req.params.id));
 
-    const [updated] = await db
-      .select()
-      .from(tenantConnectionsTable)
-      .where(eq(tenantConnectionsTable.id, req.params.id));
-
-    res.json({ ...updated, encryptedClientSecret: undefined });
+    res.json(result);
   } catch (err) {
-    req.log.error(err, "pa: update connection failed");
-    res.status(500).json({ error: "Failed to update connection" });
+    req.log.error(err, "pa: test connection failed");
+    res.status(500).json({ error: "Connection test failed" });
   }
 });
 
 router.delete("/connections/:id", requireAuth, requireOrg, async (req, res) => {
   const user = (req as any).user as { role?: string } | undefined;
-  if (user?.role !== "admin") {
-    return res.status(403).json({ error: "Only admins can disconnect tenants" });
+  if (user?.role !== "admin" && user?.role !== "compliance_manager") {
+    return res.status(403).json({ error: "Only admins and compliance managers can disconnect tenants" });
   }
 
   try {
     const [existing] = await db
-      .select({ id: tenantConnectionsTable.id })
+      .select({ id: tenantConnectionsTable.id, microsoftTenantId: tenantConnectionsTable.microsoftTenantId })
       .from(tenantConnectionsTable)
       .where(
         and(
@@ -155,6 +236,8 @@ router.delete("/connections/:id", requireAuth, requireOrg, async (req, res) => {
         )
       );
     if (!existing) return res.status(404).json({ error: "Connection not found" });
+
+    invalidateTokenCacheForTenant(existing.microsoftTenantId);
 
     await db
       .update(tenantConnectionsTable)
@@ -170,45 +253,6 @@ router.delete("/connections/:id", requireAuth, requireOrg, async (req, res) => {
   } catch (err) {
     req.log.error(err, "pa: disconnect tenant failed");
     res.status(500).json({ error: "Failed to disconnect tenant" });
-  }
-});
-
-router.post("/connections/:id/test", requireAuth, requireOrg, async (req, res) => {
-  try {
-    const [conn] = await db
-      .select()
-      .from(tenantConnectionsTable)
-      .where(
-        and(
-          eq(tenantConnectionsTable.id, req.params.id),
-          eq(tenantConnectionsTable.organizationId, req.orgId!)
-        )
-      );
-    if (!conn) return res.status(404).json({ error: "Connection not found" });
-    if (!conn.clientId || !conn.encryptedClientSecret) {
-      return res.status(400).json({ error: "Connection credentials not configured" });
-    }
-
-    const secret = decryptSecret(conn.encryptedClientSecret);
-    const result = await testTenantConnection(
-      conn.microsoftTenantId,
-      conn.clientId,
-      secret
-    );
-
-    await db
-      .update(tenantConnectionsTable)
-      .set({
-        connectionStatus: result.success ? "connected" : "error",
-        lastFailedReason: result.success ? null : result.error ?? null,
-        updatedAt: new Date(),
-      })
-      .where(eq(tenantConnectionsTable.id, req.params.id));
-
-    res.json(result);
-  } catch (err) {
-    req.log.error(err, "pa: test connection failed");
-    res.status(500).json({ error: "Connection test failed" });
   }
 });
 
@@ -248,7 +292,7 @@ router.post("/scans", requireAuth, requireOrg, async (req, res) => {
   }
 
   const [conn] = await db
-    .select({ id: tenantConnectionsTable.id })
+    .select({ id: tenantConnectionsTable.id, connectionStatus: tenantConnectionsTable.connectionStatus })
     .from(tenantConnectionsTable)
     .where(
       and(
@@ -257,6 +301,9 @@ router.post("/scans", requireAuth, requireOrg, async (req, res) => {
       )
     );
   if (!conn) return res.status(404).json({ error: "Tenant connection not found" });
+  if (conn.connectionStatus === "disconnected") {
+    return res.status(400).json({ error: "Tenant is disconnected. Reconnect before running a scan." });
+  }
 
   const id = randomUUID();
   const name = scanName?.trim() || `Tenant Scan — ${new Date().toLocaleDateString()}`;
@@ -352,9 +399,9 @@ router.patch("/findings/:id", requireAuth, requireOrg, async (req, res) => {
     return res.status(403).json({ error: "Insufficient permissions" });
   }
 
-  const { action, reason } = req.body as { action: "approve" | "reject"; reason?: string };
-  if (!["approve", "reject"].includes(action)) {
-    return res.status(400).json({ error: "action must be approve or reject" });
+  const { action, reason } = req.body as { action: "approve" | "reject" | "acknowledge" | "dismiss"; reason?: string };
+  if (!["approve", "reject", "acknowledge", "dismiss"].includes(action)) {
+    return res.status(400).json({ error: "action must be approve, reject, acknowledge, or dismiss" });
   }
 
   try {
@@ -370,33 +417,21 @@ router.patch("/findings/:id", requireAuth, requireOrg, async (req, res) => {
     if (action === "approve") {
       await db
         .update(paFindingsTable)
-        .set({
-          approvedStatus: "approved",
-          approvedBy: user?.email ?? null,
-          approvedAt: new Date(),
-          rejectedAt: null,
-          rejectedBy: null,
-          updatedAt: new Date(),
-        })
+        .set({ approvedStatus: "approved", approvedBy: user?.email ?? null, approvedAt: new Date(), rejectedAt: null, rejectedBy: null, updatedAt: new Date() })
+        .where(eq(paFindingsTable.id, req.params.id));
+    } else if (action === "reject" || action === "dismiss") {
+      await db
+        .update(paFindingsTable)
+        .set({ approvedStatus: "rejected", rejectedBy: user?.email ?? null, rejectedAt: new Date(), approvedAt: null, approvedBy: null, updatedAt: new Date() })
         .where(eq(paFindingsTable.id, req.params.id));
     } else {
       await db
         .update(paFindingsTable)
-        .set({
-          approvedStatus: "rejected",
-          rejectedBy: user?.email ?? null,
-          rejectedAt: new Date(),
-          approvedAt: null,
-          approvedBy: null,
-          updatedAt: new Date(),
-        })
+        .set({ approvedStatus: "pending_review", updatedAt: new Date() })
         .where(eq(paFindingsTable.id, req.params.id));
     }
 
-    const [updated] = await db
-      .select()
-      .from(paFindingsTable)
-      .where(eq(paFindingsTable.id, req.params.id));
+    const [updated] = await db.select().from(paFindingsTable).where(eq(paFindingsTable.id, req.params.id));
     res.json(updated);
   } catch (err) {
     req.log.error(err, "pa: patch finding failed");
@@ -431,15 +466,8 @@ router.patch("/evidence-records/:id", requireAuth, requireOrg, async (req, res) 
     }
     if (assessorSummary !== undefined) updates.assessorSummary = assessorSummary;
 
-    await db
-      .update(paEvidenceRecordsTable)
-      .set(updates)
-      .where(eq(paEvidenceRecordsTable.id, req.params.id));
-
-    const [updated] = await db
-      .select()
-      .from(paEvidenceRecordsTable)
-      .where(eq(paEvidenceRecordsTable.id, req.params.id));
+    await db.update(paEvidenceRecordsTable).set(updates).where(eq(paEvidenceRecordsTable.id, req.params.id));
+    const [updated] = await db.select().from(paEvidenceRecordsTable).where(eq(paEvidenceRecordsTable.id, req.params.id));
     res.json(updated);
   } catch (err) {
     req.log.error(err, "pa: patch evidence record failed");
@@ -489,10 +517,7 @@ router.patch("/evidence-requests/:id", requireAuth, requireOrg, async (req, res)
       .update(paEvidenceRequestsTable)
       .set({ status: status as any, updatedAt: new Date() })
       .where(eq(paEvidenceRequestsTable.id, req.params.id));
-    const [updated] = await db
-      .select()
-      .from(paEvidenceRequestsTable)
-      .where(eq(paEvidenceRequestsTable.id, req.params.id));
+    const [updated] = await db.select().from(paEvidenceRequestsTable).where(eq(paEvidenceRequestsTable.id, req.params.id));
     res.json(updated);
   } catch (err) {
     req.log.error(err, "pa: patch evidence request failed");
@@ -530,10 +555,7 @@ router.patch("/roadmap/:id", requireAuth, requireOrg, async (req, res) => {
       .update(paRoadmapActionsTable)
       .set({ status, updatedAt: new Date() })
       .where(eq(paRoadmapActionsTable.id, req.params.id));
-    const [updated] = await db
-      .select()
-      .from(paRoadmapActionsTable)
-      .where(eq(paRoadmapActionsTable.id, req.params.id));
+    const [updated] = await db.select().from(paRoadmapActionsTable).where(eq(paRoadmapActionsTable.id, req.params.id));
     res.json(updated);
   } catch (err) {
     req.log.error(err, "pa: patch roadmap action failed");

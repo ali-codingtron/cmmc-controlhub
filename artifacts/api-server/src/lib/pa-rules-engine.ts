@@ -11,13 +11,12 @@ import {
 } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import {
-  getGraphToken,
+  getGraphTokenForTenant,
   graphGetAll,
   graphGet,
   GraphPermissionError,
   GraphUnavailableError,
 } from "./graph-client";
-import { decryptSecret } from "./crypto-utils";
 import {
   ASSESSMENT_RULES,
   PACK_DEFINITIONS,
@@ -123,18 +122,9 @@ export async function runTenantScan(
 
   if (!conn) throw new Error("Tenant connection not found");
 
-  const clientId = conn.clientId;
-  const clientSecret = conn.encryptedClientSecret
-    ? decryptSecret(conn.encryptedClientSecret)
-    : null;
-
-  if (!clientId || !clientSecret) {
-    throw new Error("Tenant connection missing credentials");
-  }
-
   let token: string;
   try {
-    token = await getGraphToken(conn.microsoftTenantId, clientId, clientSecret);
+    token = await getGraphTokenForTenant(conn.microsoftTenantId);
   } catch (err) {
     await db
       .update(paScanRunsTable)
@@ -444,14 +434,17 @@ async function generateRoadmapActions(
 }
 
 export async function testTenantConnection(
-  tenantId: string,
-  clientId: string,
-  clientSecret: string
-): Promise<{ success: boolean; error?: string }> {
+  tenantId: string
+): Promise<{ success: boolean; error?: string; displayName?: string }> {
   try {
-    const token = await getGraphToken(tenantId, clientId, clientSecret);
-    await graphGet(token, "/organization", { $top: "1" });
-    return { success: true };
+    const token = await getGraphTokenForTenant(tenantId);
+    const resp = await graphGet<{ value: { displayName?: string; verifiedDomains?: { name: string; isDefault: boolean }[] }[] }>(
+      token,
+      "/organization",
+      { $top: "1" }
+    );
+    const org = resp.value?.[0];
+    return { success: true, displayName: org?.displayName };
   } catch (err) {
     return { success: false, error: (err as Error).message };
   }

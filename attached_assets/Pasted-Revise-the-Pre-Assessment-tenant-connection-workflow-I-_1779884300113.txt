@@ -1,0 +1,309 @@
+Revise the Pre-Assessment tenant connection workflow.
+
+I do NOT want a Manual Pre-Assessment module anymore.
+
+Remove:
+- Manual Pre-Assessment page
+- Manual questionnaire placeholder
+- Manual Pre-Assessment navigation item
+- Any “Coming Soon” manual assessment messaging
+
+The Pre-Assessment module should be focused on tenant-connected automated assessments.
+
+Important security requirement:
+Do NOT collect or store Microsoft admin usernames or passwords in Control HUB.
+
+When I say “connect using admin credentials,” I mean:
+- the Microsoft admin should click “Connect Microsoft Tenant”
+- they should be redirected to Microsoft’s official sign-in/admin consent page
+- they authenticate directly with Microsoft
+- Control HUB never sees or stores the admin password
+- after admin consent, Control HUB receives permission to perform read-only Microsoft Graph scans
+
+1. Replace App-Only Manual Credential Form
+
+Current issue:
+The connection form asks for:
+- Microsoft Tenant ID
+- App Registration Client ID
+- Client Secret
+
+I do not want customers to manually create an app registration or enter client secrets.
+
+Remove these fields from the customer-facing form:
+- App Registration Client ID
+- Client Secret
+
+Keep optional/read-only fields after connection:
+- tenant name
+- tenant ID
+- primary domain
+- connected by
+- connected date
+- permission status
+- last scan date
+
+2. Use Control HUB Multi-Tenant App
+
+Implement tenant connection using a Control HUB-owned Microsoft multi-tenant app registration.
+
+The app should be configured once by Control HUB, not by every customer.
+
+Use environment variables for the Control HUB app:
+
+- MICROSOFT_CLIENT_ID
+- MICROSOFT_CLIENT_SECRET or certificate credential
+- MICROSOFT_REDIRECT_URI
+- MICROSOFT_AUTHORITY = https://login.microsoftonline.com/organizations
+
+The customer should only click:
+“Connect Microsoft Tenant”
+
+Then Microsoft handles:
+- admin sign-in
+- MFA
+- consent
+- tenant authorization
+
+3. Admin Consent Flow
+
+Implement a Microsoft admin consent flow.
+
+When user clicks “Connect Microsoft Tenant”:
+- generate a secure state value
+- store organization_id in the state server-side
+- redirect to Microsoft admin consent URL
+- request read-only Graph application permissions
+- return to callback URL
+- validate state
+- capture tenant ID from Microsoft response
+- save tenant connection
+
+Use Microsoft-supported OAuth/admin consent flow.
+
+Do not ask the user to paste secrets.
+
+4. Customer Experience
+
+The tenant connection page should show:
+
+Title:
+Connect Microsoft Tenant
+
+Message:
+“Control HUB will redirect you to Microsoft to grant read-only permissions. Control HUB does not store your Microsoft admin password and cannot make changes to your tenant.”
+
+Button:
+Connect with Microsoft Admin Consent
+
+After successful connection, show:
+- Connected tenant name
+- Tenant ID
+- Primary domain
+- Consent granted
+- Permissions granted
+- Connected by
+- Last scan
+- Run Assessment button
+- Disconnect Tenant button
+
+5. Permission Packs
+
+Show the permission packs before connection.
+
+Keep permissions read-only.
+
+Initial permission packs:
+
+Identity Pack:
+- User.Read.All
+- Group.Read.All
+- Directory.Read.All
+
+Authentication Pack:
+- Reports.Read.All
+- UserAuthenticationMethod.Read.All
+
+Conditional Access Pack:
+- Policy.Read.All
+
+Device / Intune Pack:
+- DeviceManagementManagedDevices.Read.All
+
+Audit / Sign-In Pack:
+- AuditLog.Read.All
+
+Security Score Pack:
+- SecurityEvents.Read.All or SecurityActions.Read.All if needed and available
+
+Important:
+Only request permissions that are actually used.
+Show a description of what each permission is used for.
+
+6. No Tenant Write Access
+
+Do not request write permissions.
+
+Do not request:
+- Directory.ReadWrite.All
+- Application.ReadWrite.All
+- Policy.ReadWrite.*
+- DeviceManagementManagedDevices.ReadWrite.All
+- User.ReadWrite.All
+- Group.ReadWrite.All
+
+This assessment must be read-only.
+
+7. App Registration Clarification
+
+Customers should not create an app registration.
+
+Control HUB should use one multi-tenant app registration owned by Control HUB.
+
+When the customer admin consents:
+- Microsoft creates the Enterprise Application / service principal in their tenant automatically
+- Control HUB stores the tenant connection
+- Control HUB can run read-only scans using the granted permissions
+
+8. Token Handling
+
+Use secure token handling.
+
+Requirements:
+- never store Microsoft admin password
+- never log access tokens
+- encrypt refresh tokens or secrets if stored
+- prefer app-only scanning after admin consent
+- use server-side token acquisition
+- store only tenant connection metadata and scan results
+- support disconnect/revoke
+
+9. Scan Execution
+
+After connection, allow:
+
+- Test Connection
+- Run Tenant Assessment
+- View Last Scan
+- View Findings
+- View Evidence Requests
+- View Recommended Roadmap
+
+The scan should collect read-only data from Microsoft Graph and generate:
+- findings
+- evidence snapshots
+- evidence requests
+- roadmap recommendations
+- projected internal readiness results
+
+10. Backend API Endpoints
+
+Add or update endpoints:
+
+GET /api/pre-assessment/tenant-connections
+
+POST /api/pre-assessment/microsoft/connect/start
+- creates secure state
+- redirects to Microsoft admin consent
+
+GET /api/pre-assessment/microsoft/callback
+- validates state
+- stores tenant connection
+
+POST /api/pre-assessment/microsoft/test-connection
+
+POST /api/pre-assessment/microsoft/run-scan
+
+GET /api/pre-assessment/microsoft/scans/:scanId
+
+POST /api/pre-assessment/microsoft/disconnect
+
+11. UI Cleanup
+
+Remove the customer-facing credential form.
+
+The modal should no longer ask for:
+- client ID
+- client secret
+- manually created app registration
+
+Replace it with a clean Microsoft connection screen:
+
+Step 1:
+Review read-only permissions
+
+Step 2:
+Click Connect with Microsoft
+
+Step 3:
+Microsoft admin signs in and grants consent
+
+Step 4:
+Control HUB confirms tenant connection
+
+12. Error Handling
+
+If admin consent fails:
+- show clear reason
+- do not create partial connection
+
+If user is not a tenant admin:
+- show:
+“Tenant admin consent is required to connect this Microsoft tenant.”
+
+If permissions are missing:
+- show missing permission list
+- allow re-run admin consent
+
+If scan cannot access a data source:
+- mark that assessment pack as unavailable
+- continue scanning other packs
+
+13. Audit Logs
+
+Create audit logs for:
+- tenant connection started
+- tenant connection completed
+- tenant connection failed
+- tenant disconnected
+- assessment scan started
+- assessment scan completed
+- assessment scan failed
+- permission error
+- findings generated
+- evidence requests generated
+
+14. Security Notices
+
+Add a notice on Tenant Connections page:
+
+“Control HUB uses read-only Microsoft Graph permissions for assessment purposes. No tenant configuration changes are made.”
+
+15. Acceptance Tests
+
+Test A:
+- Go to Pre-Assessment > Tenant Connections
+- Click Connect Microsoft Tenant
+- No client secret form appears
+- User is redirected to Microsoft sign-in/admin consent
+
+Test B:
+- Admin grants consent
+- Control HUB records tenant ID and connection status
+- Tenant appears as Connected
+
+Test C:
+- Run Test Connection
+- Connection succeeds using Graph read-only access
+
+Test D:
+- Run Tenant Assessment
+- Identity, Conditional Access, authentication, device, audit, and secure score checks run based on granted permissions
+
+Test E:
+- Disconnect tenant
+- Connection status changes to Disconnected
+- Scheduled scans stop
+
+Test F:
+- No Microsoft admin password is ever stored, displayed, or logged
