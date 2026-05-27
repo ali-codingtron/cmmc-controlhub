@@ -36,6 +36,14 @@ const SEVERITY_COLOR: Record<string, string> = {
   informational: C.info,
 };
 
+const SEVERITY_BG: Record<string, string> = {
+  critical: C.criticalBg,
+  high: C.highBg,
+  medium: C.mediumBg,
+  low: C.lowBg,
+  informational: C.infoBg,
+};
+
 export interface PaReportData {
   scan: {
     id: string;
@@ -115,18 +123,23 @@ const PACK_NAMES: Record<string, string> = {
   secure_score: "Security Score Pack",
 };
 
+const PACK_PERMISSIONS: Record<string, string[]> = {
+  identity: ["User.Read.All", "GroupMember.Read.All", "Directory.Read.All"],
+  authentication: ["UserAuthenticationMethod.Read.All"],
+  conditional_access: ["Policy.Read.All"],
+  devices: ["Device.Read.All", "DeviceManagementManagedDevices.Read.All"],
+  audit: ["AuditLog.Read.All"],
+  secure_score: ["SecurityEvents.Read.All"],
+};
+
 const A4_W = 595.28;
 const A4_H = 841.89;
-const MARGIN = 50;
+const MARGIN = 44;
 const CONTENT_W = A4_W - MARGIN * 2;
-
-function healthLabel(rate: number, total: number): string {
-  if (total < 3) return "Insufficient Data";
-  if (rate >= 75) return "Strong";
-  if (rate >= 50) return "Moderate";
-  if (rate >= 25) return "Weak";
-  return "Critical Gaps";
-}
+const HEADER_H = 36;
+const FOOTER_H = 26;
+const PAGE_TOP = HEADER_H + 14;
+const PAGE_BOTTOM = A4_H - FOOTER_H - 10;
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
@@ -141,8 +154,29 @@ function fmtDateTime(iso: string | null): string {
   });
 }
 
+function healthLabel(rate: number, total: number): string {
+  if (total < 3) return "Insufficient Data";
+  if (rate >= 75) return "Strong";
+  if (rate >= 50) return "Moderate";
+  if (rate >= 25) return "Weak";
+  return "Critical Gaps";
+}
+
+function healthColor(label: string): string {
+  if (label === "Strong") return C.green;
+  if (label === "Moderate") return C.medium;
+  if (label === "Weak") return C.high;
+  if (label === "Critical Gaps") return C.critical;
+  return C.grayLight;
+}
+
 export function generatePaReportPdf(data: PaReportData, res: Response): void {
-  const doc = new PDFDocument({ size: "A4", margin: MARGIN, autoFirstPage: false });
+  const doc = new PDFDocument({
+    size: "A4",
+    margin: MARGIN,
+    autoFirstPage: false,
+    bufferPages: true,
+  });
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader(
@@ -153,315 +187,511 @@ export function generatePaReportPdf(data: PaReportData, res: Response): void {
 
   const passRate = data.scan.totalChecks > 0
     ? Math.round((data.scan.passedChecks / data.scan.totalChecks) * 100) : 0;
-  const confidenceRate = data.scan.totalChecks > 0
-    ? Math.round(((data.scan.totalChecks - data.scan.unknowns) / data.scan.totalChecks) * 100) : 0;
 
   const controlsTouched = Array.from(new Set([
     ...data.evidenceRecords.flatMap((e) => e.linkedControlIds),
     ...data.findings.flatMap((f) => f.linkedControlIds),
   ]));
   const controlsWithFindings = Array.from(new Set(data.findings.flatMap((f) => f.linkedControlIds)));
-  const controlsWithRequests = Array.from(new Set(data.evidenceRequests.flatMap((e) => e.linkedControlIds)));
 
-  let pageNum = 0;
+  const failedPacks = new Set(data.scan.packsFailed ?? []);
+  const health = healthLabel(passRate, data.scan.totalChecks);
+  const healthCol = healthColor(health);
 
-  function addContentPage() {
-    doc.addPage({ size: "A4", margin: MARGIN });
-    pageNum++;
+  let pageCount = 0;
+
+  function addPage(): void {
+    doc.addPage({ size: "A4", margin: 0 });
+    pageCount++;
 
     doc.save();
-    doc.rect(0, 0, A4_W, 40).fill(C.blueDark);
-    doc.fillColor(C.white).font("Helvetica-Bold").fontSize(9)
-      .text("Control HUB — Tenant-Connected CMMC Pre-Assessment Report", MARGIN, 14, { width: CONTENT_W - 80 });
-    doc.fillColor(C.white).font("Helvetica").fontSize(8)
-      .text(`Page ${pageNum}`, A4_W - MARGIN - 40, 14, { width: 40, align: "right" });
+    doc.rect(0, 0, A4_W, HEADER_H).fill(C.blueDark);
+    doc.fillColor("#93c5fd").font("Helvetica-Bold").fontSize(7.5)
+      .text("CONTROL HUB", MARGIN, 9);
+    doc.fillColor(C.white).font("Helvetica").fontSize(7.5)
+      .text("Tenant-Connected CMMC Pre-Assessment Report", MARGIN + 72, 9, { width: CONTENT_W - 120 });
+    doc.fillColor("#93c5fd").font("Helvetica").fontSize(7.5)
+      .text(data.org.name, MARGIN + 72, 20, { width: CONTENT_W - 120 });
+    doc.fillColor(C.white).font("Helvetica").fontSize(7.5)
+      .text(`Page ${pageCount}`, A4_W - MARGIN - 50, 14, { width: 50, align: "right" });
 
-    doc.rect(0, A4_H - 28, A4_W, 28).fill(C.grayBg);
-    doc.fillColor(C.grayLight).font("Helvetica").fontSize(7.5)
-      .text("Confidential — Prepared by Control HUB. Not an official CMMC assessment. For internal use only.", MARGIN, A4_H - 18, { width: CONTENT_W });
+    doc.rect(0, A4_H - FOOTER_H, A4_W, FOOTER_H).fill("#f1f5f9");
+    doc.rect(0, A4_H - FOOTER_H, A4_W, 1).fill(C.grayBorder);
+    doc.fillColor(C.grayLight).font("Helvetica").fontSize(6.5)
+      .text(
+        "CONFIDENTIAL — Prepared by Control HUB  |  Not an official CMMC assessment  |  Internal use only",
+        MARGIN, A4_H - 16, { width: CONTENT_W, align: "center" }
+      );
     doc.restore();
   }
 
-  function heading1(text: string, y: number): number {
-    doc.rect(MARGIN, y, CONTENT_W, 28).fill(C.blueLight);
-    doc.fillColor(C.blueDark).font("Helvetica-Bold").fontSize(12)
-      .text(text, MARGIN + 10, y + 8);
-    return y + 38;
-  }
-
-  function heading2(text: string, y: number): number {
-    doc.fillColor(C.blue).font("Helvetica-Bold").fontSize(10).text(text, MARGIN, y);
-    doc.moveTo(MARGIN, y + 14).lineTo(MARGIN + CONTENT_W, y + 14).lineWidth(0.5).strokeColor(C.grayBorder).stroke();
-    return y + 22;
-  }
-
-  function body(text: string, x: number, y: number, opts: object = {}): number {
-    doc.fillColor(C.gray).font("Helvetica").fontSize(9);
-    doc.text(text, x, y, { width: CONTENT_W - (x - MARGIN), ...opts });
-    return doc.y + 4;
-  }
-
   function safePage(y: number, needed = 80): number {
-    if (y > A4_H - 60 - needed) {
-      addContentPage();
-      return 58;
+    if (y + needed > PAGE_BOTTOM) {
+      addPage();
+      return PAGE_TOP;
     }
     return y;
   }
 
-  function metricBox(label: string, value: string, sub: string, x: number, y: number, w: number, color = C.blue): void {
-    doc.rect(x, y, w, 60).fill(C.grayBg).strokeColor(C.grayBorder).stroke();
-    doc.fillColor(color).font("Helvetica-Bold").fontSize(20).text(value, x + 8, y + 8, { width: w - 16, align: "center" });
-    doc.fillColor(C.black).font("Helvetica-Bold").fontSize(7.5).text(label, x + 4, y + 36, { width: w - 8, align: "center" });
-    doc.fillColor(C.grayLight).font("Helvetica").fontSize(7).text(sub, x + 4, y + 48, { width: w - 8, align: "center" });
+  function newSection(y: number, needed = 100): number {
+    if (y + needed > PAGE_BOTTOM - 40) {
+      addPage();
+      return PAGE_TOP;
+    }
+    return y + 14;
   }
 
-  function severityBadge(sev: string, x: number, y: number, w = 60): void {
-    const color = SEVERITY_COLOR[sev] ?? C.info;
-    doc.rect(x, y, w, 12).fill(color);
+  function heading1(text: string, y: number): number {
+    doc.rect(MARGIN, y, CONTENT_W, 24).fill(C.blueDark);
+    doc.rect(MARGIN, y, 4, 24).fill(C.blueMid);
+    doc.fillColor(C.white).font("Helvetica-Bold").fontSize(11)
+      .text(text, MARGIN + 12, y + 7);
+    return y + 32;
+  }
+
+  function heading2(text: string, y: number): number {
+    doc.fillColor(C.blue).font("Helvetica-Bold").fontSize(9.5).text(text, MARGIN, y);
+    doc.moveTo(MARGIN, y + 13).lineTo(MARGIN + CONTENT_W, y + 13)
+      .lineWidth(0.5).strokeColor(C.grayBorder).stroke();
+    return y + 21;
+  }
+
+  function kpiCard(label: string, value: string, color: string, x: number, y: number, w: number, h: number): void {
+    doc.rect(x, y, w, h).fill(C.grayBg).strokeColor(C.grayBorder).lineWidth(0.5).stroke();
+    doc.rect(x, y, w, 3).fill(color);
+    doc.fillColor(color).font("Helvetica-Bold").fontSize(22)
+      .text(value, x, y + 12, { width: w, align: "center" });
+    doc.fillColor(C.gray).font("Helvetica").fontSize(7)
+      .text(label, x + 4, y + h - 14, { width: w - 8, align: "center" });
+  }
+
+  function tableHeader(cols: Array<{ label: string; x: number; w: number }>, y: number, rowH = 16): number {
+    doc.rect(MARGIN, y, CONTENT_W, rowH).fill(C.blueDark);
+    for (const col of cols) {
+      doc.fillColor(C.white).font("Helvetica-Bold").fontSize(7)
+        .text(col.label, col.x + 3, y + (rowH - 7) / 2, { width: col.w - 6 });
+    }
+    return y + rowH;
+  }
+
+  function tableRow(
+    cols: Array<{ value: string; x: number; w: number; color?: string; bold?: boolean; align?: "left" | "right" | "center" }>,
+    y: number,
+    rowH: number,
+    shade: boolean
+  ): number {
+    if (shade) doc.rect(MARGIN, y, CONTENT_W, rowH).fill(C.grayBg);
+    for (const col of cols) {
+      const font = col.bold ? "Helvetica-Bold" : "Helvetica";
+      doc.fillColor(col.color ?? C.gray).font(font).fontSize(7.5)
+        .text(col.value, col.x + 3, y + (rowH - 7.5) / 2, { width: col.w - 6, align: col.align ?? "left" });
+    }
+    doc.moveTo(MARGIN, y + rowH).lineTo(MARGIN + CONTENT_W, y + rowH)
+      .lineWidth(0.3).strokeColor(C.grayBorder).stroke();
+    return y + rowH;
+  }
+
+  function badge(text: string, color: string, x: number, y: number, w: number, h = 12): void {
+    doc.rect(x, y, w, h).fill(color);
     doc.fillColor(C.white).font("Helvetica-Bold").fontSize(6.5)
-      .text(sev.toUpperCase(), x, y + 2.5, { width: w, align: "center" });
+      .text(text, x, y + (h - 6.5) / 2, { width: w, align: "center" });
   }
 
-  function statusBadge(status: string, x: number, y: number, w = 70): void {
-    const color = status === "completed" ? C.green :
-      status === "completed_with_warnings" ? C.medium :
-      status === "failed" ? C.critical : C.grayLight;
-    doc.rect(x, y, w, 12).fill(color);
-    const label = status === "completed" ? "COMPLETE" :
-      status === "completed_with_warnings" ? "WITH WARNINGS" :
-      status === "failed" ? "FAILED" : status.toUpperCase().replace("_", " ");
-    doc.fillColor(C.white).font("Helvetica-Bold").fontSize(6)
-      .text(label, x, y + 3, { width: w, align: "center" });
-  }
-
-  // ─── COVER PAGE ─────────────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // COVER PAGE
+  // ═══════════════════════════════════════════════════════════════════════════════
   doc.addPage({ size: "A4", margin: 0 });
 
-  doc.rect(0, 0, A4_W, 280).fill(C.blueDark);
-  doc.fillColor(C.white).font("Helvetica-Bold").fontSize(26)
-    .text("Tenant-Connected CMMC", MARGIN, 60, { width: CONTENT_W });
-  doc.fillColor(C.white).font("Helvetica-Bold").fontSize(26)
-    .text("Pre-Assessment Report", MARGIN, 92, { width: CONTENT_W });
-  doc.fillColor("#93c5fd").font("Helvetica").fontSize(13)
-    .text("Microsoft 365 / Entra Technical Readiness Scan", MARGIN, 130, { width: CONTENT_W });
-  doc.moveTo(MARGIN, 155).lineTo(MARGIN + 120, 155).lineWidth(2).strokeColor("#60a5fa").stroke();
+  // Blue header band
+  doc.rect(0, 0, A4_W, 310).fill(C.blueDark);
+  // Accent bar
+  doc.rect(0, 310, A4_W, 5).fill(C.blueMid);
 
-  doc.fillColor(C.white).font("Helvetica-Bold").fontSize(9).text("CONFIDENTIAL", MARGIN, 172);
-  doc.fillColor("#bfdbfe").font("Helvetica").fontSize(9).text("Internal Use Only — Not an Official CMMC Assessment", MARGIN, 185);
+  // Logo area
+  doc.fillColor("#93c5fd").font("Helvetica-Bold").fontSize(11).text("CONTROL HUB", MARGIN, 48);
+  doc.moveTo(MARGIN, 65).lineTo(MARGIN + 80, 65).lineWidth(1.5).strokeColor("#60a5fa").stroke();
 
-  const infoY = 310;
-  function infoRow(label: string, value: string, y: number): number {
-    doc.fillColor(C.grayLight).font("Helvetica").fontSize(8).text(label, MARGIN, y);
-    doc.fillColor(C.black).font("Helvetica-Bold").fontSize(9).text(value, MARGIN + 130, y);
-    return y + 18;
+  // Title
+  doc.fillColor(C.white).font("Helvetica-Bold").fontSize(28)
+    .text("Tenant-Connected", MARGIN, 82, { width: CONTENT_W });
+  doc.fillColor(C.white).font("Helvetica-Bold").fontSize(28)
+    .text("CMMC Pre-Assessment", MARGIN, 116, { width: CONTENT_W });
+  doc.fillColor(C.white).font("Helvetica-Bold").fontSize(22)
+    .text("Report", MARGIN, 150, { width: CONTENT_W });
+
+  doc.fillColor("#93c5fd").font("Helvetica").fontSize(11)
+    .text("Microsoft 365 / Entra Technical Readiness Scan", MARGIN, 190, { width: CONTENT_W });
+
+  // Status chip
+  const scanStatus = data.scan.status === "completed" ? "COMPLETED" :
+    data.scan.status === "completed_with_warnings" ? "COMPLETED WITH WARNINGS" :
+    data.scan.status === "failed" ? "FAILED" : data.scan.status.toUpperCase();
+  const statusColor = data.scan.status === "completed" ? C.green :
+    data.scan.status === "completed_with_warnings" ? C.medium : C.critical;
+  doc.rect(MARGIN, 220, 100, 16).fill(statusColor);
+  doc.fillColor(C.white).font("Helvetica-Bold").fontSize(7.5)
+    .text(scanStatus, MARGIN, 225, { width: 100, align: "center" });
+
+  doc.rect(MARGIN + 108, 220, 70, 16).fill("#1e3a8a");
+  doc.fillColor("#93c5fd").font("Helvetica-Bold").fontSize(7.5)
+    .text("CMMC Level 2", MARGIN + 108, 225, { width: 70, align: "center" });
+
+  doc.fillColor("#bfdbfe").font("Helvetica-Bold").fontSize(8).text("CONFIDENTIAL", MARGIN, 254);
+  doc.fillColor("#93c5fd").font("Helvetica").fontSize(8)
+    .text("Internal Use Only — Not an Official CMMC Assessment", MARGIN, 266);
+
+  // Metadata section on white background
+  const metaStartY = 330;
+  function coverRow(label: string, value: string, y: number): number {
+    doc.fillColor(C.grayLight).font("Helvetica").fontSize(8).text(label, MARGIN, y, { width: 120 });
+    doc.fillColor(C.black).font("Helvetica-Bold").fontSize(9).text(value, MARGIN + 125, y, { width: CONTENT_W - 125 });
+    doc.moveTo(MARGIN, y + 16).lineTo(MARGIN + CONTENT_W, y + 16).lineWidth(0.3).strokeColor(C.grayBorder).stroke();
+    return y + 22;
   }
 
-  let iy = infoY;
-  iy = infoRow("Organization", data.org.name, iy);
-  iy = infoRow("Tenant", data.tenantConnection?.tenantName ?? "—", iy);
+  let cy = metaStartY;
+  cy = coverRow("Organization", data.org.name, cy);
+  cy = coverRow("Tenant", data.tenantConnection?.tenantName ?? "—", cy);
   if (data.tenantConnection?.primaryDomain) {
-    iy = infoRow("Primary Domain", data.tenantConnection.primaryDomain, iy);
+    cy = coverRow("Primary Domain", data.tenantConnection.primaryDomain, cy);
   }
-  iy = infoRow("Scan Name", data.scan.scanName, iy);
-  iy = infoRow("Scan Date", fmtDateTime(data.scan.completedAt ?? data.scan.startedAt), iy);
-  iy = infoRow("Report Generated", fmtDateTime(new Date().toISOString()), iy);
-  iy = infoRow("Generated By", data.generatedBy, iy);
-  iy = infoRow("Target CMMC Level", "Level 2 (110 Controls)", iy);
-  iy = infoRow("Scan Status", data.scan.status.replace(/_/g, " "), iy);
+  if (data.tenantConnection?.microsoftTenantId) {
+    cy = coverRow("Tenant ID", data.tenantConnection.microsoftTenantId, cy);
+  }
+  cy = coverRow("Scan Name", data.scan.scanName, cy);
+  cy = coverRow("Scan Date", fmtDateTime(data.scan.completedAt ?? data.scan.startedAt), cy);
+  cy = coverRow("Report Generated", fmtDateTime(new Date().toISOString()), cy);
+  cy = coverRow("Generated By", data.generatedBy, cy);
+  cy = coverRow("Target CMMC Level", "CMMC Level 2 (110 controls)", cy);
 
-  doc.rect(MARGIN, iy + 16, CONTENT_W, 40).fill(C.blueLight);
-  doc.fillColor(C.blueDark).font("Helvetica-Bold").fontSize(11)
-    .text(`Tenant Scan Health: ${passRate}%  ·  ${healthLabel(passRate, data.scan.totalChecks)}`, MARGIN + 10, iy + 28);
+  // Footer strip
+  doc.rect(0, A4_H - 40, A4_W, 40).fill("#f1f5f9");
+  doc.rect(0, A4_H - 40, A4_W, 1).fill(C.grayBorder);
+  doc.fillColor(C.grayLight).font("Helvetica").fontSize(7)
+    .text(
+      "This report is produced by Control HUB and is intended for the named organization only. " +
+      "It is not an official CMMC assessment and does not replace a C3PAO evaluation.",
+      MARGIN, A4_H - 26, { width: CONTENT_W, align: "center" }
+    );
 
-  doc.rect(0, A4_H - 40, A4_W, 40).fill(C.grayBg);
-  doc.fillColor(C.grayLight).font("Helvetica").fontSize(7.5)
-    .text("Confidential — Prepared by Control HUB. Not an official CMMC assessment. For internal use only.", MARGIN, A4_H - 25, { width: CONTENT_W });
-
-  // ─── PAGE 2: EXECUTIVE SUMMARY ──────────────────────────────────────────────
-  addContentPage();
-  let y = 58;
-
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // EXECUTIVE SUMMARY
+  // ═══════════════════════════════════════════════════════════════════════════════
+  addPage();
+  let y = PAGE_TOP;
   y = heading1("Executive Summary", y);
 
-  // Metrics grid row 1
-  const boxW = (CONTENT_W - 12) / 4;
-  metricBox("Tenant Scan Health", `${passRate}%`, healthLabel(passRate, data.scan.totalChecks), MARGIN, y, boxW, passRate >= 75 ? C.green : passRate >= 50 ? C.medium : C.critical);
-  metricBox("Assessment Confidence", `${confidenceRate}%`, "data coverage", MARGIN + boxW + 4, y, boxW, C.blue);
-  metricBox("Controls Touched", `${controlsTouched.length} / ${CMMC_L2_TOTAL}`, "of CMMC L2 controls", MARGIN + (boxW + 4) * 2, y, boxW, C.blue);
-  metricBox("Evidence Snapshots", `${data.evidenceRecords.length}`, "auto-generated", MARGIN + (boxW + 4) * 3, y, boxW, C.blue);
-  y += 70;
+  // 3-column KPI row 1
+  const kW = (CONTENT_W - 8) / 3;
+  kpiCard("Checks Run", data.scan.totalChecks.toString(), C.blue, MARGIN, y, kW, 58);
+  kpiCard("Passed", data.scan.passedChecks.toString(), C.green, MARGIN + kW + 4, y, kW, 58);
+  kpiCard("Gaps Found", data.scan.failedChecks.toString(), data.scan.failedChecks > 0 ? C.critical : C.green, MARGIN + (kW + 4) * 2, y, kW, 58);
+  y += 66;
 
-  // Metrics grid row 2
-  metricBox("Checks Run", `${data.scan.totalChecks}`, "total rules evaluated", MARGIN, y, boxW);
-  metricBox("Passed", `${data.scan.passedChecks}`, "checks passed", MARGIN + boxW + 4, y, boxW, C.green);
-  metricBox("Gaps Found", `${data.scan.failedChecks}`, "failed checks", MARGIN + (boxW + 4) * 2, y, boxW, C.critical);
-  metricBox("Findings", `${data.findings.length}`, "requiring review", MARGIN + (boxW + 4) * 3, y, boxW, data.findings.length > 0 ? C.high : C.green);
-  y += 76;
+  // 3-column KPI row 2
+  kpiCard("Findings", data.findings.length.toString(), data.findings.length > 0 ? C.high : C.green, MARGIN, y, kW, 58);
+  kpiCard("Evidence Snapshots", data.evidenceRecords.length.toString(), C.blue, MARGIN + kW + 4, y, kW, 58);
+  kpiCard("Evidence Requests", data.evidenceRequests.length.toString(), C.medium, MARGIN + (kW + 4) * 2, y, kW, 58);
+  y += 66;
 
-  y = safePage(y, 100);
-  y = heading2("Scan Interpretation", y);
+  // 3-column KPI row 3
+  kpiCard("Controls Touched", `${controlsTouched.length} / ${CMMC_L2_TOTAL}`, C.blue, MARGIN, y, kW, 58);
+  kpiCard("Unknown / No Data", data.scan.unknowns.toString(), data.scan.unknowns > 0 ? C.medium : C.green, MARGIN + kW + 4, y, kW, 58);
+  kpiCard("Roadmap Actions", data.roadmapActions.length.toString(), C.blue, MARGIN + (kW + 4) * 2, y, kW, 58);
+  y += 74;
 
+  // Tenant Scan Health + Assessment Confidence bar
+  const hsW = (CONTENT_W - 8) / 2;
+  doc.rect(MARGIN, y, hsW, 42).fill(C.grayBg).strokeColor(C.grayBorder).lineWidth(0.5).stroke();
+  doc.rect(MARGIN, y, hsW, 3).fill(healthCol);
+  doc.fillColor(healthCol).font("Helvetica-Bold").fontSize(17).text(health, MARGIN, y + 10, { width: hsW, align: "center" });
+  doc.fillColor(C.grayLight).font("Helvetica").fontSize(7).text("Tenant Scan Health", MARGIN + 4, y + 32, { width: hsW - 8, align: "center" });
+
+  const confRate = data.scan.totalChecks > 0
+    ? Math.round(((data.scan.totalChecks - data.scan.unknowns) / data.scan.totalChecks) * 100) : 0;
+  const confLabel = confRate >= 80 ? "High" : confRate >= 50 ? "Moderate" : "Low";
+  const confColor = confRate >= 80 ? C.green : confRate >= 50 ? C.medium : C.critical;
+  doc.rect(MARGIN + hsW + 8, y, hsW, 42).fill(C.grayBg).strokeColor(C.grayBorder).lineWidth(0.5).stroke();
+  doc.rect(MARGIN + hsW + 8, y, hsW, 3).fill(confColor);
+  doc.fillColor(confColor).font("Helvetica-Bold").fontSize(17).text(`${confRate}%  ${confLabel}`, MARGIN + hsW + 8, y + 10, { width: hsW, align: "center" });
+  doc.fillColor(C.grayLight).font("Helvetica").fontSize(7).text("Assessment Confidence", MARGIN + hsW + 12, y + 32, { width: hsW - 8, align: "center" });
+  y += 52;
+
+  // Interpretation box
+  y = safePage(y, 90);
+  doc.rect(MARGIN, y, CONTENT_W, 5).fill(C.blue);
+  doc.rect(MARGIN, y + 5, CONTENT_W, 82).fill(C.blueLight).strokeColor(C.grayBorder).lineWidth(0.5).stroke();
+  doc.fillColor(C.blueDark).font("Helvetica-Bold").fontSize(9).text("Assessment Interpretation", MARGIN + 10, y + 13);
+
+  let interp = `This pre-assessment scanned ${data.scan.totalChecks} Microsoft tenant configuration checks across ${(data.scan.packsCompleted?.length ?? 0)} assessment packs. `;
+  if (passRate >= 75) {
+    interp += `The tenant shows strong technical readiness with ${passRate}% of checks passing.`;
+  } else if (passRate >= 50) {
+    interp += `The tenant shows moderate readiness with notable gaps requiring attention. ${passRate}% of checks passed.`;
+  } else {
+    interp += `The tenant shows significant gaps requiring remediation. Only ${passRate}% of checks passed.`;
+  }
   const critCount = data.findings.filter((f) => f.severity === "critical").length;
   const highCount = data.findings.filter((f) => f.severity === "high").length;
-  let interpretation = `This pre-assessment scanned ${data.scan.totalChecks} Microsoft tenant configuration checks across ${(data.scan.packsCompleted?.length ?? 0)} assessment packs. `;
-  if (passRate >= 75) {
-    interpretation += `The tenant shows strong technical readiness with ${passRate}% of checks passing.`;
-  } else if (passRate >= 50) {
-    interpretation += `The tenant shows moderate readiness with notable gaps that should be addressed. ${critCount + highCount} critical/high findings require priority attention.`;
-  } else {
-    interpretation += `The tenant shows significant gaps requiring remediation. ${critCount} critical and ${highCount} high severity findings were identified.`;
+  if (critCount + highCount > 0) {
+    interp += ` ${critCount} critical and ${highCount} high severity findings require priority attention.`;
   }
-  if (data.scan.packsFailed?.length > 0) {
-    interpretation += ` ${data.scan.packsFailed.length} assessment pack(s) encountered data availability issues (see Pack Summary).`;
+  if (failedPacks.size > 0) {
+    interp += ` ${failedPacks.size} assessment pack(s) encountered data availability issues.`;
   }
-  y = body(interpretation, MARGIN, y, { align: "justify" });
-  y += 8;
 
-  // ─── SCOPE & LIMITATIONS ────────────────────────────────────────────────────
-  y = safePage(y, 120);
+  doc.fillColor(C.gray).font("Helvetica").fontSize(8.5)
+    .text(interp, MARGIN + 10, y + 28, { width: CONTENT_W - 20, align: "justify" });
+
+  // Top concerns
+  const topConcerns = data.findings
+    .filter((f) => f.severity === "critical" || f.severity === "high")
+    .slice(0, 3)
+    .map((f) => f.title);
+  if (topConcerns.length > 0) {
+    const concernsText = "Primary concerns: " + topConcerns.join("; ") + ".";
+    doc.fillColor(C.blueDark).font("Helvetica-Bold").fontSize(8)
+      .text(concernsText, MARGIN + 10, y + 62, { width: CONTENT_W - 20 });
+  }
+  y += 96;
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // SCOPE & LIMITATIONS
+  // ═══════════════════════════════════════════════════════════════════════════════
+  y = newSection(y, 260);
   y = heading1("Assessment Scope & Limitations", y);
 
-  y = heading2("What This Scan Evaluated", y);
-  const evaluated = [
-    "Microsoft Entra ID user accounts, guest accounts, and group membership",
-    "MFA registration status and authentication method coverage per user",
-    "Conditional Access policies, MFA enforcement rules, and legacy authentication blocking",
-    "Sign-in logs and failed/risky authentication events",
-    "Directory audit logs including role changes, user/group modifications, and policy changes",
-    "Microsoft Secure Score and actionable improvement recommendations",
-    "Microsoft Intune managed device inventory and compliance state (if Intune is licensed and enrolled devices exist)",
-  ];
-  for (const item of evaluated) {
-    doc.fillColor(C.green).font("Helvetica-Bold").fontSize(9).text("[+]", MARGIN, y, { width: 18 });
-    doc.fillColor(C.gray).font("Helvetica").fontSize(9).text(item, MARGIN + 22, y, { width: CONTENT_W - 22 });
-    y = doc.y + 3;
-    y = safePage(y, 40);
-  }
-  y += 6;
+  // Two-column layout
+  const colW2 = (CONTENT_W - 10) / 2;
+  const scopeStartY = y;
 
-  y = safePage(y, 80);
-  y = heading2("What This Scan Does Not Fully Evaluate", y);
+  // Left column: Evaluated
+  doc.fillColor(C.green).font("Helvetica-Bold").fontSize(9).text("[+] What This Scan Evaluated", MARGIN, y);
+  y += 16;
+  const evaluated = [
+    "Entra ID user accounts, guests, group membership",
+    "MFA registration per user and authentication methods",
+    "Conditional Access policies and MFA enforcement",
+    "Legacy authentication blocking rules",
+    "Sign-in logs and failed/risky sign-in events",
+    "Directory audit logs (role changes, user/group changes)",
+    "Microsoft Secure Score and improvement actions",
+    "Intune managed devices and compliance state (if licensed)",
+  ];
+  const leftStartY = y;
+  for (const item of evaluated) {
+    doc.fillColor(C.green).font("Helvetica-Bold").fontSize(8).text("[+]", MARGIN, y, { width: 18 });
+    doc.fillColor(C.gray).font("Helvetica").fontSize(8).text(item, MARGIN + 20, y, { width: colW2 - 22 });
+    y = doc.y + 3;
+  }
+  const leftEndY = y;
+
+  // Right column: Not Evaluated (start at same Y as left column)
+  let ry = leftStartY;
+  const rxStart = MARGIN + colW2 + 10;
+  doc.fillColor(C.critical).font("Helvetica-Bold").fontSize(9)
+    .text("[-] What This Scan Does Not Evaluate", rxStart - colW2 - 10 + MARGIN, scopeStartY, { width: colW2 });
   const notEvaluated = [
-    "SSP (System Security Plan) completeness or quality",
-    "CUI scope documentation and data flow diagrams",
+    "SSP completeness or quality",
+    "CUI scope documentation and data flows",
     "Policies, procedures, and documented controls",
     "Physical security controls",
-    "Personnel security, background checks, or training records",
-    "Risk management plans, risk assessments, or risk registers",
-    "Incident response plan testing or exercises",
+    "Personnel security and training records",
+    "Risk management and risk registers",
+    "Incident response plan testing",
     "Backup and recovery testing",
-    "Firewall configuration or network segmentation (unless Microsoft-integrated)",
-    "Non-Microsoft systems, applications, or infrastructure",
-    "Assessor interviews or hands-on technical testing",
+    "Firewall configuration or network segmentation",
+    "Non-Microsoft systems and infrastructure",
+    "Assessor interviews or hands-on testing",
   ];
   for (const item of notEvaluated) {
-    y = safePage(y, 30);
-    doc.fillColor(C.critical).font("Helvetica-Bold").fontSize(9).text("[-]", MARGIN, y, { width: 18 });
-    doc.fillColor(C.gray).font("Helvetica").fontSize(9).text(item, MARGIN + 22, y, { width: CONTENT_W - 22 });
-    y = doc.y + 3;
+    doc.fillColor(C.critical).font("Helvetica-Bold").fontSize(8).text("[-]", rxStart, ry, { width: 18 });
+    doc.fillColor(C.gray).font("Helvetica").fontSize(8).text(item, rxStart + 20, ry, { width: colW2 - 22 });
+    ry = doc.y + 3;
   }
-  y += 6;
 
-  y = safePage(y, 70);
-  doc.rect(MARGIN, y, CONTENT_W, 52).fill(C.blueLight);
+  y = Math.max(leftEndY, ry) + 10;
+
+  // Disclaimer
+  y = safePage(y, 60);
+  doc.rect(MARGIN, y, CONTENT_W, 52).fill(C.blueLight).strokeColor(C.grayBorder).lineWidth(0.5).stroke();
   doc.rect(MARGIN, y, 4, 52).fill(C.blue);
   doc.fillColor(C.blueDark).font("Helvetica-Bold").fontSize(9).text("Important Disclaimer", MARGIN + 12, y + 8);
-  doc.fillColor(C.gray).font("Helvetica").fontSize(8.5)
+  doc.fillColor(C.gray).font("Helvetica").fontSize(8)
     .text(
       "This report is a technical pre-assessment based on Microsoft tenant configuration and Microsoft Graph API data. " +
       "It is not an official CMMC assessment and does not replace a C3PAO assessment, SSP review, or formal compliance audit. " +
       "Final CMMC certification requires review of policies, procedures, evidence, interviews, and testing by a certified assessor.",
-      MARGIN + 12, y + 22, { width: CONTENT_W - 20 }
+      MARGIN + 12, y + 24, { width: CONTENT_W - 20 }
     );
   y += 62;
 
-  // ─── ASSESSMENT PACK SUMMARY ────────────────────────────────────────────────
-  addContentPage();
-  y = 58;
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // ASSESSMENT PACK SUMMARY
+  // ═══════════════════════════════════════════════════════════════════════════════
+  y = newSection(y, 200);
   y = heading1("Assessment Pack Summary", y);
 
-  for (const packId of (data.scan.packsRequested ?? [])) {
+  // Table header
+  const PC = {
+    name: { x: MARGIN, w: 150 },
+    status: { x: MARGIN + 150, w: 70 },
+    checks: { x: MARGIN + 220, w: 42 },
+    passed: { x: MARGIN + 262, w: 42 },
+    gaps: { x: MARGIN + 304, w: 42 },
+    evidence: { x: MARGIN + 346, w: 55 },
+    findings: { x: MARGIN + 401, w: 50 },
+    notes: { x: MARGIN + 451, w: CONTENT_W - 451 },
+  };
+
+  y = tableHeader(
+    [
+      { label: "Assessment Pack", x: PC.name.x, w: PC.name.w },
+      { label: "Status", x: PC.status.x, w: PC.status.w },
+      { label: "Checks", x: PC.checks.x, w: PC.checks.w },
+      { label: "Passed", x: PC.passed.x, w: PC.passed.w },
+      { label: "Gaps", x: PC.gaps.x, w: PC.gaps.w },
+      { label: "Evidence", x: PC.evidence.x, w: PC.evidence.w },
+      { label: "Findings", x: PC.findings.x, w: PC.findings.w },
+      { label: "Notes", x: PC.notes.x, w: PC.notes.w },
+    ],
+    y, 16
+  );
+
+  for (let pi = 0; pi < (data.scan.packsRequested ?? []).length; pi++) {
+    const packId = data.scan.packsRequested[pi];
     const name = PACK_NAMES[packId] ?? packId;
     const isCompleted = (data.scan.packsCompleted ?? []).includes(packId);
     const isFailed = (data.scan.packsFailed ?? []).includes(packId);
     const packFindings = data.findings.filter((f) => f.packId === packId);
     const packEvidence = data.evidenceRecords.filter((e) => e.packId === packId);
+    const failGaps = packFindings.filter((f) => f.result === "fail").length;
+    const passedEv = Math.max(0, packEvidence.length - failGaps);
+    const statusLabel = isFailed ? "DATA UNAVAIL." : isCompleted ? "COMPLETE" : "NOT RUN";
+    const statusCol = isFailed ? C.critical : isCompleted ? C.green : C.grayLight;
+    const notes = isFailed ? "Missing permission, license, or API unavailable" : "";
 
-    const packFindings_fail = packFindings.filter((f) => f.result === "fail").length;
-    const packFindings_all = packFindings.length;
-    const packEvidence_count = packEvidence.length;
-    // "passed checks" = evidence records that have no corresponding failure finding (approximate)
-    const passedCount = Math.max(0, packEvidence_count - packFindings_fail);
+    const rowH = 16;
+    y = safePage(y, rowH);
+    const shade = pi % 2 === 0;
+    if (shade) doc.rect(MARGIN, y, CONTENT_W, rowH).fill(C.grayBg);
+    if (isFailed) doc.rect(MARGIN, y, CONTENT_W, rowH).fill(C.criticalBg);
 
-    const boxH = isFailed ? 56 : 64;
-    y = safePage(y, boxH + 8);
+    doc.fillColor(C.black).font("Helvetica-Bold").fontSize(7.5)
+      .text(name, PC.name.x + 3, y + (rowH - 7.5) / 2, { width: PC.name.w - 6 });
 
-    doc.rect(MARGIN, y, CONTENT_W, boxH).fill(isFailed ? C.criticalBg : C.grayBg).strokeColor(C.grayBorder).lineWidth(0.5).stroke();
-    doc.fillColor(C.black).font("Helvetica-Bold").fontSize(10).text(name, MARGIN + 10, y + 8);
-    statusBadge(isFailed ? "failed" : isCompleted ? "completed" : "not_started", MARGIN + CONTENT_W - 90, y + 7);
+    badge(statusLabel, statusCol, PC.status.x + 3, y + 3, PC.status.w - 8, 10);
 
-    if (isFailed) {
-      doc.fillColor(C.critical).font("Helvetica").fontSize(8.5)
-        .text("Data unavailable — check tenant permissions, licensing, or configuration", MARGIN + 10, y + 32, { width: CONTENT_W - 110 });
-    } else {
-      const cols = ["Evidence Snapshots", "Findings", "Gaps Found", "Passed Checks"];
-      const vals = [
-        packEvidence_count.toString(),
-        packFindings_all.toString(),
-        packFindings_fail.toString(),
-        passedCount.toString(),
-      ];
-      const colW = (CONTENT_W - 20) / cols.length;
-      cols.forEach((col, i) => {
-        const cx = MARGIN + 10 + i * colW;
-        doc.fillColor(C.grayLight).font("Helvetica").fontSize(7).text(col, cx, y + 30, { width: colW - 4 });
-        const valColor = (col === "Gaps Found" && parseInt(vals[i]) > 0) ? C.critical :
-          (col === "Passed Checks") ? C.green : C.black;
-        doc.fillColor(valColor).font("Helvetica-Bold").fontSize(11).text(vals[i], cx, y + 42, { width: colW - 4 });
-      });
-    }
-    y += boxH + 8;
+    const numColor = (n: number, warnAbove = 0) => n > warnAbove ? C.critical : C.black;
+
+    doc.fillColor(C.black).font("Helvetica").fontSize(7.5)
+      .text(isFailed ? "—" : packEvidence.length.toString(), PC.checks.x + 3, y + (rowH - 7.5) / 2, { width: PC.checks.w - 6, align: "right" });
+    doc.fillColor(isFailed ? C.grayLight : C.green).font("Helvetica").fontSize(7.5)
+      .text(isFailed ? "—" : passedEv.toString(), PC.passed.x + 3, y + (rowH - 7.5) / 2, { width: PC.passed.w - 6, align: "right" });
+    doc.fillColor(isFailed ? C.grayLight : (failGaps > 0 ? C.critical : C.green)).font("Helvetica-Bold").fontSize(7.5)
+      .text(isFailed ? "—" : failGaps.toString(), PC.gaps.x + 3, y + (rowH - 7.5) / 2, { width: PC.gaps.w - 6, align: "right" });
+    doc.fillColor(C.black).font("Helvetica").fontSize(7.5)
+      .text(isFailed ? "—" : packEvidence.length.toString(), PC.evidence.x + 3, y + (rowH - 7.5) / 2, { width: PC.evidence.w - 6, align: "right" });
+    doc.fillColor(packFindings.length > 0 ? C.high : C.black).font("Helvetica").fontSize(7.5)
+      .text(isFailed ? "—" : packFindings.length.toString(), PC.findings.x + 3, y + (rowH - 7.5) / 2, { width: PC.findings.w - 6, align: "right" });
+    doc.fillColor(C.grayLight).font("Helvetica").fontSize(6.5)
+      .text(notes, PC.notes.x + 3, y + (rowH - 6.5) / 2, { width: PC.notes.w - 6 });
+
+    doc.moveTo(MARGIN, y + rowH).lineTo(MARGIN + CONTENT_W, y + rowH)
+      .lineWidth(0.3).strokeColor(C.grayBorder).stroke();
+    y += rowH;
   }
+  y += 12;
 
-  // ─── CONTROL COVERAGE ───────────────────────────────────────────────────────
-  y = safePage(y, 120);
-  y = heading1("CMMC Control Coverage", y);
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // CONTROL COVERAGE
+  // ═══════════════════════════════════════════════════════════════════════════════
+  y = newSection(y, 160);
+  y = heading1(`CMMC Controls Touched by Tenant Scan: ${controlsTouched.length} / ${CMMC_L2_TOTAL}`, y);
 
-  const coverageItems = [
+  const coverageRows: Array<[string, string, string]> = [
     ["Total CMMC Level 2 Controls", `${CMMC_L2_TOTAL}`, C.black],
     ["Controls touched by tenant scan", `${controlsTouched.length}`, C.blue],
-    ["Controls NOT assessed by tenant scan", `${CMMC_L2_TOTAL - controlsTouched.length}`, C.critical],
+    ["Controls NOT touched by tenant scan", `${CMMC_L2_TOTAL - controlsTouched.length}`, C.critical],
     ["Controls with findings (gaps)", `${controlsWithFindings.length}`, C.high],
     ["Controls with evidence snapshots", `${Array.from(new Set(data.evidenceRecords.flatMap((e) => e.linkedControlIds))).length}`, C.green],
-    ["Controls with evidence requests", `${controlsWithRequests.length}`, C.medium],
-    ["Controls requiring manual review", `${CMMC_L2_TOTAL - controlsTouched.length}`, C.grayLight],
+    ["Controls with evidence requests", `${Array.from(new Set(data.evidenceRequests.flatMap((e) => e.linkedControlIds))).length}`, C.medium],
+    ["Controls requiring manual review only", `${CMMC_L2_TOTAL - controlsTouched.length}`, C.grayLight],
   ];
 
-  const rowH = 24;
-  coverageItems.forEach(([label, value, color], i) => {
-    const rowY = y + i * rowH;
-    if (i % 2 === 0) doc.rect(MARGIN, rowY, CONTENT_W, rowH).fill(C.grayBg);
-    doc.fillColor(C.gray).font("Helvetica").fontSize(9).text(label as string, MARGIN + 10, rowY + 7);
-    doc.fillColor(color as string).font("Helvetica-Bold").fontSize(10)
-      .text(value as string, MARGIN + CONTENT_W - 60, rowY + 6, { width: 50, align: "right" });
-  });
-  y += coverageItems.length * rowH + 12;
+  const covRowH = 22;
+  for (let ci = 0; ci < coverageRows.length; ci++) {
+    y = safePage(y, covRowH);
+    const [label, value, color] = coverageRows[ci];
+    if (ci % 2 === 0) doc.rect(MARGIN, y, CONTENT_W, covRowH).fill(C.grayBg);
+    doc.fillColor(C.gray).font("Helvetica").fontSize(8.5).text(label, MARGIN + 10, y + 6, { width: CONTENT_W - 80 });
+    doc.fillColor(color).font("Helvetica-Bold").fontSize(11)
+      .text(value, MARGIN + CONTENT_W - 66, y + 4, { width: 60, align: "right" });
+    y += covRowH;
+  }
+  y += 6;
 
-  y = safePage(y, 50);
-  doc.rect(MARGIN, y, CONTENT_W, 36).fill(C.blueLight);
-  doc.fillColor(C.blueDark).font("Helvetica").fontSize(8.5)
+  y = safePage(y, 44);
+  doc.rect(MARGIN, y, CONTENT_W, 36).fill(C.blueLight).strokeColor(C.grayBorder).lineWidth(0.5).stroke();
+  doc.fillColor(C.blueDark).font("Helvetica").fontSize(8)
     .text(
       `Microsoft tenant data provided assessment signals for ${controlsTouched.length} of ${CMMC_L2_TOTAL} CMMC Level 2 controls. ` +
-      "Controls not touched by the tenant scan still require manual review, SSP documentation, and assessor validation.",
-      MARGIN + 10, y + 10, { width: CONTENT_W - 20 }
+      "This does not mean the controls were fully assessed. Controls not touched by the tenant scan still require manual review, " +
+      "SSP documentation, and assessor validation.",
+      MARGIN + 10, y + 8, { width: CONTENT_W - 20 }
     );
   y += 46;
 
-  // ─── FINDINGS ───────────────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // TOP 5 IMMEDIATE ACTIONS
+  // ═══════════════════════════════════════════════════════════════════════════════
+  const p1Actions = [...data.roadmapActions]
+    .filter((a) => a.priority === 1)
+    .sort((a, b) => a.priority - b.priority)
+    .slice(0, 5);
+
+  if (p1Actions.length > 0) {
+    y = newSection(y, 140);
+    y = heading1("Top Immediate Actions", y);
+
+    doc.fillColor(C.gray).font("Helvetica").fontSize(8)
+      .text(
+        "These actions are the highest-priority items identified from the tenant scan. " +
+        "Address these before the formal CMMC assessment.",
+        MARGIN, y, { width: CONTENT_W }
+      );
+    y = doc.y + 10;
+
+    for (let ai = 0; ai < p1Actions.length; ai++) {
+      const action = p1Actions[ai];
+      y = safePage(y, 56);
+
+      doc.rect(MARGIN, y, CONTENT_W, 48).fill(C.criticalBg).strokeColor(C.grayBorder).lineWidth(0.5).stroke();
+      doc.rect(MARGIN, y, 4, 48).fill(C.critical);
+
+      doc.fillColor(C.critical).font("Helvetica-Bold").fontSize(7).text("IMMEDIATE", MARGIN + 10, y + 5);
+      doc.fillColor(C.black).font("Helvetica-Bold").fontSize(9.5)
+        .text(`${ai + 1}. ${action.title}`, MARGIN + 10, y + 16, { width: CONTENT_W - 20 });
+
+      if (action.description) {
+        doc.fillColor(C.gray).font("Helvetica").fontSize(8)
+          .text(action.description, MARGIN + 10, y + 30, { width: CONTENT_W - 20 });
+      }
+      if (action.linkedControlIds.length > 0) {
+        const ctrlY = action.description ? doc.y + 2 : y + 32;
+        doc.fillColor(C.blue).font("Helvetica").fontSize(7)
+          .text("Controls: " + action.linkedControlIds.slice(0, 6).join("  "), MARGIN + 10, ctrlY, { width: CONTENT_W - 20 });
+      }
+
+      y += 56;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // FINDINGS
+  // ═══════════════════════════════════════════════════════════════════════════════
   if (data.findings.length > 0) {
-    addContentPage();
-    y = 58;
+    y = newSection(y, 100);
     y = heading1(`Findings  (${data.findings.length} total)`, y);
 
     const SEVERITIES = ["critical", "high", "medium", "low", "informational"];
@@ -469,220 +699,378 @@ export function generatePaReportPdf(data: PaReportData, res: Response): void {
       const sevFindings = data.findings.filter((f) => f.severity === sev);
       if (sevFindings.length === 0) continue;
 
-      y = safePage(y, 50);
-      const color = SEVERITY_COLOR[sev] ?? C.info;
-      doc.rect(MARGIN, y, CONTENT_W, 18).fill(color);
+      y = safePage(y, 44);
+      const sevColor = SEVERITY_COLOR[sev] ?? C.info;
+      doc.rect(MARGIN, y, CONTENT_W, 18).fill(sevColor);
       doc.fillColor(C.white).font("Helvetica-Bold").fontSize(9)
-        .text(`${sev.toUpperCase()} Severity  (${sevFindings.length})`, MARGIN + 8, y + 5);
+        .text(`${sev.toUpperCase()} Severity  —  ${sevFindings.length} finding${sevFindings.length !== 1 ? "s" : ""}`, MARGIN + 8, y + 5);
       y += 24;
 
       for (const finding of sevFindings) {
-        y = safePage(y, 70);
+        // Estimate height: title=16, observed=24, remediation=24, controls=14, footer=10
+        const estH = 16 + (finding.observedCondition ? 26 : 0) + (finding.recommendedRemediation ? 26 : 0) + (finding.linkedControlIds.length > 0 ? 16 : 0) + 14;
+        y = safePage(y, estH);
 
-        doc.rect(MARGIN, y, CONTENT_W, 12).fill(C.grayBg);
-        severityBadge(finding.severity, MARGIN, y);
+        const bgColor = SEVERITY_BG[finding.severity] ?? C.infoBg;
+        const borderColor = SEVERITY_COLOR[finding.severity] ?? C.info;
+
+        // Card header
+        doc.rect(MARGIN, y, CONTENT_W, 16).fill(bgColor).strokeColor(C.grayBorder).lineWidth(0.3).stroke();
+        doc.rect(MARGIN, y, 4, 16).fill(borderColor);
+        badge(sev.toUpperCase(), borderColor, MARGIN + 8, y + 2, 52, 12);
+
         doc.fillColor(C.black).font("Helvetica-Bold").fontSize(8.5)
-          .text(finding.title, MARGIN + 68, y + 1.5, { width: CONTENT_W - 140 });
+          .text(finding.title, MARGIN + 68, y + 4, { width: CONTENT_W - 150 });
+
         if (finding.approvedStatus === "approved") {
-          doc.fillColor(C.green).font("Helvetica").fontSize(7).text("ACKNOWLEDGED", MARGIN + CONTENT_W - 80, y + 2.5);
+          badge("ACKNOWLEDGED", C.green, MARGIN + CONTENT_W - 88, y + 2, 84, 12);
         } else if (finding.approvedStatus === "rejected") {
-          doc.fillColor(C.grayLight).font("Helvetica").fontSize(7).text("DISMISSED", MARGIN + CONTENT_W - 70, y + 2.5);
+          badge("DISMISSED", C.grayLight, MARGIN + CONTENT_W - 72, y + 2, 68, 12);
         }
-        y += 14;
+        y += 18;
 
         if (finding.observedCondition) {
-          doc.fillColor(C.grayLight).font("Helvetica-Bold").fontSize(7.5).text("Observed:", MARGIN + 8, y);
+          doc.fillColor(C.grayLight).font("Helvetica-Bold").fontSize(7).text("OBSERVED:", MARGIN + 8, y);
           doc.fillColor(C.gray).font("Helvetica").fontSize(8)
-            .text(finding.observedCondition, MARGIN + 58, y, { width: CONTENT_W - 66 });
-          y = doc.y + 2;
+            .text(finding.observedCondition, MARGIN + 68, y, { width: CONTENT_W - 76 });
+          y = doc.y + 4;
         }
         if (finding.recommendedRemediation) {
-          y = safePage(y, 25);
-          doc.fillColor(C.grayLight).font("Helvetica-Bold").fontSize(7.5).text("Remediation:", MARGIN + 8, y);
+          y = safePage(y, 20);
+          doc.fillColor(C.grayLight).font("Helvetica-Bold").fontSize(7).text("REMEDIATION:", MARGIN + 8, y);
           doc.fillColor(C.gray).font("Helvetica").fontSize(8)
-            .text(finding.recommendedRemediation, MARGIN + 72, y, { width: CONTENT_W - 80 });
-          y = doc.y + 2;
+            .text(finding.recommendedRemediation, MARGIN + 78, y, { width: CONTENT_W - 86 });
+          y = doc.y + 4;
         }
         if (finding.linkedControlIds.length > 0) {
-          doc.fillColor(C.grayLight).font("Helvetica-Bold").fontSize(7.5).text("Controls:", MARGIN + 8, y);
-          doc.fillColor(C.blue).font("Helvetica").fontSize(7.5)
-            .text(finding.linkedControlIds.join("  "), MARGIN + 55, y, { width: CONTENT_W - 63 });
-          y = doc.y + 2;
+          doc.fillColor(C.grayLight).font("Helvetica-Bold").fontSize(7).text("CONTROLS:", MARGIN + 8, y);
+          doc.fillColor(C.blue).font("Helvetica-Bold").fontSize(7.5)
+            .text(finding.linkedControlIds.join("   "), MARGIN + 64, y, { width: CONTENT_W - 72 });
+          y = doc.y + 4;
         }
-        y += 8;
-        doc.moveTo(MARGIN, y).lineTo(MARGIN + CONTENT_W, y).lineWidth(0.3).strokeColor(C.grayBorder).stroke();
+        doc.fillColor(C.grayLight).font("Helvetica").fontSize(6.5)
+          .text(`Finding ID: ${finding.id.slice(0, 16)}`, MARGIN + 8, y);
+        y = doc.y + 10;
+
+        doc.moveTo(MARGIN, y).lineTo(MARGIN + CONTENT_W, y)
+          .lineWidth(0.3).strokeColor(C.grayBorder).stroke();
         y += 6;
       }
       y += 6;
     }
   }
 
-  // ─── EVIDENCE SNAPSHOTS ─────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // EVIDENCE SNAPSHOTS
+  // ═══════════════════════════════════════════════════════════════════════════════
   if (data.evidenceRecords.length > 0) {
-    addContentPage();
-    y = 58;
+    y = newSection(y, 80);
     y = heading1(`Evidence Snapshots  (${data.evidenceRecords.length})`, y);
 
-    doc.rect(MARGIN, y, CONTENT_W, 14).fill(C.blueDark);
-    doc.fillColor(C.white).font("Helvetica-Bold").fontSize(7.5);
-    doc.text("Title", MARGIN + 4, y + 3.5, { width: 200 });
-    doc.text("Pack", MARGIN + 208, y + 3.5, { width: 90 });
-    doc.text("Source", MARGIN + 302, y + 3.5, { width: 80 });
-    doc.text("Date", MARGIN + 386, y + 3.5, { width: 70 });
-    doc.text("Status", MARGIN + 458, y + 3.5, { width: 70 });
-    y += 16;
+    const EC = {
+      title: { x: MARGIN, w: 168 },
+      pack: { x: MARGIN + 168, w: 88 },
+      source: { x: MARGIN + 256, w: 72 },
+      date: { x: MARGIN + 328, w: 66 },
+      status: { x: MARGIN + 394, w: 62 },
+      controls: { x: MARGIN + 456, w: CONTENT_W - 456 },
+    };
+
+    y = tableHeader(
+      [
+        { label: "Snapshot Title", x: EC.title.x, w: EC.title.w },
+        { label: "Assessment Pack", x: EC.pack.x, w: EC.pack.w },
+        { label: "Source", x: EC.source.x, w: EC.source.w },
+        { label: "Date", x: EC.date.x, w: EC.date.w },
+        { label: "Status", x: EC.status.x, w: EC.status.w },
+        { label: "Controls", x: EC.controls.x, w: EC.controls.w },
+      ],
+      y, 16
+    );
 
     data.evidenceRecords.forEach((ev, i) => {
-      y = safePage(y, 24);
-      if (i % 2 === 0) doc.rect(MARGIN, y, CONTENT_W, 16).fill(C.grayBg);
-      doc.fillColor(C.black).font("Helvetica").fontSize(7.5).text(ev.title, MARGIN + 4, y + 4, { width: 200 });
+      y = safePage(y, 18);
+      const shade = i % 2 === 0;
+      if (shade) doc.rect(MARGIN, y, CONTENT_W, 16).fill(C.grayBg);
+
+      const isDeviceFailed = failedPacks.has(ev.packId) && ev.packId === "devices";
+      const displayStatus = isDeviceFailed ? "Data Unavailable" :
+        ev.status === "draft" ? "Pending Review" :
+        ev.status === "approved" ? "Approved" :
+        ev.status === "rejected" ? "Rejected" : ev.status;
+      const statusColor = isDeviceFailed ? C.critical :
+        ev.status === "approved" ? C.green :
+        ev.status === "rejected" ? C.critical : C.medium;
+
+      doc.fillColor(C.black).font("Helvetica").fontSize(7.5)
+        .text(ev.title, EC.title.x + 3, y + 4, { width: EC.title.w - 6 });
       doc.fillColor(C.gray).font("Helvetica").fontSize(7.5)
-        .text(PACK_NAMES[ev.packId] ?? ev.packId, MARGIN + 208, y + 4, { width: 90 });
-      doc.text(ev.source, MARGIN + 302, y + 4, { width: 80 });
-      doc.text(fmtDate(ev.collectedAt), MARGIN + 386, y + 4, { width: 70 });
-      const statusColor = ev.status === "approved" ? C.green : ev.status === "rejected" ? C.critical : C.medium;
+        .text(PACK_NAMES[ev.packId] ?? ev.packId, EC.pack.x + 3, y + 4, { width: EC.pack.w - 6 });
+      doc.fillColor(C.gray).font("Helvetica").fontSize(7.5)
+        .text(ev.source, EC.source.x + 3, y + 4, { width: EC.source.w - 6 });
+      doc.fillColor(C.gray).font("Helvetica").fontSize(7.5)
+        .text(fmtDate(ev.collectedAt), EC.date.x + 3, y + 4, { width: EC.date.w - 6 });
       doc.fillColor(statusColor).font("Helvetica-Bold").fontSize(7)
-        .text(ev.status === "draft" ? "Pending Review" : ev.status.toUpperCase(), MARGIN + 458, y + 4.5, { width: 70 });
+        .text(displayStatus, EC.status.x + 3, y + 4.5, { width: EC.status.w - 6 });
+      const ctrlStr = ev.linkedControlIds.length <= 3
+        ? ev.linkedControlIds.join(" ")
+        : ev.linkedControlIds.slice(0, 3).join(" ") + ` +${ev.linkedControlIds.length - 3}`;
+      doc.fillColor(C.blue).font("Helvetica").fontSize(6.5)
+        .text(ctrlStr, EC.controls.x + 3, y + 4.5, { width: EC.controls.w - 6 });
+
+      doc.moveTo(MARGIN, y + 16).lineTo(MARGIN + CONTENT_W, y + 16)
+        .lineWidth(0.3).strokeColor(C.grayBorder).stroke();
       y += 16;
     });
-    y += 8;
+    y += 10;
   }
 
-  // ─── EVIDENCE REQUESTS ──────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // EVIDENCE REQUESTS
+  // ═══════════════════════════════════════════════════════════════════════════════
   if (data.evidenceRequests.length > 0) {
-    addContentPage();
-    y = 58;
+    y = newSection(y, 100);
     y = heading1(`Evidence Requests  (${data.evidenceRequests.length})`, y);
 
-    for (const er of data.evidenceRequests) {
-      y = safePage(y, 60);
+    doc.fillColor(C.gray).font("Helvetica").fontSize(8)
+      .text(
+        "These evidence items should be gathered and uploaded to Control HUB before the formal assessment.",
+        MARGIN, y, { width: CONTENT_W }
+      );
+    y = doc.y + 10;
 
-      doc.rect(MARGIN, y, CONTENT_W, 14).fill(C.grayBg).strokeColor(C.grayBorder).lineWidth(0.5).stroke();
-      doc.fillColor(C.black).font("Helvetica-Bold").fontSize(9).text(er.title, MARGIN + 8, y + 2.5, { width: CONTENT_W - 100 });
-      const erColor = er.status === "closed" || er.status === "accepted" ? C.green :
-        er.status === "submitted" ? C.blue : C.high;
+    const ERC = {
+      num: { x: MARGIN, w: 22 },
+      title: { x: MARGIN + 22, w: 148 },
+      status: { x: MARGIN + 170, w: 58 },
+      filename: { x: MARGIN + 228, w: 140 },
+      controls: { x: MARGIN + 368, w: 80 },
+      owner: { x: MARGIN + 448, w: CONTENT_W - 448 },
+    };
+
+    y = tableHeader(
+      [
+        { label: "#", x: ERC.num.x, w: ERC.num.w },
+        { label: "Evidence Request", x: ERC.title.x, w: ERC.title.w },
+        { label: "Status", x: ERC.status.x, w: ERC.status.w },
+        { label: "Suggested Filename", x: ERC.filename.x, w: ERC.filename.w },
+        { label: "Controls", x: ERC.controls.x, w: ERC.controls.w },
+        { label: "Owner / Due", x: ERC.owner.x, w: ERC.owner.w },
+      ],
+      y, 16
+    );
+
+    data.evidenceRequests.forEach((er, i) => {
+      y = safePage(y, 18);
+      const shade = i % 2 === 0;
+      if (shade) doc.rect(MARGIN, y, CONTENT_W, 16).fill(C.grayBg);
+
+      const erStatus = er.status === "closed" || er.status === "accepted" ? "Collected" :
+        er.status === "submitted" ? "Submitted" : "Open";
+      const erColor = erStatus === "Collected" ? C.green : erStatus === "Submitted" ? C.blue : C.high;
+
+      doc.fillColor(C.grayLight).font("Helvetica").fontSize(7)
+        .text((i + 1).toString(), ERC.num.x + 3, y + 4.5, { width: ERC.num.w - 6, align: "right" });
+      doc.fillColor(C.black).font("Helvetica").fontSize(7.5)
+        .text(er.title, ERC.title.x + 3, y + 4, { width: ERC.title.w - 6 });
       doc.fillColor(erColor).font("Helvetica-Bold").fontSize(7)
-        .text(er.status.toUpperCase(), MARGIN + CONTENT_W - 70, y + 4, { width: 65, align: "right" });
-      y += 16;
+        .text(erStatus, ERC.status.x + 3, y + 4.5, { width: ERC.status.w - 6 });
+      doc.fillColor(C.gray).font("Helvetica").fontSize(6.5)
+        .text(er.suggestedFilename ?? "—", ERC.filename.x + 3, y + 4.5, { width: ERC.filename.w - 6 });
+      const ctrlStr = er.linkedControlIds.length <= 3
+        ? er.linkedControlIds.join(" ")
+        : er.linkedControlIds.slice(0, 3).join(" ") + ` +${er.linkedControlIds.length - 3}`;
+      doc.fillColor(C.blue).font("Helvetica").fontSize(6.5)
+        .text(ctrlStr, ERC.controls.x + 3, y + 4.5, { width: ERC.controls.w - 6 });
+      const ownerStr = er.ownerEmail ? er.ownerEmail : "Unassigned";
+      const dueStr = er.dueDate ? fmtDate(er.dueDate) : "Not set";
+      doc.fillColor(C.grayLight).font("Helvetica").fontSize(6.5)
+        .text(`${ownerStr}\n${dueStr}`, ERC.owner.x + 3, y + 2, { width: ERC.owner.w - 6, lineGap: 1 });
 
-      if (er.instructions) {
-        doc.fillColor(C.gray).font("Helvetica").fontSize(8)
-          .text(er.instructions, MARGIN + 8, y, { width: CONTENT_W - 16 });
-        y = doc.y + 4;
-      }
-      if (er.suggestedFilename) {
-        doc.fillColor(C.grayLight).font("Helvetica").fontSize(7.5)
-          .text(`Suggested filename: ${er.suggestedFilename}`, MARGIN + 8, y);
-        y = doc.y + 4;
-      }
-      if (er.linkedControlIds.length > 0) {
-        doc.fillColor(C.blue).font("Helvetica").fontSize(7.5)
-          .text(`Controls: ${er.linkedControlIds.join("  ")}`, MARGIN + 8, y, { width: CONTENT_W - 16 });
-        y = doc.y + 4;
-      }
-      if (er.ownerEmail || er.dueDate) {
-        const meta = [er.ownerEmail && `Owner: ${er.ownerEmail}`, er.dueDate && `Due: ${fmtDate(er.dueDate)}`]
-          .filter(Boolean).join("  ·  ");
-        doc.fillColor(C.grayLight).font("Helvetica").fontSize(7.5).text(meta, MARGIN + 8, y);
-        y = doc.y + 4;
-      }
-      y += 6;
-      doc.moveTo(MARGIN, y).lineTo(MARGIN + CONTENT_W, y).lineWidth(0.3).strokeColor(C.grayBorder).stroke();
-      y += 6;
-    }
+      doc.moveTo(MARGIN, y + 16).lineTo(MARGIN + CONTENT_W, y + 16)
+        .lineWidth(0.3).strokeColor(C.grayBorder).stroke();
+      y += 16;
+    });
+    y += 10;
   }
 
-  // ─── ROADMAP ─────────────────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // RECOMMENDED ROADMAP
+  // ═══════════════════════════════════════════════════════════════════════════════
   if (data.roadmapActions.length > 0) {
-    addContentPage();
-    y = 58;
+    y = newSection(y, 100);
     y = heading1(`Recommended Roadmap  (${data.roadmapActions.length} actions)`, y);
+
+    doc.fillColor(C.gray).font("Helvetica").fontSize(8)
+      .text(
+        "These roadmap actions are recommended based on tenant scan findings and should be reviewed before implementation.",
+        MARGIN, y, { width: CONTENT_W }
+      );
+    y = doc.y + 10;
+
+    const RC = {
+      num: { x: MARGIN, w: 22 },
+      priority: { x: MARGIN + 22, w: 72 },
+      title: { x: MARGIN + 94, w: 180 },
+      category: { x: MARGIN + 274, w: 76 },
+      controls: { x: MARGIN + 350, w: 90 },
+      effort: { x: MARGIN + 440, w: CONTENT_W - 440 },
+    };
+
+    y = tableHeader(
+      [
+        { label: "#", x: RC.num.x, w: RC.num.w },
+        { label: "Priority", x: RC.priority.x, w: RC.priority.w },
+        { label: "Action", x: RC.title.x, w: RC.title.w },
+        { label: "Category", x: RC.category.x, w: RC.category.w },
+        { label: "Controls", x: RC.controls.x, w: RC.controls.w },
+        { label: "Est. Effort", x: RC.effort.x, w: RC.effort.w },
+      ],
+      y, 16
+    );
 
     const sorted = [...data.roadmapActions].sort((a, b) => a.priority - b.priority);
     sorted.forEach((action, i) => {
-      y = safePage(y, 60);
+      const rowH = 20;
+      y = safePage(y, rowH);
+      const shade = i % 2 === 0;
+      if (shade) doc.rect(MARGIN, y, CONTENT_W, rowH).fill(C.grayBg);
 
-      const priBg = action.priority === 1 ? C.criticalBg : action.priority === 2 ? C.highBg : C.blueLight;
-      const priColor = action.priority === 1 ? C.critical : action.priority === 2 ? C.high : C.blue;
-      const priLabel = action.priority === 1 ? "P1 · Immediate" : action.priority === 2 ? "P2 · Short-term" : "P3 · Long-term";
+      const priLabel = action.priority === 1 ? "P1 — Immediate" :
+        action.priority === 2 ? "P2 — Short-term" : "P3 — Long-term";
+      const priColor = action.priority === 1 ? C.critical :
+        action.priority === 2 ? C.high : C.blue;
+      const effort = action.priority === 1 ? "1–2 weeks" :
+        action.priority === 2 ? "1–3 months" : "3–6 months";
 
-      doc.rect(MARGIN, y, CONTENT_W, 14).fill(priBg).strokeColor(C.grayBorder).lineWidth(0.5).stroke();
-      doc.fillColor(priColor).font("Helvetica-Bold").fontSize(7).text(priLabel, MARGIN + 4, y + 3.5, { width: 80 });
-      doc.fillColor(C.black).font("Helvetica-Bold").fontSize(9).text(`${i + 1}. ${action.title}`, MARGIN + 90, y + 2.5, { width: CONTENT_W - 160 });
       doc.fillColor(C.grayLight).font("Helvetica").fontSize(7)
-        .text(action.category, MARGIN + CONTENT_W - 70, y + 4, { width: 65, align: "right" });
-      y += 16;
+        .text((i + 1).toString(), RC.num.x + 3, y + 6, { width: RC.num.w - 6, align: "right" });
+      doc.fillColor(priColor).font("Helvetica-Bold").fontSize(7)
+        .text(priLabel, RC.priority.x + 3, y + 6, { width: RC.priority.w - 6 });
+      doc.fillColor(C.black).font("Helvetica").fontSize(8)
+        .text(action.title, RC.title.x + 3, y + 5, { width: RC.title.w - 6 });
+      doc.fillColor(C.gray).font("Helvetica").fontSize(7)
+        .text(action.category, RC.category.x + 3, y + 6, { width: RC.category.w - 6 });
+      const ctrlStr = action.linkedControlIds.length <= 2
+        ? action.linkedControlIds.join(" ")
+        : action.linkedControlIds.slice(0, 2).join(" ") + ` +${action.linkedControlIds.length - 2}`;
+      doc.fillColor(C.blue).font("Helvetica").fontSize(7)
+        .text(ctrlStr, RC.controls.x + 3, y + 6, { width: RC.controls.w - 6 });
+      doc.fillColor(C.grayLight).font("Helvetica").fontSize(7)
+        .text(effort, RC.effort.x + 3, y + 6, { width: RC.effort.w - 6 });
 
-      if (action.description) {
-        doc.fillColor(C.gray).font("Helvetica").fontSize(8.5)
-          .text(action.description, MARGIN + 8, y, { width: CONTENT_W - 16 });
-        y = doc.y + 4;
-      }
-      if (action.linkedControlIds.length > 0) {
-        doc.fillColor(C.blue).font("Helvetica").fontSize(7.5)
-          .text(`Controls: ${action.linkedControlIds.join("  ")}`, MARGIN + 8, y, { width: CONTENT_W - 16 });
-        y = doc.y + 4;
-      }
-      y += 8;
-      doc.moveTo(MARGIN, y).lineTo(MARGIN + CONTENT_W, y).lineWidth(0.3).strokeColor(C.grayBorder).stroke();
-      y += 6;
+      doc.moveTo(MARGIN, y + rowH).lineTo(MARGIN + CONTENT_W, y + rowH)
+        .lineWidth(0.3).strokeColor(C.grayBorder).stroke();
+      y += rowH;
     });
+    y += 10;
   }
 
-  // ─── APPENDIX ─────────────────────────────────────────────────────────────────
-  addContentPage();
-  y = 58;
-  y = heading1("Appendix — Technical Details", y);
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // APPENDIX
+  // ═══════════════════════════════════════════════════════════════════════════════
+  y = newSection(y, 160);
+  y = heading1("Appendix — Permissions & Scan Metadata", y);
 
-  y = heading2("Permissions Used", y);
-  const permTable: Record<string, string[]> = {
-    identity: ["User.Read.All", "GroupMember.Read.All", "Directory.Read.All"],
-    authentication: ["UserAuthenticationMethod.Read.All"],
-    conditional_access: ["Policy.Read.All"],
-    devices: ["Device.Read.All", "DeviceManagementManagedDevices.Read.All"],
-    audit: ["AuditLog.Read.All"],
-    secure_score: ["SecurityEvents.Read.All"],
+  y = heading2("Graph API Permissions by Assessment Pack", y);
+
+  const APP = {
+    pack: { x: MARGIN, w: 130 },
+    perms: { x: MARGIN + 130, w: 210 },
+    status: { x: MARGIN + 340, w: 72 },
+    notes: { x: MARGIN + 412, w: CONTENT_W - 412 },
   };
-  for (const packId of (data.scan.packsRequested ?? [])) {
-    y = safePage(y, 30);
-    const packName = PACK_NAMES[packId] ?? packId;
-    const perms = permTable[packId] ?? [];
-    const completed = (data.scan.packsCompleted ?? []).includes(packId);
-    const failed = (data.scan.packsFailed ?? []).includes(packId);
-    const statusStr = completed ? "✓ Available" : failed ? "✗ Unavailable" : "— Not Run";
-    const statusColor = completed ? C.green : failed ? C.critical : C.grayLight;
-    doc.fillColor(C.black).font("Helvetica-Bold").fontSize(8.5).text(`${packName}:`, MARGIN, y);
-    doc.fillColor(statusColor).font("Helvetica").fontSize(8).text(statusStr, MARGIN + 130, y);
-    y = doc.y + 2;
-    doc.fillColor(C.gray).font("Helvetica").fontSize(8)
-      .text(perms.join("  ·  "), MARGIN + 10, y, { width: CONTENT_W - 10 });
-    y = doc.y + 8;
-  }
 
-  y += 8;
+  y = tableHeader(
+    [
+      { label: "Assessment Pack", x: APP.pack.x, w: APP.pack.w },
+      { label: "Required Permissions", x: APP.perms.x, w: APP.perms.w },
+      { label: "Status", x: APP.status.x, w: APP.status.w },
+      { label: "Notes", x: APP.notes.x, w: APP.notes.w },
+    ],
+    y, 16
+  );
+
+  for (let pi = 0; pi < (data.scan.packsRequested ?? []).length; pi++) {
+    const packId = data.scan.packsRequested[pi];
+    const packName = PACK_NAMES[packId] ?? packId;
+    const perms = PACK_PERMISSIONS[packId] ?? [];
+    const isCompleted = (data.scan.packsCompleted ?? []).includes(packId);
+    const isFailed = (data.scan.packsFailed ?? []).includes(packId);
+
+    const statusLabel = isCompleted ? "Available" : isFailed ? "Unavailable" : "Not Run";
+    const statusColor = isCompleted ? C.green : isFailed ? C.critical : C.grayLight;
+    const notes = isCompleted ? "Data collected successfully" :
+      isFailed ? "Permission, license, or API issue" : "Pack not requested";
+
+    const rowH = 18;
+    y = safePage(y, rowH);
+    const shade = pi % 2 === 0;
+    if (shade) doc.rect(MARGIN, y, CONTENT_W, rowH).fill(C.grayBg);
+    if (isFailed) doc.rect(MARGIN, y, CONTENT_W, rowH).fill(C.criticalBg);
+
+    doc.fillColor(C.black).font("Helvetica-Bold").fontSize(7.5)
+      .text(packName, APP.pack.x + 3, y + 5, { width: APP.pack.w - 6 });
+    doc.fillColor(C.gray).font("Helvetica").fontSize(7)
+      .text(perms.join(", "), APP.perms.x + 3, y + 5, { width: APP.perms.w - 6 });
+    doc.fillColor(statusColor).font("Helvetica-Bold").fontSize(7.5)
+      .text(statusLabel, APP.status.x + 3, y + 5, { width: APP.status.w - 6 });
+    doc.fillColor(C.grayLight).font("Helvetica").fontSize(7)
+      .text(notes, APP.notes.x + 3, y + 5, { width: APP.notes.w - 6 });
+
+    doc.moveTo(MARGIN, y + rowH).lineTo(MARGIN + CONTENT_W, y + rowH)
+      .lineWidth(0.3).strokeColor(C.grayBorder).stroke();
+    y += rowH;
+  }
+  y += 14;
+
+  y = newSection(y, 100);
   y = heading2("Scan Metadata", y);
-  const meta: Array<[string, string]> = [
+
+  const metaRows: Array<[string, string]> = [
     ["Scan ID", data.scan.id],
     ["Tenant ID", data.tenantConnection?.microsoftTenantId ?? "—"],
     ["Organization", data.org.name],
+    ["Tenant Name", data.tenantConnection?.tenantName ?? "—"],
+    ["Primary Domain", data.tenantConnection?.primaryDomain ?? "—"],
     ["Scan Started", fmtDateTime(data.scan.startedAt)],
     ["Scan Completed", fmtDateTime(data.scan.completedAt)],
     ["Total Checks Run", data.scan.totalChecks.toString()],
-    ["Passed", data.scan.passedChecks.toString()],
+    ["Passed Checks", data.scan.passedChecks.toString()],
     ["Gaps Found", data.scan.failedChecks.toString()],
     ["Unknown / No Data", data.scan.unknowns.toString()],
     ["Findings Generated", data.findings.length.toString()],
     ["Evidence Snapshots", data.evidenceRecords.length.toString()],
     ["Evidence Requests", data.evidenceRequests.length.toString()],
     ["Roadmap Actions", data.roadmapActions.length.toString()],
+    ["Controls Touched", `${controlsTouched.length} / ${CMMC_L2_TOTAL}`],
+    ["Report Generated By", data.generatedBy],
   ];
-  meta.forEach(([label, value], i) => {
-    y = safePage(y, 18);
+
+  metaRows.forEach(([label, value], i) => {
+    y = safePage(y, 16);
     if (i % 2 === 0) doc.rect(MARGIN, y, CONTENT_W, 15).fill(C.grayBg);
-    doc.fillColor(C.grayLight).font("Helvetica").fontSize(8).text(label, MARGIN + 8, y + 3.5);
-    doc.fillColor(C.black).font("Helvetica").fontSize(8).text(value, MARGIN + 160, y + 3.5);
+    doc.fillColor(C.grayLight).font("Helvetica").fontSize(8).text(label, MARGIN + 8, y + 3.5, { width: 160 });
+    doc.fillColor(C.black).font("Helvetica").fontSize(8).text(value, MARGIN + 172, y + 3.5, { width: CONTENT_W - 180 });
     y += 15;
   });
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // POST-PROCESS: Write "Page X of Y" on every content page
+  // ═══════════════════════════════════════════════════════════════════════════════
+  const range = doc.bufferedPageRange();
+  const totalPages = range.count;
+
+  // Page 0 is the cover (no header), content pages are 1..count-1
+  for (let i = 1; i < totalPages; i++) {
+    doc.switchToPage(i);
+    // Overwrite the old "Page X" with an exact white-fill then rewrite with "Page X of Y"
+    doc.save();
+    doc.rect(A4_W - MARGIN - 58, 8, 58, 20).fill(C.blueDark);
+    doc.fillColor(C.white).font("Helvetica").fontSize(7.5)
+      .text(`Page ${i} of ${totalPages - 1}`, A4_W - MARGIN - 58, 14, { width: 54, align: "right" });
+    doc.restore();
+  }
 
   doc.end();
 }
