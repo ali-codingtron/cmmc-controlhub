@@ -1,0 +1,380 @@
+Improve the Tenant-Connected Pre-Assessment module to make it look and function like a professional client-facing assessment tool.
+
+The current scan works, but it needs a better scan experience, clearer scoring, better findings workflow, better evidence handling, and professional reporting.
+
+1. Add Scan Progress Experience
+
+When a user clicks Run Tenant Assessment, show a scan progress modal/page.
+
+Progress stages:
+- Initializing scan
+- Validating Microsoft tenant connection
+- Checking granted permissions
+- Running Identity Pack
+- Running Authentication Pack
+- Running Conditional Access Pack
+- Running Audit / Sign-in Pack
+- Running Secure Score Pack
+- Running Device / Intune Pack
+- Generating evidence snapshots
+- Generating findings
+- Generating evidence requests
+- Generating roadmap recommendations
+- Finalizing scan results
+
+Each stage should show:
+- status: Pending, Running, Complete, Warning, Failed, Skipped
+- progress percentage
+- details
+- timestamp
+- error message if applicable
+
+If one pack fails, continue the scan and show that pack as Failed or Unavailable instead of failing the entire scan.
+
+2. Rename Readiness Score
+
+Do not call the Microsoft tenant scan score simply “Readiness Score.”
+
+Rename it to:
+
+Tenant Scan Health
+
+or:
+
+Microsoft Tenant Technical Readiness
+
+Add separate metrics:
+- Tenant Scan Health
+- CMMC Control Coverage
+- Assessment Confidence
+- Data Coverage
+
+Do not imply this is an official CMMC score.
+
+3. Add Scope and Limitations Section
+
+Add a card on the Summary tab:
+
+Assessment Scope & Limitations
+
+Text:
+“This tenant-connected pre-assessment reviews Microsoft tenant configuration and Microsoft Graph data available through granted read-only permissions. It does not replace a C3PAO assessment and does not fully determine CMMC compliance. Final readiness still requires SSP review, policies, procedures, evidence review, interviews, testing, POA&M review, and non-Microsoft system validation.”
+
+4. Improve Summary Page
+
+The Summary tab should show:
+
+- Tenant Scan Health
+- Checks Passed
+- Gaps Found
+- Unknown / Data Unavailable
+- Findings by Severity
+- Evidence Snapshots Generated
+- Evidence Requests Created
+- Roadmap Actions Recommended
+- Data Coverage
+- Permission Coverage
+
+Add professional status labels:
+- Strong
+- Moderate
+- Weak
+- Insufficient Data
+
+5. Improve Pack Status Display
+
+For each assessment pack, show:
+
+- pack name
+- status
+- checks run
+- passed
+- failed
+- unknown
+- evidence generated
+- findings generated
+- permissions required
+- permissions granted
+- data source status
+
+Pack statuses:
+- Complete
+- Complete with Findings
+- Partial
+- Data Unavailable
+- Permission Missing
+- License Required
+- Failed
+
+For example:
+Devices should not simply say “Failed.”
+It should say why:
+- Intune data unavailable
+- missing permission
+- no Intune license
+- no managed devices found
+
+6. Improve Findings Workflow
+
+Replace simple Acknowledge / Dismiss workflow with a professional findings workflow.
+
+Finding statuses:
+- Open
+- Acknowledged
+- Assigned
+- Evidence Requested
+- In Remediation
+- POA&M Created
+- Pending Validation
+- Resolved
+- Accepted Risk
+- False Positive
+- Dismissed
+
+Finding actions:
+- Assign Owner
+- Create POA&M
+- Create Evidence Request
+- Link Evidence
+- Start Roadmap Action
+- Mark False Positive
+- Accept Risk
+- Mark Resolved
+- Dismiss with Reason
+
+Require notes for:
+- Dismiss
+- False Positive
+- Accepted Risk
+- Resolved
+
+7. Add Affected Objects to Findings
+
+Each finding should support an affected objects section.
+
+Examples:
+For MFA Registration Coverage:
+- list users missing MFA registration
+
+For Stale Account Review:
+- list stale users, disabled users, no sign-in users
+
+For Unique Named Accounts:
+- list accounts that matched shared/generic naming patterns
+
+For Sign-in Logs:
+- list failed/risky sign-in samples
+
+For Directory Audit Logs:
+- list role changes, user/group changes, policy changes
+
+Allow export of affected objects.
+
+8. Improve Evidence Records
+
+Generated scan evidence should have better metadata.
+
+Each evidence snapshot should show:
+- title
+- source = Microsoft Graph
+- scan ID
+- tenant ID
+- pack name
+- collected date/time
+- linked controls
+- data summary
+- status
+- reviewer
+- reviewed date
+
+Evidence snapshot statuses:
+- System Generated
+- Pending Review
+- Approved
+- Rejected
+- Superseded
+
+Actions:
+- View Snapshot
+- Export JSON
+- Export PDF
+- Approve
+- Reject
+- Promote to Evidence Repository
+- Link to Controls
+
+Generated evidence should not automatically be approved.
+
+9. Improve Evidence Requests
+
+Evidence Requests should function as work items.
+
+Each request should include:
+- title
+- linked finding
+- linked controls
+- evidence type
+- priority
+- owner
+- due date
+- instructions
+- suggested filename
+- upload evidence button
+- link existing evidence button
+- status
+- review notes
+
+Statuses:
+- Open
+- Assigned
+- Submitted
+- Under Review
+- Accepted
+- Rejected
+- Closed
+
+Replace “Mark Submitted” with:
+- Upload / Link Evidence
+- Submit for Review
+
+10. Improve Suggested Filenames
+
+Use professional naming conventions.
+
+Examples:
+IA-3.5.3_MFA_Registration_Report_2026-05-27.xlsx
+AC-3.1.1_Stale_Account_Review_2026-05-27.xlsx
+AU-3.3.1_Directory_Audit_Log_Summary_2026-05-27.pdf
+AC-3.1.1_User_Access_Review_2026-05-27.xlsx
+
+11. Improve Roadmap Recommendations
+
+Roadmap items should show:
+- priority
+- category
+- linked findings
+- linked evidence requests
+- controls impacted
+- expected impact
+- estimated effort
+- owner
+- status
+- start action button
+
+Add action:
+Start Roadmap Action
+
+When clicked:
+- open the Implementation Roadmap action
+- pre-link related findings and evidence requests
+
+12. Add Results Report
+
+Add button:
+Download Pre-Assessment Report
+
+Report should include:
+- cover page
+- organization
+- tenant name
+- scan date
+- scan scope
+- permissions used
+- summary scores
+- findings by severity
+- affected controls
+- evidence snapshots
+- evidence requests
+- recommended roadmap
+- limitations
+- next steps
+
+Export formats:
+- PDF
+- DOCX optional
+
+13. Add Scan History Trend
+
+Assessment History should show:
+- scan date
+- tenant scan health
+- findings count
+- critical/high count
+- evidence requests
+- roadmap actions
+- resolved findings since previous scan
+
+On scan results, show:
+- previous scan comparison
+- new findings
+- resolved findings
+- repeated findings
+- score change
+
+14. Add Permission Diagnostics
+
+Create a Permissions tab for each scan.
+
+Show:
+- required permissions
+- granted permissions
+- missing permissions
+- affected packs
+- how missing permissions affected results
+
+If data is unavailable, clearly explain whether it is:
+- permission issue
+- licensing issue
+- no data found
+- API error
+- throttling
+- unknown
+
+15. Add Better Professional UI
+
+Improve visual polish:
+- better spacing
+- more polished cards
+- consistent severity badges
+- clearer tab layout
+- executive summary at top
+- use icons consistently
+- avoid too much white space
+- make findings easier to scan
+- add severity color legend
+- make reports client-ready
+
+16. Acceptance Tests
+
+Test A:
+Run tenant scan.
+Progress modal shows each pack running and completing.
+
+Test B:
+Device pack fails or has no data.
+Results show exact reason instead of generic failed.
+
+Test C:
+Open MFA finding.
+Shows affected users and action buttons:
+Create POA&M, Create Evidence Request, Link Evidence, Start Roadmap Action.
+
+Test D:
+Open Evidence Records.
+Each snapshot has scan ID, source, pack, linked controls, and review status.
+
+Test E:
+Open Evidence Requests.
+Can assign owner, upload evidence, submit for review, accept, and close.
+
+Test F:
+Open Roadmap.
+Roadmap items link back to findings and evidence requests.
+
+Test G:
+Download Pre-Assessment Report.
+Report is professional and client-facing.
+
+Test H:
+Run another scan later.
+Assessment History shows trend and comparison.

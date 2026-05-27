@@ -28,5 +28,11 @@ All routes under `/api/pre-assessment/` registered via `router.use("/pre-assessm
 ## Frontend pages
 8 pages under `/pre-assessment/*`: history (default), run, manual, connections, results/:id, findings, evidence-requests, roadmap. PaResults polls every 3s while scan status is `running` or `not_started`.
 
+## UI improvements applied (spec sections 1–15)
+- **pa-results.tsx**: Animated scan progress panel with per-stage/per-pack status; "Tenant Scan Health" replaces "Readiness Score" with Strong/Moderate/Weak/Critical labels; Assessment Confidence, CMMC Controls Evaluated, Evidence Snapshots metrics; Pack status grid (Complete–Passed / Complete–Findings / Data Unavailable); Scope & Limitations card; Findings tab shows `affectedItems` in collapsible section; Dismiss with reason inline form; Create POA&M button navigates to /poams; Permissions tab shows per-pack required permissions, license notes, data availability explanation; Evidence Records show full metadata grid; Roadmap shows P1/P2/P3 priority badges.
+- **pa-findings.tsx**: Same finding improvements globally; status filter (open/acknowledged/dismissed); suggestedRoadmapAction display; Roadmap navigation button.
+- **pa-evidence-requests.tsx**: Work-item layout with expandable details; overdue/due-soon badges; suggested filename display; Upload Evidence / Link Existing Evidence actions; Submit for Review replaces Mark Submitted.
+- Finding type now includes `affectedItems: string[] | null` — comes from `paFindingsTable.affectedItems` jsonb.
+
 ## Sidebar icon
 Uses `Cable` from lucide-react (not `Bot` which was used for Auto Assessor).
