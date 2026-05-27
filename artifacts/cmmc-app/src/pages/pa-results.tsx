@@ -6,8 +6,11 @@ import {
   ClipboardList, Map, Loader2, ChevronDown, ChevronRight,
   Shield, Key, Lock, Info, TrendingUp, Users, Cpu,
   BookOpen, AlertCircle, CircleDot, Circle,
+  HelpCircle, Download,
 } from "lucide-react";
 import { useOrg } from "@/context/OrgContext";
+
+const CMMC_L2_TOTAL = 110;
 
 type ScanRun = {
   id: string;
@@ -292,6 +295,8 @@ export default function PaResults({ id }: { id: string }) {
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [dismissReason, setDismissReason] = useState("");
   const [severityFilter, setSeverityFilter] = useState("all");
+  const [downloading, setDownloading] = useState(false);
+  const [scopeExpanded, setScopeExpanded] = useState(false);
 
   const loadData = useCallback((quiet = false) => {
     if (!activeOrg) return;
@@ -378,8 +383,38 @@ export default function PaResults({ id }: { id: string }) {
     ? Math.round((scan.passedChecks / scan.totalChecks) * 100) : 0;
   const confidenceRate = scan && scan.totalChecks > 0
     ? Math.round(((scan.totalChecks - scan.unknowns) / scan.totalChecks) * 100) : 0;
-  const uniqueControls = Array.from(new Set(findings.flatMap((f) => f.linkedControlIds)));
+  const controlsTouched = Array.from(new Set([
+    ...evidenceRecords.flatMap((e) => e.linkedControlIds),
+    ...findings.flatMap((f) => f.linkedControlIds),
+  ]));
+  const controlsWithFindings = Array.from(new Set(findings.flatMap((f) => f.linkedControlIds)));
+  const controlsWithEvidence = Array.from(new Set(evidenceRecords.flatMap((e) => e.linkedControlIds)));
+  const controlsWithRequests = Array.from(new Set(evidenceRequests.flatMap((e) => e.linkedControlIds)));
   const health = healthLabel(passRate, scan?.totalChecks ?? 0);
+
+  async function downloadReport() {
+    if (!activeOrg) return;
+    setDownloading(true);
+    try {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch(`/api/pre-assessment/scans/${id}/report.pdf`, {
+        headers: { Authorization: `Bearer ${token}`, "X-Organization-ID": activeOrg.id },
+      });
+      if (!res.ok) throw new Error("Failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `pre-assessment-report-${id.slice(0, 8)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Failed to generate report. Please try again.");
+    }
+    setDownloading(false);
+  }
 
   const requested = scan?.packsRequested ?? [];
   const filteredFindings = findings.filter((f) =>
@@ -429,6 +464,16 @@ export default function PaResults({ id }: { id: string }) {
         <button onClick={() => { setLoaded(false); loadData(); }} className="text-gray-400 hover:text-gray-700 p-1.5 rounded-md hover:bg-gray-100">
           <RefreshCw className="h-4 w-4" />
         </button>
+        {isDone && (
+          <button
+            onClick={downloadReport}
+            disabled={downloading}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition-colors"
+          >
+            {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            {downloading ? "Generating…" : "Download Report"}
+          </button>
+        )}
       </div>
 
       {scan?.status === "failed" && (
@@ -482,10 +527,21 @@ export default function PaResults({ id }: { id: string }) {
                 <p className="text-xs text-gray-500 mt-0.5">Assessment Confidence</p>
                 <p className="text-[10px] text-gray-400">data available</p>
               </div>
-              <div className="text-center min-w-[90px]">
-                <p className="text-2xl font-bold text-gray-900">{uniqueControls.length}</p>
-                <p className="text-xs text-gray-500 mt-0.5">CMMC Controls</p>
-                <p className="text-[10px] text-gray-400">evaluated</p>
+              <div className="relative group cursor-help text-center min-w-[110px]">
+                <p className="text-2xl font-bold text-gray-900">
+                  {controlsTouched.length}
+                  <span className="text-base font-normal text-gray-400"> / {CMMC_L2_TOTAL}</span>
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5 flex items-center justify-center gap-1">
+                  Controls Touched
+                  <HelpCircle className="h-3 w-3 text-gray-400 shrink-0" />
+                </p>
+                <p className="text-[10px] text-gray-400">by tenant scan</p>
+                <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 rounded-lg bg-gray-900 text-white text-xs p-3 opacity-0 group-hover:opacity-100 transition-opacity z-50 text-left leading-relaxed shadow-xl">
+                  <p className="font-semibold mb-1">CMMC Controls Touched by Tenant Scan</p>
+                  <p className="text-gray-300">Microsoft tenant data provided assessment signals for {controlsTouched.length} of {CMMC_L2_TOTAL} CMMC Level 2 controls. This does not mean they were fully assessed.</p>
+                  <p className="text-gray-400 mt-1.5 text-[11px]">Full CMMC readiness requires SSP review, policies, procedures, evidence, interviews, testing, POA&M review, and non-Microsoft system validation.</p>
+                </div>
               </div>
               <div className="text-center min-w-[90px]">
                 <p className="text-2xl font-bold text-gray-900">{scan.generatedEvidenceCount}</p>
@@ -608,6 +664,37 @@ export default function PaResults({ id }: { id: string }) {
             ))}
           </div>
 
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <h3 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-blue-600" /> Assessment Coverage
+            </h3>
+            <div className="space-y-1.5">
+              {[
+                { label: "Total CMMC Level 2 Controls", value: CMMC_L2_TOTAL, cls: "text-gray-700", bar: false },
+                { label: "Controls touched by tenant scan", value: controlsTouched.length, cls: "text-blue-700", bar: true, color: "bg-blue-500" },
+                { label: "Controls NOT assessed by tenant scan", value: CMMC_L2_TOTAL - controlsTouched.length, cls: "text-red-700", bar: true, color: "bg-red-400" },
+                { label: "Controls with findings (gaps identified)", value: controlsWithFindings.length, cls: "text-orange-700", bar: true, color: "bg-orange-500" },
+                { label: "Controls with evidence snapshots", value: controlsWithEvidence.length, cls: "text-green-700", bar: true, color: "bg-green-500" },
+                { label: "Controls with evidence requests", value: controlsWithRequests.length, cls: "text-yellow-700", bar: true, color: "bg-yellow-500" },
+                { label: "Controls requiring manual review (not touched)", value: CMMC_L2_TOTAL - controlsTouched.length, cls: "text-gray-500", bar: false },
+              ].map((row) => (
+                <div key={row.label} className="flex items-center gap-3 py-1 border-b border-gray-50 last:border-0">
+                  <span className="flex-1 text-xs text-gray-600">{row.label}</span>
+                  {row.bar && (
+                    <div className="w-16 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                      <div className={`h-full rounded-full ${row.color}`} style={{ width: `${Math.round((row.value / CMMC_L2_TOTAL) * 100)}%` }} />
+                    </div>
+                  )}
+                  <span className={`text-sm font-bold w-8 text-right ${row.cls}`}>{row.value}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-gray-400 mt-3">
+              Microsoft tenant data provided assessment signals for <strong>{controlsTouched.length}</strong> of <strong>{CMMC_L2_TOTAL}</strong> CMMC Level 2 controls.
+              The remaining <strong>{CMMC_L2_TOTAL - controlsTouched.length}</strong> require SSP review, policies, interviews, and manual assessment.
+            </p>
+          </div>
+
           {roadmapActions.length > 0 && (
             <div className="rounded-xl border border-gray-200 bg-white p-4">
               <h3 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
@@ -633,14 +720,67 @@ export default function PaResults({ id }: { id: string }) {
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
             <div className="flex items-start gap-2">
               <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-              <div>
-                <h3 className="text-sm font-semibold text-amber-800 mb-1">Assessment Scope &amp; Limitations</h3>
-                <p className="text-sm text-amber-700 leading-relaxed">
-                  This tenant-connected pre-assessment reviews Microsoft tenant configuration and Microsoft Graph data
-                  available through granted read-only permissions. <strong>It does not replace a C3PAO assessment</strong> and
-                  does not fully determine CMMC compliance. Final readiness still requires SSP review, policies, procedures,
-                  evidence review, interviews, testing, POA&M review, and validation of non-Microsoft systems.
+              <div className="flex-1">
+                <button
+                  className="w-full flex items-center justify-between text-left"
+                  onClick={() => setScopeExpanded((v) => !v)}
+                >
+                  <h3 className="text-sm font-semibold text-amber-800">What This Scan Evaluated &amp; Limitations</h3>
+                  {scopeExpanded
+                    ? <ChevronDown className="h-4 w-4 text-amber-600 shrink-0" />
+                    : <ChevronRight className="h-4 w-4 text-amber-600 shrink-0" />}
+                </button>
+                <p className="text-sm text-amber-700 leading-relaxed mt-1">
+                  This pre-assessment reviews Microsoft tenant configuration via read-only Microsoft Graph API access.{" "}
+                  <strong>It does not replace a C3PAO assessment</strong> and does not fully determine CMMC compliance.
                 </p>
+                {scopeExpanded && (
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <h4 className="text-xs font-semibold text-green-800 mb-1.5 flex items-center gap-1">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-green-600" /> What This Scan Evaluated
+                      </h4>
+                      <ul className="space-y-1">
+                        {[
+                          "Microsoft Entra users and guest accounts",
+                          "MFA / authentication registration",
+                          "Conditional Access policies",
+                          "Sign-in logs and risky sign-ins",
+                          "Directory audit logs",
+                          "Microsoft Secure Score",
+                          "Intune device inventory (if available)",
+                        ].map((item) => (
+                          <li key={item} className="text-xs text-gray-600 flex items-start gap-1.5">
+                            <span className="text-green-500 mt-0.5 shrink-0">✓</span> {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-semibold text-red-800 mb-1.5 flex items-center gap-1">
+                        <XCircle className="h-3.5 w-3.5 text-red-500" /> What This Scan Does Not Fully Evaluate
+                      </h4>
+                      <ul className="space-y-1">
+                        {[
+                          "SSP completeness or CUI scope",
+                          "Policies and procedures",
+                          "Physical security controls",
+                          "Personnel security and training records",
+                          "Risk management records",
+                          "Incident response exercises",
+                          "Backup and recovery testing",
+                          "Firewall configuration (unless integrated)",
+                          "Non-Microsoft systems or infrastructure",
+                          "Assessor interviews or hands-on testing",
+                        ].map((item) => (
+                          <li key={item} className="text-xs text-gray-600 flex items-start gap-1.5">
+                            <span className="text-red-400 mt-0.5 shrink-0">✗</span> {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

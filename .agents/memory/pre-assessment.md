@@ -23,7 +23,10 @@ When replacing auto-assessor, old enum types (`auto_intake_answer`, `auto_severi
 **How to apply:** Before any schema push that removes enums: `DROP TYPE IF EXISTS <old_type> CASCADE;` for each removed enum type first.
 
 ## API route structure
-All routes under `/api/pre-assessment/` registered via `router.use("/pre-assessment", preAssessmentRouter)` in routes/index.ts. Key endpoints: GET/POST `/connections`, POST `/connections/:id/test`, DELETE `/connections/:id`, POST `/scans`, GET `/scans/:id` (returns full scan with findings/evidence/requests/roadmap), PATCH `/findings/:id`, PATCH `/evidence-records/:id`, PATCH `/evidence-requests/:id`, PATCH `/roadmap/:id`, GET `/packs`.
+All routes under `/api/pre-assessment/` registered via `router.use("/pre-assessment", preAssessmentRouter)` in routes/index.ts. Key endpoints: GET/POST `/connections`, POST `/connections/:id/test`, DELETE `/connections/:id`, POST `/scans`, GET `/scans/:id` (returns full scan with findings/evidence/requests/roadmap), GET `/scans/:id/report-data` (structured JSON for PDF), GET `/scans/:id/report.pdf` (streams PDF), PATCH `/findings/:id`, PATCH `/evidence-records/:id`, PATCH `/evidence-requests/:id`, PATCH `/roadmap/:id`, GET `/packs`.
+
+## PDF report generation (pdfkit)
+`pa-report-generator.ts` uses `pdfkit` (marked **external** in `build.mjs`) to generate professional PDFs. Use ONLY the 14 standard PDF fonts (Helvetica, Helvetica-Bold, etc.) — never load TTF files, as pdfkit resolves font paths relative to its own package dir which breaks when bundled. Making pdfkit external lets Node resolve it from node_modules at runtime where `__dirname` is correct. Frontend `downloadReport()` uses `fetch` + Blob + `URL.createObjectURL` pattern (never a direct `<a href>` with token in query params).
 
 ## Frontend pages
 8 pages under `/pre-assessment/*`: history (default), run, manual, connections, results/:id, findings, evidence-requests, roadmap. PaResults polls every 3s while scan status is `running` or `not_started`.

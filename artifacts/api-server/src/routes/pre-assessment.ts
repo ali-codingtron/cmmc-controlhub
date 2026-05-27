@@ -8,7 +8,9 @@ import {
   paEvidenceRecordsTable,
   paEvidenceRequestsTable,
   paRoadmapActionsTable,
+  organizationsTable,
 } from "@workspace/db";
+import { generatePaReportPdf } from "../lib/pa-report-generator";
 import { eq, and, desc } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { requireAuth } from "../lib/auth";
@@ -387,6 +389,89 @@ router.get("/scans/:id", requireAuth, requireOrg, async (req, res) => {
   } catch (err) {
     req.log.error(err, "pa: get scan failed");
     res.status(500).json({ error: "Failed to load scan" });
+  }
+});
+
+router.get("/scans/:id/report-data", requireAuth, requireOrg, async (req, res) => {
+  try {
+    const [scan] = await db
+      .select()
+      .from(paScanRunsTable)
+      .where(and(eq(paScanRunsTable.id, req.params.id), eq(paScanRunsTable.organizationId, req.orgId!)));
+    if (!scan) return res.status(404).json({ error: "Scan not found" });
+
+    const [org] = await db.select().from(organizationsTable).where(eq(organizationsTable.id, req.orgId!));
+    const [tenantConnection] = scan.tenantConnectionId
+      ? await db.select().from(tenantConnectionsTable).where(eq(tenantConnectionsTable.id, scan.tenantConnectionId))
+      : [null];
+
+    const [findings, evidenceRecords, evidenceRequests, roadmapActions] = await Promise.all([
+      db.select().from(paFindingsTable).where(eq(paFindingsTable.scanRunId, req.params.id)),
+      db.select().from(paEvidenceRecordsTable).where(eq(paEvidenceRecordsTable.scanRunId, req.params.id)),
+      db.select().from(paEvidenceRequestsTable).where(eq(paEvidenceRequestsTable.scanRunId, req.params.id)),
+      db.select().from(paRoadmapActionsTable).where(eq(paRoadmapActionsTable.scanRunId, req.params.id)),
+    ]);
+
+    res.json({
+      scan,
+      org: { name: org?.name ?? "Unknown Organization" },
+      tenantConnection: tenantConnection ? {
+        tenantName: tenantConnection.tenantName,
+        primaryDomain: tenantConnection.primaryDomain ?? null,
+        microsoftTenantId: tenantConnection.microsoftTenantId ?? null,
+      } : null,
+      findings,
+      evidenceRecords,
+      evidenceRequests,
+      roadmapActions,
+      generatedBy: req.authUser?.email ?? "Unknown",
+    });
+  } catch (err) {
+    req.log.error(err, "pa: get report data failed");
+    res.status(500).json({ error: "Failed to load report data" });
+  }
+});
+
+router.get("/scans/:id/report.pdf", requireAuth, requireOrg, async (req, res) => {
+  try {
+    const [scan] = await db
+      .select()
+      .from(paScanRunsTable)
+      .where(and(eq(paScanRunsTable.id, req.params.id), eq(paScanRunsTable.organizationId, req.orgId!)));
+    if (!scan) return res.status(404).json({ error: "Scan not found" });
+
+    const [org] = await db.select().from(organizationsTable).where(eq(organizationsTable.id, req.orgId!));
+    const [tenantConnection] = scan.tenantConnectionId
+      ? await db.select().from(tenantConnectionsTable).where(eq(tenantConnectionsTable.id, scan.tenantConnectionId))
+      : [null];
+
+    const [findings, evidenceRecords, evidenceRequests, roadmapActions] = await Promise.all([
+      db.select().from(paFindingsTable).where(eq(paFindingsTable.scanRunId, req.params.id)),
+      db.select().from(paEvidenceRecordsTable).where(eq(paEvidenceRecordsTable.scanRunId, req.params.id)),
+      db.select().from(paEvidenceRequestsTable).where(eq(paEvidenceRequestsTable.scanRunId, req.params.id)),
+      db.select().from(paRoadmapActionsTable).where(eq(paRoadmapActionsTable.scanRunId, req.params.id)),
+    ]);
+
+    generatePaReportPdf(
+      {
+        scan,
+        org: { name: org?.name ?? "Unknown Organization" },
+        tenantConnection: tenantConnection ? {
+          tenantName: tenantConnection.tenantName,
+          primaryDomain: tenantConnection.primaryDomain ?? null,
+          microsoftTenantId: tenantConnection.microsoftTenantId ?? null,
+        } : null,
+        findings,
+        evidenceRecords,
+        evidenceRequests,
+        roadmapActions,
+        generatedBy: req.authUser?.email ?? "Unknown",
+      },
+      res
+    );
+  } catch (err) {
+    req.log.error(err, "pa: generate report pdf failed");
+    if (!res.headersSent) res.status(500).json({ error: "Failed to generate report" });
   }
 });
 

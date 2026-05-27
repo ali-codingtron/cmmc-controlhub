@@ -1,0 +1,309 @@
+Improve the Tenant Scan Results page and add PDF report export.
+
+Current issues:
+1. The scan results page says “21 CMMC Controls evaluated.” That is misleading.
+2. There is no PDF report export available.
+3. The tenant scan should clearly distinguish between:
+   - controls touched by Microsoft Graph data
+   - controls fully assessed
+   - controls requiring manual review
+   - full CMMC Level 2 scope of 110 controls
+
+Fix these items.
+
+1. Rename “CMMC Controls Evaluated”
+
+Replace:
+CMMC Controls Evaluated
+
+With:
+CMMC Controls Touched by Tenant Scan
+
+Display format:
+21 / 110
+
+Supporting text:
+“Microsoft tenant data provided assessment signals for 21 of 110 CMMC Level 2 controls.”
+
+Tooltip:
+“These controls were mapped to Microsoft tenant scan checks. This does not mean they were fully assessed. Full CMMC readiness still requires SSP review, policies, procedures, evidence, interviews, testing, POA&M review, and non-Microsoft system validation.”
+
+2. Add Coverage Breakdown
+
+Add a new card or section called:
+Assessment Coverage
+
+Show:
+- Total CMMC L2 Controls: 110
+- Controls touched by tenant scan: 21
+- Controls not assessed by tenant scan: 89
+- Controls requiring manual review
+- Controls with generated evidence snapshots
+- Controls with findings
+- Controls with evidence requests
+
+3. Add Scan Scope Explanation
+
+On the Summary tab, add a section:
+
+What This Scan Evaluated
+
+Include:
+- Microsoft Entra users
+- MFA/authentication registration
+- Conditional Access policies
+- sign-in logs
+- directory audit logs
+- Secure Score
+- Intune/device data if available
+
+Add another section:
+
+What This Scan Does Not Fully Evaluate
+
+Include:
+- SSP completeness
+- CUI scope
+- policies and procedures
+- physical security
+- personnel security
+- training records
+- risk management records
+- incident response exercises
+- backup testing
+- firewall configuration unless integrated
+- non-Microsoft systems
+- assessor interviews
+- hands-on technical testing
+
+4. Add PDF Export Button
+
+Add a button at the top right of the Tenant Scan Results page:
+
+Download Pre-Assessment Report
+
+Also add:
+Export PDF
+Export DOCX optional
+Print
+
+5. PDF Report Content
+
+The PDF report should be professional and client-facing.
+
+Title:
+Tenant-Connected CMMC Pre-Assessment Report
+
+Subtitle:
+Microsoft 365 / Entra Technical Readiness Scan
+
+Report should include:
+
+A. Cover Page
+- Control HUB logo
+- Organization name
+- Tenant name
+- Scan date
+- Report generated date
+- Target CMMC level
+- Report classification: Confidential
+
+B. Executive Summary
+- Tenant Scan Health
+- Assessment Confidence
+- Checks Run
+- Passed
+- Gaps Found
+- Unknown / No Data
+- Findings
+- Evidence Snapshots
+- Evidence Requests
+- Controls Touched by Tenant Scan: 21 / 110
+- Overall interpretation
+
+C. Scope and Limitations
+Explain clearly:
+“This report is a technical pre-assessment based on Microsoft tenant configuration and Microsoft Graph data. It is not an official CMMC assessment and does not replace C3PAO review.”
+
+D. Assessment Pack Summary
+For each pack:
+- Identity Pack
+- Authentication Pack
+- Conditional Access Pack
+- Device / Intune Pack
+- Audit / Sign-in Pack
+- Security Score Pack
+
+Show:
+- status
+- checks run
+- passed
+- failed
+- unknown
+- findings count
+- evidence generated
+- notes
+
+E. Findings Summary
+Group findings by severity:
+- Critical
+- High
+- Medium
+- Low
+- Informational
+
+For each finding show:
+- finding ID
+- severity
+- status
+- title
+- observed condition
+- remediation recommendation
+- linked controls
+- related roadmap action
+
+F. Evidence Snapshot Summary
+List generated evidence records:
+- title
+- source
+- scan pack
+- generated date
+- linked controls
+- status
+
+G. Evidence Requests
+List requested artifacts:
+- request title
+- reason
+- linked controls
+- suggested filename
+- priority
+- status
+
+H. Recommended Roadmap
+Show recommended actions:
+- priority
+- action title
+- category
+- controls impacted
+- findings addressed
+- recommended next step
+
+I. Control Coverage Matrix
+Show:
+- control ID
+- title
+- domain
+- tenant scan signal
+- finding count
+- evidence snapshot count
+- manual review required yes/no
+
+J. Appendix
+- permissions used
+- scan timestamp
+- tenant ID
+- scan ID
+- disclaimers
+
+6. PDF Formatting Requirements
+
+Make the PDF look like a professional consulting deliverable.
+
+Use:
+- clean cover page
+- headers and footers
+- page numbers
+- consistent fonts
+- section dividers
+- tables
+- status badges
+- severity colors
+- no browser URL
+- no scrollbars
+- no cut-off content
+- print-friendly margins
+
+Footer:
+“Confidential — Prepared by Control HUB”
+
+7. Add Export Endpoint
+
+Create backend endpoint:
+
+GET /api/pre-assessment/scans/:scanId/report.pdf
+
+It should generate and return a PDF report.
+
+Also create:
+
+GET /api/pre-assessment/scans/:scanId/report-data
+
+This returns structured report data for preview/export.
+
+8. Add Report Preview Page
+
+Before downloading, allow viewing:
+
+Pre-Assessment Report Preview
+
+Sections:
+- Executive Summary
+- Findings
+- Evidence Requests
+- Roadmap
+- Scope and Limitations
+
+Button:
+Download PDF
+
+9. Add Report History
+
+When a PDF is generated, save a report record:
+
+Fields:
+- report ID
+- organization ID
+- scan ID
+- report type
+- generated by
+- generated date
+- file path/storage key
+- status
+
+Reports should appear under:
+Reports > Pre-Assessment Reports
+
+10. Acceptance Tests
+
+Test A:
+Open Tenant Scan Results.
+The page shows:
+“CMMC Controls Touched by Tenant Scan: 21 / 110”
+instead of “21 CMMC Controls Evaluated.”
+
+Test B:
+Hover over the control coverage metric.
+Tooltip explains that tenant scan signals do not equal full CMMC assessment.
+
+Test C:
+Click Download Pre-Assessment Report.
+A professional PDF downloads.
+
+Test D:
+PDF includes:
+- organization name
+- scan date
+- tenant scan health
+- assessment confidence
+- findings by severity
+- evidence requests
+- recommended roadmap
+- controls touched by scan
+- scope and limitations
+
+Test E:
+PDF does not show browser chrome, scrollbars, broken layout, or raw JSON.
+
+Test F:
+Generated report is saved in report history.
