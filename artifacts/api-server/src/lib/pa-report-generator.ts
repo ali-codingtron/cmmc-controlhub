@@ -162,6 +162,60 @@ function healthLabel(rate: number, total: number): string {
   return "Critical Gaps";
 }
 
+const SEVERITY_SHORT: Record<string, string> = {
+  critical: "Critical", high: "High", medium: "Medium", low: "Low", informational: "Info",
+};
+
+const CMMC_DOMAINS = [
+  { id: "AC", name: "Access Control", total: 22 },
+  { id: "IA", name: "Identification & Authentication", total: 11 },
+  { id: "AU", name: "Audit & Accountability", total: 9 },
+  { id: "SC", name: "Sys & Comms Protection", total: 16 },
+  { id: "CM", name: "Configuration Management", total: 9 },
+  { id: "SI", name: "Sys & Info Integrity", total: 7 },
+  { id: "MP", name: "Media Protection", total: 9 },
+  { id: "IR", name: "Incident Response", total: 3 },
+  { id: "MA", name: "Maintenance", total: 6 },
+  { id: "RA", name: "Risk Assessment", total: 3 },
+  { id: "CA", name: "Security Assessment", total: 4 },
+  { id: "PE", name: "Physical Protection", total: 6 },
+  { id: "PS", name: "Personnel Security", total: 2 },
+  { id: "AT", name: "Awareness & Training", total: 3 },
+];
+
+function getDomain(controlId: string): string {
+  const m = controlId.match(/^3\.(\d+)\./);
+  if (!m) return "OTHER";
+  const n = parseInt(m[1]);
+  const map: Record<number, string> = {
+    1: "AC", 2: "AT", 3: "AU", 4: "CM", 5: "IA", 6: "IR",
+    7: "MA", 8: "MP", 9: "PS", 10: "PE", 11: "RA", 12: "CA",
+    13: "SC", 14: "SI",
+  };
+  return map[n] ?? "OTHER";
+}
+
+function dueDateOffset(severity: string): number {
+  if (severity === "critical") return 7;
+  if (severity === "high") return 14;
+  if (severity === "medium") return 30;
+  return 60;
+}
+
+function fmtDateOffset(iso: string | null, days: number): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  d.setDate(d.getDate() + days);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function suggestOwner(packId: string): string {
+  if (packId === "identity" || packId === "authentication" || packId === "conditional_access") return "IT Admin / Identity";
+  if (packId === "devices") return "IT Admin / Endpoint";
+  if (packId === "audit") return "IT Admin / Security";
+  return "IT / Compliance";
+}
+
 function healthColor(label: string): string {
   if (label === "Strong") return C.green;
   if (label === "Moderate") return C.medium;
@@ -569,7 +623,11 @@ export function generatePaReportPdf(data: PaReportData, res: Response): void {
     const passedEv = Math.max(0, packEvidence.length - failGaps);
     const statusLabel = isFailed ? "DATA UNAVAIL." : isCompleted ? "COMPLETE" : "NOT RUN";
     const statusCol = isFailed ? C.critical : isCompleted ? C.green : C.grayLight;
-    const notes = isFailed ? "Missing permission, license, or API unavailable" : "";
+    const notes = isFailed
+      ? (packId === "devices"
+          ? "Data unavailable — verify DeviceManagementManagedDevices.Read.All permission, Intune license, and device enrollment"
+          : "Data unavailable — verify required permissions and licensing")
+      : "";
 
     const rowH = 16;
     y = safePage(y, rowH);
@@ -641,6 +699,70 @@ export function generatePaReportPdf(data: PaReportData, res: Response): void {
       MARGIN + 10, y + 8, { width: CONTENT_W - 20 }
     );
   y += 46;
+
+  // Domain coverage table
+  y = newSection(y, 180);
+  y = heading2("CMMC Control Coverage by Domain", y);
+
+  const domTouched = new Map<string, Set<string>>();
+  const domFindings = new Map<string, number>();
+  const domRequests = new Map<string, number>();
+  for (const ctrl of controlsTouched) {
+    const d = getDomain(ctrl);
+    if (!domTouched.has(d)) domTouched.set(d, new Set());
+    domTouched.get(d)!.add(ctrl);
+  }
+  for (const f of data.findings) {
+    for (const ctrl of f.linkedControlIds) {
+      const d = getDomain(ctrl);
+      domFindings.set(d, (domFindings.get(d) ?? 0) + 1);
+    }
+  }
+  for (const r of data.evidenceRequests) {
+    const domains = new Set(r.linkedControlIds.map(getDomain));
+    for (const d of domains) domRequests.set(d, (domRequests.get(d) ?? 0) + 1);
+  }
+
+  const DCOL = {
+    domain: { x: MARGIN, w: 170 },
+    total: { x: MARGIN + 170, w: 44 },
+    touched: { x: MARGIN + 214, w: 52 },
+    findings: { x: MARGIN + 266, w: 50 },
+    requests: { x: MARGIN + 316, w: 60 },
+    manual: { x: MARGIN + 376, w: CONTENT_W - 376 },
+  };
+  y = tableHeader([
+    { label: "Domain", x: DCOL.domain.x, w: DCOL.domain.w },
+    { label: "Controls", x: DCOL.total.x, w: DCOL.total.w },
+    { label: "Touched", x: DCOL.touched.x, w: DCOL.touched.w },
+    { label: "Findings", x: DCOL.findings.x, w: DCOL.findings.w },
+    { label: "Evidence Req.", x: DCOL.requests.x, w: DCOL.requests.w },
+    { label: "Manual Review", x: DCOL.manual.x, w: DCOL.manual.w },
+  ], y, 15);
+
+  CMMC_DOMAINS.forEach((dom, di) => {
+    const tCount = domTouched.get(dom.id)?.size ?? 0;
+    const fCount = domFindings.get(dom.id) ?? 0;
+    const rCount = domRequests.get(dom.id) ?? 0;
+    const needsManual = tCount < dom.total;
+    y = safePage(y, 13);
+    if (di % 2 === 0) doc.rect(MARGIN, y, CONTENT_W, 13).fill(C.grayBg);
+    doc.fillColor(C.black).font("Helvetica").fontSize(7.5)
+      .text(`${dom.id} — ${dom.name}`, DCOL.domain.x + 2, y + 3, { width: DCOL.domain.w - 4 });
+    doc.fillColor(C.gray).font("Helvetica").fontSize(7.5)
+      .text(dom.total.toString(), DCOL.total.x + 2, y + 3, { width: DCOL.total.w - 4, align: "right" });
+    doc.fillColor(tCount > 0 ? C.blue : C.grayLight).font("Helvetica-Bold").fontSize(7.5)
+      .text(tCount.toString(), DCOL.touched.x + 2, y + 3, { width: DCOL.touched.w - 4, align: "right" });
+    doc.fillColor(fCount > 0 ? C.critical : C.grayLight).font("Helvetica-Bold").fontSize(7.5)
+      .text(fCount > 0 ? fCount.toString() : "—", DCOL.findings.x + 2, y + 3, { width: DCOL.findings.w - 4, align: "right" });
+    doc.fillColor(rCount > 0 ? C.medium : C.grayLight).font("Helvetica").fontSize(7.5)
+      .text(rCount > 0 ? rCount.toString() : "—", DCOL.requests.x + 2, y + 3, { width: DCOL.requests.w - 4, align: "right" });
+    doc.fillColor(needsManual ? C.medium : C.green).font("Helvetica-Bold").fontSize(7)
+      .text(needsManual ? "Yes" : "No", DCOL.manual.x + 2, y + 3, { width: DCOL.manual.w - 4, align: "center" });
+    doc.moveTo(MARGIN, y + 13).lineTo(MARGIN + CONTENT_W, y + 13).lineWidth(0.3).strokeColor(C.grayBorder).stroke();
+    y += 13;
+  });
+  y += 12;
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // TOP 5 IMMEDIATE ACTIONS
@@ -717,7 +839,7 @@ export function generatePaReportPdf(data: PaReportData, res: Response): void {
         // Card header
         doc.rect(MARGIN, y, CONTENT_W, 16).fill(bgColor).strokeColor(C.grayBorder).lineWidth(0.3).stroke();
         doc.rect(MARGIN, y, 4, 16).fill(borderColor);
-        badge(sev.toUpperCase(), borderColor, MARGIN + 8, y + 2, 52, 12);
+        badge(SEVERITY_SHORT[sev] ?? sev, borderColor, MARGIN + 8, y + 2, 46, 12);
 
         doc.fillColor(C.black).font("Helvetica-Bold").fontSize(8.5)
           .text(finding.title, MARGIN + 68, y + 4, { width: CONTENT_W - 150 });
@@ -748,8 +870,10 @@ export function generatePaReportPdf(data: PaReportData, res: Response): void {
             .text(finding.linkedControlIds.join("   "), MARGIN + 64, y, { width: CONTENT_W - 72 });
           y = doc.y + 4;
         }
+        const dueDate = fmtDateOffset(data.scan.completedAt ?? data.scan.startedAt, dueDateOffset(finding.severity));
+        const owner = suggestOwner(finding.packId);
         doc.fillColor(C.grayLight).font("Helvetica").fontSize(6.5)
-          .text(`Finding ID: ${finding.id.slice(0, 16)}`, MARGIN + 8, y);
+          .text(`ID: ${finding.id.slice(0, 16)}   Suggested owner: ${owner}   Recommended due: ${dueDate}`, MARGIN + 8, y, { width: CONTENT_W - 16 });
         y = doc.y + 10;
 
         doc.moveTo(MARGIN, y).lineTo(MARGIN + CONTENT_W, y)
@@ -883,7 +1007,8 @@ export function generatePaReportPdf(data: PaReportData, res: Response): void {
       doc.fillColor(C.blue).font("Helvetica").fontSize(6.5)
         .text(ctrlStr, ERC.controls.x + 3, y + 4.5, { width: ERC.controls.w - 6 });
       const ownerStr = er.ownerEmail ? er.ownerEmail : "Unassigned";
-      const dueStr = er.dueDate ? fmtDate(er.dueDate) : "Not set";
+      const recDue = fmtDateOffset(data.scan.completedAt ?? data.scan.startedAt, 30);
+      const dueStr = er.dueDate ? fmtDate(er.dueDate) : `Rec: ${recDue}`;
       doc.fillColor(C.grayLight).font("Helvetica").fontSize(6.5)
         .text(`${ownerStr}\n${dueStr}`, ERC.owner.x + 3, y + 2, { width: ERC.owner.w - 6, lineGap: 1 });
 
@@ -895,7 +1020,7 @@ export function generatePaReportPdf(data: PaReportData, res: Response): void {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
-  // RECOMMENDED ROADMAP
+  // RECOMMENDED ROADMAP — 30/60/90 day grouping
   // ═══════════════════════════════════════════════════════════════════════════════
   if (data.roadmapActions.length > 0) {
     y = newSection(y, 100);
@@ -903,67 +1028,78 @@ export function generatePaReportPdf(data: PaReportData, res: Response): void {
 
     doc.fillColor(C.gray).font("Helvetica").fontSize(8)
       .text(
-        "These roadmap actions are recommended based on tenant scan findings and should be reviewed before implementation.",
+        "These roadmap actions are recommended based on tenant scan findings. " +
+        "Address P1 items first to establish a security foundation before formal CMMC assessment scheduling.",
         MARGIN, y, { width: CONTENT_W }
       );
     y = doc.y + 10;
 
     const RC = {
       num: { x: MARGIN, w: 22 },
-      priority: { x: MARGIN + 22, w: 72 },
-      title: { x: MARGIN + 94, w: 180 },
-      category: { x: MARGIN + 274, w: 76 },
-      controls: { x: MARGIN + 350, w: 90 },
-      effort: { x: MARGIN + 440, w: CONTENT_W - 440 },
+      title: { x: MARGIN + 22, w: 190 },
+      category: { x: MARGIN + 212, w: 76 },
+      controls: { x: MARGIN + 288, w: 100 },
+      effort: { x: MARGIN + 388, w: 60 },
+      due: { x: MARGIN + 448, w: CONTENT_W - 448 },
     };
 
-    y = tableHeader(
-      [
+    const rmBuckets: Array<{ label: string; sub: string; items: typeof data.roadmapActions; color: string; bg: string }> = [
+      { label: "First 30 Days", sub: "P1 — Immediate", items: data.roadmapActions.filter((a) => a.priority === 1), color: C.critical, bg: C.criticalBg },
+      { label: "31–60 Days", sub: "P2 — Short-term", items: data.roadmapActions.filter((a) => a.priority === 2), color: C.high, bg: C.highBg },
+      { label: "61–90 Days", sub: "P3 — Long-term", items: data.roadmapActions.filter((a) => a.priority >= 3), color: C.blue, bg: C.blueLight },
+    ];
+
+    for (const bucket of rmBuckets) {
+      if (bucket.items.length === 0) continue;
+      y = safePage(y, 52);
+
+      // Bucket header
+      doc.rect(MARGIN, y, CONTENT_W, 20).fill(bucket.bg).strokeColor(C.grayBorder).lineWidth(0.5).stroke();
+      doc.rect(MARGIN, y, 4, 20).fill(bucket.color);
+      doc.fillColor(bucket.color).font("Helvetica-Bold").fontSize(9).text(bucket.label, MARGIN + 10, y + 4);
+      doc.fillColor(C.grayLight).font("Helvetica").fontSize(7).text(bucket.sub, MARGIN + 10, y + 14);
+      y += 22;
+
+      // Column header for this bucket
+      y = tableHeader([
         { label: "#", x: RC.num.x, w: RC.num.w },
-        { label: "Priority", x: RC.priority.x, w: RC.priority.w },
         { label: "Action", x: RC.title.x, w: RC.title.w },
         { label: "Category", x: RC.category.x, w: RC.category.w },
         { label: "Controls", x: RC.controls.x, w: RC.controls.w },
         { label: "Est. Effort", x: RC.effort.x, w: RC.effort.w },
-      ],
-      y, 16
-    );
+        { label: "Rec. Due Date", x: RC.due.x, w: RC.due.w },
+      ], y, 14);
 
-    const sorted = [...data.roadmapActions].sort((a, b) => a.priority - b.priority);
-    sorted.forEach((action, i) => {
-      const rowH = 20;
-      y = safePage(y, rowH);
-      const shade = i % 2 === 0;
-      if (shade) doc.rect(MARGIN, y, CONTENT_W, rowH).fill(C.grayBg);
+      bucket.items.forEach((action, i) => {
+        const rowH = 18;
+        y = safePage(y, rowH);
+        if (i % 2 === 0) doc.rect(MARGIN, y, CONTENT_W, rowH).fill(C.grayBg);
 
-      const priLabel = action.priority === 1 ? "P1 — Immediate" :
-        action.priority === 2 ? "P2 — Short-term" : "P3 — Long-term";
-      const priColor = action.priority === 1 ? C.critical :
-        action.priority === 2 ? C.high : C.blue;
-      const effort = action.priority === 1 ? "1–2 weeks" :
-        action.priority === 2 ? "1–3 months" : "3–6 months";
+        const effort = action.priority === 1 ? "1–2 weeks" : action.priority === 2 ? "1–3 months" : "3–6 months";
+        const daysOut = action.priority === 1 ? 14 : action.priority === 2 ? 45 : 75;
+        const dueDate = fmtDateOffset(data.scan.completedAt ?? data.scan.startedAt, daysOut);
+        const ctrlStr = action.linkedControlIds.slice(0, 3).join(" ") +
+          (action.linkedControlIds.length > 3 ? ` +${action.linkedControlIds.length - 3}` : "");
 
-      doc.fillColor(C.grayLight).font("Helvetica").fontSize(7)
-        .text((i + 1).toString(), RC.num.x + 3, y + 6, { width: RC.num.w - 6, align: "right" });
-      doc.fillColor(priColor).font("Helvetica-Bold").fontSize(7)
-        .text(priLabel, RC.priority.x + 3, y + 6, { width: RC.priority.w - 6 });
-      doc.fillColor(C.black).font("Helvetica").fontSize(8)
-        .text(action.title, RC.title.x + 3, y + 5, { width: RC.title.w - 6 });
-      doc.fillColor(C.gray).font("Helvetica").fontSize(7)
-        .text(action.category, RC.category.x + 3, y + 6, { width: RC.category.w - 6 });
-      const ctrlStr = action.linkedControlIds.length <= 2
-        ? action.linkedControlIds.join(" ")
-        : action.linkedControlIds.slice(0, 2).join(" ") + ` +${action.linkedControlIds.length - 2}`;
-      doc.fillColor(C.blue).font("Helvetica").fontSize(7)
-        .text(ctrlStr, RC.controls.x + 3, y + 6, { width: RC.controls.w - 6 });
-      doc.fillColor(C.grayLight).font("Helvetica").fontSize(7)
-        .text(effort, RC.effort.x + 3, y + 6, { width: RC.effort.w - 6 });
+        doc.fillColor(C.grayLight).font("Helvetica").fontSize(7)
+          .text((i + 1).toString(), RC.num.x + 3, y + 5, { width: RC.num.w - 6, align: "right" });
+        doc.fillColor(C.black).font("Helvetica").fontSize(8)
+          .text(action.title, RC.title.x + 3, y + 4, { width: RC.title.w - 6 });
+        doc.fillColor(C.gray).font("Helvetica").fontSize(7)
+          .text(action.category, RC.category.x + 3, y + 5, { width: RC.category.w - 6 });
+        doc.fillColor(C.blue).font("Helvetica").fontSize(7)
+          .text(ctrlStr, RC.controls.x + 3, y + 5, { width: RC.controls.w - 6 });
+        doc.fillColor(C.grayLight).font("Helvetica").fontSize(7)
+          .text(effort, RC.effort.x + 3, y + 5, { width: RC.effort.w - 6 });
+        doc.fillColor(C.medium).font("Helvetica").fontSize(7)
+          .text(dueDate, RC.due.x + 3, y + 5, { width: RC.due.w - 6 });
 
-      doc.moveTo(MARGIN, y + rowH).lineTo(MARGIN + CONTENT_W, y + rowH)
-        .lineWidth(0.3).strokeColor(C.grayBorder).stroke();
-      y += rowH;
-    });
-    y += 10;
+        doc.moveTo(MARGIN, y + rowH).lineTo(MARGIN + CONTENT_W, y + rowH)
+          .lineWidth(0.3).strokeColor(C.grayBorder).stroke();
+        y += rowH;
+      });
+      y += 10;
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════

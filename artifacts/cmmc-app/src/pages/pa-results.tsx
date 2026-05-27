@@ -295,7 +295,6 @@ export default function PaResults({ id }: { id: string }) {
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [dismissReason, setDismissReason] = useState("");
   const [severityFilter, setSeverityFilter] = useState("all");
-  const [downloading, setDownloading] = useState(false);
   const [scopeExpanded, setScopeExpanded] = useState(false);
 
   const loadData = useCallback((quiet = false) => {
@@ -392,12 +391,14 @@ export default function PaResults({ id }: { id: string }) {
   const controlsWithRequests = Array.from(new Set(evidenceRequests.flatMap((e) => e.linkedControlIds)));
   const health = healthLabel(passRate, scan?.totalChecks ?? 0);
 
-  async function downloadReport() {
+  const [downloadingType, setDownloadingType] = useState<"executive" | "technical" | null>(null);
+
+  async function downloadReport(type: "executive" | "technical") {
     if (!activeOrg) return;
-    setDownloading(true);
+    setDownloadingType(type);
     try {
       const token = localStorage.getItem("auth_token");
-      const res = await fetch(`/api/pre-assessment/scans/${id}/report.pdf`, {
+      const res = await fetch(`/api/pre-assessment/scans/${id}/report.pdf?type=${type}`, {
         headers: { Authorization: `Bearer ${token}`, "X-Organization-ID": activeOrg.id },
       });
       if (!res.ok) throw new Error("Failed");
@@ -405,7 +406,7 @@ export default function PaResults({ id }: { id: string }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `pre-assessment-report-${id.slice(0, 8)}.pdf`;
+      a.download = `${type}-report-${id.slice(0, 8)}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -413,7 +414,7 @@ export default function PaResults({ id }: { id: string }) {
     } catch {
       alert("Failed to generate report. Please try again.");
     }
-    setDownloading(false);
+    setDownloadingType(null);
   }
 
   const requested = scan?.packsRequested ?? [];
@@ -465,14 +466,24 @@ export default function PaResults({ id }: { id: string }) {
           <RefreshCw className="h-4 w-4" />
         </button>
         {isDone && (
-          <button
-            onClick={downloadReport}
-            disabled={downloading}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition-colors"
-          >
-            {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-            {downloading ? "Generating…" : "Download Report"}
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => downloadReport("executive")}
+              disabled={downloadingType !== null}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 transition-colors"
+            >
+              {downloadingType === "executive" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              {downloadingType === "executive" ? "Generating…" : "Executive Report"}
+            </button>
+            <button
+              onClick={() => downloadReport("technical")}
+              disabled={downloadingType !== null}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition-colors"
+            >
+              {downloadingType === "technical" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+              {downloadingType === "technical" ? "Generating…" : "Technical Report"}
+            </button>
+          </div>
         )}
       </div>
 

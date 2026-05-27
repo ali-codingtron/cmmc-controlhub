@@ -25,8 +25,16 @@ When replacing auto-assessor, old enum types (`auto_intake_answer`, `auto_severi
 ## API route structure
 All routes under `/api/pre-assessment/` registered via `router.use("/pre-assessment", preAssessmentRouter)` in routes/index.ts. Key endpoints: GET/POST `/connections`, POST `/connections/:id/test`, DELETE `/connections/:id`, POST `/scans`, GET `/scans/:id` (returns full scan with findings/evidence/requests/roadmap), GET `/scans/:id/report-data` (structured JSON for PDF), GET `/scans/:id/report.pdf` (streams PDF), PATCH `/findings/:id`, PATCH `/evidence-records/:id`, PATCH `/evidence-requests/:id`, PATCH `/roadmap/:id`, GET `/packs`.
 
-## PDF report generation (pdfkit)
-`pa-report-generator.ts` uses `pdfkit` (marked **external** in `build.mjs`) to generate professional PDFs. Use ONLY the 14 standard PDF fonts (Helvetica, Helvetica-Bold, etc.) — never load TTF files, as pdfkit resolves font paths relative to its own package dir which breaks when bundled. Making pdfkit external lets Node resolve it from node_modules at runtime where `__dirname` is correct. Frontend `downloadReport()` uses `fetch` + Blob + `URL.createObjectURL` pattern (never a direct `<a href>` with token in query params).
+## PDF report generation (pdfkit) — dual-report architecture
+Two generators: `pa-report-generator.ts` (Technical, full detail) and `pa-executive-report-generator.ts` (Executive, 4–6 pages). Route `GET /scans/:id/report.pdf?type=executive|technical` dispatches to the correct generator. UI shows two buttons: "Executive Report" (indigo) and "Technical Report" (blue), each calling `downloadReport(type)` with `downloadingType` state. Both generators share the `PaReportData` interface exported from `pa-report-generator.ts`.
+
+**pdfkit rules**: Mark external in `build.mjs`. Standard fonts only (Helvetica/Helvetica-Bold) — no TTF. Use `bufferPages:true` + `doc.switchToPage(i)` for "Page X of Y" footer. Cover page is always page index 0; body pages start at index 1. Severity labels: Critical/High/Medium/Low/Info (never "INFORMATIONAL" — wraps at 46px badge width).
+
+**Domain coverage**: Both reports include a CMMC L2 domain coverage table. Domain extraction from control IDs: `3.X.Y` → section number X → domain abbr (1=AC…14=SI). 14 domains, 110 total controls.
+
+**Recommended due dates**: Critical=+7d, High=+14d, Medium=+30d, Low/Info=+60d from scan completion date. Applied to finding cards (footer line) and evidence requests (Rec: date).
+
+**30/60/90 day roadmap grouping**: P1=First 30 Days, P2=31–60 Days, P3=61–90 Days. Each bucket gets a colored sub-header then a column-header row.
 
 ## Frontend pages
 8 pages under `/pre-assessment/*`: history (default), run, manual, connections, results/:id, findings, evidence-requests, roadmap. PaResults polls every 3s while scan status is `running` or `not_started`.

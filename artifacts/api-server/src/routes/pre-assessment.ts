@@ -11,6 +11,7 @@ import {
   organizationsTable,
 } from "@workspace/db";
 import { generatePaReportPdf } from "../lib/pa-report-generator";
+import { generatePaExecutiveReportPdf } from "../lib/pa-executive-report-generator";
 import { eq, and, desc } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { requireAuth } from "../lib/auth";
@@ -452,23 +453,27 @@ router.get("/scans/:id/report.pdf", requireAuth, requireOrg, async (req, res) =>
       db.select().from(paRoadmapActionsTable).where(eq(paRoadmapActionsTable.scanRunId, req.params.id)),
     ]);
 
-    generatePaReportPdf(
-      {
-        scan,
-        org: { name: org?.name ?? "Unknown Organization" },
-        tenantConnection: tenantConnection ? {
-          tenantName: tenantConnection.tenantName,
-          primaryDomain: tenantConnection.primaryDomain ?? null,
-          microsoftTenantId: tenantConnection.microsoftTenantId ?? null,
-        } : null,
-        findings,
-        evidenceRecords,
-        evidenceRequests,
-        roadmapActions,
-        generatedBy: req.authUser?.email ?? "Unknown",
-      },
-      res
-    );
+    const reportData = {
+      scan,
+      org: { name: org?.name ?? "Unknown Organization" },
+      tenantConnection: tenantConnection ? {
+        tenantName: tenantConnection.tenantName,
+        primaryDomain: tenantConnection.primaryDomain ?? null,
+        microsoftTenantId: tenantConnection.microsoftTenantId ?? null,
+      } : null,
+      findings,
+      evidenceRecords,
+      evidenceRequests,
+      roadmapActions,
+      generatedBy: req.authUser?.email ?? "Unknown",
+    };
+
+    const reportType = (req.query.type as string) === "executive" ? "executive" : "technical";
+    if (reportType === "executive") {
+      generatePaExecutiveReportPdf(reportData, res);
+    } else {
+      generatePaReportPdf(reportData, res);
+    }
   } catch (err) {
     req.log.error(err, "pa: generate report pdf failed");
     if (!res.headersSent) res.status(500).json({ error: "Failed to generate report" });
