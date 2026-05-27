@@ -290,7 +290,7 @@ export default function PaConnections() {
         const data = await res.json().catch(() => ({}));
         setBanner({ type: "error", message: data.error ?? `Disconnect failed (${res.status})` });
       } else {
-        setBanner({ type: "success", message: "Tenant disconnected. Historical scans are preserved." });
+        setBanner({ type: "success", message: "Tenant connection removed. Historical scans are preserved." });
       }
     } catch {
       setBanner({ type: "error", message: "Network error while disconnecting. Please try again." });

@@ -256,19 +256,13 @@ router.delete("/connections/:id", requireAuth, requireOrg, async (req, res) => {
     invalidateTokenCacheForTenant(existing.microsoftTenantId);
 
     await db
-      .update(tenantConnectionsTable)
-      .set({
-        connectionStatus: "disconnected",
-        encryptedClientSecret: null,
-        clientId: null,
-        updatedAt: new Date(),
-      })
+      .delete(tenantConnectionsTable)
       .where(eq(tenantConnectionsTable.id, req.params.id));
 
     res.json({ success: true });
   } catch (err) {
-    req.log.error(err, "pa: disconnect tenant failed");
-    res.status(500).json({ error: "Failed to disconnect tenant" });
+    req.log.error(err, "pa: remove tenant failed");
+    res.status(500).json({ error: "Failed to remove tenant connection" });
   }
 });
 
