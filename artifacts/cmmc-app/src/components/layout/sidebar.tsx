@@ -161,6 +161,7 @@ export function Sidebar() {
   const isAdmin = user?.role === "admin";
   const { isDemoMode } = useDemoMode();
   const canRunAssessment = user?.role === "admin" || user?.role === "compliance_manager" || user?.role === "reviewer";
+  const canViewRoadmap = user?.role === "admin" || user?.role === "compliance_manager" || user?.role === "reviewer";
   const isPreAssessmentActive = location.startsWith("/pre-assessment");
   const [preAssessmentExpanded, setPreAssessmentExpanded] = useState(isPreAssessmentActive);
 
@@ -187,8 +188,8 @@ export function Sidebar() {
           <NavLink href="/monitoring" icon={Activity} label="Monitoring Tracker" />
           <NavLink href="/poams" icon={AlertTriangle} label="POA&Ms" />
 
-          {/* Implementation Roadmap section — admin only */}
-          {isAdmin && (
+          {/* Implementation Roadmap section */}
+          {canViewRoadmap && (
             <>
               <button
                 onClick={() => setRoadmapExpanded((v) => !v)}
