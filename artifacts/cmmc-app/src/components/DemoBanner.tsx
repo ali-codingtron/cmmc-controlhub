@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { MapPin, LogOut, FlaskConical } from "lucide-react";
+import carmetechLogo from "@assets/Carme_Tech_Logo_Official_1779981155506.png";
 
 interface DemoBannerProps {
   onStartTour: () => void;
@@ -39,8 +40,10 @@ export function DemoBanner({ onStartTour }: DemoBannerProps) {
         >
           DEMO MODE
         </span>
-        <span className="text-xs text-yellow-200/50 truncate hidden sm:block">
-          Sample data only — <strong className="text-yellow-200/70">CarmeTechnology</strong>. Read-only. No real data.
+        <span className="hidden sm:flex items-center gap-1.5 text-xs text-yellow-200/50">
+          Sample data only —
+          <img src={carmetechLogo} alt="Carme Technology" className="h-4 rounded" style={{ background: "#1C1A0A" }} />
+          Read-only. No real data.
         </span>
       </div>
       <div className="flex items-center gap-2 shrink-0">

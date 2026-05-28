@@ -23,9 +23,11 @@ import {
 
 import { useAuth } from "@/lib/auth";
 import { useOrg } from "@/context/OrgContext";
+import { useDemoMode } from "@/context/DemoModeContext";
 import { useState, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import carmetechLogo from "@assets/Carme_Tech_Logo_Official_1779981155506.png";
 
 const roadmapItems = [
   { href: "/roadmap", label: "Priority Actions" },
@@ -157,6 +159,7 @@ export function Sidebar() {
   const [reportsExpanded, setReportsExpanded] = useState(isReportsActive);
   const [roadmapExpanded, setRoadmapExpanded] = useState(isRoadmapActive);
   const isAdmin = user?.role === "admin";
+  const { isDemoMode } = useDemoMode();
   const canRunAssessment = user?.role === "admin" || user?.role === "compliance_manager" || user?.role === "reviewer";
   const isPreAssessmentActive = location.startsWith("/pre-assessment");
   const [preAssessmentExpanded, setPreAssessmentExpanded] = useState(isPreAssessmentActive);
@@ -381,17 +384,29 @@ export function Sidebar() {
             </div>
           )}
 
-          <div className="pt-2">
-            <div className="px-3 py-1 text-[10px] uppercase tracking-wider font-semibold text-sidebar-foreground/40">
-              Admin
-            </div>
-          </div>
-          <NavLink href="/audit-logs" icon={History} label="Audit Trail" />
-          <NavLink href="/users" icon={Users} label="Users" />
-          {isAdmin && <NavLink href="/organizations" icon={Building2} label="Organizations" />}
-          <NavLink href="/settings" icon={Settings} label="Settings" />
+          {!isDemoMode && (
+            <>
+              <div className="pt-2">
+                <div className="px-3 py-1 text-[10px] uppercase tracking-wider font-semibold text-sidebar-foreground/40">
+                  Admin
+                </div>
+              </div>
+              <NavLink href="/audit-logs" icon={History} label="Audit Trail" />
+              <NavLink href="/users" icon={Users} label="Users" />
+              {isAdmin && <NavLink href="/organizations" icon={Building2} label="Organizations" />}
+              <NavLink href="/settings" icon={Settings} label="Settings" />
+            </>
+          )}
         </nav>
       </div>
+
+      {isDemoMode && (
+        <div className="px-3 pb-2">
+          <div className="rounded-lg overflow-hidden" style={{ background: "#1C1A0A", border: "1px solid rgba(201,168,76,0.2)" }}>
+            <img src={carmetechLogo} alt="Carme Technology" className="w-full object-contain" style={{ maxHeight: 52 }} />
+          </div>
+        </div>
+      )}
 
       <div className="p-4 border-t border-sidebar-border">
         <div className="flex items-center justify-between">

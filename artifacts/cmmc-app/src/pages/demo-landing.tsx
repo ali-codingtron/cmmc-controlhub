@@ -9,6 +9,7 @@ import {
   Users, ExternalLink, ClipboardList, RadarIcon, BookOpen,
   Lock, TrendingUp, Zap, Building2,
 } from "lucide-react";
+import carmetechLogo from "@assets/Carme_Tech_Logo_Official_1779981155506.png";
 
 const CONSULTATION_HREF = "mailto:info@carmetechnology.com?subject=Control%20HUB%20Consultation%20Request";
 
@@ -133,8 +134,7 @@ export default function DemoLanding() {
             <span className="font-bold text-lg text-white tracking-tight">Control HUB</span>
             <span className="hidden sm:flex items-center gap-1 text-xs text-slate-500 font-medium">
               <span className="text-slate-600 mx-1">·</span>
-              by
-              <span style={{ color: "#C9A84C" }} className="font-semibold ml-1">CARME TECHNOLOGY</span>
+              <img src={carmetechLogo} alt="Carme Technology" className="h-5 rounded" style={{ background: "#1C1A0A" }} />
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -414,8 +414,7 @@ export default function DemoLanding() {
                   <Shield className="h-3.5 w-3.5 text-white" />
                 </div>
                 <span className="font-bold text-sm text-white">Control HUB</span>
-                <span className="text-slate-600 text-xs">by</span>
-                <span className="text-xs font-semibold" style={{ color: "#C9A84C" }}>CARME TECHNOLOGY</span>
+                <img src={carmetechLogo} alt="Carme Technology" className="h-5 rounded" style={{ background: "#1C1A0A" }} />
               </div>
               <p className="text-[11px] text-slate-600">Demo environment uses synthetic sample data only.</p>
             </div>

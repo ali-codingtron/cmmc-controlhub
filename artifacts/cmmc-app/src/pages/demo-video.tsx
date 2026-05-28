@@ -5,6 +5,7 @@ import {
   Shield, ArrowLeft, Play, Clock, CheckCircle, ArrowRight,
   ExternalLink,
 } from "lucide-react";
+import carmetechLogo from "@assets/Carme_Tech_Logo_Official_1779981155506.png";
 
 const CONSULTATION_HREF = "mailto:info@carmetechnology.com?subject=Control%20HUB%20Consultation%20Request";
 
@@ -73,7 +74,7 @@ export default function DemoVideo() {
             </div>
             <span className="font-bold text-sm text-white">Control HUB</span>
             <span className="text-slate-600 text-xs hidden sm:inline">·</span>
-            <span className="text-xs font-semibold hidden sm:inline" style={{ color: "#C9A84C" }}>CARME TECHNOLOGY</span>
+            <img src={carmetechLogo} alt="Carme Technology" className="h-5 rounded hidden sm:block" style={{ background: "#1C1A0A" }} />
           </div>
           <a
             href={CONSULTATION_HREF}
@@ -219,8 +220,7 @@ export default function DemoVideo() {
               <Shield className="h-3 w-3 text-white" />
             </div>
             <span className="text-sm font-bold text-white">Control HUB</span>
-            <span className="text-xs text-slate-600">by</span>
-            <span className="text-xs font-semibold" style={{ color: "#C9A84C" }}>CARME TECHNOLOGY</span>
+            <img src={carmetechLogo} alt="Carme Technology" className="h-5 rounded" style={{ background: "#1C1A0A" }} />
           </div>
           <div className="flex gap-4 text-xs text-slate-600">
             <button onClick={() => navigate("/demo")} className="hover:text-white transition-colors">Demo</button>
