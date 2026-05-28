@@ -9,6 +9,7 @@ import { Layout } from "@/components/layout/layout";
 import NotFound from "@/pages/not-found";
 import DemoLanding from "@/pages/demo-landing";
 import DemoVideo from "@/pages/demo-video";
+import DemoApp from "@/pages/demo-app";
 
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
@@ -96,6 +97,7 @@ function AppRoutes() {
       <Route path="/login" component={Login} />
       <Route path="/demo" component={DemoLanding} />
       <Route path="/demo-video" component={DemoVideo} />
+      <Route path="/demo/app" component={DemoApp} />
       <Route>
         <Layout>
           <Guard>

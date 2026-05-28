@@ -1,0 +1,262 @@
+Fix the public demo walkthrough and live demo launch behavior.
+
+Current issues:
+1. The Watch Walkthrough page still shows the demo script. I do not want the demo script visible on the public page.
+2. Remove the text that says:
+   - 3–5 minutes
+   - 9 sections
+   - Full platform tour
+3. The demo video has captions only and no sound. I want the video to include audio narration.
+4. When I click Launch Live Demo, it sends me to the actual production sign-in page. That is wrong. The public demo should launch the read-only demo app without requiring login.
+
+Fix these now.
+
+1. Remove Public Demo Script
+
+On /demo-video, remove the visible “Demo Script” section entirely.
+
+Do not show:
+- Opening
+- Dashboard
+- Pre-Assessment
+- Controls
+- Evidence Repository
+- Monitoring Tracker
+- POA&M Tracker
+- Reports & Exports
+- Closing
+
+The script can remain internally in code if needed for video generation, but it should not be visible to public demo viewers.
+
+2. Remove Demo Metadata Text
+
+Remove the line that says:
+- 3–5 minutes
+- 9 sections
+- Full platform tour
+
+The video page should look like a polished landing page, not a script planning page.
+
+3. Replace /demo-video Layout
+
+The /demo-video page should show only:
+
+- Control HUB branding
+- Carme Technology branding
+- title: Control HUB Demo Walkthrough
+- short subtitle
+- embedded video player
+- Launch Live Demo button
+- Request Consultation button
+
+No demo script.
+No section list.
+No “3–5 minutes / 9 sections / full platform tour” labels.
+
+4. Add Audio to Demo Video
+
+The current video has captions but no sound.
+
+Create or attach an audio narration track to the demo video.
+
+Preferred behavior:
+- Generate a narrated version of the demo video using text-to-speech if available
+- Combine narration audio with the existing video using ffmpeg
+- Export a new MP4 with audio included
+
+Output file:
+public/videos/control-hub-demo.mp4
+
+The final video must have:
+- video track
+- audio track
+- captions track if available
+
+Also keep:
+public/videos/control-hub-demo-captions.vtt
+
+5. Voiceover Script
+
+Use this narration script for the audio:
+
+“Welcome to Control HUB, a CMMC readiness and evidence management platform built for defense contractors.
+
+Control HUB helps organizations understand where they stand, organize evidence, track recurring monitoring, manage remediation, and prepare for C3PAO review.
+
+The dashboard gives leadership a quick view of readiness, evidence health, monitoring status, POA&M activity, domain readiness, and recommended next actions.
+
+For organizations that are just getting started, the pre-assessment module can review Microsoft tenant configuration data, identify findings, generate evidence requests, and recommend a remediation roadmap.
+
+Findings are tied to CMMC controls and can be assigned, acknowledged, converted into POA&M items, or used to create evidence requests.
+
+The implementation roadmap shows which actions to complete first, helping teams focus on high-impact work that supports multiple CMMC controls.
+
+Each control includes implementation details, configuration steps, linked evidence, monitoring activities, SSP mapping, and POA&M linkage.
+
+The evidence repository stores screenshots, policies, procedures, logs, reports, and exports with metadata such as control ID, domain, status, owner, and review date.
+
+The monitoring tracker helps prove ongoing compliance through weekly, monthly, quarterly, and annual operational reviews.
+
+POA&M tracking keeps remediation work tied to controls, owners, risks, due dates, and supporting evidence.
+
+Finally, Control HUB generates reports for executives, technical teams, and audit preparation.
+
+Control HUB gives organizations one place to manage CMMC readiness from pre-assessment through implementation, evidence collection, monitoring, remediation, and reporting.”
+
+6. Audio Generation Options
+
+Implement one of these:
+
+Option A:
+Use a text-to-speech package or API if already available.
+
+Option B:
+Allow me to upload an audio file:
+public/videos/control-hub-demo-voiceover.mp3
+
+Then combine:
+- control-hub-demo-silent.mp4
+- control-hub-demo-voiceover.mp3
+
+into:
+public/videos/control-hub-demo.mp4
+
+Option C:
+If automatic voice generation is not possible, add an admin upload option:
+Settings > Demo Settings > Upload Voiceover Audio
+
+Then regenerate the video with the uploaded voiceover.
+
+7. Validate Audio
+
+Add a check after video generation:
+- confirm MP4 contains audio stream
+- if no audio stream exists, show admin warning:
+  “Demo video generated without audio. Upload voiceover or configure text-to-speech.”
+
+Do not present a silent video as complete.
+
+8. Fix Launch Live Demo
+
+Current issue:
+Clicking Launch Live Demo sends users to the production sign-in page.
+
+Expected behavior:
+Clicking Launch Live Demo should open the public read-only demo app.
+
+Route should be one of:
+- /demo/app
+or
+- /app/demo
+or
+- /app?demo=true
+
+But it must not redirect to /login.
+
+9. Demo Auth Bypass / Read-Only Demo Session
+
+Create a safe public demo session.
+
+When user goes to /demo/app:
+- automatically use demo mode
+- automatically select organization CarmeTechnology
+- create a read-only demo viewer context
+- do not require login
+- do not expose real organizations
+- do not expose real users
+- do not expose real tenant connections
+- do not expose admin settings
+
+Demo user permissions:
+Can view:
+- Dashboard
+- Controls
+- Evidence
+- Documentation
+- SSP
+- Monitoring Tracker
+- POA&M
+- Implementation Roadmap
+- Pre-Assessment demo results
+- Reports
+
+Cannot:
+- add
+- edit
+- delete
+- upload
+- archive
+- save
+- run assessment
+- connect Microsoft tenant
+- create users
+- create organizations
+- change settings
+
+10. Fix Middleware / Route Guard
+
+Inspect the auth middleware or route guard.
+
+The demo app route must be allowed without login.
+
+Add exception for:
+- /demo
+- /demo-video
+- /demo/app
+- /api/demo/*
+- public demo assets
+
+But all real production routes should still require authentication.
+
+Do not weaken authentication for normal app routes.
+
+11. Demo Data Requirement
+
+If CarmeTechnology demo organization is missing, do not redirect to login.
+
+Instead show:
+“Demo data is being prepared. Please check back shortly or contact info@carmetechnology.com.”
+
+For admins only, show technical message:
+“Run seed-demo.”
+
+12. Request Consultation
+
+Make sure all Request Consultation buttons open:
+
+mailto:info@carmetechnology.com?subject=Control%20HUB%20Consultation%20Request
+
+13. Acceptance Tests
+
+Test A:
+Open /demo-video.
+The demo script is gone.
+
+Test B:
+The page no longer shows:
+- 3–5 minutes
+- 9 sections
+- Full platform tour
+
+Test C:
+The video plays with audible narration.
+
+Test D:
+The MP4 contains an audio track.
+
+Test E:
+Open /demo.
+Click Launch Live Demo.
+It opens the read-only CarmeTechnology demo app.
+
+Test F:
+Launch Live Demo does not redirect to production login.
+
+Test G:
+Demo mode user cannot add, edit, delete, upload, run scans, or access admin settings.
+
+Test H:
+Real organizations are not visible in demo mode.
+
+Test I:
+Request Consultation opens email to info@carmetechnology.com.

@@ -32,6 +32,11 @@ description: Public /demo landing page, demo login endpoint, seed script, DemoMo
 
 **Why:** TypeScript types from Drizzle are exact — invalid enum values cause TS2769 overload errors at compile time.
 
+## Launch Live Demo fix
+
+- `handleLaunchDemo` (demo-landing, demo-video) must use `window.location.href = "/"` NOT `navigate("/")`. The React Query cache has `user=null` after the initial 401; `navigate()` hits the Guard which redirects to `/login` before the refetch. A full page reload lets AuthProvider pick up the new localStorage token on fresh mount.
+- `/demo/app` is a public auto-launch route (in App.tsx before the Guard catch-all). It calls demo-login in a `useEffect`, sets localStorage, then does `window.location.href = "/"`. Shareable direct link — no button click needed.
+
 ## Demo video generation
 
 - Script: `scripts/src/generate-demo-video.ts`; run with `pnpm --filter @workspace/scripts demo:video`
@@ -41,3 +46,13 @@ description: Public /demo landing page, demo login endpoint, seed script, DemoMo
 - Video served at `/videos/control-hub-demo.mp4` (BASE_PATH `/`); embedded in `/demo-video` page as native `<video>` with poster + captions track.
 
 **Why:** Playwright's bundled headless-shell binary is compiled for Debian/Ubuntu and doesn't find glib in NixOS. The nix-managed chromium has all libs linked correctly.
+
+## Demo video audio (TTS)
+
+- `espeak-ng` installed via `installSystemDependencies({ packages: ["espeak-ng"] })`. Binary at `/nix/store/.../bin/espeak-ng`.
+- Command: `espeak-ng -v en-us -s 145 -p 45 -f /tmp/narration.txt -w /tmp/narration.wav`
+- At ~145 wpm, ~230 words produces ~138s of audio (slower than expected; espeak adds paragraph pauses).
+- To match video to audio length: `ffmpeg -vf "setpts=FACTOR*PTS" -r 3` to stretch video, then combine: `ffmpeg -i video.mp4 -i audio.aac -map 0:v -map 1:a -c:v libx264 -c:a aac -shortest`.
+- Silent backup kept at `control-hub-demo-silent.mp4` for regeneration.
+
+**Why:** Playwright bundled chromium glib issue + espeak produces longer audio than word-count suggests due to sentence pauses.

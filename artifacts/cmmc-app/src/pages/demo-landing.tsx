@@ -113,7 +113,7 @@ export default function DemoLanding() {
       if (data.demoOrgId) localStorage.setItem("cmmc_active_org_id", data.demoOrgId);
       enableDemoMode();
       queryClient.clear();
-      navigate("/");
+      window.location.href = "/";
     } catch {
       setError("Could not connect to the server. Please try again.");
     } finally {
