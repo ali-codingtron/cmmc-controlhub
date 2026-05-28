@@ -1,0 +1,438 @@
+Create an actual demo walkthrough video for Control HUB.
+
+Current issue:
+The demo page currently has a placeholder video. I want a real MP4 demo video generated from the actual Control HUB demo environment.
+
+Goal:
+Create a professional 3–5 minute demo video that walks through the public demo organization, CarmeTechnology, and shows the full functionality of Control HUB.
+
+The video should be usable on:
+/demo
+/demo-video
+
+It should not require me to manually record the screen unless absolutely necessary.
+
+1. Create Automated Demo Video Generator
+
+Create a script that automatically opens the Control HUB demo app in a browser, navigates through the demo workflow, records the screen, and exports an MP4.
+
+Use:
+- Playwright or Puppeteer for browser automation
+- ffmpeg or equivalent tool for video assembly if needed
+- 1920x1080 viewport
+- smooth navigation
+- realistic pauses between scenes
+- cursor/click highlighting if possible
+- captions or text overlays
+
+Script path:
+scripts/generate-demo-video.ts
+
+Package command:
+pnpm demo:video
+
+Output:
+public/videos/control-hub-demo.mp4
+public/videos/control-hub-demo-poster.png
+public/videos/control-hub-demo-captions.vtt
+
+2. Use Demo Organization Only
+
+The video must use only the seeded demo organization:
+
+CarmeTechnology
+
+Do not show:
+- real organizations
+- real customer data
+- real Microsoft tenants
+- real user emails except safe demo emails
+- real evidence files
+- real production secrets
+- admin settings
+- environment variables
+
+If needed, create fake demo data first by running the demo seed.
+
+3. Demo Mode URL
+
+Use the public demo route:
+
+/demo/app
+
+or the actual working route for launching the read-only demo.
+
+The video should start from:
+/demo
+
+Then click:
+Launch Live Demo
+
+Then continue through the app.
+
+4. Video Length
+
+Target length:
+3 to 5 minutes
+
+Do not make it too long.
+
+The video should feel like a professional product walkthrough for potential customers.
+
+5. Video Style
+
+Use a polished customer-facing style.
+
+Include:
+- scene title overlays
+- short captions
+- smooth transitions
+- zoom/pan on important sections if practical
+- clear visual focus
+- no raw debugging screens
+- no console
+- no developer tools
+- no loading errors
+- no seed errors
+- no admin-only screens
+
+6. Video Scenes
+
+Create these scenes in order:
+
+Scene 1 — Demo Landing Page
+Duration: 15–20 seconds
+
+Show:
+- Control HUB branding
+- Carme Technology branding
+- headline
+- Launch Live Demo button
+- Watch Walkthrough button
+- Request Consultation button
+
+Caption:
+“Control HUB helps organizations manage CMMC readiness, evidence, monitoring, POA&M, and reporting in one platform.”
+
+Scene 2 — Dashboard Overview
+Duration: 30–40 seconds
+
+Navigate to:
+Dashboard
+
+Show:
+- overall readiness
+- controls breakdown
+- evidence health
+- monitoring health
+- POA&M health
+- domain readiness
+- recommended next actions
+
+Caption:
+“Start with an executive dashboard showing readiness, evidence health, monitoring status, POA&M risk, and next actions.”
+
+Scene 3 — Pre-Assessment Results
+Duration: 35–45 seconds
+
+Navigate to:
+Pre-Assessment demo result
+
+Show:
+- Tenant Scan Health
+- Assessment Confidence
+- Controls Touched by Tenant Scan
+- findings
+- evidence requests
+- roadmap recommendations
+
+Caption:
+“Use tenant-connected pre-assessment results to identify gaps, request evidence, and prioritize remediation.”
+
+Important:
+This must be sample demo data only. Do not run a live tenant scan during video generation.
+
+Scene 4 — Findings and Evidence Requests
+Duration: 30–40 seconds
+
+Show:
+- critical/high findings
+- MFA gap example
+- evidence request example
+- linked controls
+- recommended remediation
+
+Caption:
+“Findings create actionable evidence requests and remediation steps tied to CMMC controls.”
+
+Scene 5 — Implementation Roadmap
+Duration: 30–40 seconds
+
+Navigate to:
+Implementation Roadmap
+
+Show:
+- high-impact actions
+- controls impacted
+- evidence to collect
+- roadmap action detail
+
+Caption:
+“Implementation Roadmap shows what to do first and which actions support multiple controls.”
+
+Scene 6 — Control Detail Page
+Duration: 45–60 seconds
+
+Open:
+IA.L2-3.5.3 or AC.L1-3.1.1
+
+Show tabs:
+- Implementation
+- Configure
+- Evidence
+- Monitoring
+- POA&M
+- SSP
+
+Focus on:
+- Configure tab step-by-step instructions
+- evidence linked to the control
+- SSP narrative
+- readiness indicators
+
+Caption:
+“Each control has implementation guidance, configuration steps, evidence, monitoring, POA&M, and SSP mapping.”
+
+Scene 7 — Evidence Repository
+Duration: 30–40 seconds
+
+Navigate to:
+Evidence Repository
+
+Show:
+- filters
+- linked controls
+- status badges
+- evidence preview
+- download option
+
+Caption:
+“Evidence is tagged by control, domain, type, owner, status, and review date.”
+
+Scene 8 — Monitoring Tracker
+Duration: 25–35 seconds
+
+Navigate to:
+Monitoring Tracker
+
+Show:
+- current items
+- due within 7 days
+- overdue items
+- recurring review schedule
+
+Caption:
+“Monitoring Tracker helps prove ongoing compliance through weekly, monthly, quarterly, and annual reviews.”
+
+Scene 9 — POA&M
+Duration: 25–35 seconds
+
+Navigate to:
+POA&M
+
+Show:
+- open POA&M items
+- risk level
+- owner
+- target completion date
+- linked controls
+
+Caption:
+“POA&M tracking keeps remediation work tied to controls, owners, risk levels, and evidence.”
+
+Scene 10 — Reports
+Duration: 25–35 seconds
+
+Navigate to:
+Reports
+
+Show:
+- Executive Readiness Report
+- Domain Readiness Report
+- Gap Analysis Report
+- Monitoring Tracker Report
+- POA&M Report
+- Pre-Assessment Report
+
+Caption:
+“Generate client-ready reports for executives, technical teams, and audit preparation.”
+
+Scene 11 — Closing
+Duration: 15–20 seconds
+
+Return to:
+/demo
+
+Show:
+- Launch Live Demo
+- Request Consultation
+
+Caption:
+“Control HUB gives teams one place to manage CMMC readiness from pre-assessment through ongoing compliance.”
+
+7. Captions
+
+Create captions/subtitles for each scene.
+
+Generate:
+public/videos/control-hub-demo-captions.vtt
+
+The video player should load captions.
+
+8. Optional Voiceover
+
+If voiceover generation is practical, create a narrated version.
+
+If voiceover is not practical:
+- create a captions-only video
+- include scene title overlays
+- include transcript below the video
+
+Do not block the video generation if voiceover is unavailable.
+
+9. Poster Image
+
+Generate a poster image from the dashboard or hero section.
+
+Save as:
+public/videos/control-hub-demo-poster.png
+
+It should show:
+- Control HUB branding
+- CarmeTechnology demo
+- polished dashboard preview
+
+10. Embed the Real Video
+
+Update /demo-video.
+
+Replace the placeholder with:
+
+<video controls poster="/videos/control-hub-demo-poster.png">
+  <source src="/videos/control-hub-demo.mp4" type="video/mp4" />
+  <track src="/videos/control-hub-demo-captions.vtt" kind="captions" srclang="en" label="English" default />
+</video>
+
+If video file does not exist, show:
+“Demo video is being generated. Launch the interactive demo below or request a walkthrough.”
+
+Do not show a broken placeholder.
+
+11. Add Video Modal on /demo
+
+On the /demo page:
+- Watch Walkthrough should open the video in a modal if the MP4 exists
+- Otherwise it should navigate to /demo-video
+
+12. Add Transcript Below Video
+
+On /demo-video, add a collapsible transcript section.
+
+Transcript should follow the scene captions and explain:
+- dashboard
+- pre-assessment
+- findings
+- roadmap
+- controls
+- evidence
+- monitoring
+- POA&M
+- reports
+
+13. Add Regenerate Video Admin Action
+
+Create an admin-only button:
+
+Regenerate Demo Video
+
+Location:
+Settings > Demo Settings
+
+Behavior:
+- runs the demo video generation script
+- updates MP4, poster, captions
+- shows generation status
+- does not expose this to public demo users
+
+14. Video Generation Status
+
+Add a status record/table or config entry:
+
+DemoVideo:
+- id
+- status
+- started_at
+- completed_at
+- generated_by
+- video_path
+- poster_path
+- captions_path
+- error_message
+
+Statuses:
+- Not Generated
+- Generating
+- Complete
+- Failed
+
+15. Error Handling
+
+If video generation fails:
+- show error only to admins
+- public users see polished fallback message
+- do not expose stack trace publicly
+
+16. Production Storage Note
+
+Do not rely on files written dynamically to the production filesystem unless they are part of the deployed project or stored in persistent storage.
+
+If video is generated dynamically in production:
+- store it in persistent/object storage
+OR
+- generate locally/development and commit/deploy it to public/videos
+
+17. Acceptance Tests
+
+Test A:
+Run:
+pnpm demo:video
+
+It generates:
+- public/videos/control-hub-demo.mp4
+- public/videos/control-hub-demo-poster.png
+- public/videos/control-hub-demo-captions.vtt
+
+Test B:
+Open /demo-video.
+The actual MP4 video appears and plays.
+
+Test C:
+Open /demo.
+Click Watch Walkthrough.
+Video opens in modal or routes to /demo-video.
+
+Test D:
+The video only shows CarmeTechnology demo data.
+
+Test E:
+The video does not show real organizations, secrets, admin settings, or real tenant data.
+
+Test F:
+The video includes captions or scene overlays.
+
+Test G:
+If video generation fails, public visitors see a polished fallback, not a technical error.
+
+Test H:
+Request Consultation still opens:
+mailto:info@carmetechnology.com?subject=Control%20HUB%20Consultation%20Request

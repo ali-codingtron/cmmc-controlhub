@@ -9,12 +9,14 @@
     "seed-doc-templates": "tsx ./src/seed-document-templates.ts",
     "seed-orgs": "tsx ./src/seed-organizations.ts",
     "seed-demo": "tsx ./src/seed-demo.ts",
+    "demo:video": "tsx ./src/generate-demo-video.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@workspace/db": "workspace:*",
     "bcryptjs": "^2.4.3",
-    "drizzle-orm": "catalog:"
+    "drizzle-orm": "catalog:",
+    "playwright": "^1.60.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

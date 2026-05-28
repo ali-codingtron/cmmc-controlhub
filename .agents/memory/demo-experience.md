@@ -31,3 +31,13 @@ description: Public /demo landing page, demo login endpoint, seed script, DemoMo
 - `task_type` enum: valid values include `training_review` (NOT `training`).
 
 **Why:** TypeScript types from Drizzle are exact — invalid enum values cause TS2769 overload errors at compile time.
+
+## Demo video generation
+
+- Script: `scripts/src/generate-demo-video.ts`; run with `pnpm --filter @workspace/scripts demo:video`
+- Two phases: `--screenshots` (Playwright) then `--assemble` (ffmpeg). Run separately — screenshot phase ~90s, assembly ~15s.
+- Playwright bundled chromium fails on NixOS (missing `libglib-2.0.so.0`). Use nix chromium instead — install via `installSystemDependencies({ packages: ["chromium"] })`, then set `executablePath` to the nix store path (e.g. `/nix/store/<hash>-chromium-<ver>/bin/chromium`). Hash changes on reinstall — grep `which chromium` after install.
+- Output: `artifacts/cmmc-app/public/videos/` — `control-hub-demo.mp4`, `control-hub-demo-poster.png`, `control-hub-demo-captions.vtt`
+- Video served at `/videos/control-hub-demo.mp4` (BASE_PATH `/`); embedded in `/demo-video` page as native `<video>` with poster + captions track.
+
+**Why:** Playwright's bundled headless-shell binary is compiled for Debian/Ubuntu and doesn't find glib in NixOS. The nix-managed chromium has all libs linked correctly.

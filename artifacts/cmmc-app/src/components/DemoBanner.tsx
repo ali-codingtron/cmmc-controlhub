@@ -42,7 +42,7 @@ export function DemoBanner({ onStartTour }: DemoBannerProps) {
         </span>
         <span className="hidden sm:flex items-center gap-1.5 text-xs text-yellow-200/50">
           Sample data only —
-          <img src={carmetechLogo} alt="Carme Technology" className="h-4 rounded" style={{ background: "#1C1A0A" }} />
+          <img src={carmetechLogo} alt="Carme Technology" className="h-5 rounded" style={{ background: "#1C1A0A" }} />
           Read-only. No real data.
         </span>
       </div>

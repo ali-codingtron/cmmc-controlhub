@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import {
-  Shield, ArrowLeft, Play, Clock, CheckCircle, ArrowRight,
+  Shield, ArrowLeft, Clock, CheckCircle, ArrowRight,
   ExternalLink,
 } from "lucide-react";
 import carmetechLogo from "@assets/Carme_Tech_Logo_Official_1779981155506.png";
@@ -74,7 +74,7 @@ export default function DemoVideo() {
             </div>
             <span className="font-bold text-sm text-white">Control HUB</span>
             <span className="text-slate-600 text-xs hidden sm:inline">·</span>
-            <img src={carmetechLogo} alt="Carme Technology" className="h-5 rounded hidden sm:block" style={{ background: "#1C1A0A" }} />
+            <img src={carmetechLogo} alt="Carme Technology" className="h-8 rounded hidden sm:block" style={{ background: "#1C1A0A" }} />
           </div>
           <a
             href={CONSULTATION_HREF}
@@ -108,31 +108,45 @@ export default function DemoVideo() {
       </div>
 
       <div className="max-w-5xl mx-auto px-6 py-12">
-        {/* ── Video placeholder ─────────────────────────────────────────── */}
+        {/* ── Video player ──────────────────────────────────────────────── */}
         <div className="rounded-2xl overflow-hidden mb-12 shadow-xl"
-          style={{ background: "#1E293B", border: "1px solid rgba(255,255,255,0.08)", aspectRatio: "16/9", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div className="text-center px-8">
-            <div className="inline-flex p-5 rounded-full mb-5"
-              style={{ background: "rgba(37,99,235,0.15)", border: "1px solid rgba(37,99,235,0.25)" }}>
-              <Play className="h-10 w-10 text-blue-400" />
-            </div>
-            <p className="font-bold text-lg text-white mb-2">Walkthrough video coming soon</p>
-            <p className="text-sm text-slate-400 mb-6 max-w-sm mx-auto">
-              Recording in progress. In the meantime, launch the interactive demo to explore the full platform.
-            </p>
-            <div className="flex flex-wrap justify-center gap-3">
+          style={{ background: "#000", border: "1px solid rgba(255,255,255,0.08)" }}>
+          <video
+            controls
+            preload="metadata"
+            poster="/videos/control-hub-demo-poster.png"
+            className="w-full block"
+            style={{ aspectRatio: "16/9", maxHeight: "600px", background: "#0F172A" }}
+          >
+            <source src="/videos/control-hub-demo.mp4" type="video/mp4" />
+            <track
+              kind="captions"
+              src="/videos/control-hub-demo-captions.vtt"
+              srcLang="en"
+              label="English"
+              default
+            />
+            Your browser does not support the video tag.
+          </video>
+          <div className="px-5 py-3 flex items-center justify-between"
+            style={{ background: "#0F172A", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            <span className="text-xs text-slate-500">
+              Control HUB Platform Walkthrough — ~1 min overview
+            </span>
+            <div className="flex gap-3">
               <Button
                 onClick={handleLaunchDemo}
                 disabled={isLoading}
-                className="bg-blue-600 hover:bg-blue-700 text-white border-0 font-semibold px-7"
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700 text-white border-0 text-xs font-semibold h-8 px-4"
               >
-                {isLoading ? "Launching…" : "Launch Interactive Demo"}
-                {!isLoading && <ArrowRight className="h-4 w-4 ml-2" />}
+                {isLoading ? "Launching…" : "Launch Live Demo"}
+                {!isLoading && <ArrowRight className="h-3.5 w-3.5 ml-1.5" />}
               </Button>
               <a
                 href={CONSULTATION_HREF}
-                className="inline-flex items-center gap-2 px-6 h-10 rounded-md text-sm font-medium"
-                style={{ color: "#C9A84C", border: "1px solid rgba(201,168,76,0.3)", background: "rgba(201,168,76,0.05)" }}
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-medium"
+                style={{ color: "#C9A84C", border: "1px solid rgba(201,168,76,0.3)" }}
               >
                 Request Consultation
               </a>
@@ -220,7 +234,7 @@ export default function DemoVideo() {
               <Shield className="h-3 w-3 text-white" />
             </div>
             <span className="text-sm font-bold text-white">Control HUB</span>
-            <img src={carmetechLogo} alt="Carme Technology" className="h-5 rounded" style={{ background: "#1C1A0A" }} />
+            <img src={carmetechLogo} alt="Carme Technology" className="h-8 rounded" style={{ background: "#1C1A0A" }} />
           </div>
           <div className="flex gap-4 text-xs text-slate-600">
             <button onClick={() => navigate("/demo")} className="hover:text-white transition-colors">Demo</button>
