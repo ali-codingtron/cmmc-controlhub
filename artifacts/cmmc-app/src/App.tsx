@@ -4,8 +4,11 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { OrgProvider, useOrg } from "@/context/OrgContext";
+import { DemoModeProvider } from "@/context/DemoModeContext";
 import { Layout } from "@/components/layout/layout";
 import NotFound from "@/pages/not-found";
+import DemoLanding from "@/pages/demo-landing";
+import DemoVideo from "@/pages/demo-video";
 
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
@@ -91,6 +94,8 @@ function AppRoutes() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
+      <Route path="/demo" component={DemoLanding} />
+      <Route path="/demo-video" component={DemoVideo} />
       <Route>
         <Layout>
           <Guard>
@@ -188,9 +193,11 @@ function App() {
       <TooltipProvider>
         <AuthProvider>
           <OrgProvider>
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-              <AppRoutes />
-            </WouterRouter>
+            <DemoModeProvider>
+              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                <AppRoutes />
+              </WouterRouter>
+            </DemoModeProvider>
           </OrgProvider>
         </AuthProvider>
         <Toaster />

@@ -8,6 +8,7 @@
     "seed-cmmc": "tsx ./src/seed-cmmc.ts",
     "seed-doc-templates": "tsx ./src/seed-document-templates.ts",
     "seed-orgs": "tsx ./src/seed-organizations.ts",
+    "seed-demo": "tsx ./src/seed-demo.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

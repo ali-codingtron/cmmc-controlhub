@@ -1,0 +1,645 @@
+Create a complete public demo experience for Control HUB.
+
+Goal:
+I want a test organization called “CarmeTechnology” that demonstrates the full functionality of Control HUB for potential customers.
+
+This demo must be safe, read-only by default, and use only fake/sample data.
+
+Do not expose any real customer data, real VTCCORP.US data, real tenant scan data, real Microsoft credentials, or real CUI.
+
+1. Create Demo Organization
+
+Create a seeded organization:
+
+Organization Name:
+CarmeTechnology
+
+Legal Name:
+CarmeTechnology Demo LLC
+
+Short Name:
+CarmeTechnology
+
+Target CMMC Level:
+Level 2
+
+Demo status:
+Enabled
+
+Industry:
+Government Contractor / IT Services
+
+Assessment scope:
+Microsoft 365 / Entra / Intune / Defender cloud-first environment
+
+This organization should be clearly marked as:
+
+DEMO DATA — NOT REAL CUSTOMER DATA
+
+2. Public Demo Route
+
+Create a public demo landing page:
+
+/demo
+
+The page should show:
+
+- Control HUB logo
+- Product tagline:
+  “CMMC Readiness, Evidence Management, and Continuous Monitoring in One Platform”
+- Demo organization:
+  CarmeTechnology
+- Button:
+  Launch Demo
+- Button:
+  Watch Demo Walkthrough
+- Notice:
+  “This demo uses sample data only. No real tenant data, customer data, or CUI is shown.”
+
+When the user clicks Launch Demo:
+- open the app in demo mode
+- automatically select CarmeTechnology
+- use a read-only Demo Viewer session
+- do not require a login for public demo viewing
+
+3. Demo Mode Security
+
+Demo mode must be read-only for public users.
+
+Public demo users can:
+- view dashboards
+- view controls
+- view evidence metadata
+- preview/download sample demo files
+- view monitoring tracker
+- view POA&M items
+- view SSP sample data
+- view reports
+- view pre-assessment results
+- view implementation roadmap
+
+Public demo users cannot:
+- upload files
+- delete files
+- edit evidence
+- edit controls
+- edit SSP
+- edit monitoring tracker
+- create users
+- create organizations
+- connect Microsoft tenants
+- run live tenant scans
+- change statuses
+- add POA&M
+- export sensitive admin data
+- access admin settings
+
+Hide or disable all write buttons in demo mode:
+- Add Evidence
+- Bulk Upload
+- Save
+- Delete
+- Archive
+- Add POA&M
+- Add User
+- Add Organization
+- Connect Microsoft Tenant
+- Run Live Scan
+- Re-parse SSP
+- Status dropdowns
+- Editable date fields
+- Notes fields
+
+If a user tries a restricted action, show:
+“This action is disabled in the public demo.”
+
+4. Demo Watermark
+
+In demo mode, show a small banner at the top:
+
+Demo Mode — Sample Data Only
+
+Also add a watermark or badge on key pages:
+CarmeTechnology Demo
+
+5. Seed Demo Dashboard
+
+Create a realistic dashboard for CarmeTechnology.
+
+Do not make everything 100%.
+
+Use realistic sample posture:
+
+Overall readiness:
+62%
+
+Controls:
+- Implemented: 42
+- In Progress: 38
+- Not Started: 30
+- At Risk: 12
+
+Evidence:
+- Total evidence: 185
+- Approved evidence: 127
+- Pending review: 31
+- Stale evidence: 9
+
+Monitoring:
+- Total items: 19
+- Current: 12
+- Due within 7 days: 4
+- Overdue: 3
+
+POA&M:
+- Open items: 8
+- High risk: 3
+- Overdue: 1
+
+The dashboard should look professional and show:
+- executive KPI cards
+- domain readiness
+- recent activity
+- recommended next actions
+- readiness quality
+- monitoring health
+- POA&M health
+
+6. Seed CMMC Controls
+
+For CarmeTechnology, seed all 110 CMMC Level 2 controls with mixed statuses.
+
+Use:
+- Implemented
+- In Progress
+- Not Started
+- At Risk
+
+Make sure control pages demonstrate:
+- Implementation tab
+- Configure tab
+- Evidence tab
+- Monitoring tab
+- POA&M tab
+- SSP tab
+
+7. Seed Detailed Control Examples
+
+Create rich demo content for at least these controls:
+
+AC.L1-3.1.1 — Authorized Access Control
+AC.L1-3.1.2 — Transaction and Function Control
+AC.L2-3.1.5 — Least Privilege
+IA.L2-3.5.3 — Multifactor Authentication
+AU.L2-3.3.1 — Audit Logs
+AU.L2-3.3.5 — Audit Review
+CM.L2-3.4.1 — Baseline Configuration
+RA.L2-3.11.2 — Vulnerability Scanning
+CA.L2-3.12.2 — POA&M
+SI.L2-3.14.3 — Security Alerts
+
+Each rich control should include:
+- implementation narrative
+- configure steps
+- evidence records
+- monitoring linkage
+- SSP narrative
+- POA&M example if applicable
+- readiness status
+
+8. Seed Configure Tab Demo
+
+For each rich control, add detailed Configure tab content:
+
+- implementation approach
+- systems/portals used
+- step-by-step configuration
+- evidence to capture
+- required documents
+- test/validation steps
+- closeout checklist
+
+Example for IA.L2-3.5.3:
+- configure MFA
+- review authentication methods
+- verify Conditional Access policy
+- confirm admin MFA
+- export MFA registration report
+- test with sample user
+- upload evidence
+
+9. Seed Evidence Repository
+
+Create realistic sample evidence records.
+
+Evidence types:
+- Policy
+- Procedure
+- Screenshot
+- Log
+- Report
+- Configuration Export
+- Access Review
+- Training Record
+- Risk Record
+- Approval Record
+- Backup Verification
+- Vulnerability Scan
+
+Create sample files in demo storage so preview/download works.
+
+Use fake files:
+- PDF policy
+- DOCX procedure
+- PNG screenshot
+- XLSX access review
+- PDF vulnerability summary
+- TXT log review
+- PDF POA&M export
+
+Sample evidence names:
+- AC-3.1.1_User_Access_Review_2026-05-01.xlsx
+- IA-3.5.3_MFA_Registration_Report_2026-05-01.pdf
+- IA-3.5.3_Conditional_Access_MFA_Policy.png
+- AU-3.3.5_Audit_Log_Review_2026-05-01.pdf
+- CM-3.4.1_Intune_Security_Baseline.png
+- RA-3.11.2_Vulnerability_Report_2026-05-01.pdf
+- CA-3.12.2_POAM_Export_2026-05-01.xlsx
+- SI-3.14.3_Defender_Alerts_Review.pdf
+
+Make sure evidence is linked to controls, domains, level, owner, and status.
+
+10. Seed Documentation
+
+Create sample documents under Documentation:
+
+- Access Control Policy
+- Identification and Authentication Policy
+- Audit and Accountability Policy
+- Configuration Management Policy
+- Incident Response Policy
+- Risk Assessment Policy
+- Access Review Procedure
+- Log Review Procedure
+- Vulnerability Management Procedure
+- Backup Verification Procedure
+
+Documents should:
+- appear in All Documents
+- link to controls
+- show domain tags
+- show status
+- preview/download correctly
+
+11. Seed SSP
+
+Create a demo SSP for CarmeTechnology.
+
+SSP should include:
+- SSP overview
+- system name
+- system owner
+- target level
+- system boundary
+- CUI flow summary
+- asset summary
+- external providers
+- implementation narratives
+- control mappings
+
+SSP Control Mapping should show:
+- 110 controls mapped
+- mixed statuses from actual control status
+- no separate conflicting SSP status
+
+12. Seed Monitoring Tracker
+
+Create monitoring tracker data showing recurring operations.
+
+Use daily/weekly/monthly/quarterly/annual items.
+
+Rows should include:
+- Review Defender Alerts
+- Review Entra Sign-in Logs
+- Review Audit Logs
+- Review Vulnerabilities
+- Update POA&M
+- Check Device Compliance
+- Review Firewall Rules
+- Review User Accounts
+- Verify Backups
+- Verify Updates
+- Check Media Compliance
+- Review Risk Assessment
+- Review Policies
+- Test Incident Response
+- Security Assessment
+- Update SSP
+- Security Training
+- Formal Risk Review
+- Access Review
+
+Use varied statuses:
+- Current
+- Open
+- In Progress
+- Overdue
+
+13. Seed POA&M
+
+Create realistic POA&M items:
+
+- POAM-001: MFA registration gap
+- POAM-002: Stale accounts require review
+- POAM-003: Intune device compliance not fully deployed
+- POAM-004: Log review evidence missing
+- POAM-005: Vulnerability remediation backlog
+- POAM-006: SSP update required
+- POAM-007: Incident response tabletop not completed
+- POAM-008: Backup restore test overdue
+
+Each POA&M should include:
+- linked control
+- risk level
+- owner
+- target date
+- status
+- remediation plan
+- required evidence
+- notes
+
+14. Seed Pre-Assessment Tenant Scan Demo
+
+Create a fake tenant-connected assessment result for CarmeTechnology.
+
+This must be demo data only and not tied to a real Microsoft tenant.
+
+Show:
+- Tenant Scan Health: 41%
+- Assessment Confidence: 78%
+- Controls Touched by Tenant Scan: 25 / 110
+- Checks Run: 11
+- Passed: 4
+- Gaps Found: 5
+- Unknown / No Data: 2
+- Findings: 7
+- Evidence Snapshots: 11
+- Evidence Requests: 6
+
+Assessment packs:
+- Identity Pack: Complete with Findings
+- Authentication Pack: Complete with Critical Finding
+- Conditional Access Pack: Complete
+- Device / Intune Pack: Data Unavailable
+- Audit / Sign-in Pack: Complete with Findings
+- Secure Score Pack: Complete with Findings
+
+Findings:
+- MFA registration coverage gap
+- unique named accounts issue
+- stale / disabled user review needed
+- sign-in log review needs evidence
+- directory audit review needs evidence
+- managed device inventory unavailable
+- Microsoft Secure Score needs review
+
+15. Seed Evidence Requests
+
+Create evidence requests from the pre-assessment:
+
+- Upload MFA Registration Report
+- Upload User Access Review
+- Upload Stale Account Review
+- Upload Sign-in Log Review
+- Upload Directory Audit Review
+- Upload Secure Score Review
+
+Each should include:
+- linked controls
+- suggested filename
+- priority
+- due date
+- owner
+- status
+
+16. Seed Implementation Roadmap
+
+Create roadmap actions:
+
+Priority 1:
+- Perform User and Access Review
+- Configure MFA and Conditional Access Baseline
+
+Priority 2:
+- Configure Endpoint Compliance and Device Management
+- Configure Logging and Audit Review
+
+Priority 3:
+- Run Microsoft Security Baseline Review
+- Conduct Incident Response Tabletop
+- Complete SSP and Scope Review
+
+Each roadmap action should show:
+- linked findings
+- linked evidence requests
+- linked controls
+- documents needed
+- evidence to capture
+- operating procedure
+- test procedure
+- completion checklist
+
+17. Seed Reports
+
+Create sample report outputs for demo:
+
+- Executive Readiness Report
+- Domain Readiness Report
+- Gap Analysis Report
+- Monitoring Tracker Report
+- POA&M Report
+- Tenant-Connected Pre-Assessment Report
+
+Reports should be downloadable sample PDFs.
+
+18. Demo Guided Tour
+
+Add a guided tour overlay.
+
+Button:
+Start Guided Tour
+
+Tour steps:
+1. Dashboard overview
+2. Pre-assessment scan result
+3. Findings and evidence requests
+4. Implementation roadmap
+5. Control detail page
+6. Configure tab walkthrough
+7. Evidence repository and preview
+8. Monitoring tracker
+9. POA&M tracking
+10. Reports export
+
+Use tooltips and “Next” buttons.
+
+Add:
+- Skip tour
+- Restart tour
+- End tour
+
+19. Demo Landing Page Sections
+
+The /demo page should explain:
+
+What Control HUB demonstrates:
+- CMMC readiness dashboard
+- control implementation tracking
+- evidence repository
+- documentation mapping
+- SSP control mapping
+- monitoring tracker
+- POA&M tracking
+- Microsoft tenant pre-assessment
+- implementation roadmap
+- client-ready reports
+
+Add CTA buttons:
+- Launch Demo
+- Watch Walkthrough
+- Request Consultation
+
+20. Demo Video Support Page
+
+Create a page:
+
+/demo-video
+
+This page should include:
+- embedded demo video placeholder
+- 3-minute demo script
+- product feature highlights
+- button to launch live demo
+
+If no video exists yet, show:
+“Demo video coming soon.”
+
+21. Demo Script Content
+
+Create a built-in script for recording a short video.
+
+Script title:
+Control HUB Demo Walkthrough
+
+Duration:
+3 to 5 minutes
+
+Script outline:
+
+A. Opening
+“Control HUB is a CMMC readiness and evidence management platform built to help organizations understand where they stand, organize evidence, track recurring monitoring, and prepare for C3PAO review.”
+
+B. Dashboard
+Show executive readiness, evidence health, monitoring health, POA&M health, domain readiness, and recommended actions.
+
+C. Pre-Assessment
+Show tenant-connected scan results, findings, evidence requests, and roadmap recommendations.
+
+D. Controls
+Open a control and show implementation, configure steps, evidence, monitoring, SSP, and POA&M linkage.
+
+E. Evidence
+Show evidence repository, filtering, preview, download, metadata, linked controls, and status.
+
+F. Monitoring Tracker
+Show recurring compliance reviews and due dates.
+
+G. POA&M
+Show remediation tracking.
+
+H. Reports
+Show exportable reports.
+
+I. Closing
+“Control HUB gives teams one place to manage CMMC readiness from assessment through remediation and ongoing compliance operations.”
+
+22. Public Demo Access
+
+Add a configuration flag:
+
+ENABLE_PUBLIC_DEMO=true
+
+When enabled:
+- /demo is publicly accessible
+- demo organization is read-only
+- real organizations remain protected behind login
+- public demo users cannot access admin pages or real data
+
+23. Protect Real Data
+
+Public demo users must never see:
+- real organizations
+- real users
+- real tenant connections
+- real scans
+- real evidence
+- real files
+- admin settings
+- production secrets
+
+24. Demo Reset
+
+Add a demo reset mechanism.
+
+Option A:
+Reset demo data nightly.
+
+Option B:
+Reset demo data on demand using admin-only button:
+Reset Demo Data
+
+Reset should restore:
+- CarmeTechnology organization
+- sample controls
+- sample evidence
+- sample documents
+- sample monitoring tracker
+- sample POA&Ms
+- sample reports
+- sample pre-assessment scan
+
+25. Demo Badge
+
+Every demo page should show:
+DEMO DATA
+
+26. Acceptance Tests
+
+Test A:
+Go to /demo without logging in.
+Demo landing page loads.
+
+Test B:
+Click Launch Demo.
+CarmeTechnology opens in read-only demo mode.
+
+Test C:
+Demo user can view dashboard, controls, evidence, monitoring, POA&M, SSP, reports, and pre-assessment.
+
+Test D:
+Demo user cannot add, edit, delete, upload, connect tenant, run live scan, or change status.
+
+Test E:
+Evidence preview/download works for sample files.
+
+Test F:
+Reports download successfully.
+
+Test G:
+Guided tour works from beginning to end.
+
+Test H:
+Real organizations are not visible in demo mode.
+
+Test I:
+Admin can reset demo data.

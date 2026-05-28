@@ -1,6 +1,6 @@
 import { Router } from "express";
 import bcrypt from 'bcryptjs';
-import { db, usersTable, auditLogsTable } from "@workspace/db";
+import { db, usersTable, auditLogsTable, organizationUsersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { signToken, requireAuth } from "../lib/auth";
 import { randomUUID } from "crypto";
@@ -57,6 +57,44 @@ router.post("/auth/login", async (req, res) => {
   });
 
   res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+});
+
+router.post("/auth/demo-login", async (req, res) => {
+  if (process.env.ENABLE_PUBLIC_DEMO === "false") {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, "demo@controlhub.com"))
+    .limit(1);
+
+  if (!user || !user.isActive) {
+    res.status(503).json({ error: "Demo environment not configured. Run: pnpm --filter @workspace/scripts run seed-demo" });
+    return;
+  }
+
+  const [membership] = await db
+    .select({ organizationId: organizationUsersTable.organizationId })
+    .from(organizationUsersTable)
+    .where(eq(organizationUsersTable.userId, user.id))
+    .limit(1);
+
+  const token = signToken({
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+  });
+
+  res.json({
+    token,
+    user: { id: user.id, name: user.name, email: user.email, role: user.role },
+    isDemoMode: true,
+    demoOrgId: membership?.organizationId ?? null,
+  });
 });
 
 router.post("/auth/logout", requireAuth, async (req, res) => {

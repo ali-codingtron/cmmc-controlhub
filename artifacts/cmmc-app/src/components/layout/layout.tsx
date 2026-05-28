@@ -1,9 +1,15 @@
+import { useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { useDemoMode } from "@/context/DemoModeContext";
 import { Sidebar } from "./sidebar";
+import { DemoBanner } from "@/components/DemoBanner";
+import { GuidedTour } from "@/components/GuidedTour";
 import { ReactNode } from "react";
 
 export function Layout({ children }: { children: ReactNode }) {
   const { user, isLoading } = useAuth();
+  const { isDemoMode } = useDemoMode();
+  const [showTour, setShowTour] = useState(false);
 
   if (isLoading) {
     return (
@@ -24,10 +30,14 @@ export function Layout({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen w-full bg-background">
       <Sidebar />
       <main className="flex-1 flex flex-col overflow-hidden">
+        {isDemoMode && (
+          <DemoBanner onStartTour={() => setShowTour(true)} />
+        )}
         <div className="flex-1 overflow-y-auto p-8">
           {children}
         </div>
       </main>
+      {showTour && <GuidedTour onClose={() => setShowTour(false)} />}
     </div>
   );
 }

@@ -1,0 +1,38 @@
+Title:
+Control HUB — CMMC Readiness Platform Demo
+
+Length:
+3–5 minutes
+
+Opening:
+“Today I’m going to show you Control HUB, a CMMC readiness and evidence management platform designed to help organizations understand where they stand, organize evidence, track remediation, and prepare for C3PAO assessment.”
+
+Scene 1 — Dashboard:
+“This is the executive dashboard. It shows readiness, evidence health, monitoring health, POA&M status, domain readiness, and recommended next actions.”
+
+Scene 2 — Pre-Assessment:
+“For organizations that do not know where they currently stand, Control HUB can run a tenant-connected pre-assessment. It reviews Microsoft 365 and Entra configuration data, identifies findings, creates evidence requests, and recommends a roadmap.”
+
+Scene 3 — Findings:
+“Findings are tied to controls and can be assigned, acknowledged, converted into POA&M items, or used to create evidence requests.”
+
+Scene 4 — Implementation Roadmap:
+“The roadmap shows what to do first. Rather than working control by control, Control HUB identifies high-impact actions that support multiple CMMC requirements.”
+
+Scene 5 — Control Detail:
+“Each control includes implementation narrative, configuration steps, evidence, monitoring, POA&M linkage, and SSP mapping.”
+
+Scene 6 — Evidence Repository:
+“The evidence repository stores screenshots, policies, procedures, logs, exports, and reports. Each item is tagged by control, domain, level, status, owner, and review date.”
+
+Scene 7 — Monitoring Tracker:
+“The monitoring tracker helps prove ongoing compliance through weekly, monthly, quarterly, and annual review activities.”
+
+Scene 8 — POA&M:
+“POA&M tracking shows remediation items, owners, risk levels, target dates, and linked evidence.”
+
+Scene 9 — Reports:
+“Reports can be generated for executives, technical teams, and audit preparation.”
+
+Closing:
+“Control HUB gives organizations a single place to manage CMMC readiness from pre-assessment through implementation, evidence collection, remediation, and ongoing compliance.”

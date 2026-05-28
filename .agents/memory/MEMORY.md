@@ -1,1 +1,2 @@
 - [Pre-Assessment module](pre-assessment.md) — Tenant-Connected Pre-Assessment replaced Auto Assessor; key decisions on auth, rules engine, and DB enum pitfalls.
+- [Demo experience](demo-experience.md) — Public /demo landing page, demo login endpoint, seed script, read-only mode, guided tour.
