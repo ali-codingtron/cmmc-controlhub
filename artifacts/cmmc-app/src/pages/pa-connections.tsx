@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useOrg } from "@/context/OrgContext";
 import { useLocation } from "wouter";
+import { useDemoMode } from "@/context/DemoModeContext";
 
 type Connection = {
   id: string;
@@ -178,6 +179,7 @@ function SetupRequiredPanel({ missingVars }: { missingVars: string[] }) {
 export default function PaConnections() {
   const { activeOrg } = useOrg();
   const [, navigate] = useLocation();
+  const { isDemoMode } = useDemoMode();
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -314,16 +316,28 @@ export default function PaConnections() {
             <p className="text-sm text-gray-500">Connect a Microsoft 365 / Entra tenant for automated read-only pre-assessments</p>
           </div>
         </div>
-        <button
-          onClick={startConsent}
-          disabled={starting || !configReady}
-          title={!configReady ? "Microsoft environment variables must be configured before connecting tenants" : undefined}
-          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-          {starting ? "Redirecting to Microsoft…" : "Connect Microsoft Tenant"}
-        </button>
+        {!isDemoMode && (
+          <button
+            onClick={startConsent}
+            disabled={starting || !configReady}
+            title={!configReady ? "Microsoft environment variables must be configured before connecting tenants" : undefined}
+            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+            {starting ? "Redirecting to Microsoft…" : "Connect Microsoft Tenant"}
+          </button>
+        )}
       </div>
+
+      {isDemoMode && (
+        <div className="flex items-start gap-3 rounded-lg border px-4 py-3 text-sm border-yellow-200 bg-yellow-50 text-yellow-800">
+          <Info className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>
+            <strong>Demo mode.</strong> This is a pre-connected demo tenant showing synthetic CarmeTechnology data.
+            Connecting or disconnecting tenants is disabled in the demo environment.
+          </span>
+        </div>
+      )}
 
       {banner && (
         <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 text-sm ${
@@ -411,7 +425,7 @@ export default function PaConnections() {
                 {testingId === conn.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                 Test Connection
               </button>
-              {confirmDisconnectId === conn.id ? (
+              {!isDemoMode && (confirmDisconnectId === conn.id ? (
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-gray-600 mr-1">Disconnect?</span>
                   <button
@@ -438,7 +452,7 @@ export default function PaConnections() {
                   <Trash2 className="h-3.5 w-3.5" />
                   Disconnect
                 </button>
-              )}
+              ))}
             </div>
           </div>
 

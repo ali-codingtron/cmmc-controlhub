@@ -10,6 +10,7 @@ import {
 import type { EvidenceItem, ControlWithStatus, User } from "@workspace/api-client-react";
 import { useOrg } from "@/context/OrgContext";
 import { useIsAssessor } from "@/lib/auth";
+import { useDemoMode } from "@/context/DemoModeContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -378,6 +379,7 @@ export default function Evidence() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isAssessor = useIsAssessor();
+  const { isDemoMode } = useDemoMode();
 
   // Server-side filters (re-fetch when these change)
   const [filterStatus, setFilterStatus] = useState("all");
@@ -562,7 +564,7 @@ export default function Evidence() {
             All evidence items for this organization
           </p>
         </div>
-        {!isAssessor && (
+        {!isAssessor && !isDemoMode && (
           <Button asChild>
             <Link href="/evidence/upload">
               <Plus className="mr-2 h-4 w-4" /> Upload Evidence

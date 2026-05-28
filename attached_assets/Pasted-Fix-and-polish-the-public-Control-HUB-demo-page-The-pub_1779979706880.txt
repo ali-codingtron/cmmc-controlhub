@@ -1,0 +1,367 @@
+Fix and polish the public Control HUB demo page.
+
+The public demo page is currently live at:
+
+/demo
+
+But it has several issues that need to be fixed before I can show it to potential customers.
+
+Current issues:
+1. The page says:
+   “Demo environment not configured. Run: pnpm --filter @workspace/scripts run seed-demo”
+2. The Launch Live Demo button throws an error.
+3. The Request Consultation button needs to go to info@carmetechnology.com.
+4. The page is too plain and has too much white background.
+5. The Carme Technology branding/logo needs to be added.
+6. The Watch Walkthrough page is okay as a placeholder, but it needs better branding and should not feel unfinished.
+7. The public demo must be read-only and must not expose real customer data.
+
+Fix requirements:
+
+1. Fix Demo Data Seeding
+
+The public demo should use a seeded demo organization called:
+
+CarmeTechnology
+
+If the demo organization does not exist, the app should either:
+- automatically create it during deployment/startup, OR
+- provide an admin-only “Seed Demo Data” button, OR
+- ensure the production seed script runs as part of deployment.
+
+Do not show the seed command to public visitors.
+
+Remove this public error message:
+“Demo environment not configured. Run: pnpm --filter @workspace/scripts run seed-demo”
+
+Instead:
+- if demo data is missing, show a friendly maintenance message to public users
+- log the technical seed issue for admins only
+
+2. Fix Launch Live Demo
+
+The Launch Live Demo button should work.
+
+Expected behavior:
+- user clicks Launch Live Demo
+- user is taken into the app in read-only demo mode
+- selected organization is CarmeTechnology
+- no login is required for the demo
+- no real organizations are visible
+- no real data is visible
+
+Suggested route:
+/demo/app
+or
+/app?demo=true&org=CarmeTechnology
+
+3. Public Demo Read-Only Mode
+
+The public demo user can view:
+- Dashboard
+- Controls
+- Evidence
+- Documentation
+- SSP
+- Monitoring Tracker
+- POA&M
+- Implementation Roadmap
+- Pre-Assessment demo results
+- Reports
+
+The public demo user cannot:
+- add data
+- edit data
+- delete data
+- upload files
+- connect Microsoft tenant
+- run live tenant scan
+- create users
+- create organizations
+- change settings
+- change statuses
+- access admin settings
+- see real organizations
+
+Hide or disable:
+- Add Evidence
+- Bulk Upload
+- Save
+- Delete
+- Archive
+- Add POA&M
+- Add User
+- Add Organization
+- Connect Microsoft Tenant
+- Run Assessment
+- Re-parse SSP
+- all editable fields
+
+If someone tries a restricted action, show:
+“This action is disabled in the public demo.”
+
+4. Wire Request Consultation Button
+
+Update the Request Consultation button to open an email.
+
+Use:
+
+mailto:info@carmetechnology.com?subject=Control%20HUB%20Consultation%20Request
+
+Button text:
+Request Consultation
+
+Also add a secondary footer CTA:
+Questions? Email info@carmetechnology.com
+
+5. Add Carme Technology Branding
+
+Use the Carme Technology logo I provided.
+
+Place the logo asset at:
+
+public/assets/carme-tech-logo.png
+
+Use it on:
+- demo landing page header
+- hero section
+- demo walkthrough page
+- footer
+- report/demo branding where appropriate
+
+The demo page should show both:
+- Control HUB product branding
+- Carme Technology company branding
+
+Suggested header:
+Left: Control HUB logo/name
+Right: Carme Technology logo + Request Consultation button
+
+6. Improve Demo Page Visual Design
+
+The current demo page is too white and plain.
+
+Redesign it with a professional cybersecurity/compliance look.
+
+Use:
+- dark navy background sections
+- subtle gradient
+- charcoal / slate accents
+- Carme gold accent color
+- Control HUB blue accent
+- clean white cards
+- soft shadows
+- professional spacing
+
+Suggested color palette:
+- Navy: #0F172A
+- Slate: #1E293B
+- Blue: #2563EB
+- Gold: #B88A2E or similar from Carme logo
+- Green: #16A34A
+- Light background: #F8FAFC
+
+Do not make the whole page plain white.
+
+7. Improve Hero Section
+
+Current headline:
+“CMMC compliance, built for defense contractors”
+
+Keep this idea, but make the section more visually polished.
+
+Suggested hero:
+
+Headline:
+CMMC Readiness, Evidence Management, and Continuous Monitoring — Built for Defense Contractors
+
+Subtext:
+Control HUB helps organizations understand where they stand, organize evidence, track remediation, manage recurring monitoring, and prepare for C3PAO review.
+
+Hero buttons:
+- Launch Live Demo
+- Watch Walkthrough
+- Request Consultation
+
+Add a right-side visual:
+- dashboard preview card
+- readiness score mockup
+- evidence workflow graphic
+- CMMC controls summary card
+- or Control HUB icon
+
+8. Add Demo Feature Cards
+
+Below the hero, add cards showing what the demo includes:
+
+- Executive readiness dashboard
+- CMMC control library
+- Evidence repository
+- Documentation mapping
+- SSP control mapping
+- Monitoring tracker
+- POA&M management
+- Implementation roadmap
+- Tenant-connected pre-assessment
+- Client-ready reports
+
+Each card should have:
+- icon
+- title
+- short description
+
+9. Add “What You’ll See in the Demo” Section
+
+Add a section:
+
+What You’ll See
+
+Steps:
+1. Dashboard showing readiness, evidence health, monitoring, and POA&M status
+2. CMMC controls with implementation, configuration, evidence, monitoring, and SSP tabs
+3. Evidence repository with linked controls and document preview
+4. Monitoring Tracker for weekly/monthly/quarterly/annual compliance activities
+5. POA&M tracking for remediation items
+6. Implementation Roadmap showing what to do first
+7. Pre-assessment scan sample results
+8. Reports and exports
+
+10. Improve Watch Walkthrough Page
+
+The walkthrough page currently says the video is coming soon.
+
+That is okay, but make it feel intentional.
+
+Update page to include:
+- Carme Technology logo
+- Control HUB logo
+- better dark/navy hero header
+- video placeholder styled professionally
+- “Live demo available now” button
+- “Request Consultation” mailto button
+
+If no video exists yet, change text to:
+“Walkthrough video coming soon. In the meantime, launch the interactive demo below.”
+
+Add button:
+Launch Interactive Demo
+
+11. Add Demo Script Page Content
+
+Keep the demo script, but make it cleaner.
+
+Sections:
+- Opening
+- Dashboard
+- Pre-Assessment
+- Controls
+- Evidence Repository
+- Monitoring Tracker
+- POA&M
+- Reports
+- Closing
+
+Add estimated timestamps.
+
+12. Add Footer
+
+Add a professional footer on /demo and /demo-video:
+
+Control HUB by Carme Technology
+
+Links:
+- Launch Demo
+- Watch Walkthrough
+- Request Consultation
+- Email: info@carmetechnology.com
+
+Footer note:
+Demo environment uses synthetic sample data only.
+
+13. Protect Real Data
+
+Make sure the public demo cannot access:
+- VTCCORP.US
+- real Carme Tech customer data
+- real tenant scan data
+- real evidence files
+- production admin users
+- production settings
+- environment variables
+- Microsoft tenant connections
+
+Public demo must only show:
+CarmeTechnology demo data
+
+14. Add Demo Badge
+
+Inside demo mode, show a top banner:
+
+DEMO MODE — Sample Data Only
+
+Also show:
+CarmeTechnology Demo
+
+15. Demo Data Content
+
+Seed the demo organization with enough data to show the full platform.
+
+CarmeTechnology should include:
+- realistic dashboard data
+- all 110 CMMC L2 controls
+- mixed statuses, not 100% complete
+- sample evidence
+- sample documents
+- sample SSP
+- sample monitoring tracker
+- sample POA&Ms
+- sample implementation roadmap
+- sample pre-assessment scan result
+- sample reports
+
+Do not make the demo look empty.
+
+16. Make Demo Story Realistic
+
+Use a realistic posture:
+- Overall readiness: around 62%
+- Some implemented controls
+- Some in progress
+- Some not started
+- Several evidence gaps
+- A few overdue monitoring items
+- A few open POA&M items
+- A tenant pre-assessment with findings
+- Roadmap actions showing what to do next
+
+17. Acceptance Tests
+
+Test A:
+Open /demo in incognito.
+Page loads without login.
+
+Test B:
+No technical seed error is shown to public users.
+
+Test C:
+Click Launch Live Demo.
+Demo app opens using CarmeTechnology sample data.
+
+Test D:
+Demo user cannot edit, upload, delete, run tenant scan, or connect Microsoft tenant.
+
+Test E:
+Request Consultation opens:
+info@carmetechnology.com
+
+Test F:
+Carme Technology logo appears on demo landing page and walkthrough page.
+
+Test G:
+Page no longer looks all white; it uses navy/gold/blue professional branding.
+
+Test H:
+Real organizations are not visible in demo mode.
+
+Test I:
+Watch Walkthrough page looks polished even if the video is not ready yet.

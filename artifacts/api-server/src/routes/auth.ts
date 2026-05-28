@@ -72,7 +72,7 @@ router.post("/auth/demo-login", async (req, res) => {
     .limit(1);
 
   if (!user || !user.isActive) {
-    res.status(503).json({ error: "Demo environment not configured. Run: pnpm --filter @workspace/scripts run seed-demo" });
+    res.status(503).json({ error: "The demo environment is temporarily unavailable. Please try again in a few minutes." });
     return;
   }
 

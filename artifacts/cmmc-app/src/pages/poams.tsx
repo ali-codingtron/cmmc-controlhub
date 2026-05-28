@@ -26,6 +26,7 @@ import { Plus, AlertTriangle, Loader2, X, Eye, Pencil, ChevronDown, Search } fro
 import { useToast } from "@/hooks/use-toast";
 import { useOrg } from "@/context/OrgContext";
 import { cn } from "@/lib/utils";
+import { useDemoMode } from "@/context/DemoModeContext";
 
 const POAM_STATUSES = [
   { value: "open", label: "Open" },
@@ -439,6 +440,7 @@ export default function Poams() {
   const [showAdd, setShowAdd] = useState(false);
   const [editPoam, setEditPoam] = useState<any | null>(null);
   const isAssessor = useIsAssessor();
+  const { isDemoMode } = useDemoMode();
 
   const { data: poams = [], isLoading } = useListPoams({
     status: filterStatus !== "all" ? filterStatus : undefined,
@@ -489,7 +491,7 @@ export default function Poams() {
           <h1 className="text-3xl font-bold">POA&amp;Ms</h1>
           <p className="text-muted-foreground mt-1">Plan of Action &amp; Milestones — track remediation of gaps and findings</p>
         </div>
-        {!isAssessor && (
+        {!isAssessor && !isDemoMode && (
           <Button onClick={() => setShowAdd(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Add POA&amp;M
@@ -591,7 +593,7 @@ export default function Poams() {
               <AlertTriangle className="h-12 w-12 mx-auto mb-3 opacity-25" />
               <p className="font-medium">No POA&amp;M items found</p>
               <p className="text-sm mt-1">Add a POA&amp;M to track remediation of a gap or finding.</p>
-              {!isAssessor && (
+              {!isAssessor && !isDemoMode && (
                 <Button className="mt-4" onClick={() => setShowAdd(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add First POA&amp;M

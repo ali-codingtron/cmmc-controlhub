@@ -17,6 +17,7 @@ import { seedControlConfigure } from "./routes/configure";
 import { seedRoadmapActions, seedProcedureSteps } from "./routes/roadmap";
 import { logger } from "./lib/logger";
 import { DOCUMENT_TEMPLATES } from "./data/document-templates-data";
+import { seedDemoOrg } from "./demo-seed-org";
 
 // __dirname is injected by the esbuild build banner and points to dist/ at runtime
 const cmmcData = JSON.parse(
@@ -197,6 +198,7 @@ export async function runStartupSeed() {
     await seedControlConfigure();
     await seedRoadmapActions();
     await seedProcedureSteps();
+    await seedDemoOrg();
   } catch (err) {
     logger.error({ err }, "Startup seed failed — app will continue but may lack reference data");
   }
