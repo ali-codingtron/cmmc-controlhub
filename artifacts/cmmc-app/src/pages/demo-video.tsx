@@ -137,34 +137,6 @@ export default function DemoVideo() {
           </div>
         </div>
 
-        {/* ── bottom CTA strip ─────────────────────────────────────────── */}
-        <div className="mt-8 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-5"
-          style={{ background: "linear-gradient(135deg, #1E293B, #0F172A)", border: "1px solid rgba(255,255,255,0.08)" }}>
-          <div>
-            <p className="font-semibold text-white mb-1">Ready to explore the platform?</p>
-            <p className="text-sm text-slate-400">
-              Launch the fully-populated CarmeTechnology demo — no account required.
-            </p>
-          </div>
-          <div className="flex gap-3 shrink-0">
-            <Button
-              onClick={handleLaunchDemo}
-              disabled={isLoading}
-              className="bg-blue-600 hover:bg-blue-700 text-white border-0 font-semibold"
-            >
-              {isLoading ? "Launching…" : "Launch Live Demo"}
-              {!isLoading && <ArrowRight className="h-4 w-4 ml-2" />}
-            </Button>
-            <a
-              href={CONSULTATION_HREF}
-              className="inline-flex items-center gap-2 h-10 px-4 rounded-md text-sm font-medium"
-              style={{ color: "#C9A84C", border: "1px solid rgba(201,168,76,0.3)" }}
-            >
-              Consultation
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-          </div>
-        </div>
       </div>
 
       {/* ── Footer ──────────────────────────────────────────────────────── */}
