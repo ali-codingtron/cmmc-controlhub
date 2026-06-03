@@ -1,0 +1,152 @@
+Run a production-safe one-time backfill for the Implementation Roadmap for VTCCORP.US only.
+
+Current issue:
+The Implementation Roadmap was created after VTCCORP.US was already implemented, so all roadmap actions are showing “Not Started” even though the organization has already completed the work.
+
+Goal:
+For the organization VTCCORP.US only, mark all Implementation Roadmap actions as Complete.
+
+Important:
+Do NOT update any other organization.
+Do NOT update demo organizations.
+Do NOT update CarmeTechnology.
+Do NOT update roadmap templates globally.
+Only update organization-specific roadmap progress records for VTCCORP.US.
+
+1. Identify Organization
+
+Find organization where:
+
+organization.name = "VTCCORP.US"
+
+or the exact selected organization currently displayed as VTCCORP.US.
+
+2. Dry Run First
+
+Before changing anything, show a dry-run summary:
+
+- organization name
+- organization ID
+- total roadmap actions
+- current Not Started count
+- current In Progress count
+- current Complete count
+- actions that will be marked Complete
+
+Do not update anything until I confirm.
+
+3. Confirm Backfill Action
+
+Add a confirmation button or admin-only script action:
+
+“Mark VTCCORP.US Roadmap Complete”
+
+After confirmation:
+
+For every roadmap action linked to VTCCORP.US:
+- set status = Complete
+- set completed_at = today/current timestamp if blank
+- set progress percentage = 100
+- set checklist items = complete if checklist progress exists
+- set result = Completed or Successful if that field exists
+- keep existing notes if any
+- do not overwrite custom notes
+- set updated_at = current timestamp
+
+4. Create Missing Progress Records
+
+If a roadmap action template exists but VTCCORP.US does not have an organization-specific progress record yet:
+- create the OrganizationRoadmapProgress record
+- set organization_id = VTCCORP.US organization ID
+- set action_id = roadmap action ID
+- set status = Complete
+- set completed_at = current timestamp
+- set progress = 100%
+
+5. Audit Logs
+
+Write an audit log entry for each updated roadmap action:
+
+Action:
+Roadmap Action Marked Complete by Backfill
+
+Include:
+- organization_id
+- roadmap_action_id
+- previous status
+- new status
+- user/admin who ran the backfill
+- timestamp
+
+Also create one summary audit log:
+
+VTCCORP.US Implementation Roadmap Backfill Completed
+
+6. UI Updates
+
+After backfill, the Implementation Roadmap page for VTCCORP.US should show:
+
+- Total Actions: 12
+- Complete: 12
+- In Progress: 0
+- Not Started: 0
+- phase cards show all done
+- every roadmap action row shows Complete
+- checklist progress shows complete
+- progress page shows 100%
+
+7. Do Not Affect Other Organizations
+
+Verify other organizations still show their own roadmap statuses.
+
+Example:
+- CarmeTechnology demo should remain unchanged
+- Test organizations should remain unchanged
+- New organizations should still start Not Started
+
+8. Optional Admin Utility
+
+Add an admin-only utility page or button under:
+
+Admin > Narrative Backfill or Admin > Roadmap Backfill
+
+Name:
+Roadmap Backfill
+
+Options:
+- Select organization
+- Dry run
+- Confirm update
+
+Default:
+No organization selected
+
+This should never run globally by accident.
+
+9. Acceptance Tests
+
+Test A:
+Open VTCCORP.US Implementation Roadmap before backfill.
+Actions show Not Started.
+
+Test B:
+Run dry-run.
+It shows exactly the VTCCORP.US roadmap actions that will be updated.
+
+Test C:
+Confirm backfill.
+All VTCCORP.US roadmap actions show Complete.
+
+Test D:
+Refresh the page.
+Statuses remain Complete.
+
+Test E:
+Dashboard / roadmap counters update correctly.
+
+Test F:
+Switch to another organization.
+Their roadmap statuses are unchanged.
+
+Test G:
+Audit log shows the backfill action.

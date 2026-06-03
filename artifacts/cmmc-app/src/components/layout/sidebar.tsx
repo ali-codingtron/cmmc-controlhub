@@ -395,6 +395,7 @@ export function Sidebar() {
               <NavLink href="/audit-logs" icon={History} label="Audit Trail" />
               <NavLink href="/users" icon={Users} label="Users" />
               {isAdmin && <NavLink href="/organizations" icon={Building2} label="Organizations" />}
+              {isAdmin && <NavLink href="/admin/roadmap-backfill" icon={Map} label="Roadmap Backfill" />}
               <NavLink href="/settings" icon={Settings} label="Settings" />
             </>
           )}
