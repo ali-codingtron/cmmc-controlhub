@@ -1,0 +1,656 @@
+Create a full Document Template Library module using the uploaded package:
+
+CMMC_L2_Document_Library.zip
+
+This package contains the complete CMMC Level 2 document library, including:
+- cmmc_l2_document_templates.json
+- cmmc_l2_control_document_map.csv
+- cmmc_l2_template_catalog.csv
+- CMMC_L2_Document_Library_Master.docx
+- CMMC_L2_Control_Document_Map.xlsx
+- markdown_templates folder with individual templates
+
+Important:
+Use cmmc_l2_document_templates.json as the canonical source of truth.
+Use the CSV/XLSX files only as import/reference support.
+Do not create a user-facing CSV import workflow.
+
+The goal is to create a professional document template library inside Control HUB that allows me to generate, manage, customize, approve, and export CMMC documents for each organization.
+
+1. Add Documentation Template Library
+
+Under Documentation, add:
+
+- Template Library
+- Template Detail
+- Generate Document
+- Control Document Requirements
+- Template Import History
+
+The Template Library should show all imported templates with filters.
+
+Filters:
+- search
+- artifact type
+- CMMC domain/family
+- linked control
+- review frequency
+- template status
+
+Columns:
+- Template ID
+- Title
+- Artifact Type
+- Family / Domain
+- Linked Controls
+- Review Frequency
+- Status
+- Actions
+
+Actions:
+- View
+- Preview
+- Generate Document
+- Copy / Customize
+- Archive
+
+2. Import the ZIP Package
+
+Create an admin-only import function that can process:
+
+CMMC_L2_Document_Library.zip
+
+Import should:
+- unzip the package
+- parse cmmc_l2_document_templates.json
+- import all templates
+- import all control mappings
+- import all placeholder definitions
+- import all tables/records/requirements
+- import markdown template body content where available
+- validate template IDs
+- validate control mappings
+- create an import summary
+
+Do not duplicate templates if the import is run more than once.
+
+The import must be idempotent.
+
+3. Template Data Model
+
+Add or update database models:
+
+DocumentTemplate
+- id
+- template_id
+- title
+- artifact_type
+- family
+- domain_code
+- purpose
+- scope
+- review_frequency
+- status
+- source_package
+- source_file
+- created_at
+- updated_at
+
+DocumentTemplateSection
+- id
+- template_id
+- section_name
+- section_order
+- content
+- content_type
+
+DocumentTemplateRequirement
+- id
+- template_id
+- requirement_text
+- sort_order
+
+DocumentTemplateRole
+- id
+- template_id
+- role_text
+- sort_order
+
+DocumentTemplateProcedureStep
+- id
+- template_id
+- step_text
+- sort_order
+
+DocumentTemplateRecord
+- id
+- template_id
+- record_name
+- description
+
+DocumentTemplateTable
+- id
+- template_id
+- table_name
+- columns_json
+- sort_order
+
+DocumentTemplatePlaceholder
+- id
+- placeholder
+- description
+- default_value
+- required
+
+DocumentTemplateControlMap
+- id
+- template_id
+- control_id
+- nist_control_number
+- support_type
+- artifact_type
+
+DocumentTemplateImportBatch
+- id
+- filename
+- imported_by
+- imported_at
+- total_templates
+- total_mappings
+- success_count
+- error_count
+- status
+- import_log
+
+4. Control ID Mapping
+
+The package maps controls as NIST-style numbers like:
+
+3.1.1
+3.1.2
+3.5.3
+3.14.7
+
+The app uses CMMC control IDs like:
+
+AC.L1-3.1.1
+AC.L2-3.1.3
+IA.L2-3.5.3
+SI.L2-3.14.7
+
+Map imported template controls to existing global Control records.
+
+Do not create duplicate controls.
+
+Mapping logic:
+- match by NIST/control number suffix first
+- match family/domain to determine correct CMMC prefix
+- if control is Level 1, map to L1 control ID
+- if control is Level 2, map to L2 control ID
+- if ambiguous, flag for manual review
+
+Examples:
+3.1.1 → AC.L1-3.1.1
+3.1.3 → AC.L2-3.1.3
+3.5.3 → IA.L2-3.5.3
+3.14.7 → SI.L2-3.14.7
+
+5. Preserve Global vs Organization-Specific Templates
+
+Templates imported from the ZIP should be global default templates.
+
+Organizations should be able to use them without modifying the original.
+
+Support:
+
+Global Template:
+- default imported template
+- read-only unless Admin edits
+
+Organization Custom Template:
+- copied from global template
+- customized for one organization
+- linked to original source template
+- does not affect other organizations
+
+6. Template Detail Page
+
+Each Template Detail page should show:
+
+- Template ID
+- Title
+- Artifact Type
+- Domain / Family
+- Purpose
+- Scope
+- Roles
+- Requirements
+- Procedure steps
+- Required records
+- Tables
+- Review frequency
+- Linked controls
+- Placeholders used
+- Markdown/source preview
+- Generate Document button
+
+7. Generate Document Workflow
+
+Create a professional Generate Document workflow.
+
+Steps:
+
+Step 1:
+Select organization.
+
+Step 2:
+Select template.
+
+Step 3:
+Auto-fill organization values:
+- organization name
+- system name
+- system owner
+- security officer
+- IT administrator
+- CMMC scope name
+- CMMC level
+- effective date
+- review date
+- approver
+- prepared by
+
+Step 4:
+Show placeholder review screen.
+Any missing placeholders must be editable.
+
+Step 5:
+Preview generated document.
+
+Step 6:
+Generate and save document.
+
+Generated document should become a Document record linked to:
+- organization
+- template
+- controls
+- domain
+- artifact type
+- review date
+- status
+
+Default status:
+Draft
+
+8. Supported Placeholders
+
+Use placeholders from the JSON.
+
+At minimum support:
+
+{{ORGANIZATION_NAME}}
+{{SYSTEM_NAME}}
+{{CMMC_SCOPE_NAME}}
+{{SYSTEM_OWNER_TITLE}}
+{{SECURITY_OFFICER_TITLE}}
+{{IT_ADMIN_TITLE}}
+{{ACCESS_REVIEW_FREQUENCY}}
+{{POLICY_REVIEW_FREQUENCY}}
+{{EFFECTIVE_DATE}}
+{{NEXT_REVIEW_DATE}}
+{{PREPARED_BY}}
+{{APPROVED_BY}}
+
+If a placeholder does not have a value, show it in the placeholder review screen.
+
+Do not leave unresolved placeholders in final exported documents unless the user explicitly allows it.
+
+9. Professional DOCX/PDF Export
+
+Generated documents must export as properly formatted:
+
+- DOCX
+- PDF
+
+Do not export raw text.
+
+Generated documents should include:
+
+Cover/Header:
+- Control HUB logo
+- Carme Technology logo if available
+- organization name
+- document title
+- template ID / document ID
+- version
+- effective date
+- next review date
+- classification/confidentiality statement
+
+Body:
+- purpose
+- scope
+- roles and responsibilities
+- policy statements / requirements
+- procedures
+- required records
+- tables
+- control mapping
+- review requirements
+
+Footer:
+- page number
+- organization name
+- Confidential / Internal Use
+- generated by Control HUB
+
+10. Generated Document Versioning
+
+Generated documents need version control.
+
+GeneratedDocument
+- id
+- organization_id
+- template_id
+- title
+- document_type
+- status
+- version
+- effective_date
+- review_date
+- file_docx_path
+- file_pdf_path
+- created_by
+- approved_by
+- approved_at
+- created_at
+- updated_at
+
+GeneratedDocumentVersion
+- id
+- document_id
+- version
+- change_summary
+- docx_path
+- pdf_path
+- created_by
+- created_at
+
+11. Document Status Workflow
+
+Statuses:
+- Draft
+- Pending Review
+- Approved
+- Active
+- Needs Update
+- Expired
+- Superseded
+- Archived
+
+Rules:
+- generated documents start as Draft
+- user can submit for review
+- reviewer can approve
+- approved document can become Active
+- expired/review due documents appear on dashboard
+- superseded documents remain in version history
+
+12. Control Integration
+
+On each Control Detail page, under Documents or Documentation Requirements, show:
+
+- required templates for that control
+- generated documents linked to that control
+- uploaded documents linked to that control
+- status of each required document
+- missing documents
+- draft documents
+- approved/active documents
+
+For each control, show:
+- Required Policy
+- Required Procedure
+- Required Record/Register/Log if applicable
+- Supporting templates from the imported library
+
+13. Documentation Gap Analysis Integration
+
+Update Documentation Gap Analysis to use the imported template map.
+
+A control should no longer appear as missing documentation if:
+- it has an approved/active generated document from a mapped template
+OR
+- it has an approved/active uploaded document/evidence of the required type
+
+Gap categories:
+- Missing Policy
+- Policy Exists But Not Active
+- Missing Procedure
+- Procedure Exists But Not Active
+- Missing Required Record
+- Required Document Expired
+- Required Document Needs Review
+
+14. All Documents Integration
+
+Generated documents must appear in:
+
+Documentation > All Documents
+
+All Documents should show:
+- uploaded documents
+- generated documents
+- document-like evidence
+
+Columns:
+- Title
+- Type
+- Status
+- Linked Controls
+- Security Domain
+- Level
+- Owner
+- Effective Date
+- Next Review
+- Source
+- Actions
+
+Source values:
+- Uploaded Evidence
+- Uploaded Document
+- Generated from Template
+
+15. Template Coverage Report
+
+Add a report/page:
+
+Template Coverage
+
+Show:
+- total templates imported
+- templates by domain
+- templates by artifact type
+- controls with required templates
+- controls with generated documents
+- controls missing documents
+- template coverage percentage
+
+16. Bulk Generate Documents
+
+Add optional bulk generation.
+
+Allow Admin/Compliance Manager to:
+- select organization
+- select domain
+- select artifact types
+- select templates
+- bulk generate documents as Draft
+
+Example:
+Generate all Access Control documents for VTCCORP.US.
+
+Bulk generation should:
+- create Draft documents
+- fill placeholders
+- flag unresolved placeholders
+- link controls automatically
+
+17. Import Markdown Templates
+
+The ZIP contains markdown_templates.
+
+Use these to display readable template previews.
+
+When generating DOCX/PDF:
+- convert markdown/content into professional formatted document
+- preserve headings
+- preserve lists
+- preserve tables where possible
+
+Do not display raw markdown as the final exported document.
+
+18. Template Search
+
+Template Library search should match:
+- template ID
+- title
+- artifact type
+- family
+- mapped controls
+- record names
+- requirements
+- procedure text
+
+19. Role Permissions
+
+Admin:
+- import templates
+- edit global templates
+- archive templates
+
+Compliance Manager:
+- generate documents
+- customize organization templates
+- approve documents if reviewer role permits
+
+Reviewer:
+- review/approve documents
+
+IT Contributor:
+- generate drafts if assigned
+- cannot approve
+
+Assessor Read-Only:
+- can view approved/active documents only
+- can preview/download if assessor-ready or approved
+- cannot generate, edit, approve, or delete
+
+Demo Mode:
+- read-only
+
+20. Audit Logging
+
+Log:
+- template imported
+- template updated
+- template archived
+- document generated
+- document edited
+- document submitted for review
+- document approved
+- document activated
+- document exported
+- document superseded
+- document archived
+
+21. Do Not Break Existing Functionality
+
+Do not remove:
+- existing Evidence Repository
+- existing All Documents page
+- existing document upload
+- existing evidence upload
+- existing SSP module
+- existing reports
+- existing control mappings
+
+This template library should enhance Documentation, not replace the existing document upload workflow.
+
+22. UI Placement
+
+Update Documentation navigation:
+
+Documentation
+- Overview
+- All Documents
+- Template Library
+- Generate Document
+- Control Document Requirements
+- Compliance Logs
+- Checklists
+- Gap Analysis
+
+23. Import Validation
+
+After import, show:
+
+Import Summary:
+- templates imported
+- templates skipped
+- mappings imported
+- unmapped controls
+- placeholders imported
+- markdown files matched
+- errors/warnings
+
+Expected:
+- 67 templates imported
+- 110 controls mapped
+- markdown templates available
+- no duplicate global controls created
+
+24. Acceptance Tests
+
+Test A:
+Import CMMC_L2_Document_Library.zip.
+Template Library shows 67 templates.
+
+Test B:
+Open AC-POL-001.
+It shows Access Control Policy, mapped controls, purpose, scope, roles, requirements, records, and review frequency.
+
+Test C:
+Open AC.L1-3.1.1 control.
+Documents section shows required templates:
+- AC-POL-001
+- AC-PROC-001
+- AC-MAT-001
+
+Test D:
+Generate AC-POL-001 for VTCCORP.US.
+Document is created as Draft.
+Placeholders are filled from VTCCORP.US organization data.
+Document is linked to all mapped AC controls.
+
+Test E:
+Export generated document as DOCX.
+It is professionally formatted, not raw text.
+
+Test F:
+Export generated document as PDF.
+It is professionally formatted and includes title, sections, tables, footer, and branding.
+
+Test G:
+Approve generated policy.
+Documentation Gap Analysis no longer shows mapped controls as missing policy.
+
+Test H:
+Assessor Read-Only user can view/download approved documents but cannot edit/generate/delete.
+
+Test I:
+Re-run import.
+No duplicate templates or duplicate mappings are created.
+
+Test J:
+All Documents shows generated documents, uploaded documents, and document-like evidence together.
