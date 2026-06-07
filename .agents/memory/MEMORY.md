@@ -1,2 +1,3 @@
 - [Pre-Assessment module](pre-assessment.md) — Tenant-Connected Pre-Assessment replaced Auto Assessor; key decisions on auth, rules engine, and DB enum pitfalls.
 - [Demo experience](demo-experience.md) — Public /demo landing page, demo login endpoint, seed script, read-only mode, guided tour.
+- [Doc Template Library](doc-template-library.md) — 67-template CMMC L2 library; ZIP import, satellite tables, generate wizard, DOCX/PDF export, control detail tab.

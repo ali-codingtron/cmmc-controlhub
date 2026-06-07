@@ -58,6 +58,9 @@ import RoadmapProgress from "@/pages/roadmap-progress";
 import PaHistory from "@/pages/pa-history";
 import PaRun from "@/pages/pa-run";
 import PaConnections from "@/pages/pa-connections";
+import DocTemplateLibrary from "@/pages/doc-template-library";
+import DocTemplateDetail from "@/pages/doc-template-detail";
+import DocGenerate from "@/pages/doc-generate";
 import PaResults from "@/pages/pa-results";
 import PaFindings from "@/pages/pa-findings";
 import PaEvidenceRequests from "@/pages/pa-evidence-requests";
@@ -133,6 +136,11 @@ function AppRoutes() {
               <Route path="/admin/roadmap-backfill" component={AdminRoadmapBackfill} />
               <Route path="/documents" component={Documents} />
               <Route path="/documents/list" component={DocumentsList} />
+              <Route path="/documents/templates" component={DocTemplateLibrary} />
+              <Route path="/documents/templates/:id">
+                {(params: { id: string }) => <DocTemplateDetail id={params.id} />}
+              </Route>
+              <Route path="/documents/generate" component={DocGenerate} />
               <Route path="/documents/logs" component={DocumentLogs} />
               <Route path="/documents/checklists" component={DocumentChecklists} />
               <Route path="/documents/missing" component={DocumentsMissing} />

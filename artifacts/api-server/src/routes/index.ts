@@ -19,6 +19,7 @@ import adminRouter from "./admin";
 import configureRouter from "./configure";
 import roadmapRouter from "./roadmap";
 import preAssessmentRouter from "./pre-assessment";
+import docTemplateLibraryRouter from "./doc-template-library";
 
 const router: IRouter = Router();
 
@@ -42,5 +43,6 @@ router.use(adminRouter);
 router.use(configureRouter);
 router.use(roadmapRouter);
 router.use("/pre-assessment", preAssessmentRouter);
+router.use(docTemplateLibraryRouter);
 
 export default router;

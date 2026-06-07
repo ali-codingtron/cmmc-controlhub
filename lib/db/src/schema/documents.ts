@@ -86,6 +86,13 @@ export const documentTemplatesTable = pgTable("document_templates", {
   isSystemTemplate: boolean("is_system_template").notNull().default(false),
   checklistItems: jsonb("checklist_items").default([]),
   recurrenceRule: text("recurrence_rule"),
+  // ── CMMC L2 Template Library columns ─────────────────────────────────────
+  sourceTemplateId: text("source_template_id"),
+  sourcePackage: text("source_package"),
+  family: text("family"),
+  artifactTypeLabel: text("artifact_type_label"),
+  purpose: text("purpose"),
+  scope: text("scope"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

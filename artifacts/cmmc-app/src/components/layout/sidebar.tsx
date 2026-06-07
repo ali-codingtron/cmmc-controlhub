@@ -38,6 +38,8 @@ const roadmapItems = [
 const documentationItems = [
   { href: "/documents", label: "Overview" },
   { href: "/documents/list", label: "All Documents" },
+  { href: "/documents/templates", label: "Template Library" },
+  { href: "/documents/generate", label: "Generate Document" },
   { href: "/documents/logs", label: "Compliance Logs" },
   { href: "/documents/checklists", label: "Checklists" },
   { href: "/documents/missing", label: "Gap Analysis" },

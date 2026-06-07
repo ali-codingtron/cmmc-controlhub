@@ -1444,6 +1444,7 @@ export default function ControlDetail({ id }: { id: string }) {
           <TabsTrigger value="tasks">Tasks ({tasks.length})</TabsTrigger>
           <TabsTrigger value="poams">POA&Ms ({poams.length})</TabsTrigger>
           <TabsTrigger value="monitoring">Monitoring</TabsTrigger>
+          <TabsTrigger value="templates">Templates</TabsTrigger>
           <TabsTrigger value="ssp">SSP</TabsTrigger>
           <TabsTrigger value="roadmap">Roadmap</TabsTrigger>
         </TabsList>
@@ -2201,6 +2202,9 @@ export default function ControlDetail({ id }: { id: string }) {
         {/* ── Monitoring Tab ── */}
         <MonitoringTab controlCmmcId={control?.controlId ?? ""} orgId={activeOrg?.id} />
 
+        {/* ── Templates Tab ── */}
+        <TemplatesTab controlId={id} orgId={activeOrg?.id} />
+
         {/* ── SSP Tab ── */}
         <SspTab controlRef={control?.controlId ?? ""} orgId={activeOrg?.id} />
 
@@ -2553,6 +2557,154 @@ function RoadmapTab({ controlCmmcId, orgId }: { controlCmmcId: string; orgId?: s
             </Card>
           ))}
         </div>
+      )}
+    </TabsContent>
+  );
+}
+
+// ─── Templates Tab Component ─────────────────────────────────────────────────
+function TemplatesTab({ controlId, orgId }: { controlId: string; orgId?: string }) {
+  const authToken = localStorage.getItem("auth_token");
+  const headers: Record<string, string> = {};
+  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+  if (orgId) headers["X-Organization-ID"] = orgId;
+
+  const { data, isLoading } = useQuery<{
+    control: { id: string; controlId: string; title: string; nistRef: string | null };
+    requiredTemplates: {
+      templateId: string; title: string; sourceTemplateId: string | null;
+      artifactTypeLabel: string | null; family: string | null; nistRef: string;
+    }[];
+    generatedDocuments: {
+      docId: string; title: string; status: string; docType: string;
+      effectiveDate: string | null; nextReviewDate: string | null; templateId: string | null;
+    }[];
+  }>({
+    queryKey: ["control-requirements", controlId, orgId],
+    queryFn: async () => {
+      const r = await fetch(`/api/doc-templates/control-requirements/${controlId}`, { headers });
+      if (!r.ok) throw new Error("Failed to load");
+      return r.json();
+    },
+    enabled: !!controlId && !!orgId,
+  });
+
+  const TYPE_COLORS: Record<string, string> = {
+    Policy: "bg-blue-100 text-blue-800",
+    Procedure: "bg-green-100 text-green-800",
+    Standard: "bg-purple-100 text-purple-800",
+    Plan: "bg-orange-100 text-orange-800",
+  };
+  const DOC_STATUS_COLORS: Record<string, string> = {
+    draft: "bg-slate-100 text-slate-700",
+    approved: "bg-green-100 text-green-700",
+    active: "bg-green-100 text-green-700",
+    pending_review: "bg-yellow-100 text-yellow-800",
+    rejected: "bg-red-100 text-red-700",
+    expired: "bg-orange-100 text-orange-800",
+    archived: "bg-slate-100 text-slate-500",
+  };
+
+  return (
+    <TabsContent value="templates" className="mt-6 space-y-4">
+      {isLoading ? (
+        <div className="py-8 text-center text-muted-foreground text-sm">Loading templates…</div>
+      ) : (
+        <>
+          {/* Required templates */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2z"/><path d="M7 7h.01"/></svg>
+                  Required Templates ({data?.requiredTemplates.length ?? 0})
+                </span>
+                <Link href={`/documents/generate`}>
+                  <Button size="sm" variant="outline" className="h-7 text-xs">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Generate
+                  </Button>
+                </Link>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!data?.requiredTemplates.length ? (
+                <p className="text-sm text-muted-foreground">No templates mapped to this control.</p>
+              ) : (
+                <div className="space-y-2">
+                  {data.requiredTemplates.map((t) => {
+                    const base = t.artifactTypeLabel?.split("/")[0] ?? "";
+                    const color = TYPE_COLORS[base] ?? "bg-slate-100 text-slate-700";
+                    return (
+                      <div key={t.templateId} className="flex items-center justify-between p-2 rounded-md border bg-muted/20 gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded shrink-0">{t.sourceTemplateId}</code>
+                          <Link href={`/documents/templates/${t.templateId}`} className="text-sm font-medium hover:underline text-primary truncate">{t.title}</Link>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${color}`}>{t.artifactTypeLabel}</span>
+                          <Link href={`/documents/generate?templateId=${t.templateId}`}>
+                            <Button size="icon" variant="ghost" className="h-6 w-6" title="Generate">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            </Button>
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Generated documents for this control */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Generated Documents ({data?.generatedDocuments.length ?? 0})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!data?.generatedDocuments.length ? (
+                <p className="text-sm text-muted-foreground">No documents generated for this control yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {data.generatedDocuments.map((d) => {
+                    const color = DOC_STATUS_COLORS[d.status] ?? "bg-slate-100 text-slate-700";
+                    return (
+                      <div key={d.docId} className="flex items-center justify-between p-2 rounded-md border bg-muted/20 gap-2">
+                        <div className="min-w-0">
+                          <Link href={`/documents/${d.docId}`} className="text-sm font-medium hover:underline text-primary block truncate">{d.title}</Link>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className={`text-xs px-1.5 py-0.5 rounded ${color}`}>{d.status.replace(/_/g, " ")}</span>
+                            {d.effectiveDate && <span className="text-xs text-muted-foreground">Effective: {new Date(d.effectiveDate).toLocaleDateString()}</span>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <a onClick={(e) => {
+                            e.preventDefault();
+                            const h = { Authorization: `Bearer ${localStorage.getItem("auth_token") ?? ""}`, "X-Organization-ID": orgId ?? "" };
+                            fetch(`/api/doc-templates/generated/${d.docId}/docx`, { headers: h })
+                              .then((r) => r.blob())
+                              .then((blob) => {
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement("a"); a.href = url;
+                                a.download = `${d.title.replace(/[^a-zA-Z0-9]/g, "_")}.docx`; a.click();
+                                URL.revokeObjectURL(url);
+                              });
+                          }} href="#" className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-accent" title="Download DOCX">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                          </a>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
       )}
     </TabsContent>
   );
