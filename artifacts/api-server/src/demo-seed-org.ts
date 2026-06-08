@@ -54,28 +54,44 @@ function days(n: number): Date {
 }
 
 export async function seedDemoOrg(): Promise<void> {
-  const [existingUser] = await db
+  // Step 1: ensure the demo user exists (idempotent — fetch or create)
+  let [existingUser] = await db
     .select()
     .from(usersTable)
     .where(eq(usersTable.email, DEMO_USER_EMAIL))
     .limit(1);
 
-  if (existingUser) return;
+  let demoUserId: string;
 
-  logger.info("Demo org not found — seeding CarmeTechnology demo data...");
+  if (existingUser) {
+    demoUserId = existingUser.id;
 
-  const demoUserId = randomUUID();
-  const hash = await bcrypt.hash("DemoMode1!", 10);
-  await db.insert(usersTable).values({
-    id: demoUserId,
-    name: "Demo Viewer",
-    email: DEMO_USER_EMAIL,
-    passwordHash: hash,
-    role: "reviewer",
-    title: "Public Demo User",
-    department: "Demo",
-    isActive: true,
-  }).onConflictDoNothing();
+    // Step 2: check if the org membership already exists — if so, fully seeded, done.
+    const [existingMembership] = await db
+      .select({ organizationId: organizationUsersTable.organizationId })
+      .from(organizationUsersTable)
+      .where(eq(organizationUsersTable.userId, demoUserId))
+      .limit(1);
+
+    if (existingMembership) return;
+
+    // User exists but org/membership was never created — continue below.
+    logger.info("Demo user found but missing org — resuming CarmeTechnology demo seed...");
+  } else {
+    logger.info("Demo org not found — seeding CarmeTechnology demo data...");
+    demoUserId = randomUUID();
+    const hash = await bcrypt.hash("DemoMode1!", 10);
+    await db.insert(usersTable).values({
+      id: demoUserId,
+      name: "Demo Viewer",
+      email: DEMO_USER_EMAIL,
+      passwordHash: hash,
+      role: "reviewer",
+      title: "Public Demo User",
+      department: "Demo",
+      isActive: true,
+    }).onConflictDoNothing();
+  }
 
   const orgId = randomUUID();
   await db.insert(organizationsTable).values({
@@ -265,6 +281,9 @@ export async function seedDemoOrg(): Promise<void> {
     }).onConflictDoNothing();
   }
 
+  // PA/pre-assessment data is optional — wrap in try/catch so a missing table
+  // (e.g. first deploy before schema migration) never blocks the core seed.
+  try {
   const connectionId = randomUUID();
   const scanDate = days(-3);
   await db.insert(tenantConnectionsTable).values({
@@ -434,6 +453,9 @@ export async function seedDemoOrg(): Promise<void> {
       createdAt: scanDate,
       updatedAt: scanDate,
     }).onConflictDoNothing();
+  }
+  } catch (err) {
+    logger.warn({ err }, "Demo seed: PA table inserts failed (tables may not exist yet) — skipping");
   }
 
   const sampleTasks = [
