@@ -25,6 +25,8 @@ function requireAdmin(req: any, res: any, next: any) {
 }
 
 router.get("/organizations/my-orgs", requireAuth, async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+
   const memberships = await db
     .select({
       id: organizationsTable.id,

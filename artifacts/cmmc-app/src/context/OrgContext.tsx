@@ -44,6 +44,7 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
     try {
       const r = await fetch("/api/organizations/my-orgs", {
         headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
       });
       const data: OrgSummary[] = r.ok ? await r.json() : [];
       setOrgs(data);
