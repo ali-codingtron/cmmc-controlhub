@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Shield, ArrowLeft, ArrowRight, ExternalLink } from "lucide-react";
@@ -9,6 +9,47 @@ const CONSULTATION_HREF = "mailto:info@carmetechnology.com?subject=Control%20HUB
 export default function DemoVideo() {
   const [, navigate] = useLocation();
   const [isLoading, setIsLoading] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const syncingRef = useRef(false);
+
+  const syncAudioToVideo = useCallback(() => {
+    const v = videoRef.current;
+    const a = audioRef.current;
+    if (!v || !a || syncingRef.current) return;
+    syncingRef.current = true;
+    a.currentTime = v.currentTime;
+    syncingRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    const a = audioRef.current;
+    if (!v || !a) return;
+
+    const onPlay = () => {
+      a.currentTime = v.currentTime;
+      a.play().catch(() => {});
+    };
+    const onPause = () => a.pause();
+    const onSeeked = () => syncAudioToVideo();
+    const onRateChange = () => { a.playbackRate = v.playbackRate; };
+    const onVolumeChange = () => { a.muted = v.muted; };
+
+    v.addEventListener("play", onPlay);
+    v.addEventListener("pause", onPause);
+    v.addEventListener("seeked", onSeeked);
+    v.addEventListener("ratechange", onRateChange);
+    v.addEventListener("volumechange", onVolumeChange);
+
+    return () => {
+      v.removeEventListener("play", onPlay);
+      v.removeEventListener("pause", onPause);
+      v.removeEventListener("seeked", onSeeked);
+      v.removeEventListener("ratechange", onRateChange);
+      v.removeEventListener("volumechange", onVolumeChange);
+    };
+  }, [syncAudioToVideo]);
 
   const handleLaunchDemo = async () => {
     setIsLoading(true);
@@ -91,14 +132,20 @@ export default function DemoVideo() {
           className="rounded-2xl overflow-hidden shadow-2xl"
           style={{ background: "#000", border: "1px solid rgba(255,255,255,0.1)" }}
         >
+          {/* Hidden audio element — voiceover track */}
+          <audio ref={audioRef} preload="auto">
+            <source src="/videos/control-hub-demo-voiceover.mp3" type="audio/mpeg" />
+          </audio>
+
           <video
+            ref={videoRef}
             controls
             preload="metadata"
             poster="/videos/control-hub-demo-poster.png"
             className="w-full block"
             style={{ aspectRatio: "16/9", background: "#0F172A" }}
           >
-            <source src="/videos/control-hub-demo.mp4" type="video/mp4" />
+            <source src="/videos/control-hub-demo-silent.mp4" type="video/mp4" />
             <track
               kind="captions"
               src="/videos/control-hub-demo-captions.vtt"
