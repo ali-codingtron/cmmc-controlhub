@@ -188,17 +188,24 @@ function SkeletonDashboard() {
 }
 
 export default function Dashboard() {
-  const { activeOrg } = useOrg();
+  const { activeOrg, isLoading: orgLoading } = useOrg();
   const queryClient = useQueryClient();
-  const { data: summary, isLoading: summaryLoading } = useGetDashboardSummary();
-  const { data: domains, isLoading: domainsLoading } = useGetReadinessByDomain();
-  const { data: recentActivity, isLoading: activityLoading } = useGetRecentActivity({ limit: 10 });
+  const { data: summary, isLoading: summaryLoading } = useGetDashboardSummary({
+    query: { enabled: !!activeOrg },
+  });
+  const { data: domains, isLoading: domainsLoading } = useGetReadinessByDomain({
+    query: { enabled: !!activeOrg },
+  });
+  const { data: recentActivity, isLoading: activityLoading } = useGetRecentActivity(
+    { limit: 10 },
+    { query: { enabled: !!activeOrg } },
+  );
 
   const handleRefresh = () => {
     queryClient.invalidateQueries();
   };
 
-  if (summaryLoading || domainsLoading) return <SkeletonDashboard />;
+  if (orgLoading || summaryLoading || domainsLoading) return <SkeletonDashboard />;
 
   if (!summary) {
     return (
