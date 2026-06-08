@@ -25,7 +25,7 @@ interface OrgContextType {
 const OrgContext = createContext<OrgContextType | undefined>(undefined);
 
 export function OrgProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const [orgs, setOrgs] = useState<OrgSummary[]>([]);
   const [activeOrg, setActiveOrgState] = useState<OrgSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -67,6 +67,10 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // Wait for auth to finish resolving before acting — prevents a premature
+    // isLoading=false while the JWT is still being validated.
+    if (authLoading) return;
+
     if (!user) {
       setOrgs([]);
       setActiveOrgState(null);
@@ -75,7 +79,7 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     fetchOrgs();
-  }, [user, fetchOrgs]);
+  }, [user, authLoading, fetchOrgs]);
 
   const setActiveOrg = useCallback((org: OrgSummary) => {
     setActiveOrgState(org);

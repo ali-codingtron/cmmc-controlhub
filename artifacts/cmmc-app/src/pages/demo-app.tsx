@@ -41,6 +41,8 @@ export default function DemoApp() {
         }
 
         const data = await res.json();
+        // Clear any stale session data before writing the new demo session
+        localStorage.removeItem("cmmc_active_org_id");
         localStorage.setItem("auth_token", data.token);
         if (data.demoOrgId) localStorage.setItem("cmmc_active_org_id", data.demoOrgId);
         localStorage.setItem("isDemoMode", "true");

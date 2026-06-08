@@ -27,6 +27,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const handleLogin = async (data: LoginBody) => {
     const res = await loginMutation.mutateAsync({ data });
     localStorage.setItem("auth_token", res.token);
+    // A normal login is never a demo session — clear demo flags so the
+    // demo banner doesn't bleed over from a previous demo session.
+    localStorage.removeItem("isDemoMode");
     await refetch();
   };
 
@@ -37,6 +40,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Ignore server errors — the session ends locally regardless
     } finally {
       localStorage.removeItem("auth_token");
+      localStorage.removeItem("isDemoMode");
+      localStorage.removeItem("cmmc_active_org_id");
       // Clear all cached query data so the app immediately treats the
       // user as unauthenticated without relying on stale cache.
       await qc.resetQueries({ queryKey: ["me"] });

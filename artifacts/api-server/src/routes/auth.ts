@@ -111,6 +111,7 @@ router.post("/auth/logout", requireAuth, async (req, res) => {
 });
 
 router.get("/auth/me", requireAuth, async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
   const [user] = await db
     .select()
     .from(usersTable)
