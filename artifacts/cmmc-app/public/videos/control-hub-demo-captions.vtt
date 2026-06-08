@@ -1,38 +1,38 @@
 WEBVTT
 
-00:00.000 --> 00:09.500
+00:00.000 --> 00:07.031
 Welcome to Control HUB, a CMMC readiness and evidence management platform built for defense contractors.
 
-00:10.000 --> 00:21.000
+00:07.401 --> 00:15.542
 Control HUB helps organizations understand where they stand, organize evidence, track recurring monitoring, manage remediation, and prepare for C3PAO review.
 
-00:21.500 --> 00:32.500
+00:15.912 --> 00:24.054
 The dashboard gives leadership a quick view of readiness, evidence health, monitoring status, POA&M activity, domain readiness, and recommended next actions.
 
-00:33.000 --> 00:46.500
+00:24.424 --> 00:34.416
 For organizations getting started, the pre-assessment module reviews Microsoft tenant data, identifies findings, generates evidence requests, and recommends a remediation roadmap.
 
-00:47.000 --> 00:58.500
+00:34.786 --> 00:43.297
 Findings are tied to CMMC controls and can be converted into POA&M items or used to create evidence requests.
 
-00:59.000 --> 01:10.500
+00:43.668 --> 00:52.179
 The implementation roadmap shows which actions to complete first, helping teams focus on high-impact work that supports multiple CMMC controls.
 
-01:11.000 --> 01:22.500
+00:52.549 --> 01:01.061
 Each control includes implementation details, configuration steps, linked evidence, monitoring activities, SSP mapping, and POA&M linkage.
 
-01:23.000 --> 01:35.500
+01:01.431 --> 01:10.682
 The evidence repository stores screenshots, policies, procedures, logs, and reports — tagged by control, domain, status, owner, and review date.
 
-01:36.000 --> 01:44.500
+01:11.053 --> 01:17.344
 The monitoring tracker proves ongoing compliance through weekly, monthly, quarterly, and annual operational reviews.
 
-01:45.000 --> 01:52.500
+01:17.714 --> 01:23.265
 POA&M tracking keeps remediation work tied to controls, owners, risks, due dates, and supporting evidence.
 
-01:53.000 --> 02:00.000
+01:23.635 --> 01:28.816
 Control HUB generates reports for executives, technical teams, and audit preparation.
 
-02:00.500 --> 02:18.000
+01:29.186 --> 01:42.138
 One platform — from pre-assessment through implementation, evidence collection, monitoring, remediation, and reporting.
 

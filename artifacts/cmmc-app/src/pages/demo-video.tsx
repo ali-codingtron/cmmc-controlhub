@@ -145,7 +145,7 @@ export default function DemoVideo() {
             className="w-full block"
             style={{ aspectRatio: "16/9", background: "#0F172A" }}
           >
-            <source src="/videos/control-hub-demo-silent.mp4" type="video/mp4" />
+            <source src="/videos/control-hub-demo-silent-stretched.mp4" type="video/mp4" />
             <track
               kind="captions"
               src="/videos/control-hub-demo-captions.vtt"
