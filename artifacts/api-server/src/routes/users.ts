@@ -285,7 +285,7 @@ router.post("/users/:id/deactivate", requireAuth, requireRole("admin"), async (r
 
   await db
     .update(usersTable)
-    .set({ isActive: false, updatedAt: new Date() })
+    .set({ isActive: false, status: "suspended", updatedAt: new Date() })
     .where(eq(usersTable.id, req.params.id));
 
   await logAudit(req, "deactivated", "user", existing.id, { entityLabel: existing.email });
@@ -323,7 +323,7 @@ router.post("/users/:id/activate", requireAuth, requireRole("admin"), async (req
 
   await db
     .update(usersTable)
-    .set({ isActive: true, updatedAt: new Date() })
+    .set({ isActive: true, status: "active", updatedAt: new Date() })
     .where(eq(usersTable.id, req.params.id));
 
   await logAudit(req, "activated", "user", existing.id, { entityLabel: existing.email });

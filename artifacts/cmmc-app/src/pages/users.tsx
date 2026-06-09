@@ -595,12 +595,13 @@ const EMPTY_INVITE: InviteFormData = {
 };
 
 interface InviteDialogProps {
+  emailConfigured: boolean;
   open: boolean;
   onClose: () => void;
   onInvited: (inviteUrl?: string) => void;
 }
 
-function InviteDialog({ open, onClose, onInvited }: InviteDialogProps) {
+function InviteDialog({ open, onClose, onInvited, emailConfigured }: InviteDialogProps) {
   const { toast } = useToast();
   const [form, setForm] = useState<InviteFormData>(EMPTY_INVITE);
   const [errors, setErrors] = useState<Partial<Record<keyof InviteFormData, string>>>({});
@@ -770,23 +771,36 @@ function InviteDialog({ open, onClose, onInvited }: InviteDialogProps) {
           <Button variant="outline" onClick={handleClose} disabled={sendMutation.isPending}>
             Cancel
           </Button>
-          <Button
-            variant="outline"
-            onClick={() => handleSubmit(false)}
-            disabled={sendMutation.isPending}
-            className="gap-2"
-          >
-            {sendMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4" />}
-            Create Without Email
-          </Button>
-          <Button
-            onClick={() => handleSubmit(true)}
-            disabled={sendMutation.isPending}
-            className="gap-2"
-          >
-            {sendMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
-            Invite &amp; Send Email
-          </Button>
+          {emailConfigured ? (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => handleSubmit(false)}
+                disabled={sendMutation.isPending}
+                className="gap-2"
+              >
+                {sendMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4" />}
+                Create Without Email
+              </Button>
+              <Button
+                onClick={() => handleSubmit(true)}
+                disabled={sendMutation.isPending}
+                className="gap-2"
+              >
+                {sendMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                Invite &amp; Send Email
+              </Button>
+            </>
+          ) : (
+            <Button
+              onClick={() => handleSubmit(false)}
+              disabled={sendMutation.isPending}
+              className="gap-2"
+            >
+              {sendMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4" />}
+              Create &amp; Copy Link
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1116,6 +1130,7 @@ export default function Users() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const isAdmin = me?.role === "admin";
+  const canInvite = me?.role === "admin" || me?.role === "compliance_manager";
 
   const { data: emailStatus } = useQuery({
     queryKey: ["invitations", "email-status"],
@@ -1129,10 +1144,11 @@ export default function Users() {
       return res.json() as Promise<{ emailConfigured: boolean }>;
     },
     staleTime: 60_000,
-    enabled: isAdmin,
+    enabled: canInvite,
   });
 
-  const emailNotConfigured = isAdmin && emailStatus !== undefined && !emailStatus.emailConfigured;
+  const emailConfigured = emailStatus?.emailConfigured ?? true;
+  const emailNotConfigured = canInvite && emailStatus !== undefined && !emailStatus.emailConfigured;
 
   const { data: users = [], isLoading } = useListUsers({
     query: { queryKey: getListUsersQueryKey() },
@@ -1314,7 +1330,7 @@ export default function Users() {
             {users.length} user{users.length !== 1 ? "s" : ""} total
           </p>
         </div>
-        {isAdmin && (
+        {canInvite && (
           <Button onClick={() => open("invite")} className="gap-2">
             <Mail className="h-4 w-4" />
             Invite User
@@ -1610,6 +1626,7 @@ export default function Users() {
       <InviteDialog
         open={openDialog === "invite"}
         onClose={close}
+        emailConfigured={emailConfigured}
         onInvited={(url) => {
           invalidate();
           if (url) setPendingInviteUrl(url);
