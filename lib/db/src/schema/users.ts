@@ -18,15 +18,26 @@ export const mfaEnforcementModeEnum = pgEnum("mfa_enforcement_mode", [
   "all_users",
 ]);
 
+export const userStatusEnum = pgEnum("user_status", [
+  "invited",
+  "active",
+  "suspended",
+  "deactivated",
+]);
+
 export const usersTable = pgTable("users", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
-  passwordHash: text("password_hash").notNull(),
+  passwordHash: text("password_hash"),
   role: userRoleEnum("role").notNull().default("it_contributor"),
   title: text("title"),
   department: text("department"),
   isActive: boolean("is_active").notNull().default(true),
+  status: userStatusEnum("status").notNull().default("active"),
+  invitedById: text("invited_by_id"),
+  invitedAt: timestamp("invited_at"),
+  inviteAcceptedAt: timestamp("invite_accepted_at"),
   lastLoginAt: timestamp("last_login_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

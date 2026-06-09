@@ -1,4 +1,5 @@
 export * from "./users";
+export * from "./invitations";
 export * from "./organizations";
 export * from "./domains";
 export * from "./controls";

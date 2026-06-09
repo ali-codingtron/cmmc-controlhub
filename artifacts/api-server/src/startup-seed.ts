@@ -102,6 +102,7 @@ async function seedInitialAdmin() {
     email: "admin@example.com",
     passwordHash: hash,
     role: "admin",
+    status: "active",
     title: "IT Administrator",
     department: "Information Technology",
     isActive: true,
@@ -197,6 +198,7 @@ async function migrateAuditEnum() {
     "mfa_setup_started", "mfa_enabled", "mfa_verify_success", "mfa_verify_failure",
     "mfa_recovery_code_used", "mfa_reset_by_admin", "mfa_disabled", "mfa_policy_changed",
     "mfa_required_set",
+    "user_invited", "invitation_resent", "invitation_cancelled", "invitation_accepted",
   ];
   for (const val of missingValues) {
     try {

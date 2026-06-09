@@ -19,6 +19,9 @@ import {
   useUnlockUser,
   useMfaRequireUser,
   useMfaDisable,
+  useSendInvitation,
+  useResendInvitation,
+  useCancelInvitation,
 } from "@workspace/api-client-react";
 import type { User, UserOrgMembership, OrganizationSummary } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
@@ -79,6 +82,13 @@ import {
   Loader2,
   ShieldCheck,
   ChevronsUpDown,
+  Mail,
+  MailCheck,
+  Copy,
+  Check,
+  AlertTriangle,
+  RefreshCw,
+  Ban,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -126,7 +136,7 @@ function formatDate(d: string | null | undefined) {
   });
 }
 
-// ─── User Form ────────────────────────────────────────────────────────────────
+// ─── User Form (edit only) ────────────────────────────────────────────────────
 
 interface UserFormData {
   name: string;
@@ -196,9 +206,6 @@ function UserForm({
           {errors.password && (
             <p className="text-xs text-red-500">{errors.password}</p>
           )}
-          <p className="text-xs text-muted-foreground">
-            User must change this password on first login.
-          </p>
         </div>
       )}
 
@@ -461,7 +468,7 @@ function OrgMembershipsPanel({ userId }: { userId: string }) {
   );
 }
 
-// ─── Org Access Builder (for Add User) ───────────────────────────────────────
+// ─── Org Access Builder (for Invite dialog) ───────────────────────────────────
 
 interface PendingOrgMembership {
   orgId: string;
@@ -512,18 +519,6 @@ function OrgAccessBuilder({
                   {ORG_ROLES.map((r) => (
                     <SelectItem key={r.value} value={r.value} className="text-xs">
                       {r.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={m.status} onValueChange={(v) => updateField(m.orgId, "status", v)}>
-                <SelectTrigger className="h-7 w-24 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ORG_STATUSES.map((s) => (
-                    <SelectItem key={s.value} value={s.value} className="text-xs">
-                      {s.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -579,7 +574,258 @@ function OrgAccessBuilder({
   );
 }
 
-// ─── Add / Edit Dialog ────────────────────────────────────────────────────────
+// ─── Invite User Dialog ───────────────────────────────────────────────────────
+
+interface InviteFormData {
+  name: string;
+  email: string;
+  role: string;
+  title: string;
+  department: string;
+}
+
+const EMPTY_INVITE: InviteFormData = {
+  name: "",
+  email: "",
+  role: "it_contributor",
+  title: "",
+  department: "",
+};
+
+interface InviteDialogProps {
+  open: boolean;
+  onClose: () => void;
+  onInvited: (inviteUrl?: string) => void;
+}
+
+function InviteDialog({ open, onClose, onInvited }: InviteDialogProps) {
+  const { toast } = useToast();
+  const [form, setForm] = useState<InviteFormData>(EMPTY_INVITE);
+  const [errors, setErrors] = useState<Partial<Record<keyof InviteFormData, string>>>({});
+  const [pendingOrgs, setPendingOrgs] = useState<PendingOrgMembership[]>([]);
+
+  const sendMutation = useSendInvitation();
+
+  const setField = (field: keyof InviteFormData, value: string) => {
+    setForm((f) => ({ ...f, [field]: value }));
+    setErrors((e) => ({ ...e, [field]: undefined }));
+  };
+
+  const validate = () => {
+    const errs: Partial<Record<keyof InviteFormData, string>> = {};
+    if (!form.name.trim()) errs.name = "Name is required";
+    if (!form.email.trim()) errs.email = "Email is required";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
+      errs.email = "Invalid email address";
+    if (!form.role) errs.role = "Role is required";
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleClose = () => {
+    setForm(EMPTY_INVITE);
+    setErrors({});
+    setPendingOrgs([]);
+    onClose();
+  };
+
+  const handleSubmit = async () => {
+    if (!validate()) return;
+    try {
+      const result = await sendMutation.mutateAsync({
+        data: {
+          name: form.name.trim(),
+          email: form.email.trim(),
+          role: form.role as any,
+          title: form.title || undefined,
+          department: form.department || undefined,
+          orgMemberships: pendingOrgs.map((m) => ({ orgId: m.orgId, role: m.role })),
+        },
+      });
+      handleClose();
+      onInvited(result.inviteUrl ?? undefined);
+    } catch (err: any) {
+      const msg = err?.response?.data?.error ?? "Failed to send invitation";
+      if (msg.toLowerCase().includes("email")) {
+        setErrors({ email: "A user with this email already exists" });
+      } else {
+        toast({ title: msg, variant: "destructive" });
+      }
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Mail className="h-5 w-5 text-blue-500" />
+            Invite User
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="py-2 overflow-y-auto flex-1 min-h-0 space-y-6">
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="inv-name">
+                  Full Name <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="inv-name"
+                  value={form.name}
+                  onChange={(e) => setField("name", e.target.value)}
+                  placeholder="Jane Smith"
+                  className={errors.name ? "border-red-500" : ""}
+                  autoFocus
+                />
+                {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="inv-email">
+                  Email <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="inv-email"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setField("email", e.target.value)}
+                  placeholder="jane@example.com"
+                  className={errors.email ? "border-red-500" : ""}
+                />
+                {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="inv-role">
+                Role <span className="text-red-500">*</span>
+              </Label>
+              <Select value={form.role} onValueChange={(v) => setField("role", v)}>
+                <SelectTrigger id="inv-role" className={errors.role ? "border-red-500" : ""}>
+                  <SelectValue placeholder="Select role…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {GLOBAL_ROLES.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>
+                      {r.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.role && <p className="text-xs text-red-500">{errors.role}</p>}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="inv-title">Title</Label>
+                <Input
+                  id="inv-title"
+                  value={form.title}
+                  onChange={(e) => setField("title", e.target.value)}
+                  placeholder="Security Engineer"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="inv-dept">Department</Label>
+                <Input
+                  id="inv-dept"
+                  value={form.department}
+                  onChange={(e) => setField("department", e.target.value)}
+                  placeholder="IT / Security"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold">Organization Access</h3>
+              {pendingOrgs.length > 0 && (
+                <Badge variant="secondary" className="text-xs h-5">
+                  {pendingOrgs.length}
+                </Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Optionally grant this user access to one or more organizations. They'll be activated when they accept the invitation.
+            </p>
+            <OrgAccessBuilder value={pendingOrgs} onChange={setPendingOrgs} />
+          </div>
+
+          <div className="rounded-md bg-blue-50 border border-blue-200 p-3 text-sm text-blue-700 flex items-start gap-2">
+            <MailCheck className="h-4 w-4 mt-0.5 shrink-0" />
+            <span>
+              A secure invitation link will be emailed to {form.email || "the user"}.
+              They'll set their own password when they accept. The link expires in 7 days.
+            </span>
+          </div>
+        </div>
+
+        <DialogFooter className="shrink-0">
+          <Button variant="outline" onClick={handleClose}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={sendMutation.isPending} className="gap-2">
+            {sendMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Mail className="h-4 w-4" />
+            )}
+            Send Invitation
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Invite URL Banner ─────────────────────────────────────────────────────────
+
+function InviteUrlBanner({ url, onDismiss }: { url: string; onDismiss: () => void }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 text-sm font-medium text-amber-800">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          Email not configured — copy this invitation link manually
+        </div>
+        <Button variant="ghost" size="icon" className="h-6 w-6 -mt-0.5 shrink-0" onClick={onDismiss}>
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+      <div className="flex items-center gap-2">
+        <Input
+          readOnly
+          value={url}
+          className="text-xs font-mono h-8 bg-white"
+          onClick={(e) => (e.target as HTMLInputElement).select()}
+        />
+        <Button size="sm" variant="outline" className="shrink-0 gap-1.5" onClick={handleCopy}>
+          {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+          {copied ? "Copied!" : "Copy"}
+        </Button>
+      </div>
+      <p className="text-xs text-amber-700">
+        Set <code className="font-mono bg-amber-100 px-1 rounded">SMTP_HOST</code>,{" "}
+        <code className="font-mono bg-amber-100 px-1 rounded">SMTP_USER</code>, and{" "}
+        <code className="font-mono bg-amber-100 px-1 rounded">SMTP_PASSWORD</code> environment variables to enable automatic email delivery.
+      </p>
+    </div>
+  );
+}
+
+// ─── Edit Dialog ───────────────────────────────────────────────────────────────
 
 const EMPTY_FORM: UserFormData = {
   name: "",
@@ -590,19 +836,18 @@ const EMPTY_FORM: UserFormData = {
   department: "",
 };
 
-interface UserDialogProps {
+interface EditDialogProps {
   user: User | null;
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-function UserDialog({ user, open, onClose, onSuccess }: UserDialogProps) {
+function EditDialog({ user, open, onClose, onSuccess }: EditDialogProps) {
   const { toast } = useToast();
-  const isEdit = !!user;
 
   const [form, setForm] = useState<UserFormData>(() =>
-    isEdit && user
+    user
       ? {
           name: user.name,
           email: user.email,
@@ -615,11 +860,8 @@ function UserDialog({ user, open, onClose, onSuccess }: UserDialogProps) {
   );
   const [errors, setErrors] = useState<Partial<Record<keyof UserFormData, string>>>({});
   const [activeTab, setActiveTab] = useState<"details" | "orgs">("details");
-  const [pendingOrgs, setPendingOrgs] = useState<PendingOrgMembership[]>([]);
 
-  const createMutation = useCreateUser();
   const updateMutation = useUpdateUser();
-  const addToOrgMutation = useAddUserToOrg();
 
   const setField = (field: keyof UserFormData, value: string) => {
     setForm((f) => ({ ...f, [field]: value }));
@@ -632,9 +874,6 @@ function UserDialog({ user, open, onClose, onSuccess }: UserDialogProps) {
     if (!form.email.trim()) errs.email = "Email is required";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
       errs.email = "Invalid email address";
-    if (!isEdit && !form.password) errs.password = "Password is required";
-    if (!isEdit && form.password && form.password.length < 8)
-      errs.password = "Password must be at least 8 characters";
     if (!form.role) errs.role = "Role is required";
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -643,53 +882,21 @@ function UserDialog({ user, open, onClose, onSuccess }: UserDialogProps) {
   const handleSubmit = async () => {
     if (!validate()) return;
     try {
-      if (isEdit) {
-        await updateMutation.mutateAsync({
-          id: user!.id,
-          data: {
-            name: form.name,
-            email: form.email,
-            role: form.role as any,
-            title: form.title || undefined,
-            department: form.department || undefined,
-          },
-        });
-        toast({ title: "User updated successfully" });
-      } else {
-        const newUser = await createMutation.mutateAsync({
-          data: {
-            name: form.name,
-            email: form.email,
-            password: form.password,
-            role: form.role as any,
-            title: form.title || undefined,
-            department: form.department || undefined,
-          },
-        });
-        // Apply org memberships sequentially after creation
-        for (const m of pendingOrgs) {
-          await addToOrgMutation.mutateAsync({
-            id: newUser.id,
-            data: {
-              organizationId: m.orgId,
-              role: m.role as any,
-              status: m.status as any,
-            },
-          });
-        }
-        const orgCount = pendingOrgs.length;
-        toast({
-          title: "User created successfully",
-          description:
-            orgCount > 0
-              ? `Added to ${orgCount} organization${orgCount > 1 ? "s" : ""}`
-              : undefined,
-        });
-      }
+      await updateMutation.mutateAsync({
+        id: user!.id,
+        data: {
+          name: form.name,
+          email: form.email,
+          role: form.role as any,
+          title: form.title || undefined,
+          department: form.department || undefined,
+        },
+      });
+      toast({ title: "User updated successfully" });
       onSuccess();
       onClose();
     } catch (err: any) {
-      const msg = err?.response?.data?.error ?? (isEdit ? "Failed to update user" : "Failed to create user");
+      const msg = err?.response?.data?.error ?? "Failed to update user";
       if (msg.toLowerCase().includes("email")) {
         setErrors({ email: "Email already in use" });
       } else {
@@ -698,82 +905,45 @@ function UserDialog({ user, open, onClose, onSuccess }: UserDialogProps) {
     }
   };
 
-  const isPending = createMutation.isPending || updateMutation.isPending || addToOrgMutation.isPending;
-
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit User" : "Add User"}</DialogTitle>
+          <DialogTitle>Edit User</DialogTitle>
         </DialogHeader>
 
-        {isEdit && (
-          <div className="flex gap-1 border-b pb-0 -mt-2 shrink-0">
-            <button
-              onClick={() => setActiveTab("details")}
-              className={cn(
-                "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
-                activeTab === "details"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              )}
-            >
-              Details
-            </button>
-            <button
-              onClick={() => setActiveTab("orgs")}
-              className={cn(
-                "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5",
-                activeTab === "orgs"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Building2 className="h-3.5 w-3.5" />
-              Organization Access
-            </button>
-          </div>
-        )}
+        <div className="flex gap-1 border-b pb-0 -mt-2 shrink-0">
+          <button
+            onClick={() => setActiveTab("details")}
+            className={cn(
+              "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+              activeTab === "details"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Details
+          </button>
+          <button
+            onClick={() => setActiveTab("orgs")}
+            className={cn(
+              "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5",
+              activeTab === "orgs"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Building2 className="h-3.5 w-3.5" />
+            Organization Access
+          </button>
+        </div>
 
         <div className="py-2 overflow-y-auto flex-1 min-h-0">
-          {isEdit ? (
-            <>
-              {activeTab === "details" && (
-                <UserForm
-                  data={form}
-                  onChange={setField}
-                  isEdit={isEdit}
-                  errors={errors}
-                />
-              )}
-              {activeTab === "orgs" && user && (
-                <OrgMembershipsPanel userId={user.id} />
-              )}
-            </>
-          ) : (
-            <div className="space-y-6">
-              <UserForm
-                data={form}
-                onChange={setField}
-                isEdit={false}
-                errors={errors}
-              />
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4 text-muted-foreground" />
-                  <h3 className="text-sm font-semibold">Organization Access</h3>
-                  {pendingOrgs.length > 0 && (
-                    <Badge variant="secondary" className="text-xs h-5">
-                      {pendingOrgs.length}
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Optionally add this user to one or more organizations with a specific role and status.
-                </p>
-                <OrgAccessBuilder value={pendingOrgs} onChange={setPendingOrgs} />
-              </div>
-            </div>
+          {activeTab === "details" && (
+            <UserForm data={form} onChange={setField} isEdit={true} errors={errors} />
+          )}
+          {activeTab === "orgs" && user && (
+            <OrgMembershipsPanel userId={user.id} />
           )}
         </div>
 
@@ -781,10 +951,10 @@ function UserDialog({ user, open, onClose, onSuccess }: UserDialogProps) {
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          {(!isEdit || activeTab === "details") && (
-            <Button onClick={handleSubmit} disabled={isPending}>
-              {isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {isEdit ? "Save Changes" : "Create User"}
+          {activeTab === "details" && (
+            <Button onClick={handleSubmit} disabled={updateMutation.isPending}>
+              {updateMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save Changes
             </Button>
           )}
         </DialogFooter>
@@ -927,7 +1097,7 @@ function ConfirmDialog({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-type DialogKind = "add" | "edit" | "reset-password" | "deactivate" | "activate" | "delete";
+type DialogKind = "invite" | "edit" | "reset-password" | "deactivate" | "activate" | "delete";
 
 export default function Users() {
   const { user: me } = useAuth();
@@ -946,6 +1116,24 @@ export default function Users() {
   const unlockMutation = useUnlockUser();
   const requireMfaMutation = useMfaRequireUser();
   const disableMfaMutation = useMfaDisable();
+  const resendMutation = useResendInvitation();
+  const cancelMutation = useCancelInvitation();
+
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [openDialog, setOpenDialog] = useState<DialogKind | null>(null);
+  const [search, setSearch] = useState("");
+  const [pendingInviteUrl, setPendingInviteUrl] = useState<string | null>(null);
+
+  const open = (kind: DialogKind, user: User | null = null) => {
+    setSelectedUser(user);
+    setOpenDialog(kind);
+  };
+  const close = () => {
+    setOpenDialog(null);
+    setSelectedUser(null);
+  };
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: getListUsersQueryKey() });
 
   const handleMfaReset = async (u: User) => {
     try {
@@ -986,21 +1174,6 @@ export default function Users() {
       toast({ title: "Failed to disable MFA", variant: "destructive" });
     }
   };
-
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [openDialog, setOpenDialog] = useState<DialogKind | null>(null);
-  const [search, setSearch] = useState("");
-
-  const open = (kind: DialogKind, user: User | null = null) => {
-    setSelectedUser(user);
-    setOpenDialog(kind);
-  };
-  const close = () => {
-    setOpenDialog(null);
-    setSelectedUser(null);
-  };
-
-  const invalidate = () => qc.invalidateQueries({ queryKey: getListUsersQueryKey() });
 
   const handleDeactivate = async () => {
     if (!selectedUser) return;
@@ -1047,6 +1220,30 @@ export default function Users() {
     }
   };
 
+  const handleResendInvite = async (u: User) => {
+    try {
+      const result = await resendMutation.mutateAsync({ data: { userId: u.id } });
+      if (result.inviteUrl) {
+        setPendingInviteUrl(result.inviteUrl);
+      } else {
+        toast({ title: `Invitation resent to ${u.email}` });
+      }
+      invalidate();
+    } catch (err: any) {
+      toast({ title: err?.response?.data?.error ?? "Failed to resend invitation", variant: "destructive" });
+    }
+  };
+
+  const handleCancelInvite = async (u: User) => {
+    try {
+      await cancelMutation.mutateAsync({ data: { userId: u.id } });
+      toast({ title: `Invitation cancelled for ${u.email}` });
+      invalidate();
+    } catch (err: any) {
+      toast({ title: err?.response?.data?.error ?? "Failed to cancel invitation", variant: "destructive" });
+    }
+  };
+
   const filteredUsers = users.filter((u) => {
     if (!search) return true;
     const q = search.toLowerCase();
@@ -1059,6 +1256,8 @@ export default function Users() {
     );
   });
 
+  const isInvited = (u: User) => (u as any).status === "invited";
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -1070,12 +1269,17 @@ export default function Users() {
           </p>
         </div>
         {isAdmin && (
-          <Button onClick={() => open("add")} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Add User
+          <Button onClick={() => open("invite")} className="gap-2">
+            <Mail className="h-4 w-4" />
+            Invite User
           </Button>
         )}
       </div>
+
+      {/* Invite URL banner (shown when email not configured) */}
+      {pendingInviteUrl && (
+        <InviteUrlBanner url={pendingInviteUrl} onDismiss={() => setPendingInviteUrl(null)} />
+      )}
 
       {/* Search */}
       <div className="flex gap-3 items-center">
@@ -1122,7 +1326,7 @@ export default function Users() {
                 {filteredUsers.map((u) => (
                   <TableRow
                     key={u.id}
-                    className={cn(!u.isActive && "opacity-50")}
+                    className={cn(!u.isActive && !isInvited(u) && "opacity-50")}
                   >
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
@@ -1150,7 +1354,11 @@ export default function Users() {
                       ) : null}
                     </TableCell>
                     <TableCell>
-                      {u.isActive ? (
+                      {isInvited(u) ? (
+                        <Badge variant="outline" className="border-amber-400 text-amber-700 gap-1 text-xs bg-amber-50">
+                          <Mail className="h-3 w-3" /> Invited
+                        </Badge>
+                      ) : u.isActive ? (
                         <Badge className="bg-green-600 hover:bg-green-600 text-white">
                           Active
                         </Badge>
@@ -1159,7 +1367,9 @@ export default function Users() {
                       )}
                     </TableCell>
                     <TableCell>
-                      {u.mfaEnabled && !u.mfaResetRequired ? (
+                      {isInvited(u) ? (
+                        <Badge variant="outline" className="text-muted-foreground text-xs">—</Badge>
+                      ) : u.mfaEnabled && !u.mfaResetRequired ? (
                         <Badge variant="outline" className="border-green-500 text-green-700 gap-1 text-xs">
                           <ShieldCheck className="h-3 w-3" /> Enabled
                         </Badge>
@@ -1178,7 +1388,13 @@ export default function Users() {
                       )}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {formatDate(u.lastLoginAt ?? null)}
+                      {isInvited(u) ? (
+                        <span className="text-xs text-amber-600">
+                          Invited {formatDate((u as any).invitedAt ?? u.createdAt)}
+                        </span>
+                      ) : (
+                        formatDate(u.lastLoginAt ?? null)
+                      )}
                     </TableCell>
                     {isAdmin && (
                       <TableCell>
@@ -1189,76 +1405,99 @@ export default function Users() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => open("edit", u)}
-                              className="gap-2"
-                            >
-                              <Pencil className="h-4 w-4" />
-                              Edit User
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => open("reset-password", u)}
-                              className="gap-2"
-                            >
-                              <Key className="h-4 w-4" />
-                              Reset Password
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            {u.isActive ? (
-                              <DropdownMenuItem
-                                onClick={() => open("deactivate", u)}
-                                className="gap-2"
-                                disabled={u.id === me?.id}
-                              >
-                                <UserX className="h-4 w-4" />
-                                Deactivate
-                              </DropdownMenuItem>
-                            ) : (
-                              <DropdownMenuItem
-                                onClick={() => open("activate", u)}
-                                className="gap-2"
-                              >
-                                <UserCheck className="h-4 w-4" />
-                                Reactivate
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator />
-                            {u.mfaEnabled ? (
+                            {isInvited(u) ? (
                               <>
                                 <DropdownMenuItem
-                                  onClick={() => handleMfaReset(u)}
+                                  onClick={() => handleResendInvite(u)}
                                   className="gap-2"
+                                  disabled={resendMutation.isPending}
                                 >
-                                  <ShieldCheck className="h-4 w-4" />
-                                  Reset MFA
+                                  <RefreshCw className="h-4 w-4" />
+                                  Resend Invitation
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  onClick={() => handleDisableMfa(u)}
-                                  className="gap-2 text-amber-600 focus:text-amber-600"
-                                  disabled={u.id === me?.id}
+                                  onClick={() => handleCancelInvite(u)}
+                                  className="gap-2 text-red-600 focus:text-red-600"
+                                  disabled={cancelMutation.isPending}
                                 >
-                                  <ShieldCheck className="h-4 w-4" />
-                                  Disable MFA
+                                  <Ban className="h-4 w-4" />
+                                  Cancel Invitation
                                 </DropdownMenuItem>
                               </>
                             ) : (
-                              <DropdownMenuItem
-                                onClick={() => handleRequireMfa(u, !u.mfaRequired)}
-                                className="gap-2"
-                                disabled={u.id === me?.id}
-                              >
-                                <ShieldCheck className="h-4 w-4" />
-                                {u.mfaRequired ? "Remove MFA Requirement" : "Require MFA"}
-                              </DropdownMenuItem>
-                            )}
-                            {u.lockedUntil && new Date(u.lockedUntil) > new Date() && (
-                              <DropdownMenuItem
-                                onClick={() => handleUnlock(u)}
-                                className="gap-2"
-                              >
-                                <ShieldCheck className="h-4 w-4" />
-                                Unlock Account
-                              </DropdownMenuItem>
+                              <>
+                                <DropdownMenuItem
+                                  onClick={() => open("edit", u)}
+                                  className="gap-2"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                  Edit User
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => open("reset-password", u)}
+                                  className="gap-2"
+                                >
+                                  <Key className="h-4 w-4" />
+                                  Reset Password
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                {u.isActive ? (
+                                  <DropdownMenuItem
+                                    onClick={() => open("deactivate", u)}
+                                    className="gap-2"
+                                    disabled={u.id === me?.id}
+                                  >
+                                    <UserX className="h-4 w-4" />
+                                    Deactivate
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem
+                                    onClick={() => open("activate", u)}
+                                    className="gap-2"
+                                  >
+                                    <UserCheck className="h-4 w-4" />
+                                    Reactivate
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuSeparator />
+                                {u.mfaEnabled ? (
+                                  <>
+                                    <DropdownMenuItem
+                                      onClick={() => handleMfaReset(u)}
+                                      className="gap-2"
+                                    >
+                                      <ShieldCheck className="h-4 w-4" />
+                                      Reset MFA
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => handleDisableMfa(u)}
+                                      className="gap-2 text-amber-600 focus:text-amber-600"
+                                      disabled={u.id === me?.id}
+                                    >
+                                      <ShieldCheck className="h-4 w-4" />
+                                      Disable MFA
+                                    </DropdownMenuItem>
+                                  </>
+                                ) : (
+                                  <DropdownMenuItem
+                                    onClick={() => handleRequireMfa(u, !u.mfaRequired)}
+                                    className="gap-2"
+                                    disabled={u.id === me?.id}
+                                  >
+                                    <ShieldCheck className="h-4 w-4" />
+                                    {u.mfaRequired ? "Remove MFA Requirement" : "Require MFA"}
+                                  </DropdownMenuItem>
+                                )}
+                                {u.lockedUntil && new Date(u.lockedUntil) > new Date() && (
+                                  <DropdownMenuItem
+                                    onClick={() => handleUnlock(u)}
+                                    className="gap-2"
+                                  >
+                                    <ShieldCheck className="h-4 w-4" />
+                                    Unlock Account
+                                  </DropdownMenuItem>
+                                )}
+                              </>
                             )}
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
@@ -1281,10 +1520,21 @@ export default function Users() {
         </CardContent>
       </Card>
 
-      {/* Add/Edit Dialog */}
-      <UserDialog
-        user={openDialog === "edit" ? selectedUser : null}
-        open={openDialog === "add" || openDialog === "edit"}
+      {/* Invite Dialog */}
+      <InviteDialog
+        open={openDialog === "invite"}
+        onClose={close}
+        onInvited={(url) => {
+          invalidate();
+          if (url) setPendingInviteUrl(url);
+          else toast({ title: "Invitation sent successfully" });
+        }}
+      />
+
+      {/* Edit Dialog */}
+      <EditDialog
+        user={selectedUser}
+        open={openDialog === "edit"}
         onClose={close}
         onSuccess={invalidate}
       />

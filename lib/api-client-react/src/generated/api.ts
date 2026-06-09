@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AcceptInvitationBody,
   ActivateDocumentBody,
   AddUserToOrgBody,
   ApproveDocumentBody,
@@ -26,6 +27,7 @@ import type {
   AssessorControlPackage,
   AuditLogEntry,
   AuthResponse,
+  CancelInvitationBody,
   ChecklistCompletion,
   ChecklistTemplate,
   ClosePoamBody,
@@ -82,11 +84,14 @@ import type {
   Poam,
   RejectDocumentBody,
   RejectEvidenceBody,
+  ResendInvitationBody,
   ResetPasswordBody,
   RunDocChecksBody,
   SearchEvidenceParams,
   SecurityCenterData,
   SecuritySettings,
+  SendInvitationBody,
+  SendInvitationResponse,
   SubmitEvidenceBody,
   SubmitReviewBody,
   SuccessResponse,
@@ -107,6 +112,8 @@ import type {
   UploadEvidenceBody,
   User,
   UserOrgMembership,
+  ValidateInvitationParams,
+  ValidateInvitationResponse,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -2346,6 +2353,450 @@ export const useRemoveUserFromOrg = <
   TContext
 > => {
   return useMutation(getRemoveUserFromOrgMutationOptions(options));
+};
+
+/**
+ * @summary Invite a new user by email
+ */
+export const getSendInvitationUrl = () => {
+  return `/api/invitations/send`;
+};
+
+export const sendInvitation = async (
+  sendInvitationBody: SendInvitationBody,
+  options?: RequestInit,
+): Promise<SendInvitationResponse> => {
+  return customFetch<SendInvitationResponse>(getSendInvitationUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(sendInvitationBody),
+  });
+};
+
+export const getSendInvitationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendInvitation>>,
+    TError,
+    { data: BodyType<SendInvitationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendInvitation>>,
+  TError,
+  { data: BodyType<SendInvitationBody> },
+  TContext
+> => {
+  const mutationKey = ["sendInvitation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendInvitation>>,
+    { data: BodyType<SendInvitationBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return sendInvitation(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SendInvitationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sendInvitation>>
+>;
+export type SendInvitationMutationBody = BodyType<SendInvitationBody>;
+export type SendInvitationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Invite a new user by email
+ */
+export const useSendInvitation = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendInvitation>>,
+    TError,
+    { data: BodyType<SendInvitationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendInvitation>>,
+  TError,
+  { data: BodyType<SendInvitationBody> },
+  TContext
+> => {
+  return useMutation(getSendInvitationMutationOptions(options));
+};
+
+/**
+ * @summary Resend an invitation to an invited user
+ */
+export const getResendInvitationUrl = () => {
+  return `/api/invitations/resend`;
+};
+
+export const resendInvitation = async (
+  resendInvitationBody: ResendInvitationBody,
+  options?: RequestInit,
+): Promise<SendInvitationResponse> => {
+  return customFetch<SendInvitationResponse>(getResendInvitationUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(resendInvitationBody),
+  });
+};
+
+export const getResendInvitationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resendInvitation>>,
+    TError,
+    { data: BodyType<ResendInvitationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resendInvitation>>,
+  TError,
+  { data: BodyType<ResendInvitationBody> },
+  TContext
+> => {
+  const mutationKey = ["resendInvitation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resendInvitation>>,
+    { data: BodyType<ResendInvitationBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return resendInvitation(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResendInvitationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resendInvitation>>
+>;
+export type ResendInvitationMutationBody = BodyType<ResendInvitationBody>;
+export type ResendInvitationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Resend an invitation to an invited user
+ */
+export const useResendInvitation = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resendInvitation>>,
+    TError,
+    { data: BodyType<ResendInvitationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof resendInvitation>>,
+  TError,
+  { data: BodyType<ResendInvitationBody> },
+  TContext
+> => {
+  return useMutation(getResendInvitationMutationOptions(options));
+};
+
+/**
+ * @summary Cancel a pending invitation
+ */
+export const getCancelInvitationUrl = () => {
+  return `/api/invitations/cancel`;
+};
+
+export const cancelInvitation = async (
+  cancelInvitationBody: CancelInvitationBody,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getCancelInvitationUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(cancelInvitationBody),
+  });
+};
+
+export const getCancelInvitationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelInvitation>>,
+    TError,
+    { data: BodyType<CancelInvitationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof cancelInvitation>>,
+  TError,
+  { data: BodyType<CancelInvitationBody> },
+  TContext
+> => {
+  const mutationKey = ["cancelInvitation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof cancelInvitation>>,
+    { data: BodyType<CancelInvitationBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return cancelInvitation(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CancelInvitationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof cancelInvitation>>
+>;
+export type CancelInvitationMutationBody = BodyType<CancelInvitationBody>;
+export type CancelInvitationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Cancel a pending invitation
+ */
+export const useCancelInvitation = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelInvitation>>,
+    TError,
+    { data: BodyType<CancelInvitationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof cancelInvitation>>,
+  TError,
+  { data: BodyType<CancelInvitationBody> },
+  TContext
+> => {
+  return useMutation(getCancelInvitationMutationOptions(options));
+};
+
+/**
+ * @summary Validate an invitation token (public)
+ */
+export const getValidateInvitationUrl = (params: ValidateInvitationParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/invitations/validate?${stringifiedParams}`
+    : `/api/invitations/validate`;
+};
+
+export const validateInvitation = async (
+  params: ValidateInvitationParams,
+  options?: RequestInit,
+): Promise<ValidateInvitationResponse> => {
+  return customFetch<ValidateInvitationResponse>(
+    getValidateInvitationUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getValidateInvitationQueryKey = (
+  params?: ValidateInvitationParams,
+) => {
+  return [`/api/invitations/validate`, ...(params ? [params] : [])] as const;
+};
+
+export const getValidateInvitationQueryOptions = <
+  TData = Awaited<ReturnType<typeof validateInvitation>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params: ValidateInvitationParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof validateInvitation>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getValidateInvitationQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof validateInvitation>>
+  > = ({ signal }) => validateInvitation(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof validateInvitation>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ValidateInvitationQueryResult = NonNullable<
+  Awaited<ReturnType<typeof validateInvitation>>
+>;
+export type ValidateInvitationQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Validate an invitation token (public)
+ */
+
+export function useValidateInvitation<
+  TData = Awaited<ReturnType<typeof validateInvitation>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params: ValidateInvitationParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof validateInvitation>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getValidateInvitationQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Accept an invitation and set password (public)
+ */
+export const getAcceptInvitationUrl = () => {
+  return `/api/invitations/accept`;
+};
+
+export const acceptInvitation = async (
+  acceptInvitationBody: AcceptInvitationBody,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getAcceptInvitationUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(acceptInvitationBody),
+  });
+};
+
+export const getAcceptInvitationMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof acceptInvitation>>,
+    TError,
+    { data: BodyType<AcceptInvitationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof acceptInvitation>>,
+  TError,
+  { data: BodyType<AcceptInvitationBody> },
+  TContext
+> => {
+  const mutationKey = ["acceptInvitation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof acceptInvitation>>,
+    { data: BodyType<AcceptInvitationBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return acceptInvitation(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AcceptInvitationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof acceptInvitation>>
+>;
+export type AcceptInvitationMutationBody = BodyType<AcceptInvitationBody>;
+export type AcceptInvitationMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Accept an invitation and set password (public)
+ */
+export const useAcceptInvitation = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof acceptInvitation>>,
+    TError,
+    { data: BodyType<AcceptInvitationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof acceptInvitation>>,
+  TError,
+  { data: BodyType<AcceptInvitationBody> },
+  TContext
+> => {
+  return useMutation(getAcceptInvitationMutationOptions(options));
 };
 
 /**

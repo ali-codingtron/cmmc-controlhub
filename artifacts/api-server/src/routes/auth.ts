@@ -77,6 +77,11 @@ router.post("/auth/login", async (req, res) => {
     return;
   }
 
+  if (!user.passwordHash) {
+    res.status(401).json({ error: "Invalid credentials" });
+    return;
+  }
+
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) {
     const settings = await getSecuritySettings();
@@ -268,6 +273,11 @@ router.post("/auth/change-password", requireAuth, async (req, res) => {
 
   if (!user) {
     res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  if (!user.passwordHash) {
+    res.status(400).json({ error: "This account uses invitation-based setup. Please contact your administrator." });
     return;
   }
 

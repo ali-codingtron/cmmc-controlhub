@@ -34,14 +34,25 @@ export const UserRole = {
   assessor: "assessor",
 } as const;
 
+export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus] | null;
+
+export const UserStatus = {
+  invited: "invited",
+  active: "active",
+  suspended: "suspended",
+  deactivated: "deactivated",
+} as const;
+
 export interface User {
   id: string;
   name: string;
   email: string;
   role: UserRole;
+  status?: UserStatus;
   title?: string | null;
   department?: string | null;
   isActive: boolean;
+  invitedAt?: string | null;
   createdAt: string;
   mfaEnabled: boolean;
   mfaRequired?: boolean;
@@ -1412,6 +1423,62 @@ export interface DocCheckResult {
   documentsMarkedNeedsUpdate: number;
   message: string;
 }
+
+export type SendInvitationBodyRole =
+  (typeof SendInvitationBodyRole)[keyof typeof SendInvitationBodyRole];
+
+export const SendInvitationBodyRole = {
+  admin: "admin",
+  compliance_manager: "compliance_manager",
+  it_contributor: "it_contributor",
+  reviewer: "reviewer",
+  executive_viewer: "executive_viewer",
+  assessor: "assessor",
+} as const;
+
+export type SendInvitationBodyOrgMembershipsItem = {
+  orgId: string;
+  role: string;
+};
+
+export interface SendInvitationBody {
+  name: string;
+  email: string;
+  role: SendInvitationBodyRole;
+  title?: string;
+  department?: string;
+  orgMemberships?: SendInvitationBodyOrgMembershipsItem[];
+}
+
+export interface ResendInvitationBody {
+  userId: string;
+}
+
+export interface CancelInvitationBody {
+  userId: string;
+}
+
+export interface SendInvitationResponse {
+  success: boolean;
+  emailSent: boolean;
+  inviteUrl?: string | null;
+}
+
+export interface ValidateInvitationResponse {
+  valid: boolean;
+  name: string;
+  email: string;
+  expiresAt: string;
+}
+
+export interface AcceptInvitationBody {
+  token: string;
+  password: string;
+}
+
+export type ValidateInvitationParams = {
+  token: string;
+};
 
 export type ListControlsParams = {
   /**

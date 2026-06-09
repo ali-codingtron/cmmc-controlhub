@@ -540,6 +540,114 @@ paths:
         "200":
           description: Removed
 
+  # ─── INVITATIONS ────────────────────────────────────────────
+  /invitations/send:
+    post:
+      operationId: sendInvitation
+      tags: [users]
+      summary: Invite a new user by email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendInvitationBody"
+      responses:
+        "201":
+          description: Invitation sent (or inviteUrl returned if email not configured)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendInvitationResponse"
+
+  /invitations/resend:
+    post:
+      operationId: resendInvitation
+      tags: [users]
+      summary: Resend an invitation to an invited user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResendInvitationBody"
+      responses:
+        "200":
+          description: Invitation resent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendInvitationResponse"
+
+  /invitations/cancel:
+    post:
+      operationId: cancelInvitation
+      tags: [users]
+      summary: Cancel a pending invitation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelInvitationBody"
+      responses:
+        "200":
+          description: Invitation cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /invitations/validate:
+    get:
+      operationId: validateInvitation
+      tags: [users]
+      summary: Validate an invitation token (public)
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Token is valid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidateInvitationResponse"
+        "404":
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /invitations/accept:
+    post:
+      operationId: acceptInvitation
+      tags: [users]
+      summary: Accept an invitation and set password (public)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptInvitationBody"
+      responses:
+        "200":
+          description: Invitation accepted, account activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Invalid token or password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /organizations:
     get:
       operationId: listOrganizations
@@ -2385,6 +2493,10 @@ components:
         role:
           type: string
           enum: [admin, compliance_manager, it_contributor, reviewer, executive_viewer, assessor]
+        status:
+          type: string
+          enum: [invited, active, suspended, deactivated]
+          nullable: true
         title:
           type: string
           nullable: true
@@ -2393,6 +2505,10 @@ components:
           nullable: true
         isActive:
           type: boolean
+        invitedAt:
+          type: string
+          format: date-time
+          nullable: true
         createdAt:
           type: string
           format: date-time
@@ -4449,3 +4565,79 @@ components:
         - tasksGenerated
         - documentsMarkedNeedsUpdate
         - message
+
+    # ─── INVITATIONS ────────────────────────────────────────────
+    SendInvitationBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, compliance_manager, it_contributor, reviewer, executive_viewer, assessor]
+        title:
+          type: string
+        department:
+          type: string
+        orgMemberships:
+          type: array
+          items:
+            type: object
+            properties:
+              orgId:
+                type: string
+              role:
+                type: string
+            required: [orgId, role]
+      required: [name, email, role]
+
+    ResendInvitationBody:
+      type: object
+      properties:
+        userId:
+          type: string
+      required: [userId]
+
+    CancelInvitationBody:
+      type: object
+      properties:
+        userId:
+          type: string
+      required: [userId]
+
+    SendInvitationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        emailSent:
+          type: boolean
+        inviteUrl:
+          type: string
+          nullable: true
+      required: [success, emailSent]
+
+    ValidateInvitationResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        name:
+          type: string
+        email:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+      required: [valid, name, email, expiresAt]
+
+    AcceptInvitationBody:
+      type: object
+      properties:
+        token:
+          type: string
+        password:
+          type: string
+      required: [token, password]

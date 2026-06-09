@@ -66,6 +66,7 @@ import PaResults from "@/pages/pa-results";
 import PaFindings from "@/pages/pa-findings";
 import PaEvidenceRequests from "@/pages/pa-evidence-requests";
 import PaRoadmap from "@/pages/pa-roadmap";
+import InviteAccept from "@/pages/invite-accept";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -100,6 +101,7 @@ function AppRoutes() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
+      <Route path="/invite/accept" component={InviteAccept} />
       <Route path="/demo" component={DemoLanding} />
       <Route path="/demo-video" component={DemoVideo} />
       <Route path="/demo/app" component={DemoApp} />

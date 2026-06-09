@@ -35,9 +35,13 @@ export const LoginResponse = zod.object({
       "executive_viewer",
       "assessor",
     ]),
+    status: zod
+      .enum(["invited", "active", "suspended", "deactivated"])
+      .nullish(),
     title: zod.string().nullish(),
     department: zod.string().nullish(),
     isActive: zod.boolean(),
+    invitedAt: zod.coerce.date().nullish(),
     createdAt: zod.coerce.date(),
     mfaEnabled: zod.boolean(),
     mfaRequired: zod.boolean().optional(),
@@ -74,9 +78,11 @@ export const GetMeResponse = zod.object({
     "executive_viewer",
     "assessor",
   ]),
+  status: zod.enum(["invited", "active", "suspended", "deactivated"]).nullish(),
   title: zod.string().nullish(),
   department: zod.string().nullish(),
   isActive: zod.boolean(),
+  invitedAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
   mfaEnabled: zod.boolean(),
   mfaRequired: zod.boolean().optional(),
@@ -116,9 +122,13 @@ export const MfaSetupVerifyResponse = zod.object({
       "executive_viewer",
       "assessor",
     ]),
+    status: zod
+      .enum(["invited", "active", "suspended", "deactivated"])
+      .nullish(),
     title: zod.string().nullish(),
     department: zod.string().nullish(),
     isActive: zod.boolean(),
+    invitedAt: zod.coerce.date().nullish(),
     createdAt: zod.coerce.date(),
     mfaEnabled: zod.boolean(),
     mfaRequired: zod.boolean().optional(),
@@ -149,9 +159,13 @@ export const MfaVerifyResponse = zod.object({
       "executive_viewer",
       "assessor",
     ]),
+    status: zod
+      .enum(["invited", "active", "suspended", "deactivated"])
+      .nullish(),
     title: zod.string().nullish(),
     department: zod.string().nullish(),
     isActive: zod.boolean(),
+    invitedAt: zod.coerce.date().nullish(),
     createdAt: zod.coerce.date(),
     mfaEnabled: zod.boolean(),
     mfaRequired: zod.boolean().optional(),
@@ -186,9 +200,13 @@ export const MfaRecoveryCodeResponse = zod.object({
       "executive_viewer",
       "assessor",
     ]),
+    status: zod
+      .enum(["invited", "active", "suspended", "deactivated"])
+      .nullish(),
     title: zod.string().nullish(),
     department: zod.string().nullish(),
     isActive: zod.boolean(),
+    invitedAt: zod.coerce.date().nullish(),
     createdAt: zod.coerce.date(),
     mfaEnabled: zod.boolean(),
     mfaRequired: zod.boolean().optional(),
@@ -347,9 +365,11 @@ export const ListUsersResponseItem = zod.object({
     "executive_viewer",
     "assessor",
   ]),
+  status: zod.enum(["invited", "active", "suspended", "deactivated"]).nullish(),
   title: zod.string().nullish(),
   department: zod.string().nullish(),
   isActive: zod.boolean(),
+  invitedAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
   mfaEnabled: zod.boolean(),
   mfaRequired: zod.boolean().optional(),
@@ -398,9 +418,11 @@ export const GetUserResponse = zod.object({
     "executive_viewer",
     "assessor",
   ]),
+  status: zod.enum(["invited", "active", "suspended", "deactivated"]).nullish(),
   title: zod.string().nullish(),
   department: zod.string().nullish(),
   isActive: zod.boolean(),
+  invitedAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
   mfaEnabled: zod.boolean(),
   mfaRequired: zod.boolean().optional(),
@@ -447,9 +469,11 @@ export const UpdateUserResponse = zod.object({
     "executive_viewer",
     "assessor",
   ]),
+  status: zod.enum(["invited", "active", "suspended", "deactivated"]).nullish(),
   title: zod.string().nullish(),
   department: zod.string().nullish(),
   isActive: zod.boolean(),
+  invitedAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
   mfaEnabled: zod.boolean(),
   mfaRequired: zod.boolean().optional(),
@@ -485,9 +509,11 @@ export const DeactivateUserResponse = zod.object({
     "executive_viewer",
     "assessor",
   ]),
+  status: zod.enum(["invited", "active", "suspended", "deactivated"]).nullish(),
   title: zod.string().nullish(),
   department: zod.string().nullish(),
   isActive: zod.boolean(),
+  invitedAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
   mfaEnabled: zod.boolean(),
   mfaRequired: zod.boolean().optional(),
@@ -516,9 +542,11 @@ export const ActivateUserResponse = zod.object({
     "executive_viewer",
     "assessor",
   ]),
+  status: zod.enum(["invited", "active", "suspended", "deactivated"]).nullish(),
   title: zod.string().nullish(),
   department: zod.string().nullish(),
   isActive: zod.boolean(),
+  invitedAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
   mfaEnabled: zod.boolean(),
   mfaRequired: zod.boolean().optional(),
@@ -648,6 +676,82 @@ export const UpdateUserOrgMembershipResponse = zod.object({
 export const RemoveUserFromOrgParams = zod.object({
   id: zod.coerce.string(),
   orgId: zod.coerce.string(),
+});
+
+/**
+ * @summary Invite a new user by email
+ */
+export const SendInvitationBody = zod.object({
+  name: zod.string(),
+  email: zod.string(),
+  role: zod.enum([
+    "admin",
+    "compliance_manager",
+    "it_contributor",
+    "reviewer",
+    "executive_viewer",
+    "assessor",
+  ]),
+  title: zod.string().optional(),
+  department: zod.string().optional(),
+  orgMemberships: zod
+    .array(
+      zod.object({
+        orgId: zod.string(),
+        role: zod.string(),
+      }),
+    )
+    .optional(),
+});
+
+/**
+ * @summary Resend an invitation to an invited user
+ */
+export const ResendInvitationBody = zod.object({
+  userId: zod.string(),
+});
+
+export const ResendInvitationResponse = zod.object({
+  success: zod.boolean(),
+  emailSent: zod.boolean(),
+  inviteUrl: zod.string().nullish(),
+});
+
+/**
+ * @summary Cancel a pending invitation
+ */
+export const CancelInvitationBody = zod.object({
+  userId: zod.string(),
+});
+
+export const CancelInvitationResponse = zod.object({
+  success: zod.boolean(),
+});
+
+/**
+ * @summary Validate an invitation token (public)
+ */
+export const ValidateInvitationQueryParams = zod.object({
+  token: zod.coerce.string(),
+});
+
+export const ValidateInvitationResponse = zod.object({
+  valid: zod.boolean(),
+  name: zod.string(),
+  email: zod.string(),
+  expiresAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Accept an invitation and set password (public)
+ */
+export const AcceptInvitationBody = zod.object({
+  token: zod.string(),
+  password: zod.string(),
+});
+
+export const AcceptInvitationResponse = zod.object({
+  success: zod.boolean(),
 });
 
 /**
