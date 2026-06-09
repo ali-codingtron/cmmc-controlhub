@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
-import { Eye, EyeOff, Loader2, Lock, Network, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, Loader2, Lock, Network, ShieldCheck, KeyRound, Copy, Check, ArrowLeft, QrCode, Smartphone } from "lucide-react";
 import { cn } from "@/lib/utils";
+import QRCode from "qrcode";
+import { mfaVerify, mfaSetupStart, mfaSetupVerify, mfaRecoveryCode } from "@workspace/api-client-react";
 
 const loginSchema = z.object({
   email: z.string().email("Enter a valid email address"),
@@ -67,8 +69,405 @@ function SecurityBackground() {
   );
 }
 
+// ─── OTP Input ────────────────────────────────────────────────────────────────
+
+function OtpInput({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  return (
+    <input
+      ref={inputRef}
+      type="text"
+      inputMode="numeric"
+      autoComplete="one-time-code"
+      maxLength={6}
+      disabled={disabled}
+      value={value}
+      onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, 6))}
+      className="w-full text-center text-3xl font-mono tracking-[0.5em] h-14 rounded-md border border-input bg-background px-3 py-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+      placeholder="000000"
+    />
+  );
+}
+
+// ─── MFA Verify Screen ────────────────────────────────────────────────────────
+
+function MfaVerifyScreen({ mfaStateToken, onBack }: { mfaStateToken: string; onBack: () => void }) {
+  const { loginWithToken } = useAuth();
+  const [, setLocation] = useLocation();
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState("");
+
+  const mfaHeaders = () => ({ headers: { "X-Mfa-State-Token": mfaStateToken } });
+
+  const handleVerify = async () => {
+    if (code.length !== 6) return;
+    setError("");
+    setIsLoading(true);
+    try {
+      const res = await mfaVerify({ code }, mfaHeaders());
+      await loginWithToken(res.token);
+      setLocation("/");
+    } catch (e: any) {
+      setError(e?.data?.error ?? e?.message ?? "Invalid code. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRecovery = async () => {
+    if (!recoveryCode.trim()) return;
+    setError("");
+    setIsLoading(true);
+    try {
+      const res = await mfaRecoveryCode({ code: recoveryCode.trim() }, mfaHeaders());
+      await loginWithToken(res.token);
+      setLocation("/");
+    } catch (e: any) {
+      setError(e?.data?.error ?? e?.message ?? "Invalid recovery code.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (code.length === 6) handleVerify();
+  }, [code]);
+
+  return (
+    <div className="space-y-6">
+      <div className="space-y-1">
+        <h1 className="text-2xl font-bold tracking-tight">Two-Factor Authentication</h1>
+        <p className="text-sm text-muted-foreground">
+          {showRecovery
+            ? "Enter one of your 8-character recovery codes."
+            : "Enter the 6-digit code from your authenticator app."}
+        </p>
+      </div>
+
+      {!showRecovery ? (
+        <div className="space-y-4">
+          <OtpInput value={code} onChange={setCode} disabled={isLoading} />
+
+          {error && (
+            <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
+              <Lock className="h-4 w-4 shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <Button
+            className="w-full h-10"
+            onClick={handleVerify}
+            disabled={isLoading || code.length !== 6}
+          >
+            {isLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Verifying…</> : "Verify"}
+          </Button>
+
+          <div className="flex items-center justify-between text-sm">
+            <button type="button" className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1" onClick={onBack}>
+              <ArrowLeft className="h-3.5 w-3.5" /> Back to login
+            </button>
+            <button type="button" className="text-muted-foreground hover:text-foreground transition-colors" onClick={() => { setShowRecovery(true); setError(""); }}>
+              Use recovery code
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <Input
+            value={recoveryCode}
+            onChange={(e) => setRecoveryCode(e.target.value.toUpperCase())}
+            placeholder="XXXXX-XXXXX"
+            className="h-10 font-mono text-center tracking-widest text-base"
+            disabled={isLoading}
+            autoFocus
+          />
+
+          {error && (
+            <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
+              <Lock className="h-4 w-4 shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <Button className="w-full h-10" onClick={handleRecovery} disabled={isLoading || !recoveryCode.trim()}>
+            {isLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Verifying…</> : "Use Recovery Code"}
+          </Button>
+
+          <div className="flex items-center justify-between text-sm">
+            <button type="button" className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1" onClick={onBack}>
+              <ArrowLeft className="h-3.5 w-3.5" /> Back to login
+            </button>
+            <button type="button" className="text-muted-foreground hover:text-foreground transition-colors" onClick={() => { setShowRecovery(false); setError(""); }}>
+              Use authenticator app
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── MFA Setup Wizard ─────────────────────────────────────────────────────────
+
+type SetupStep = "start" | "qr" | "verify" | "recovery";
+
+function MfaSetupScreen({ mfaStateToken, onBack }: { mfaStateToken: string; onBack: () => void }) {
+  const { loginWithToken } = useAuth();
+  const [, setLocation] = useLocation();
+  const [step, setStep] = useState<SetupStep>("start");
+  const [qrDataUrl, setQrDataUrl] = useState("");
+  const [otpUri, setOtpUri] = useState("");
+  const [manualKey, setManualKey] = useState("");
+  const [code, setCode] = useState("");
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const [sessionToken, setSessionToken] = useState("");
+  const [sessionUser, setSessionUser] = useState<any>(null);
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [showManual, setShowManual] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [savedCodes, setSavedCodes] = useState(false);
+
+  const mfaHeaders = () => ({ headers: { "X-Mfa-State-Token": mfaStateToken } });
+
+  const startSetup = async () => {
+    setIsLoading(true);
+    setError("");
+    try {
+      const res = await mfaSetupStart(mfaHeaders());
+      setOtpUri(res.otpAuthUri);
+      setManualKey(res.manualKey);
+      const dataUrl = await QRCode.toDataURL(res.otpAuthUri, { width: 220, margin: 1, color: { dark: "#1e293b", light: "#ffffff" } });
+      setQrDataUrl(dataUrl);
+      setStep("qr");
+    } catch (e: any) {
+      setError(e?.data?.error ?? e?.message ?? "Failed to start MFA setup. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    if (code.length !== 6) return;
+    setError("");
+    setIsLoading(true);
+    try {
+      const res = await mfaSetupVerify({ code }, mfaHeaders());
+      setRecoveryCodes(res.recoveryCodes);
+      setSessionToken(res.token);
+      setSessionUser(res.user);
+      setStep("recovery");
+    } catch (e: any) {
+      setError(e?.data?.error ?? e?.message ?? "Invalid code. Please check your authenticator app.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const copyAllCodes = async () => {
+    await navigator.clipboard.writeText(recoveryCodes.join("\n"));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const finishSetup = async () => {
+    await loginWithToken(sessionToken);
+    setLocation("/");
+  };
+
+  useEffect(() => {
+    if (step === "qr") return;
+    if (code.length === 6 && step === "verify") handleVerify();
+  }, [code, step]);
+
+  if (step === "start") {
+    return (
+      <div className="space-y-6">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold tracking-tight">Set Up Two-Factor Authentication</h1>
+          <p className="text-sm text-muted-foreground">
+            Your account requires MFA. You'll need an authenticator app like Google Authenticator, Authy, or 1Password.
+          </p>
+        </div>
+
+        <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+          <div className="flex items-start gap-3">
+            <div className="rounded-full bg-primary/10 p-1.5 shrink-0"><Smartphone className="h-4 w-4 text-primary" /></div>
+            <div>
+              <div className="text-sm font-medium">Install an authenticator app</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Google Authenticator, Authy, Microsoft Authenticator, or 1Password work great.</div>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <div className="rounded-full bg-primary/10 p-1.5 shrink-0"><QrCode className="h-4 w-4 text-primary" /></div>
+            <div>
+              <div className="text-sm font-medium">Scan the QR code</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Open your app and scan the code we'll show you.</div>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <div className="rounded-full bg-primary/10 p-1.5 shrink-0"><KeyRound className="h-4 w-4 text-primary" /></div>
+            <div>
+              <div className="text-sm font-medium">Enter your verification code</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Confirm setup with the 6-digit code from your app.</div>
+            </div>
+          </div>
+        </div>
+
+        {error && (
+          <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
+            <Lock className="h-4 w-4 shrink-0 mt-0.5" /><span>{error}</span>
+          </div>
+        )}
+
+        <Button className="w-full h-10" onClick={startSetup} disabled={isLoading}>
+          {isLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Loading…</> : "Get Started"}
+        </Button>
+
+        <button type="button" className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-1" onClick={onBack}>
+          <ArrowLeft className="h-3.5 w-3.5" /> Back to login
+        </button>
+      </div>
+    );
+  }
+
+  if (step === "qr") {
+    return (
+      <div className="space-y-6">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold tracking-tight">Scan QR Code</h1>
+          <p className="text-sm text-muted-foreground">
+            Open your authenticator app and scan this code to add Control HUB.
+          </p>
+        </div>
+
+        <div className="flex flex-col items-center gap-4">
+          {qrDataUrl && (
+            <div className="rounded-xl border border-muted p-3 bg-white shadow-sm">
+              <img src={qrDataUrl} alt="Authenticator QR code" className="block" width={220} height={220} />
+            </div>
+          )}
+
+          <button
+            type="button"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-4"
+            onClick={() => setShowManual((v) => !v)}
+          >
+            {showManual ? "Hide" : "Can't scan?"} Enter code manually
+          </button>
+
+          {showManual && (
+            <div className="w-full rounded-lg bg-muted/50 border p-3 text-center font-mono text-sm tracking-wider break-all select-all">
+              {manualKey}
+            </div>
+          )}
+        </div>
+
+        <Button className="w-full h-10" onClick={() => setStep("verify")}>
+          I've scanned the code — Continue
+        </Button>
+
+        <button type="button" className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors" onClick={onBack}>
+          <ArrowLeft className="h-3.5 w-3.5 inline mr-1" /> Back
+        </button>
+      </div>
+    );
+  }
+
+  if (step === "verify") {
+    return (
+      <div className="space-y-6">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold tracking-tight">Verify Your Code</h1>
+          <p className="text-sm text-muted-foreground">
+            Enter the 6-digit code from your authenticator app to complete setup.
+          </p>
+        </div>
+
+        <OtpInput value={code} onChange={setCode} disabled={isLoading} />
+
+        {error && (
+          <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
+            <Lock className="h-4 w-4 shrink-0 mt-0.5" /><span>{error}</span>
+          </div>
+        )}
+
+        <Button className="w-full h-10" onClick={handleVerify} disabled={isLoading || code.length !== 6}>
+          {isLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Verifying…</> : "Verify & Enable MFA"}
+        </Button>
+
+        <button type="button" className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors" onClick={() => { setStep("qr"); setCode(""); setError(""); }}>
+          <ArrowLeft className="h-3.5 w-3.5 inline mr-1" /> Back
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="space-y-1">
+        <div className="flex items-center gap-2">
+          <div className="rounded-full bg-green-100 p-1">
+            <Check className="h-4 w-4 text-green-600" />
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight">MFA Enabled!</h1>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Save these recovery codes somewhere safe. Each can only be used once to bypass MFA if you lose your device.
+        </p>
+      </div>
+
+      <div className="rounded-lg border bg-muted/30 p-4">
+        <div className="grid grid-cols-2 gap-2 font-mono text-sm">
+          {recoveryCodes.map((c, i) => (
+            <div key={i} className="flex items-center gap-1.5 bg-background rounded px-2 py-1">
+              <span className="text-muted-foreground text-xs w-4 shrink-0">{i + 1}.</span>
+              <span className="tracking-wider">{c}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        <Button variant="outline" className="flex-1 gap-2" onClick={copyAllCodes}>
+          {copied ? <><Check className="h-4 w-4" />Copied!</> : <><Copy className="h-4 w-4" />Copy All</>}
+        </Button>
+        <Button
+          variant={savedCodes ? "default" : "outline"}
+          className="flex-1 gap-2"
+          onClick={() => setSavedCodes(true)}
+        >
+          <Check className={cn("h-4 w-4", savedCodes ? "opacity-100" : "opacity-50")} />
+          I've Saved Them
+        </Button>
+      </div>
+
+      <Button className="w-full h-10" onClick={finishSetup} disabled={!savedCodes}>
+        Enter Control HUB
+      </Button>
+
+      {!savedCodes && (
+        <p className="text-xs text-center text-amber-600">
+          Please save your recovery codes before continuing — you won't see them again.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Login Form ───────────────────────────────────────────────────────────────
+
 export default function Login() {
-  const { login } = useAuth();
+  const { login, mfaChallenge, clearMfaChallenge } = useAuth();
   const [, setLocation] = useLocation();
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -89,7 +488,10 @@ export default function Login() {
       setError("");
       setIsLoading(true);
       await login(data);
-      setLocation("/");
+      // If no MFA challenge raised, navigate to dashboard
+      if (!mfaChallenge) {
+        setLocation("/");
+      }
     } catch (e: any) {
       const apiMessage =
         e?.data?.error ||
@@ -101,6 +503,140 @@ export default function Login() {
       setIsLoading(false);
     }
   };
+
+  const rightPanel = (() => {
+    if (mfaChallenge?.type === "mfa_required") {
+      return (
+        <MfaVerifyScreen
+          mfaStateToken={mfaChallenge.mfaStateToken}
+          onBack={clearMfaChallenge}
+        />
+      );
+    }
+    if (mfaChallenge?.type === "mfa_setup_required") {
+      return (
+        <MfaSetupScreen
+          mfaStateToken={mfaChallenge.mfaStateToken}
+          onBack={clearMfaChallenge}
+        />
+      );
+    }
+    return (
+      <>
+        {/* Mobile logo */}
+        <div className="flex flex-col items-center gap-3 lg:hidden">
+          <img
+            src="/assets/control-hub-icon.png"
+            alt="Control HUB"
+            className="h-14 w-14 rounded-2xl object-cover shadow-md"
+          />
+          <div className="text-center">
+            <h1 className="text-2xl font-bold tracking-tight">Control HUB</h1>
+            <p className="text-sm text-muted-foreground">CMMC Compliance &amp; Evidence Management</p>
+          </div>
+        </div>
+
+        {/* Desktop heading */}
+        <div className="hidden lg:flex items-center gap-4">
+          <img
+            src="/assets/control-hub-icon.png"
+            alt="Control HUB"
+            className="h-14 w-14 rounded-2xl object-cover shadow-md shrink-0"
+          />
+          <div className="space-y-0.5">
+            <h1 className="text-2xl font-bold tracking-tight">Sign in to your account</h1>
+            <p className="text-sm text-muted-foreground">CMMC Compliance &amp; Evidence Management</p>
+          </div>
+        </div>
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium">Email address</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="name@example.com"
+                      autoComplete="email"
+                      className="h-10"
+                      {...field}
+                      ref={(el) => {
+                        field.ref(el);
+                        (emailRef as any).current = el;
+                      }}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium">Password</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        autoComplete="current-password"
+                        className="h-10 pr-10"
+                        {...field}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground transition-colors"
+                        tabIndex={-1}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {error && (
+              <div
+                role="alert"
+                className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
+              >
+                <Lock className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <Button
+              type="submit"
+              className="w-full h-10 font-medium"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Signing in…
+                </>
+              ) : (
+                "Sign in"
+              )}
+            </Button>
+          </form>
+        </Form>
+
+        <p className="text-center text-xs text-muted-foreground">
+          Secure Compliance Platform &mdash; Control HUB
+        </p>
+      </>
+    );
+  })();
 
   return (
     <div className="min-h-screen flex">
@@ -150,120 +686,10 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Right panel — login form */}
+      {/* Right panel */}
       <div className="flex-1 flex flex-col items-center justify-center bg-background px-6 py-12">
         <div className="w-full max-w-sm space-y-8">
-          {/* Mobile logo */}
-          <div className="flex flex-col items-center gap-3 lg:hidden">
-            <img
-              src="/assets/control-hub-icon.png"
-              alt="Control HUB"
-              className="h-14 w-14 rounded-2xl object-cover shadow-md"
-            />
-            <div className="text-center">
-              <h1 className="text-2xl font-bold tracking-tight">Control HUB</h1>
-              <p className="text-sm text-muted-foreground">CMMC Compliance &amp; Evidence Management</p>
-            </div>
-          </div>
-
-          {/* Desktop heading */}
-          <div className="hidden lg:flex items-center gap-4">
-            <img
-              src="/assets/control-hub-icon.png"
-              alt="Control HUB"
-              className="h-14 w-14 rounded-2xl object-cover shadow-md shrink-0"
-            />
-            <div className="space-y-0.5">
-              <h1 className="text-2xl font-bold tracking-tight">Sign in to your account</h1>
-              <p className="text-sm text-muted-foreground">CMMC Compliance &amp; Evidence Management</p>
-            </div>
-          </div>
-
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">Email address</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="name@example.com"
-                        autoComplete="email"
-                        className="h-10"
-                        {...field}
-                        ref={(el) => {
-                          field.ref(el);
-                          (emailRef as any).current = el;
-                        }}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">Password</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Input
-                          type={showPassword ? "text" : "password"}
-                          autoComplete="current-password"
-                          className="h-10 pr-10"
-                          {...field}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword((v) => !v)}
-                          className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground transition-colors"
-                          tabIndex={-1}
-                          aria-label={showPassword ? "Hide password" : "Show password"}
-                        >
-                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </button>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {error && (
-                <div
-                  role="alert"
-                  className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
-                >
-                  <Lock className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>{error}</span>
-                </div>
-              )}
-
-              <Button
-                type="submit"
-                className="w-full h-10 font-medium"
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Signing in…
-                  </>
-                ) : (
-                  "Sign in"
-                )}
-              </Button>
-            </form>
-          </Form>
-
-          <p className="text-center text-xs text-muted-foreground">
-            Secure Compliance Platform &mdash; Control HUB
-          </p>
+          {rightPanel}
         </div>
       </div>
     </div>

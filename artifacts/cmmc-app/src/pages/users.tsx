@@ -15,6 +15,8 @@ import {
   useUpdateUserOrgMembership,
   useRemoveUserFromOrg,
   useListOrganizations,
+  useMfaReset,
+  useUnlockUser,
 } from "@workspace/api-client-react";
 import type { User, UserOrgMembership, OrganizationSummary } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
@@ -938,6 +940,28 @@ export default function Users() {
   const deactivateMutation = useDeactivateUser();
   const activateMutation = useActivateUser();
   const deleteMutation = useDeleteUser();
+  const mfaResetMutation = useMfaReset();
+  const unlockMutation = useUnlockUser();
+
+  const handleMfaReset = async (u: User) => {
+    try {
+      await mfaResetMutation.mutateAsync({ data: { userId: u.id } });
+      toast({ title: `MFA reset for ${u.name}. They must re-enroll on next login.` });
+      invalidate();
+    } catch {
+      toast({ title: "Failed to reset MFA", variant: "destructive" });
+    }
+  };
+
+  const handleUnlock = async (u: User) => {
+    try {
+      await unlockMutation.mutateAsync({ data: { userId: u.id } });
+      toast({ title: `Account unlocked for ${u.name}` });
+      invalidate();
+    } catch {
+      toast({ title: "Failed to unlock account", variant: "destructive" });
+    }
+  };
 
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [openDialog, setOpenDialog] = useState<DialogKind | null>(null);
@@ -1065,6 +1089,7 @@ export default function Users() {
                   <TableHead>Global Role</TableHead>
                   <TableHead>Title / Dept</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>MFA</TableHead>
                   <TableHead>Last Login</TableHead>
                   {isAdmin && <TableHead className="w-10" />}
                 </TableRow>
@@ -1109,8 +1134,19 @@ export default function Users() {
                         <Badge variant="secondary">Inactive</Badge>
                       )}
                     </TableCell>
+                    <TableCell>
+                      {u.mfaEnabled ? (
+                        <Badge variant="outline" className="border-green-500 text-green-700 gap-1 text-xs">
+                          <ShieldCheck className="h-3 w-3" /> Enabled
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-muted-foreground text-xs">
+                          Off
+                        </Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {formatDate((u as any).lastLoginAt)}
+                      {formatDate(u.lastLoginAt ?? null)}
                     </TableCell>
                     {isAdmin && (
                       <TableCell>
@@ -1152,6 +1188,25 @@ export default function Users() {
                               >
                                 <UserCheck className="h-4 w-4" />
                                 Reactivate
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            {u.mfaEnabled && (
+                              <DropdownMenuItem
+                                onClick={() => handleMfaReset(u)}
+                                className="gap-2"
+                              >
+                                <ShieldCheck className="h-4 w-4" />
+                                Reset MFA
+                              </DropdownMenuItem>
+                            )}
+                            {u.lockedUntil && new Date(u.lockedUntil) > new Date() && (
+                              <DropdownMenuItem
+                                onClick={() => handleUnlock(u)}
+                                className="gap-2"
+                              >
+                                <ShieldCheck className="h-4 w-4" />
+                                Unlock Account
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuSeparator />

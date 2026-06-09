@@ -37,6 +37,10 @@ router.get("/users", requireAuth, async (req, res) => {
       isActive: usersTable.isActive,
       lastLoginAt: usersTable.lastLoginAt,
       createdAt: usersTable.createdAt,
+      mfaEnabled: usersTable.mfaEnabled,
+      mfaRequired: usersTable.mfaRequired,
+      lockedUntil: usersTable.lockedUntil,
+      failedLoginCount: usersTable.failedLoginCount,
     })
     .from(usersTable)
     .orderBy(usersTable.name);

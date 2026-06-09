@@ -1,12 +1,19 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGetMe, useLogin, useLogout } from "@workspace/api-client-react";
 import type { User, LoginBody } from "@workspace/api-client-react";
 
+export type MfaChallenge =
+  | { type: "mfa_required"; mfaStateToken: string }
+  | { type: "mfa_setup_required"; mfaStateToken: string };
+
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
+  mfaChallenge: MfaChallenge | null;
+  clearMfaChallenge: () => void;
   login: (data: LoginBody) => Promise<void>;
+  loginWithToken: (token: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -20,15 +27,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       retry: false,
     }
   });
+  const [mfaChallenge, setMfaChallenge] = useState<MfaChallenge | null>(null);
 
   const loginMutation = useLogin();
   const logoutMutation = useLogout();
 
   const handleLogin = async (data: LoginBody) => {
     const res = await loginMutation.mutateAsync({ data });
+
+    if (res.mfa_required && res.mfa_state_token) {
+      setMfaChallenge({ type: "mfa_required", mfaStateToken: res.mfa_state_token });
+      return;
+    }
+    if (res.mfa_setup_required && res.mfa_state_token) {
+      setMfaChallenge({ type: "mfa_setup_required", mfaStateToken: res.mfa_state_token });
+      return;
+    }
+
     localStorage.setItem("auth_token", res.token);
-    // A normal login is never a demo session — clear demo flags so the
-    // demo banner doesn't bleed over from a previous demo session.
+    localStorage.removeItem("isDemoMode");
+    await refetch();
+  };
+
+  const handleLoginWithToken = async (token: string) => {
+    setMfaChallenge(null);
+    localStorage.setItem("auth_token", token);
     localStorage.removeItem("isDemoMode");
     await refetch();
   };
@@ -42,15 +65,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem("auth_token");
       localStorage.removeItem("isDemoMode");
       localStorage.removeItem("cmmc_active_org_id");
-      // Clear all cached query data so the app immediately treats the
-      // user as unauthenticated without relying on stale cache.
+      setMfaChallenge(null);
       await qc.resetQueries({ queryKey: ["me"] });
       qc.clear();
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user: user || null, isLoading, login: handleLogin, logout: handleLogout }}>
+    <AuthContext.Provider value={{
+      user: user || null,
+      isLoading,
+      mfaChallenge,
+      clearMfaChallenge: () => setMfaChallenge(null),
+      login: handleLogin,
+      loginWithToken: handleLoginWithToken,
+      logout: handleLogout,
+    }}>
       {children}
     </AuthContext.Provider>
   );

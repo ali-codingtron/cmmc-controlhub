@@ -39,8 +39,16 @@ export const LoginResponse = zod.object({
     department: zod.string().nullish(),
     isActive: zod.boolean(),
     createdAt: zod.coerce.date(),
+    mfaEnabled: zod.boolean(),
+    mfaRequired: zod.boolean().optional(),
+    lockedUntil: zod.coerce.date().nullish(),
+    failedLoginCount: zod.number(),
+    lastLoginAt: zod.coerce.date().nullish(),
   }),
   token: zod.string(),
+  mfa_required: zod.boolean().optional(),
+  mfa_setup_required: zod.boolean().optional(),
+  mfa_state_token: zod.string().optional(),
 });
 
 /**
@@ -69,6 +77,254 @@ export const GetMeResponse = zod.object({
   department: zod.string().nullish(),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
+  mfaEnabled: zod.boolean(),
+  mfaRequired: zod.boolean().optional(),
+  lockedUntil: zod.coerce.date().nullish(),
+  failedLoginCount: zod.number(),
+  lastLoginAt: zod.coerce.date().nullish(),
+});
+
+/**
+ * @summary Start TOTP MFA setup — returns otpauth URI and manual key
+ */
+export const MfaSetupStartResponse = zod.object({
+  otpAuthUri: zod.string(),
+  manualKey: zod.string(),
+});
+
+/**
+ * @summary Verify first TOTP code and complete MFA enrollment
+ */
+export const MfaSetupVerifyBody = zod.object({
+  code: zod.string(),
+});
+
+export const MfaSetupVerifyResponse = zod.object({
+  recoveryCodes: zod.array(zod.string()),
+  token: zod.string(),
+  user: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    email: zod.string(),
+    role: zod.enum([
+      "admin",
+      "compliance_manager",
+      "it_contributor",
+      "reviewer",
+      "executive_viewer",
+      "assessor",
+    ]),
+    title: zod.string().nullish(),
+    department: zod.string().nullish(),
+    isActive: zod.boolean(),
+    createdAt: zod.coerce.date(),
+    mfaEnabled: zod.boolean(),
+    mfaRequired: zod.boolean().optional(),
+    lockedUntil: zod.coerce.date().nullish(),
+    failedLoginCount: zod.number(),
+    lastLoginAt: zod.coerce.date().nullish(),
+  }),
+});
+
+/**
+ * @summary Verify TOTP code during login challenge
+ */
+export const MfaVerifyBody = zod.object({
+  code: zod.string(),
+});
+
+export const MfaVerifyResponse = zod.object({
+  user: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    email: zod.string(),
+    role: zod.enum([
+      "admin",
+      "compliance_manager",
+      "it_contributor",
+      "reviewer",
+      "executive_viewer",
+      "assessor",
+    ]),
+    title: zod.string().nullish(),
+    department: zod.string().nullish(),
+    isActive: zod.boolean(),
+    createdAt: zod.coerce.date(),
+    mfaEnabled: zod.boolean(),
+    mfaRequired: zod.boolean().optional(),
+    lockedUntil: zod.coerce.date().nullish(),
+    failedLoginCount: zod.number(),
+    lastLoginAt: zod.coerce.date().nullish(),
+  }),
+  token: zod.string(),
+  mfa_required: zod.boolean().optional(),
+  mfa_setup_required: zod.boolean().optional(),
+  mfa_state_token: zod.string().optional(),
+});
+
+/**
+ * @summary Use a recovery code in place of TOTP during login
+ */
+export const MfaRecoveryCodeBody = zod.object({
+  code: zod.string(),
+});
+
+export const MfaRecoveryCodeResponse = zod.object({
+  user: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    email: zod.string(),
+    role: zod.enum([
+      "admin",
+      "compliance_manager",
+      "it_contributor",
+      "reviewer",
+      "executive_viewer",
+      "assessor",
+    ]),
+    title: zod.string().nullish(),
+    department: zod.string().nullish(),
+    isActive: zod.boolean(),
+    createdAt: zod.coerce.date(),
+    mfaEnabled: zod.boolean(),
+    mfaRequired: zod.boolean().optional(),
+    lockedUntil: zod.coerce.date().nullish(),
+    failedLoginCount: zod.number(),
+    lastLoginAt: zod.coerce.date().nullish(),
+  }),
+  token: zod.string(),
+  mfa_required: zod.boolean().optional(),
+  mfa_setup_required: zod.boolean().optional(),
+  mfa_state_token: zod.string().optional(),
+});
+
+/**
+ * @summary Admin — reset a user's MFA enrollment
+ */
+export const MfaResetBody = zod.object({
+  userId: zod.string(),
+});
+
+export const MfaResetResponse = zod.object({
+  success: zod.boolean(),
+});
+
+/**
+ * @summary Disable MFA for a user (admin or self with password+code)
+ */
+export const MfaDisableBody = zod.object({
+  userId: zod.string().optional(),
+  password: zod.string().optional(),
+  code: zod.string().optional(),
+});
+
+export const MfaDisableResponse = zod.object({
+  success: zod.boolean(),
+});
+
+/**
+ * @summary Admin — require MFA for a specific user
+ */
+export const MfaRequireUserBody = zod.object({
+  userId: zod.string(),
+  mfaRequired: zod.boolean().optional(),
+});
+
+export const MfaRequireUserResponse = zod.object({
+  success: zod.boolean(),
+});
+
+/**
+ * @summary Admin — unlock a locked user account
+ */
+export const UnlockUserBody = zod.object({
+  userId: zod.string(),
+});
+
+export const UnlockUserResponse = zod.object({
+  success: zod.boolean(),
+});
+
+/**
+ * @summary Admin — get global security settings
+ */
+export const GetSecuritySettingsResponse = zod.object({
+  id: zod.string(),
+  mfaEnforcementMode: zod.enum([
+    "disabled",
+    "admins_only",
+    "privileged",
+    "all_users",
+  ]),
+  maxFailedLoginAttempts: zod.number(),
+  lockoutDurationMinutes: zod.number(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Admin — update global security settings
+ */
+export const UpdateSecuritySettingsBody = zod.object({
+  mfaEnforcementMode: zod
+    .enum(["disabled", "admins_only", "privileged", "all_users"])
+    .optional(),
+  maxFailedLoginAttempts: zod.number().optional(),
+  lockoutDurationMinutes: zod.number().optional(),
+});
+
+export const UpdateSecuritySettingsResponse = zod.object({
+  id: zod.string(),
+  mfaEnforcementMode: zod.enum([
+    "disabled",
+    "admins_only",
+    "privileged",
+    "all_users",
+  ]),
+  maxFailedLoginAttempts: zod.number(),
+  lockoutDurationMinutes: zod.number(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Admin — get MFA adoption stats and recent security events
+ */
+export const GetSecurityCenterResponse = zod.object({
+  settings: zod.object({
+    id: zod.string(),
+    mfaEnforcementMode: zod.enum([
+      "disabled",
+      "admins_only",
+      "privileged",
+      "all_users",
+    ]),
+    maxFailedLoginAttempts: zod.number(),
+    lockoutDurationMinutes: zod.number(),
+    updatedAt: zod.coerce.date(),
+  }),
+  stats: zod.object({
+    totalUsers: zod.number(),
+    enrolledCount: zod.number(),
+    notEnrolledCount: zod.number(),
+  }),
+  privilegedWithoutMfa: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      email: zod.string(),
+      role: zod.string(),
+    }),
+  ),
+  lockedAccounts: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      email: zod.string(),
+      role: zod.string(),
+      lockedUntil: zod.coerce.date().nullish(),
+      failedLoginCount: zod.number(),
+    }),
+  ),
+  recentEvents: zod.array(zod.object({}).passthrough()),
 });
 
 /**
@@ -90,6 +346,11 @@ export const ListUsersResponseItem = zod.object({
   department: zod.string().nullish(),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
+  mfaEnabled: zod.boolean(),
+  mfaRequired: zod.boolean().optional(),
+  lockedUntil: zod.coerce.date().nullish(),
+  failedLoginCount: zod.number(),
+  lastLoginAt: zod.coerce.date().nullish(),
 });
 export const ListUsersResponse = zod.array(ListUsersResponseItem);
 
@@ -135,6 +396,11 @@ export const GetUserResponse = zod.object({
   department: zod.string().nullish(),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
+  mfaEnabled: zod.boolean(),
+  mfaRequired: zod.boolean().optional(),
+  lockedUntil: zod.coerce.date().nullish(),
+  failedLoginCount: zod.number(),
+  lastLoginAt: zod.coerce.date().nullish(),
 });
 
 /**
@@ -178,6 +444,11 @@ export const UpdateUserResponse = zod.object({
   department: zod.string().nullish(),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
+  mfaEnabled: zod.boolean(),
+  mfaRequired: zod.boolean().optional(),
+  lockedUntil: zod.coerce.date().nullish(),
+  failedLoginCount: zod.number(),
+  lastLoginAt: zod.coerce.date().nullish(),
 });
 
 /**
@@ -210,6 +481,11 @@ export const DeactivateUserResponse = zod.object({
   department: zod.string().nullish(),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
+  mfaEnabled: zod.boolean(),
+  mfaRequired: zod.boolean().optional(),
+  lockedUntil: zod.coerce.date().nullish(),
+  failedLoginCount: zod.number(),
+  lastLoginAt: zod.coerce.date().nullish(),
 });
 
 /**
@@ -235,6 +511,11 @@ export const ActivateUserResponse = zod.object({
   department: zod.string().nullish(),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
+  mfaEnabled: zod.boolean(),
+  mfaRequired: zod.boolean().optional(),
+  lockedUntil: zod.coerce.date().nullish(),
+  failedLoginCount: zod.number(),
+  lastLoginAt: zod.coerce.date().nullish(),
 });
 
 /**

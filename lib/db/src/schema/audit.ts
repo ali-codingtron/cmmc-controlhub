@@ -47,6 +47,19 @@ export const auditActionEnum = pgEnum("audit_action", [
   "complete",
   "complete_checklist",
   "run_doc_checks",
+  "password_changed",
+  "login_failed",
+  "account_locked",
+  "account_unlocked",
+  "mfa_setup_started",
+  "mfa_enabled",
+  "mfa_verify_success",
+  "mfa_verify_failure",
+  "mfa_recovery_code_used",
+  "mfa_reset_by_admin",
+  "mfa_disabled",
+  "mfa_policy_changed",
+  "mfa_required_set",
 ]);
 
 export const auditLogsTable = pgTable("audit_logs", {

@@ -43,11 +43,119 @@ export interface User {
   department?: string | null;
   isActive: boolean;
   createdAt: string;
+  mfaEnabled: boolean;
+  mfaRequired?: boolean;
+  lockedUntil?: string | null;
+  failedLoginCount: number;
+  lastLoginAt?: string | null;
 }
 
 export interface AuthResponse {
   user: User;
   token: string;
+  mfa_required?: boolean;
+  mfa_setup_required?: boolean;
+  mfa_state_token?: string;
+}
+
+export interface MfaSetupStartResponse {
+  otpAuthUri: string;
+  manualKey: string;
+}
+
+export interface MfaSetupVerifyResponse {
+  recoveryCodes: string[];
+  token: string;
+  user: User;
+}
+
+export interface MfaCodeBody {
+  code: string;
+}
+
+export interface MfaRecoveryCodeBody {
+  code: string;
+}
+
+export interface MfaAdminActionBody {
+  userId: string;
+}
+
+export interface MfaDisableBody {
+  userId?: string;
+  password?: string;
+  code?: string;
+}
+
+export interface MfaRequireUserBody {
+  userId: string;
+  mfaRequired?: boolean;
+}
+
+export type SecuritySettingsMfaEnforcementMode =
+  (typeof SecuritySettingsMfaEnforcementMode)[keyof typeof SecuritySettingsMfaEnforcementMode];
+
+export const SecuritySettingsMfaEnforcementMode = {
+  disabled: "disabled",
+  admins_only: "admins_only",
+  privileged: "privileged",
+  all_users: "all_users",
+} as const;
+
+export interface SecuritySettings {
+  id: string;
+  mfaEnforcementMode: SecuritySettingsMfaEnforcementMode;
+  maxFailedLoginAttempts: number;
+  lockoutDurationMinutes: number;
+  updatedAt: string;
+}
+
+export type UpdateSecuritySettingsBodyMfaEnforcementMode =
+  (typeof UpdateSecuritySettingsBodyMfaEnforcementMode)[keyof typeof UpdateSecuritySettingsBodyMfaEnforcementMode];
+
+export const UpdateSecuritySettingsBodyMfaEnforcementMode = {
+  disabled: "disabled",
+  admins_only: "admins_only",
+  privileged: "privileged",
+  all_users: "all_users",
+} as const;
+
+export interface UpdateSecuritySettingsBody {
+  mfaEnforcementMode?: UpdateSecuritySettingsBodyMfaEnforcementMode;
+  maxFailedLoginAttempts?: number;
+  lockoutDurationMinutes?: number;
+}
+
+export type SecurityCenterDataStats = {
+  totalUsers: number;
+  enrolledCount: number;
+  notEnrolledCount: number;
+};
+
+export type SecurityCenterDataPrivilegedWithoutMfaItem = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+};
+
+export type SecurityCenterDataLockedAccountsItem = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  lockedUntil?: string | null;
+  failedLoginCount: number;
+};
+
+export type SecurityCenterDataRecentEventsItem = { [key: string]: unknown };
+
+export interface SecurityCenterData {
+  settings: SecuritySettings;
+  stats: SecurityCenterDataStats;
+  privilegedWithoutMfa: SecurityCenterDataPrivilegedWithoutMfaItem[];
+  lockedAccounts: SecurityCenterDataLockedAccountsItem[];
+  recentEvents: SecurityCenterDataRecentEventsItem[];
 }
 
 export type CreateUserBodyRole =

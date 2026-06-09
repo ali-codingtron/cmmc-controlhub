@@ -112,6 +112,195 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /auth/mfa/setup/start:
+    post:
+      operationId: mfaSetupStart
+      tags: [auth]
+      summary: Start TOTP MFA setup — returns otpauth URI and manual key
+      responses:
+        "200":
+          description: OTP auth URI and manual key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MfaSetupStartResponse"
+
+  /auth/mfa/setup/verify:
+    post:
+      operationId: mfaSetupVerify
+      tags: [auth]
+      summary: Verify first TOTP code and complete MFA enrollment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MfaCodeBody"
+      responses:
+        "200":
+          description: Recovery codes + session token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MfaSetupVerifyResponse"
+
+  /auth/mfa/verify:
+    post:
+      operationId: mfaVerify
+      tags: [auth]
+      summary: Verify TOTP code during login challenge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MfaCodeBody"
+      responses:
+        "200":
+          description: Full session token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+
+  /auth/mfa/recovery-code:
+    post:
+      operationId: mfaRecoveryCode
+      tags: [auth]
+      summary: Use a recovery code in place of TOTP during login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MfaRecoveryCodeBody"
+      responses:
+        "200":
+          description: Full session token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+
+  /auth/mfa/reset:
+    post:
+      operationId: mfaReset
+      tags: [auth]
+      summary: Admin — reset a user's MFA enrollment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MfaAdminActionBody"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /auth/mfa/disable:
+    post:
+      operationId: mfaDisable
+      tags: [auth]
+      summary: Disable MFA for a user (admin or self with password+code)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MfaDisableBody"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /auth/mfa/require-user:
+    patch:
+      operationId: mfaRequireUser
+      tags: [auth]
+      summary: Admin — require MFA for a specific user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MfaRequireUserBody"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /auth/unlock-user:
+    post:
+      operationId: unlockUser
+      tags: [auth]
+      summary: Admin — unlock a locked user account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MfaAdminActionBody"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /auth/security-settings:
+    get:
+      operationId: getSecuritySettings
+      tags: [auth]
+      summary: Admin — get global security settings
+      responses:
+        "200":
+          description: Security settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecuritySettings"
+    patch:
+      operationId: updateSecuritySettings
+      tags: [auth]
+      summary: Admin — update global security settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSecuritySettingsBody"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecuritySettings"
+
+  /auth/security-center:
+    get:
+      operationId: getSecurityCenter
+      tags: [auth]
+      summary: Admin — get MFA adoption stats and recent security events
+      responses:
+        "200":
+          description: Security center data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecurityCenterData"
+
   # ─── USERS ──────────────────────────────────────────────────
   /users:
     get:
@@ -2006,9 +2195,182 @@ components:
           $ref: "#/components/schemas/User"
         token:
           type: string
+        mfa_required:
+          type: boolean
+        mfa_setup_required:
+          type: boolean
+        mfa_state_token:
+          type: string
       required:
         - user
         - token
+
+    MfaSetupStartResponse:
+      type: object
+      properties:
+        otpAuthUri:
+          type: string
+        manualKey:
+          type: string
+      required:
+        - otpAuthUri
+        - manualKey
+
+    MfaSetupVerifyResponse:
+      type: object
+      properties:
+        recoveryCodes:
+          type: array
+          items:
+            type: string
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+      required:
+        - recoveryCodes
+        - token
+        - user
+
+    MfaCodeBody:
+      type: object
+      properties:
+        code:
+          type: string
+      required:
+        - code
+
+    MfaRecoveryCodeBody:
+      type: object
+      properties:
+        code:
+          type: string
+      required:
+        - code
+
+    MfaAdminActionBody:
+      type: object
+      properties:
+        userId:
+          type: string
+      required:
+        - userId
+
+    MfaDisableBody:
+      type: object
+      properties:
+        userId:
+          type: string
+        password:
+          type: string
+        code:
+          type: string
+
+    MfaRequireUserBody:
+      type: object
+      properties:
+        userId:
+          type: string
+        mfaRequired:
+          type: boolean
+      required:
+        - userId
+
+    SecuritySettings:
+      type: object
+      properties:
+        id:
+          type: string
+        mfaEnforcementMode:
+          type: string
+          enum: [disabled, admins_only, privileged, all_users]
+        maxFailedLoginAttempts:
+          type: integer
+        lockoutDurationMinutes:
+          type: integer
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - mfaEnforcementMode
+        - maxFailedLoginAttempts
+        - lockoutDurationMinutes
+        - updatedAt
+
+    UpdateSecuritySettingsBody:
+      type: object
+      properties:
+        mfaEnforcementMode:
+          type: string
+          enum: [disabled, admins_only, privileged, all_users]
+        maxFailedLoginAttempts:
+          type: integer
+        lockoutDurationMinutes:
+          type: integer
+
+    SecurityCenterData:
+      type: object
+      properties:
+        settings:
+          $ref: "#/components/schemas/SecuritySettings"
+        stats:
+          type: object
+          properties:
+            totalUsers:
+              type: integer
+            enrolledCount:
+              type: integer
+            notEnrolledCount:
+              type: integer
+          required:
+            - totalUsers
+            - enrolledCount
+            - notEnrolledCount
+        privilegedWithoutMfa:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              email:
+                type: string
+              role:
+                type: string
+            required: [id, name, email, role]
+        lockedAccounts:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              email:
+                type: string
+              role:
+                type: string
+              lockedUntil:
+                type: string
+                format: date-time
+                nullable: true
+              failedLoginCount:
+                type: integer
+            required: [id, name, email, role, failedLoginCount]
+        recentEvents:
+          type: array
+          items:
+            type: object
+      required:
+        - settings
+        - stats
+        - privilegedWithoutMfa
+        - lockedAccounts
+        - recentEvents
 
     # ─── USER ─────────────────────────────────────────────────
     User:
@@ -2034,6 +2396,20 @@ components:
         createdAt:
           type: string
           format: date-time
+        mfaEnabled:
+          type: boolean
+        mfaRequired:
+          type: boolean
+        lockedUntil:
+          type: string
+          format: date-time
+          nullable: true
+        failedLoginCount:
+          type: integer
+        lastLoginAt:
+          type: string
+          format: date-time
+          nullable: true
       required:
         - id
         - name
@@ -2041,6 +2417,8 @@ components:
         - role
         - isActive
         - createdAt
+        - mfaEnabled
+        - failedLoginCount
 
     CreateUserBody:
       type: object

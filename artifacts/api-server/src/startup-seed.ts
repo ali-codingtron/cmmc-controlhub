@@ -10,6 +10,7 @@ import {
   documentTemplatesTable,
   checklistItemsTable,
   organizationsTable,
+  securitySettingsTable,
 } from "@workspace/db";
 import { count, eq, sql } from "drizzle-orm";
 import { seedMonitoringItemsForOrg } from "./routes/monitoring";
@@ -173,11 +174,29 @@ async function seedMonitoringItems() {
   }
 }
 
+async function seedSecuritySettings() {
+  const rows = await db.select({ id: securitySettingsTable.id }).from(securitySettingsTable).limit(1);
+  if (rows.length > 0) return;
+
+  logger.info("Seeding default security settings...");
+  await db.insert(securitySettingsTable).values({
+    id: "global",
+    mfaEnforcementMode: "privileged",
+    maxFailedLoginAttempts: 5,
+    lockoutDurationMinutes: 15,
+    updatedAt: new Date(),
+  }).onConflictDoNothing();
+}
+
 async function migrateAuditEnum() {
   const missingValues = [
     "viewed", "deactivated", "activated", "password_reset", "org_access_changed",
     "create", "update", "generate", "submit_review", "approve", "reject",
     "activate", "archive", "complete", "complete_checklist", "run_doc_checks",
+    "password_changed", "login_failed", "account_locked", "account_unlocked",
+    "mfa_setup_started", "mfa_enabled", "mfa_verify_success", "mfa_verify_failure",
+    "mfa_recovery_code_used", "mfa_reset_by_admin", "mfa_disabled", "mfa_policy_changed",
+    "mfa_required_set",
   ];
   for (const val of missingValues) {
     try {
@@ -199,6 +218,7 @@ export async function runStartupSeed() {
     await seedRoadmapActions();
     await seedProcedureSteps();
     await seedDemoOrg();
+    await seedSecuritySettings();
   } catch (err) {
     logger.error({ err }, "Startup seed failed — app will continue but may lack reference data");
   }

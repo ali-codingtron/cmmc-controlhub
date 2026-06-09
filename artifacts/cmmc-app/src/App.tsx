@@ -36,6 +36,7 @@ import DocumentsMissing from "@/pages/documents-missing";
 import DocumentDetail from "@/pages/document-detail";
 import DocumentLogDetail from "@/pages/document-log-detail";
 import Organizations from "@/pages/organizations";
+import SecurityCenter from "@/pages/security-center";
 import AdminRoadmapBackfill from "@/pages/admin-roadmap-backfill";
 import SspOverview from "@/pages/ssp-overview";
 import SspSections from "@/pages/ssp-sections";
@@ -133,6 +134,7 @@ function AppRoutes() {
               <Route path="/users" component={Users} />
               <Route path="/settings" component={Settings} />
               <Route path="/organizations" component={Organizations} />
+              <Route path="/security" component={SecurityCenter} />
               <Route path="/admin/roadmap-backfill" component={AdminRoadmapBackfill} />
               <Route path="/documents" component={Documents} />
               <Route path="/documents/list" component={DocumentsList} />
