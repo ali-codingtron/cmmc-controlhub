@@ -2495,7 +2495,7 @@ components:
           enum: [admin, compliance_manager, it_contributor, reviewer, executive_viewer, assessor]
         status:
           type: string
-          enum: [invited, active, suspended, deactivated]
+          enum: [invited, pending_setup, active, suspended, deactivated]
           nullable: true
         title:
           type: string
@@ -2525,6 +2525,10 @@ components:
         failedLoginCount:
           type: integer
         lastLoginAt:
+          type: string
+          format: date-time
+          nullable: true
+        invitationExpiresAt:
           type: string
           format: date-time
           nullable: true
@@ -4591,6 +4595,8 @@ components:
               role:
                 type: string
             required: [orgId, role]
+        sendEmail:
+          type: boolean
       required: [name, email, role]
 
     ResendInvitationBody:
@@ -4598,6 +4604,8 @@ components:
       properties:
         userId:
           type: string
+        sendEmail:
+          type: boolean
       required: [userId]
 
     CancelInvitationBody:

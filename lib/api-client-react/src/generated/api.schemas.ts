@@ -38,6 +38,7 @@ export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus] | null;
 
 export const UserStatus = {
   invited: "invited",
+  pending_setup: "pending_setup",
   active: "active",
   suspended: "suspended",
   deactivated: "deactivated",
@@ -60,6 +61,7 @@ export interface User {
   lockedUntil?: string | null;
   failedLoginCount: number;
   lastLoginAt?: string | null;
+  invitationExpiresAt?: string | null;
 }
 
 export interface AuthResponse {
@@ -1448,10 +1450,12 @@ export interface SendInvitationBody {
   title?: string;
   department?: string;
   orgMemberships?: SendInvitationBodyOrgMembershipsItem[];
+  sendEmail?: boolean;
 }
 
 export interface ResendInvitationBody {
   userId: string;
+  sendEmail?: boolean;
 }
 
 export interface CancelInvitationBody {

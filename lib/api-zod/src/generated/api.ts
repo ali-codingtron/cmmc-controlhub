@@ -36,7 +36,7 @@ export const LoginResponse = zod.object({
       "assessor",
     ]),
     status: zod
-      .enum(["invited", "active", "suspended", "deactivated"])
+      .enum(["invited", "pending_setup", "active", "suspended", "deactivated"])
       .nullish(),
     title: zod.string().nullish(),
     department: zod.string().nullish(),
@@ -49,6 +49,7 @@ export const LoginResponse = zod.object({
     lockedUntil: zod.coerce.date().nullish(),
     failedLoginCount: zod.number(),
     lastLoginAt: zod.coerce.date().nullish(),
+    invitationExpiresAt: zod.coerce.date().nullish(),
   }),
   token: zod.string(),
   mfa_required: zod.boolean().optional(),
@@ -78,7 +79,9 @@ export const GetMeResponse = zod.object({
     "executive_viewer",
     "assessor",
   ]),
-  status: zod.enum(["invited", "active", "suspended", "deactivated"]).nullish(),
+  status: zod
+    .enum(["invited", "pending_setup", "active", "suspended", "deactivated"])
+    .nullish(),
   title: zod.string().nullish(),
   department: zod.string().nullish(),
   isActive: zod.boolean(),
@@ -90,6 +93,7 @@ export const GetMeResponse = zod.object({
   lockedUntil: zod.coerce.date().nullish(),
   failedLoginCount: zod.number(),
   lastLoginAt: zod.coerce.date().nullish(),
+  invitationExpiresAt: zod.coerce.date().nullish(),
 });
 
 /**
@@ -123,7 +127,7 @@ export const MfaSetupVerifyResponse = zod.object({
       "assessor",
     ]),
     status: zod
-      .enum(["invited", "active", "suspended", "deactivated"])
+      .enum(["invited", "pending_setup", "active", "suspended", "deactivated"])
       .nullish(),
     title: zod.string().nullish(),
     department: zod.string().nullish(),
@@ -136,6 +140,7 @@ export const MfaSetupVerifyResponse = zod.object({
     lockedUntil: zod.coerce.date().nullish(),
     failedLoginCount: zod.number(),
     lastLoginAt: zod.coerce.date().nullish(),
+    invitationExpiresAt: zod.coerce.date().nullish(),
   }),
 });
 
@@ -160,7 +165,7 @@ export const MfaVerifyResponse = zod.object({
       "assessor",
     ]),
     status: zod
-      .enum(["invited", "active", "suspended", "deactivated"])
+      .enum(["invited", "pending_setup", "active", "suspended", "deactivated"])
       .nullish(),
     title: zod.string().nullish(),
     department: zod.string().nullish(),
@@ -173,6 +178,7 @@ export const MfaVerifyResponse = zod.object({
     lockedUntil: zod.coerce.date().nullish(),
     failedLoginCount: zod.number(),
     lastLoginAt: zod.coerce.date().nullish(),
+    invitationExpiresAt: zod.coerce.date().nullish(),
   }),
   token: zod.string(),
   mfa_required: zod.boolean().optional(),
@@ -201,7 +207,7 @@ export const MfaRecoveryCodeResponse = zod.object({
       "assessor",
     ]),
     status: zod
-      .enum(["invited", "active", "suspended", "deactivated"])
+      .enum(["invited", "pending_setup", "active", "suspended", "deactivated"])
       .nullish(),
     title: zod.string().nullish(),
     department: zod.string().nullish(),
@@ -214,6 +220,7 @@ export const MfaRecoveryCodeResponse = zod.object({
     lockedUntil: zod.coerce.date().nullish(),
     failedLoginCount: zod.number(),
     lastLoginAt: zod.coerce.date().nullish(),
+    invitationExpiresAt: zod.coerce.date().nullish(),
   }),
   token: zod.string(),
   mfa_required: zod.boolean().optional(),
@@ -365,7 +372,9 @@ export const ListUsersResponseItem = zod.object({
     "executive_viewer",
     "assessor",
   ]),
-  status: zod.enum(["invited", "active", "suspended", "deactivated"]).nullish(),
+  status: zod
+    .enum(["invited", "pending_setup", "active", "suspended", "deactivated"])
+    .nullish(),
   title: zod.string().nullish(),
   department: zod.string().nullish(),
   isActive: zod.boolean(),
@@ -377,6 +386,7 @@ export const ListUsersResponseItem = zod.object({
   lockedUntil: zod.coerce.date().nullish(),
   failedLoginCount: zod.number(),
   lastLoginAt: zod.coerce.date().nullish(),
+  invitationExpiresAt: zod.coerce.date().nullish(),
 });
 export const ListUsersResponse = zod.array(ListUsersResponseItem);
 
@@ -418,7 +428,9 @@ export const GetUserResponse = zod.object({
     "executive_viewer",
     "assessor",
   ]),
-  status: zod.enum(["invited", "active", "suspended", "deactivated"]).nullish(),
+  status: zod
+    .enum(["invited", "pending_setup", "active", "suspended", "deactivated"])
+    .nullish(),
   title: zod.string().nullish(),
   department: zod.string().nullish(),
   isActive: zod.boolean(),
@@ -430,6 +442,7 @@ export const GetUserResponse = zod.object({
   lockedUntil: zod.coerce.date().nullish(),
   failedLoginCount: zod.number(),
   lastLoginAt: zod.coerce.date().nullish(),
+  invitationExpiresAt: zod.coerce.date().nullish(),
 });
 
 /**
@@ -469,7 +482,9 @@ export const UpdateUserResponse = zod.object({
     "executive_viewer",
     "assessor",
   ]),
-  status: zod.enum(["invited", "active", "suspended", "deactivated"]).nullish(),
+  status: zod
+    .enum(["invited", "pending_setup", "active", "suspended", "deactivated"])
+    .nullish(),
   title: zod.string().nullish(),
   department: zod.string().nullish(),
   isActive: zod.boolean(),
@@ -481,6 +496,7 @@ export const UpdateUserResponse = zod.object({
   lockedUntil: zod.coerce.date().nullish(),
   failedLoginCount: zod.number(),
   lastLoginAt: zod.coerce.date().nullish(),
+  invitationExpiresAt: zod.coerce.date().nullish(),
 });
 
 /**
@@ -509,7 +525,9 @@ export const DeactivateUserResponse = zod.object({
     "executive_viewer",
     "assessor",
   ]),
-  status: zod.enum(["invited", "active", "suspended", "deactivated"]).nullish(),
+  status: zod
+    .enum(["invited", "pending_setup", "active", "suspended", "deactivated"])
+    .nullish(),
   title: zod.string().nullish(),
   department: zod.string().nullish(),
   isActive: zod.boolean(),
@@ -521,6 +539,7 @@ export const DeactivateUserResponse = zod.object({
   lockedUntil: zod.coerce.date().nullish(),
   failedLoginCount: zod.number(),
   lastLoginAt: zod.coerce.date().nullish(),
+  invitationExpiresAt: zod.coerce.date().nullish(),
 });
 
 /**
@@ -542,7 +561,9 @@ export const ActivateUserResponse = zod.object({
     "executive_viewer",
     "assessor",
   ]),
-  status: zod.enum(["invited", "active", "suspended", "deactivated"]).nullish(),
+  status: zod
+    .enum(["invited", "pending_setup", "active", "suspended", "deactivated"])
+    .nullish(),
   title: zod.string().nullish(),
   department: zod.string().nullish(),
   isActive: zod.boolean(),
@@ -554,6 +575,7 @@ export const ActivateUserResponse = zod.object({
   lockedUntil: zod.coerce.date().nullish(),
   failedLoginCount: zod.number(),
   lastLoginAt: zod.coerce.date().nullish(),
+  invitationExpiresAt: zod.coerce.date().nullish(),
 });
 
 /**
@@ -702,6 +724,7 @@ export const SendInvitationBody = zod.object({
       }),
     )
     .optional(),
+  sendEmail: zod.boolean().optional(),
 });
 
 /**
@@ -709,6 +732,7 @@ export const SendInvitationBody = zod.object({
  */
 export const ResendInvitationBody = zod.object({
   userId: zod.string(),
+  sendEmail: zod.boolean().optional(),
 });
 
 export const ResendInvitationResponse = zod.object({

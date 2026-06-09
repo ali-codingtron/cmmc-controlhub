@@ -1,7 +1,8 @@
 import { Router } from "express";
+import type { Request, Response } from "express";
 import { randomUUID } from "crypto";
 import { db, usersTable, userInvitationsTable, organizationUsersTable, organizationsTable, auditLogsTable } from "@workspace/db";
-import { eq, and, gt, inArray } from "drizzle-orm";
+import { eq, and, gt } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
 import { generateInviteToken, hashToken, INVITE_EXPIRY_DAYS } from "../lib/invite-token";
 import { sendInvitationEmail, isEmailConfigured, getAppBaseUrl } from "../lib/email";
@@ -9,6 +10,7 @@ import { logger } from "../lib/logger";
 
 const router = Router();
 
+// ─── Password policy ───────────────────────────────────────────────────────────
 function validatePassword(password: string): string | null {
   if (password.length < 12) return "Password must be at least 12 characters";
   if (!/[A-Z]/.test(password)) return "Password must contain at least one uppercase letter";
@@ -18,9 +20,8 @@ function validatePassword(password: string): string | null {
   return null;
 }
 
-// Rate limit store for validate endpoint (simple in-memory, per-IP)
+// ─── Rate limit store (per-IP, in-memory) ─────────────────────────────────────
 const validateAttempts = new Map<string, { count: number; resetAt: number }>();
-
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
   const entry = validateAttempts.get(ip);
@@ -33,15 +34,32 @@ function checkRateLimit(ip: string): boolean {
   return true;
 }
 
-// ─── POST /invitations/send ─── (auth required, admin/compliance_manager)
-router.post("/invitations/send", requireAuth, requireRole(["admin", "compliance_manager"]), async (req, res) => {
-  const { name, email, role, title, department, orgMemberships } = req.body as {
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+async function getOrgMembershipsForUser(userId: string) {
+  return db
+    .select({
+      orgId: organizationUsersTable.organizationId,
+      orgName: organizationsTable.name,
+      role: organizationUsersTable.role,
+    })
+    .from(organizationUsersTable)
+    .innerJoin(organizationsTable, eq(organizationsTable.id, organizationUsersTable.organizationId))
+    .where(and(
+      eq(organizationUsersTable.userId, userId),
+      eq(organizationUsersTable.status, "invited"),
+    ));
+}
+
+// ─── Send invitation handler ──────────────────────────────────────────────────
+async function handleSendInvitation(req: Request, res: Response): Promise<void> {
+  const { name, email, role, title, department, orgMemberships, sendEmail: doSendEmail = true } = req.body as {
     name: string;
     email: string;
     role: string;
     title?: string;
     department?: string;
     orgMemberships?: Array<{ orgId: string; role: string }>;
+    sendEmail?: boolean;
   };
 
   if (!name?.trim() || !email?.trim() || !role) {
@@ -51,7 +69,6 @@ router.post("/invitations/send", requireAuth, requireRole(["admin", "compliance_
 
   const normalizedEmail = email.trim().toLowerCase();
 
-  // Check for existing user
   const [existing] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, normalizedEmail)).limit(1);
   if (existing) {
     res.status(409).json({ error: "A user with this email already exists" });
@@ -59,10 +76,9 @@ router.post("/invitations/send", requireAuth, requireRole(["admin", "compliance_
   }
 
   const inviter = req.authUser!;
-
-  // Create the user record (no password yet)
   const userId = randomUUID();
   const now = new Date();
+
   await db.insert(usersTable).values({
     id: userId,
     name: name.trim(),
@@ -79,7 +95,6 @@ router.post("/invitations/send", requireAuth, requireRole(["admin", "compliance_
     updatedAt: now,
   });
 
-  // Create org memberships with status "invited"
   if (orgMemberships?.length) {
     for (const m of orgMemberships) {
       await db.insert(organizationUsersTable).values({
@@ -93,13 +108,13 @@ router.post("/invitations/send", requireAuth, requireRole(["admin", "compliance_
     }
   }
 
-  // Create invitation record
   const { rawToken, tokenHash } = generateInviteToken();
   const expiresAt = new Date(now.getTime() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
   await db.insert(userInvitationsTable).values({
     id: randomUUID(),
     tokenHash,
+    email: normalizedEmail,
     userId,
     invitedById: inviter.id,
     status: "pending",
@@ -107,10 +122,8 @@ router.post("/invitations/send", requireAuth, requireRole(["admin", "compliance_
     createdAt: now,
   });
 
-  const baseUrl = getAppBaseUrl();
-  const inviteUrl = `${baseUrl}/invite/accept?token=${rawToken}`;
+  const inviteUrl = `${getAppBaseUrl()}/invite/accept?token=${rawToken}`;
 
-  // Audit log
   await db.insert(auditLogsTable).values({
     id: randomUUID(),
     userId: inviter.id,
@@ -125,16 +138,25 @@ router.post("/invitations/send", requireAuth, requireRole(["admin", "compliance_
     timestamp: now,
   });
 
-  // Send email if configured, otherwise return inviteUrl
-  if (isEmailConfigured()) {
+  // Build org memberships for email
+  const orgsForEmail = orgMemberships?.length
+    ? await db
+        .select({ orgName: organizationsTable.name, role: organizationUsersTable.role })
+        .from(organizationUsersTable)
+        .innerJoin(organizationsTable, eq(organizationsTable.id, organizationUsersTable.organizationId))
+        .where(and(eq(organizationUsersTable.userId, userId), eq(organizationUsersTable.status, "invited")))
+    : [];
+
+  if (doSendEmail && isEmailConfigured()) {
     try {
       await sendInvitationEmail({
         toEmail: normalizedEmail,
         toName: name.trim(),
         inviterName: inviter.name,
         inviteUrl,
+        orgMemberships: orgsForEmail,
       });
-      res.status(201).json({ success: true, emailSent: true });
+      res.status(201).json({ success: true, emailSent: true, inviteUrl });
     } catch (err) {
       logger.error({ err }, "Failed to send invitation email");
       res.status(201).json({ success: true, emailSent: false, inviteUrl });
@@ -142,11 +164,11 @@ router.post("/invitations/send", requireAuth, requireRole(["admin", "compliance_
   } else {
     res.status(201).json({ success: true, emailSent: false, inviteUrl });
   }
-});
+}
 
-// ─── POST /invitations/resend ─── (auth required, admin/compliance_manager)
-router.post("/invitations/resend", requireAuth, requireRole(["admin", "compliance_manager"]), async (req, res) => {
-  const { userId, sendEmail = true } = req.body as { userId: string; sendEmail?: boolean };
+// ─── Resend invitation handler ─────────────────────────────────────────────────
+async function handleResendInvitation(req: Request, res: Response): Promise<void> {
+  const { userId, sendEmail: doSendEmail = true } = req.body as { userId: string; sendEmail?: boolean };
   if (!userId) {
     res.status(400).json({ error: "userId is required" });
     return;
@@ -162,12 +184,10 @@ router.post("/invitations/resend", requireAuth, requireRole(["admin", "complianc
     return;
   }
 
-  // Revoke existing pending invitations
   await db.update(userInvitationsTable)
     .set({ status: "revoked" })
     .where(and(eq(userInvitationsTable.userId, userId), eq(userInvitationsTable.status, "pending")));
 
-  // Create new invitation
   const { rawToken, tokenHash } = generateInviteToken();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
@@ -175,6 +195,7 @@ router.post("/invitations/resend", requireAuth, requireRole(["admin", "complianc
   await db.insert(userInvitationsTable).values({
     id: randomUUID(),
     tokenHash,
+    email: user.email,
     userId,
     invitedById: req.authUser!.id,
     status: "pending",
@@ -182,8 +203,7 @@ router.post("/invitations/resend", requireAuth, requireRole(["admin", "complianc
     createdAt: now,
   });
 
-  const baseUrl = getAppBaseUrl();
-  const inviteUrl = `${baseUrl}/invite/accept?token=${rawToken}`;
+  const inviteUrl = `${getAppBaseUrl()}/invite/accept?token=${rawToken}`;
 
   await db.insert(auditLogsTable).values({
     id: randomUUID(),
@@ -198,13 +218,16 @@ router.post("/invitations/resend", requireAuth, requireRole(["admin", "complianc
     timestamp: now,
   });
 
-  if (sendEmail && isEmailConfigured()) {
+  const orgsForEmail = await getOrgMembershipsForUser(userId);
+
+  if (doSendEmail && isEmailConfigured()) {
     try {
       await sendInvitationEmail({
         toEmail: user.email,
         toName: user.name,
         inviterName: req.authUser!.name,
         inviteUrl,
+        orgMemberships: orgsForEmail,
       });
       res.json({ success: true, emailSent: true, inviteUrl });
     } catch (err) {
@@ -214,17 +237,18 @@ router.post("/invitations/resend", requireAuth, requireRole(["admin", "complianc
   } else {
     res.json({ success: true, emailSent: false, inviteUrl });
   }
-});
+}
 
-// ─── POST /invitations/cancel ─── (auth required, admin/compliance_manager)
-router.post("/invitations/cancel", requireAuth, requireRole(["admin", "compliance_manager"]), async (req, res) => {
+// ─── Cancel invitation handler ─────────────────────────────────────────────────
+async function handleCancelInvitation(req: Request, res: Response): Promise<void> {
   const { userId } = req.body as { userId: string };
   if (!userId) {
     res.status(400).json({ error: "userId is required" });
     return;
   }
 
-  const [user] = await db.select({ id: usersTable.id, email: usersTable.email, status: usersTable.status }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+  const [user] = await db.select({ id: usersTable.id, email: usersTable.email, status: usersTable.status })
+    .from(usersTable).where(eq(usersTable.id, userId)).limit(1);
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
@@ -234,14 +258,14 @@ router.post("/invitations/cancel", requireAuth, requireRole(["admin", "complianc
     return;
   }
 
-  // Revoke pending invitations
+  const now = new Date();
+
   await db.update(userInvitationsTable)
-    .set({ status: "cancelled" })
+    .set({ status: "cancelled", cancelledAt: now })
     .where(and(eq(userInvitationsTable.userId, userId), eq(userInvitationsTable.status, "pending")));
 
-  // Deactivate the pre-created user record
   await db.update(usersTable)
-    .set({ isActive: false, status: "deactivated", updatedAt: new Date() })
+    .set({ isActive: false, status: "deactivated", updatedAt: now })
     .where(eq(usersTable.id, userId));
 
   await db.insert(auditLogsTable).values({
@@ -254,10 +278,31 @@ router.post("/invitations/cancel", requireAuth, requireRole(["admin", "complianc
     entityLabel: user.email,
     ipAddress: req.ip,
     userAgent: req.headers["user-agent"],
-    timestamp: new Date(),
+    timestamp: now,
   });
 
   res.json({ success: true });
+}
+
+// ─── Route registrations ───────────────────────────────────────────────────────
+const adminOrManager = requireRole("admin", "compliance_manager");
+
+// Primary routes
+router.post("/invitations/send",   requireAuth, adminOrManager, handleSendInvitation);
+router.post("/invitations/resend", requireAuth, adminOrManager, handleResendInvitation);
+router.post("/invitations/cancel", requireAuth, adminOrManager, handleCancelInvitation);
+
+// Spec-compliant aliases: /users/invite, /users/:id/resend-invite, /users/:id/cancel-invite
+router.post("/users/invite", requireAuth, adminOrManager, handleSendInvitation);
+
+router.post("/users/:id/resend-invite", requireAuth, adminOrManager, async (req, res) => {
+  req.body = { ...req.body, userId: req.params.id };
+  return handleResendInvitation(req, res);
+});
+
+router.post("/users/:id/cancel-invite", requireAuth, adminOrManager, async (req, res) => {
+  req.body = { ...req.body, userId: req.params.id };
+  return handleCancelInvitation(req, res);
 });
 
 // ─── GET /invitations/validate ─── (PUBLIC, rate-limited)
@@ -270,25 +315,42 @@ router.get("/invitations/validate", async (req, res) => {
 
   const rawToken = req.query["token"] as string | undefined;
   if (!rawToken) {
-    res.status(400).json({ error: "token is required" });
+    res.status(400).json({ code: "invalid", error: "token is required" });
     return;
   }
 
   const tokenHash = hashToken(rawToken);
   const now = new Date();
 
+  // Query without status/expiry filter to determine specific error code
   const [invitation] = await db
     .select()
     .from(userInvitationsTable)
-    .where(and(
-      eq(userInvitationsTable.tokenHash, tokenHash),
-      eq(userInvitationsTable.status, "pending"),
-      gt(userInvitationsTable.expiresAt, now),
-    ))
+    .where(eq(userInvitationsTable.tokenHash, tokenHash))
     .limit(1);
 
   if (!invitation) {
-    res.status(404).json({ error: "This invitation link is invalid or has expired." });
+    res.status(404).json({ code: "invalid", error: "This invitation link is invalid." });
+    return;
+  }
+
+  if (invitation.status === "accepted") {
+    res.status(410).json({ code: "used", error: "This invitation has already been accepted." });
+    return;
+  }
+
+  if (invitation.status === "cancelled" || invitation.status === "revoked") {
+    res.status(410).json({ code: "cancelled", error: "This invitation has been cancelled by an administrator." });
+    return;
+  }
+
+  if (invitation.expiresAt < now) {
+    res.status(410).json({ code: "expired", error: "This invitation link has expired. Please ask your administrator to resend it." });
+    return;
+  }
+
+  if (invitation.status !== "pending") {
+    res.status(410).json({ code: "invalid", error: "This invitation link is no longer valid." });
     return;
   }
 
@@ -299,23 +361,11 @@ router.get("/invitations/validate", async (req, res) => {
     .limit(1);
 
   if (!user) {
-    res.status(404).json({ error: "This invitation link is invalid or has expired." });
+    res.status(404).json({ code: "invalid", error: "This invitation link is invalid." });
     return;
   }
 
-  // Fetch assigned org memberships for display
-  const memberships = await db
-    .select({
-      orgId: organizationUsersTable.organizationId,
-      orgName: organizationsTable.name,
-      role: organizationUsersTable.role,
-    })
-    .from(organizationUsersTable)
-    .innerJoin(organizationsTable, eq(organizationsTable.id, organizationUsersTable.organizationId))
-    .where(and(
-      eq(organizationUsersTable.userId, user.id),
-      eq(organizationUsersTable.status, "invited"),
-    ));
+  const memberships = await getOrgMembershipsForUser(user.id);
 
   res.json({
     valid: true,
@@ -346,28 +396,43 @@ router.post("/invitations/accept", async (req, res) => {
   const [invitation] = await db
     .select()
     .from(userInvitationsTable)
-    .where(and(
-      eq(userInvitationsTable.tokenHash, tokenHash),
-      eq(userInvitationsTable.status, "pending"),
-      gt(userInvitationsTable.expiresAt, now),
-    ))
+    .where(eq(userInvitationsTable.tokenHash, tokenHash))
     .limit(1);
 
   if (!invitation) {
-    res.status(400).json({ error: "This invitation link is invalid or has expired." });
+    res.status(400).json({ code: "invalid", error: "This invitation link is invalid." });
+    return;
+  }
+
+  if (invitation.status === "accepted") {
+    res.status(400).json({ code: "used", error: "This invitation has already been accepted." });
+    return;
+  }
+
+  if (invitation.status === "cancelled" || invitation.status === "revoked") {
+    res.status(400).json({ code: "cancelled", error: "This invitation has been cancelled." });
+    return;
+  }
+
+  if (invitation.expiresAt < now) {
+    res.status(400).json({ code: "expired", error: "This invitation link has expired. Please ask your administrator to resend it." });
+    return;
+  }
+
+  if (invitation.status !== "pending") {
+    res.status(400).json({ code: "invalid", error: "This invitation link is no longer valid." });
     return;
   }
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, invitation.userId)).limit(1);
   if (!user || user.status !== "invited") {
-    res.status(400).json({ error: "This invitation has already been used." });
+    res.status(400).json({ code: "used", error: "This invitation has already been used." });
     return;
   }
 
   const bcrypt = await import("bcryptjs");
   const passwordHash = await bcrypt.hash(password, 10);
 
-  // Activate the user
   await db.update(usersTable).set({
     passwordHash,
     isActive: true,
@@ -376,7 +441,6 @@ router.post("/invitations/accept", async (req, res) => {
     updatedAt: now,
   }).where(eq(usersTable.id, user.id));
 
-  // Activate org memberships
   await db.update(organizationUsersTable)
     .set({ status: "active" })
     .where(and(
@@ -384,7 +448,6 @@ router.post("/invitations/accept", async (req, res) => {
       eq(organizationUsersTable.status, "invited"),
     ));
 
-  // Mark invitation accepted
   await db.update(userInvitationsTable)
     .set({ status: "accepted", acceptedAt: now })
     .where(eq(userInvitationsTable.id, invitation.id));

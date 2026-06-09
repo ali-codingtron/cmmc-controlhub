@@ -20,6 +20,7 @@ export const mfaEnforcementModeEnum = pgEnum("mfa_enforcement_mode", [
 
 export const userStatusEnum = pgEnum("user_status", [
   "invited",
+  "pending_setup",
   "active",
   "suspended",
   "deactivated",

@@ -14,9 +14,11 @@ export const userInvitationsTable = pgTable("user_invitations", {
   tokenHash: text("token_hash").notNull().unique(),
   userId: text("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   invitedById: text("invited_by_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  email: text("email"),
   status: invitationStatusEnum("status").notNull().default("pending"),
   expiresAt: timestamp("expires_at").notNull(),
   acceptedAt: timestamp("accepted_at"),
+  cancelledAt: timestamp("cancelled_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

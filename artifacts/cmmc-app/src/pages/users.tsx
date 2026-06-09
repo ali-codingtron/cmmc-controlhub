@@ -89,6 +89,8 @@ import {
   AlertTriangle,
   RefreshCw,
   Ban,
+  Link,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -629,7 +631,7 @@ function InviteDialog({ open, onClose, onInvited }: InviteDialogProps) {
     onClose();
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (sendEmail: boolean) => {
     if (!validate()) return;
     try {
       const result = await sendMutation.mutateAsync({
@@ -640,13 +642,14 @@ function InviteDialog({ open, onClose, onInvited }: InviteDialogProps) {
           title: form.title || undefined,
           department: form.department || undefined,
           orgMemberships: pendingOrgs.map((m) => ({ orgId: m.orgId, role: m.role })),
-        },
+          sendEmail,
+        } as any,
       });
       handleClose();
       onInvited(result.inviteUrl ?? undefined);
     } catch (err: any) {
       const msg = err?.response?.data?.error ?? "Failed to send invitation";
-      if (msg.toLowerCase().includes("email")) {
+      if (msg.toLowerCase().includes("email already exists") || msg.toLowerCase().includes("email")) {
         setErrors({ email: "A user with this email already exists" });
       } else {
         toast({ title: msg, variant: "destructive" });
@@ -764,16 +767,25 @@ function InviteDialog({ open, onClose, onInvited }: InviteDialogProps) {
         </div>
 
         <DialogFooter className="shrink-0">
-          <Button variant="outline" onClick={handleClose}>
+          <Button variant="outline" onClick={handleClose} disabled={sendMutation.isPending}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={sendMutation.isPending} className="gap-2">
-            {sendMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Mail className="h-4 w-4" />
-            )}
-            Send Invitation
+          <Button
+            variant="outline"
+            onClick={() => handleSubmit(false)}
+            disabled={sendMutation.isPending}
+            className="gap-2"
+          >
+            {sendMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4" />}
+            Create Without Email
+          </Button>
+          <Button
+            onClick={() => handleSubmit(true)}
+            disabled={sendMutation.isPending}
+            className="gap-2"
+          >
+            {sendMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+            Invite &amp; Send Email
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1439,9 +1451,24 @@ export default function Users() {
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {isInvited(u) ? (
-                        <span className="text-xs text-amber-600">
-                          Invited {formatDate((u as any).invitedAt ?? u.createdAt)}
-                        </span>
+                        <div className="space-y-0.5">
+                          <div className="text-xs text-amber-700">
+                            Invited {formatDate((u as any).invitedAt ?? u.createdAt)}
+                          </div>
+                          {(u as any).invitationExpiresAt && (
+                            <div className={cn(
+                              "text-xs flex items-center gap-1",
+                              new Date((u as any).invitationExpiresAt) < new Date()
+                                ? "text-red-600"
+                                : "text-slate-500",
+                            )}>
+                              <Clock className="h-3 w-3" />
+                              {new Date((u as any).invitationExpiresAt) < new Date()
+                                ? "Expired"
+                                : `Expires ${formatDate((u as any).invitationExpiresAt)}`}
+                            </div>
+                          )}
+                        </div>
                       ) : (
                         formatDate(u.lastLoginAt ?? null)
                       )}

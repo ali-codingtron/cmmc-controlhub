@@ -1,6 +1,6 @@
 import { Router } from "express";
 import bcrypt from 'bcryptjs';
-import { db, usersTable } from "@workspace/db";
+import { db, usersTable, userInvitationsTable } from "@workspace/db";
 import { organizationsTable, organizationUsersTable } from "@workspace/db";
 import {
   auditLogsTable,
@@ -16,7 +16,7 @@ import {
   procedureTaskRulesTable,
   evidenceItemsTable,
 } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
 import { logAudit } from "../lib/audit";
 import { randomUUID } from "crypto";
@@ -44,8 +44,16 @@ router.get("/users", requireAuth, async (req, res) => {
       mfaResetRequired: usersTable.mfaResetRequired,
       lockedUntil: usersTable.lockedUntil,
       failedLoginCount: usersTable.failedLoginCount,
+      invitationExpiresAt: userInvitationsTable.expiresAt,
     })
     .from(usersTable)
+    .leftJoin(
+      userInvitationsTable,
+      and(
+        eq(userInvitationsTable.userId, usersTable.id),
+        eq(userInvitationsTable.status, "pending"),
+      ),
+    )
     .orderBy(usersTable.name);
 
   res.json(users);
