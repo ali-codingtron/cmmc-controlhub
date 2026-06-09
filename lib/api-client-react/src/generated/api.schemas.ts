@@ -45,6 +45,7 @@ export interface User {
   createdAt: string;
   mfaEnabled: boolean;
   mfaRequired?: boolean;
+  mfaResetRequired?: boolean;
   lockedUntil?: string | null;
   failedLoginCount: number;
   lastLoginAt?: string | null;

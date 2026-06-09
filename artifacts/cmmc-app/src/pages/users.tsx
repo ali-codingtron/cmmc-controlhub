@@ -17,6 +17,8 @@ import {
   useListOrganizations,
   useMfaReset,
   useUnlockUser,
+  useMfaRequireUser,
+  useMfaDisable,
 } from "@workspace/api-client-react";
 import type { User, UserOrgMembership, OrganizationSummary } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
@@ -942,6 +944,8 @@ export default function Users() {
   const deleteMutation = useDeleteUser();
   const mfaResetMutation = useMfaReset();
   const unlockMutation = useUnlockUser();
+  const requireMfaMutation = useMfaRequireUser();
+  const disableMfaMutation = useMfaDisable();
 
   const handleMfaReset = async (u: User) => {
     try {
@@ -960,6 +964,26 @@ export default function Users() {
       invalidate();
     } catch {
       toast({ title: "Failed to unlock account", variant: "destructive" });
+    }
+  };
+
+  const handleRequireMfa = async (u: User, required: boolean) => {
+    try {
+      await requireMfaMutation.mutateAsync({ data: { userId: u.id, mfaRequired: required } });
+      toast({ title: required ? `MFA required for ${u.name}` : `MFA no longer required for ${u.name}` });
+      invalidate();
+    } catch {
+      toast({ title: "Failed to update MFA requirement", variant: "destructive" });
+    }
+  };
+
+  const handleDisableMfa = async (u: User) => {
+    try {
+      await disableMfaMutation.mutateAsync({ data: { userId: u.id } });
+      toast({ title: `MFA disabled for ${u.name}` });
+      invalidate();
+    } catch {
+      toast({ title: "Failed to disable MFA", variant: "destructive" });
     }
   };
 
@@ -1135,9 +1159,17 @@ export default function Users() {
                       )}
                     </TableCell>
                     <TableCell>
-                      {u.mfaEnabled ? (
+                      {u.mfaEnabled && !u.mfaResetRequired ? (
                         <Badge variant="outline" className="border-green-500 text-green-700 gap-1 text-xs">
                           <ShieldCheck className="h-3 w-3" /> Enabled
+                        </Badge>
+                      ) : u.mfaResetRequired ? (
+                        <Badge variant="outline" className="border-amber-500 text-amber-700 gap-1 text-xs">
+                          <ShieldCheck className="h-3 w-3" /> Reset Required
+                        </Badge>
+                      ) : u.mfaRequired ? (
+                        <Badge variant="outline" className="border-blue-500 text-blue-700 gap-1 text-xs">
+                          <ShieldCheck className="h-3 w-3" /> Required
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="text-muted-foreground text-xs">
@@ -1191,13 +1223,32 @@ export default function Users() {
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuSeparator />
-                            {u.mfaEnabled && (
+                            {u.mfaEnabled ? (
+                              <>
+                                <DropdownMenuItem
+                                  onClick={() => handleMfaReset(u)}
+                                  className="gap-2"
+                                >
+                                  <ShieldCheck className="h-4 w-4" />
+                                  Reset MFA
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleDisableMfa(u)}
+                                  className="gap-2 text-amber-600 focus:text-amber-600"
+                                  disabled={u.id === me?.id}
+                                >
+                                  <ShieldCheck className="h-4 w-4" />
+                                  Disable MFA
+                                </DropdownMenuItem>
+                              </>
+                            ) : (
                               <DropdownMenuItem
-                                onClick={() => handleMfaReset(u)}
+                                onClick={() => handleRequireMfa(u, !u.mfaRequired)}
                                 className="gap-2"
+                                disabled={u.id === me?.id}
                               >
                                 <ShieldCheck className="h-4 w-4" />
-                                Reset MFA
+                                {u.mfaRequired ? "Remove MFA Requirement" : "Require MFA"}
                               </DropdownMenuItem>
                             )}
                             {u.lockedUntil && new Date(u.lockedUntil) > new Date() && (

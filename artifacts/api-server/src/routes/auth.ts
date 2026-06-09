@@ -424,10 +424,35 @@ router.post("/auth/mfa/verify", async (req, res) => {
     return;
   }
 
+  const MFA_MAX_ATTEMPTS = 5;
+  const MFA_LOCKOUT_MINUTES = 15;
+
+  // Check if already locked out
+  if (user.lockedUntil && user.lockedUntil > new Date()) {
+    const retryAfterSeconds = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 1000);
+    res.status(429).setHeader("Retry-After", String(retryAfterSeconds)).json({
+      error: `Account temporarily locked. Please try again in ${Math.ceil(retryAfterSeconds / 60)} minute(s) or start over.`,
+      locked: true,
+    });
+    return;
+  }
+
   const secret = decryptSecret(user.mfaSecret);
   const valid = verifyTotp(secret, code);
 
   if (!valid) {
+    const newFailCount = (user.failedLoginCount ?? 0) + 1;
+    const shouldLock = newFailCount >= MFA_MAX_ATTEMPTS;
+    const lockedUntil = shouldLock ? new Date(Date.now() + MFA_LOCKOUT_MINUTES * 60 * 1000) : null;
+
+    await db.update(usersTable)
+      .set({
+        failedLoginCount: newFailCount,
+        ...(shouldLock ? { lockedUntil } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.id, userId));
+
     await db.insert(auditLogsTable).values({
       id: randomUUID(),
       userId: user.id,
@@ -438,13 +463,26 @@ router.post("/auth/mfa/verify", async (req, res) => {
       entityLabel: user.email,
       ipAddress: req.ip,
       userAgent: req.headers["user-agent"],
+      newValue: { attempt: newFailCount, locked: shouldLock },
       timestamp: new Date(),
     });
-    res.status(400).json({ error: "Invalid code. Please try again." });
+
+    if (shouldLock) {
+      res.status(429).json({
+        error: `Too many failed attempts. Account locked for ${MFA_LOCKOUT_MINUTES} minutes. Please start over and try again later.`,
+        locked: true,
+      });
+      return;
+    }
+
+    const remaining = MFA_MAX_ATTEMPTS - newFailCount;
+    res.status(400).json({
+      error: `Invalid code. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining before lockout.`,
+    });
     return;
   }
 
-  await db.update(usersTable).set({ failedLoginCount: 0, lastLoginAt: new Date(), updatedAt: new Date() }).where(eq(usersTable.id, userId));
+  await db.update(usersTable).set({ failedLoginCount: 0, lockedUntil: null, lastLoginAt: new Date(), updatedAt: new Date() }).where(eq(usersTable.id, userId));
 
   await db.insert(auditLogsTable).values({
     id: randomUUID(),

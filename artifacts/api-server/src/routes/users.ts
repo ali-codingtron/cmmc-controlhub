@@ -39,6 +39,7 @@ router.get("/users", requireAuth, async (req, res) => {
       createdAt: usersTable.createdAt,
       mfaEnabled: usersTable.mfaEnabled,
       mfaRequired: usersTable.mfaRequired,
+      mfaResetRequired: usersTable.mfaResetRequired,
       lockedUntil: usersTable.lockedUntil,
       failedLoginCount: usersTable.failedLoginCount,
     })
