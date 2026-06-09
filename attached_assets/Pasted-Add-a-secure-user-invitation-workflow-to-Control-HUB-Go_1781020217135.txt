@@ -1,0 +1,463 @@
+Add a secure user invitation workflow to Control HUB.
+
+Goal:
+I want to create users by entering their name, email, organization access, and role. The system should send them an email invitation so they can set their own password.
+
+Important:
+Users should NOT be able to choose their own role or organization.
+Only an Admin / Global Admin / Organization Admin should assign roles and organizations.
+
+Do not email temporary passwords.
+Do not force me to manually create passwords for users.
+Do not break existing users/passwords.
+
+1. User Invitation Workflow
+
+Add a new workflow:
+
+Admin creates/invites user:
+- Full name
+- Email address
+- Organization access
+- Role per organization
+- Title
+- Department
+- Status
+
+Then Admin clicks:
+Send Invitation
+
+The system sends the user an email with a secure link to set their password.
+
+2. Add User Form Updates
+
+Update the Add User form.
+
+Fields:
+- Full Name
+- Email
+- Title
+- Department
+- Organization Access
+- Role for each selected organization
+- Status
+
+Remove or make optional:
+- Temporary Password
+
+Add buttons:
+- Create User and Send Invite
+- Create User Without Sending Invite
+- Save Draft
+- Cancel
+
+Organization Access:
+- searchable dropdown of existing organizations
+- allow selecting one or more organizations
+- role must be assigned per organization
+
+Roles:
+- Global Admin
+- Organization Admin
+- Compliance Manager
+- IT Contributor
+- Reviewer
+- Executive Viewer
+- Assessor Read-Only
+
+3. User Statuses
+
+Add or update user statuses:
+
+- Invited
+- Pending Setup
+- Active
+- Suspended
+- Deactivated
+
+Behavior:
+- Invited = invitation email sent, password not yet created
+- Pending Setup = account exists but password/MFA setup incomplete
+- Active = user completed password setup and can log in
+- Suspended/Deactivated = cannot log in
+
+4. Invitation Token
+
+Create a secure invitation token system.
+
+Invitation token requirements:
+- cryptographically random
+- single-use
+- expires after 7 days by default
+- stored hashed in the database
+- never store raw token
+- never log raw token
+- invalidated after password is created
+- invalidated if Admin cancels invite
+- regenerated when Admin resends invite
+
+5. Database Changes
+
+Add or update fields/models.
+
+User:
+- id
+- full_name
+- email
+- title
+- department
+- status
+- password_hash nullable until setup
+- invitation_status
+- invited_at
+- invite_accepted_at
+- last_login_at
+- created_at
+- updated_at
+
+UserInvitation:
+- id
+- user_id
+- email
+- token_hash
+- status
+- expires_at
+- invited_by
+- invited_at
+- accepted_at
+- cancelled_at
+- created_at
+- updated_at
+
+OrganizationUser:
+- id
+- user_id
+- organization_id
+- role
+- status
+- created_at
+- updated_at
+
+Invitation statuses:
+- Pending
+- Accepted
+- Expired
+- Cancelled
+- Revoked
+
+6. Invitation Email
+
+Create an email template.
+
+Subject:
+You’ve been invited to Control HUB
+
+Email body should include:
+
+Hello [Full Name],
+
+You have been invited to access Control HUB.
+
+Your assigned organization:
+[Organization Name]
+
+Your assigned role:
+[Role Name]
+
+To finish setting up your account, click the secure link below and create your password:
+
+[Set Password Button]
+
+This link expires in 7 days.
+
+If you were not expecting this invitation, you can ignore this email.
+
+Thanks,
+Control HUB
+
+Important:
+Do not include the user’s role/organization selection fields in the setup page. Those are assigned by Admin only.
+
+7. Set Password Page
+
+Create a public route:
+
+/invite/accept?token=<token>
+
+This page should:
+- validate token
+- confirm token exists
+- confirm token is not expired
+- confirm token is not already used
+- show the user’s email
+- show assigned organization(s) read-only
+- show assigned role(s) read-only
+- allow user to create password
+- require password confirmation
+- enforce password policy
+- submit password setup
+- activate account
+
+Fields:
+- New Password
+- Confirm Password
+
+Optional:
+- show password toggle
+
+Do not allow the user to edit:
+- email
+- organization
+- role
+
+8. Password Policy
+
+Require:
+- minimum 12 characters
+- at least one uppercase letter
+- at least one lowercase letter
+- at least one number
+- at least one special character
+
+Recommended:
+- block common passwords if simple to implement
+
+After password setup:
+- hash password securely using existing password hashing method
+- mark invitation accepted
+- mark user Active
+- redirect to login page with success message:
+“Your password has been set. You may now sign in.”
+
+9. MFA Integration
+
+If MFA is enabled for the user’s role:
+- after first login, require MFA enrollment
+- do not require MFA during password setup unless already implemented safely
+
+10. Email Provider
+
+Add email sending support.
+
+Support one of:
+- SMTP
+- SendGrid
+- Postmark
+- Resend
+- Mailgun
+
+Use environment variables:
+
+EMAIL_PROVIDER=
+SMTP_HOST=
+SMTP_PORT=
+SMTP_USER=
+SMTP_PASSWORD=
+SMTP_FROM=
+APP_BASE_URL=https://controlhub.carmetechnology.com
+
+If email is not configured:
+- do not fail silently
+- show Admin a clear message:
+“Email provider is not configured.”
+- allow Admin to copy the invitation link manually as a fallback
+
+11. Resend / Cancel Invitation
+
+On Users page, add actions for invited users:
+
+- Resend Invite
+- Copy Invite Link
+- Cancel Invite
+- Edit Organization Access
+- Edit Role
+- Delete User
+
+Resend Invite:
+- invalidates old token
+- creates new token
+- sends new email
+- updates invited_at
+
+Cancel Invite:
+- invalidates token
+- marks invitation Cancelled
+- user cannot set password
+
+12. Existing Users
+
+Do not affect existing users.
+
+Existing users:
+- keep current username/email
+- keep current password hash
+- keep current role
+- keep current organization membership
+- keep ability to log in
+
+Only newly invited users use the invite/password setup flow.
+
+13. Users Page Updates
+
+Update Users page columns:
+
+- Name
+- Email
+- Status
+- MFA Status
+- Organizations
+- Roles
+- Last Login
+- Invitation Status
+- Actions
+
+For invited users, show:
+- Invited
+- Invite expires on [date]
+- Resend Invite
+- Copy Invite Link
+- Cancel Invite
+
+14. Permissions
+
+Only these roles can invite users:
+- Global Admin
+- Organization Admin
+
+Global Admin can invite users to any organization.
+
+Organization Admin can invite users only to organizations they administer.
+
+Compliance Manager should not invite users unless explicitly granted permission.
+
+Assessor Read-Only cannot invite users.
+
+15. Backend API Endpoints
+
+Add or update:
+
+POST /api/users/invite
+- creates user
+- assigns organization/role
+- creates invitation token
+- sends email
+
+POST /api/users/:id/resend-invite
+- regenerates token
+- sends email
+
+POST /api/users/:id/cancel-invite
+- cancels invitation
+
+GET /api/invitations/validate?token=
+- validates token and returns safe invite metadata
+
+POST /api/invitations/accept
+- validates token
+- sets password
+- activates user
+
+PATCH /api/users/:id
+- edit user information and org roles
+
+DELETE /api/users/:id
+- delete/deactivate user based on rules
+
+16. Security
+
+Security requirements:
+- invitation token must be random and unguessable
+- store only token hash
+- expire token after 7 days
+- token is single-use
+- do not expose whether an email exists publicly
+- rate limit invitation acceptance attempts
+- rate limit password setup attempts
+- log failed token attempts
+- do not expose roles/orgs beyond what is assigned to the invited user
+- do not allow token reuse
+
+17. Audit Logs
+
+Write audit logs for:
+- user invited
+- invitation email sent
+- invitation resent
+- invitation cancelled
+- invitation accepted
+- password created
+- user activated
+- role assigned
+- organization access assigned
+- organization access changed
+- invite token validation failed
+
+Each audit log should include:
+- acting admin
+- target user
+- organization
+- action
+- timestamp
+- IP address if available
+
+18. UI Flow
+
+Admin flow:
+1. Go to Users
+2. Click Add User
+3. Enter name/email
+4. Select organization(s)
+5. Assign role(s)
+6. Click Create User and Send Invite
+7. User appears with status Invited
+
+User flow:
+1. User receives email
+2. User clicks Set Password
+3. User creates password
+4. User logs in
+5. User sees only assigned organization(s)
+6. User has only assigned role permissions
+
+19. Acceptance Tests
+
+Test A:
+Admin creates user and assigns them to VTCCORP.US as Reviewer.
+Invitation email is sent.
+User status shows Invited.
+
+Test B:
+User clicks invite link.
+User can set password.
+User cannot change organization or role.
+User becomes Active.
+
+Test C:
+User logs in.
+User only sees VTCCORP.US.
+User has Reviewer permissions only.
+
+Test D:
+Admin creates user assigned to two organizations with different roles.
+User logs in and sees only those organizations with correct permissions.
+
+Test E:
+Expired invite link cannot be used.
+
+Test F:
+Used invite link cannot be reused.
+
+Test G:
+Admin resends invite.
+Old link stops working.
+New link works.
+
+Test H:
+Admin cancels invite.
+Invite link no longer works.
+
+Test I:
+Existing users can still log in with their current passwords.
+
+Test J:
+Assessor Read-Only user cannot invite users.
