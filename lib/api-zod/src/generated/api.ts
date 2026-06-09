@@ -740,6 +740,12 @@ export const ValidateInvitationResponse = zod.object({
   name: zod.string(),
   email: zod.string(),
   expiresAt: zod.coerce.date(),
+  orgMemberships: zod.array(
+    zod.object({
+      orgName: zod.string(),
+      role: zod.string(),
+    }),
+  ),
 });
 
 /**

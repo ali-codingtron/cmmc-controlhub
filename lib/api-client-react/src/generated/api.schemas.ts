@@ -1464,11 +1464,17 @@ export interface SendInvitationResponse {
   inviteUrl?: string | null;
 }
 
+export type ValidateInvitationResponseOrgMembershipsItem = {
+  orgName: string;
+  role: string;
+};
+
 export interface ValidateInvitationResponse {
   valid: boolean;
   name: string;
   email: string;
   expiresAt: string;
+  orgMemberships: ValidateInvitationResponseOrgMembershipsItem[];
 }
 
 export interface AcceptInvitationBody {

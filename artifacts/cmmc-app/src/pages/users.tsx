@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import {
   useListUsers,
   getListUsersQueryKey,
@@ -1105,6 +1105,23 @@ export default function Users() {
   const qc = useQueryClient();
   const isAdmin = me?.role === "admin";
 
+  const { data: emailStatus } = useQuery({
+    queryKey: ["invitations", "email-status"],
+    queryFn: async () => {
+      const token = localStorage.getItem("auth_token");
+      const base = (import.meta.env.BASE_URL ?? "").replace(/\/$/, "");
+      const res = await fetch(`${base}/api/invitations/email-status`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) return { emailConfigured: true };
+      return res.json() as Promise<{ emailConfigured: boolean }>;
+    },
+    staleTime: 60_000,
+    enabled: isAdmin,
+  });
+
+  const emailNotConfigured = isAdmin && emailStatus !== undefined && !emailStatus.emailConfigured;
+
   const { data: users = [], isLoading } = useListUsers({
     query: { queryKey: getListUsersQueryKey() },
   });
@@ -1223,7 +1240,7 @@ export default function Users() {
   const handleResendInvite = async (u: User) => {
     try {
       const result = await resendMutation.mutateAsync({ data: { userId: u.id } });
-      if (result.inviteUrl) {
+      if (result.inviteUrl && !result.emailSent) {
         setPendingInviteUrl(result.inviteUrl);
       } else {
         toast({ title: `Invitation resent to ${u.email}` });
@@ -1231,6 +1248,23 @@ export default function Users() {
       invalidate();
     } catch (err: any) {
       toast({ title: err?.response?.data?.error ?? "Failed to resend invitation", variant: "destructive" });
+    }
+  };
+
+  const handleCopyInviteLink = async (u: User) => {
+    try {
+      const result = await resendMutation.mutateAsync({ data: { userId: u.id, sendEmail: false } as any });
+      if (result.inviteUrl) {
+        try {
+          await navigator.clipboard.writeText(result.inviteUrl);
+          toast({ title: "Invite link copied to clipboard" });
+        } catch {
+          setPendingInviteUrl(result.inviteUrl);
+        }
+      }
+      invalidate();
+    } catch (err: any) {
+      toast({ title: err?.response?.data?.error ?? "Failed to get invite link", variant: "destructive" });
     }
   };
 
@@ -1275,6 +1309,22 @@ export default function Users() {
           </Button>
         )}
       </div>
+
+      {/* Proactive no-email alert */}
+      {emailNotConfigured && !pendingInviteUrl && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
+          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="text-sm text-amber-800">
+            <p className="font-semibold">Email delivery not configured</p>
+            <p className="text-amber-700 mt-0.5">
+              Invitation emails won't be sent automatically. When you invite a user, you'll receive a link to share manually.
+              Set <code className="font-mono bg-amber-100 px-1 rounded">SMTP_HOST</code>,{" "}
+              <code className="font-mono bg-amber-100 px-1 rounded">SMTP_USER</code>, and{" "}
+              <code className="font-mono bg-amber-100 px-1 rounded">SMTP_PASSWORD</code> to enable email delivery.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Invite URL banner (shown when email not configured) */}
       {pendingInviteUrl && (
@@ -1415,6 +1465,15 @@ export default function Users() {
                                   <RefreshCw className="h-4 w-4" />
                                   Resend Invitation
                                 </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleCopyInviteLink(u)}
+                                  className="gap-2"
+                                  disabled={resendMutation.isPending}
+                                >
+                                  <Copy className="h-4 w-4" />
+                                  Copy Invite Link
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                   onClick={() => handleCancelInvite(u)}
                                   className="gap-2 text-red-600 focus:text-red-600"

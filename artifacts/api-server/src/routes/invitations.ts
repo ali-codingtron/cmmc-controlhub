@@ -1,13 +1,22 @@
 import { Router } from "express";
 import { randomUUID } from "crypto";
 import { db, usersTable, userInvitationsTable, organizationUsersTable, organizationsTable, auditLogsTable } from "@workspace/db";
-import { eq, and, gt } from "drizzle-orm";
+import { eq, and, gt, inArray } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
 import { generateInviteToken, hashToken, INVITE_EXPIRY_DAYS } from "../lib/invite-token";
 import { sendInvitationEmail, isEmailConfigured, getAppBaseUrl } from "../lib/email";
 import { logger } from "../lib/logger";
 
 const router = Router();
+
+function validatePassword(password: string): string | null {
+  if (password.length < 12) return "Password must be at least 12 characters";
+  if (!/[A-Z]/.test(password)) return "Password must contain at least one uppercase letter";
+  if (!/[a-z]/.test(password)) return "Password must contain at least one lowercase letter";
+  if (!/[0-9]/.test(password)) return "Password must contain at least one digit";
+  if (!/[^A-Za-z0-9]/.test(password)) return "Password must contain at least one special character";
+  return null;
+}
 
 // Rate limit store for validate endpoint (simple in-memory, per-IP)
 const validateAttempts = new Map<string, { count: number; resetAt: number }>();
@@ -74,10 +83,12 @@ router.post("/invitations/send", requireAuth, requireRole(["admin", "compliance_
   if (orgMemberships?.length) {
     for (const m of orgMemberships) {
       await db.insert(organizationUsersTable).values({
+        id: randomUUID(),
         userId,
         organizationId: m.orgId,
         role: m.role as any,
         status: "invited",
+        invitedAt: now,
       }).onConflictDoNothing();
     }
   }
@@ -135,7 +146,7 @@ router.post("/invitations/send", requireAuth, requireRole(["admin", "compliance_
 
 // ─── POST /invitations/resend ─── (auth required, admin/compliance_manager)
 router.post("/invitations/resend", requireAuth, requireRole(["admin", "compliance_manager"]), async (req, res) => {
-  const { userId } = req.body as { userId: string };
+  const { userId, sendEmail = true } = req.body as { userId: string; sendEmail?: boolean };
   if (!userId) {
     res.status(400).json({ error: "userId is required" });
     return;
@@ -187,7 +198,7 @@ router.post("/invitations/resend", requireAuth, requireRole(["admin", "complianc
     timestamp: now,
   });
 
-  if (isEmailConfigured()) {
+  if (sendEmail && isEmailConfigured()) {
     try {
       await sendInvitationEmail({
         toEmail: user.email,
@@ -195,7 +206,7 @@ router.post("/invitations/resend", requireAuth, requireRole(["admin", "complianc
         inviterName: req.authUser!.name,
         inviteUrl,
       });
-      res.json({ success: true, emailSent: true });
+      res.json({ success: true, emailSent: true, inviteUrl });
     } catch (err) {
       logger.error({ err }, "Failed to resend invitation email");
       res.json({ success: true, emailSent: false, inviteUrl });
@@ -292,7 +303,27 @@ router.get("/invitations/validate", async (req, res) => {
     return;
   }
 
-  res.json({ valid: true, name: user.name, email: user.email, expiresAt: invitation.expiresAt });
+  // Fetch assigned org memberships for display
+  const memberships = await db
+    .select({
+      orgId: organizationUsersTable.organizationId,
+      orgName: organizationsTable.name,
+      role: organizationUsersTable.role,
+    })
+    .from(organizationUsersTable)
+    .innerJoin(organizationsTable, eq(organizationsTable.id, organizationUsersTable.organizationId))
+    .where(and(
+      eq(organizationUsersTable.userId, user.id),
+      eq(organizationUsersTable.status, "invited"),
+    ));
+
+  res.json({
+    valid: true,
+    name: user.name,
+    email: user.email,
+    expiresAt: invitation.expiresAt,
+    orgMemberships: memberships.map((m) => ({ orgName: m.orgName, role: m.role })),
+  });
 });
 
 // ─── POST /invitations/accept ─── (PUBLIC)
@@ -303,8 +334,9 @@ router.post("/invitations/accept", async (req, res) => {
     res.status(400).json({ error: "token and password are required" });
     return;
   }
-  if (password.length < 8) {
-    res.status(400).json({ error: "Password must be at least 8 characters" });
+  const passwordErr = validatePassword(password);
+  if (passwordErr) {
+    res.status(400).json({ error: passwordErr });
     return;
   }
 
@@ -371,6 +403,11 @@ router.post("/invitations/accept", async (req, res) => {
   });
 
   res.json({ success: true });
+});
+
+// ─── GET /invitations/email-status ─── (auth required)
+router.get("/invitations/email-status", requireAuth, (_req, res) => {
+  res.json({ emailConfigured: isEmailConfigured() });
 });
 
 export default router;

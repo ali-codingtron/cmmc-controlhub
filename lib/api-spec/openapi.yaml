@@ -4631,7 +4631,17 @@ components:
         expiresAt:
           type: string
           format: date-time
-      required: [valid, name, email, expiresAt]
+        orgMemberships:
+          type: array
+          items:
+            type: object
+            properties:
+              orgName:
+                type: string
+              role:
+                type: string
+            required: [orgName, role]
+      required: [valid, name, email, expiresAt, orgMemberships]
 
     AcceptInvitationBody:
       type: object

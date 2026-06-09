@@ -4,14 +4,79 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Loader2, ShieldCheck, CheckCircle2, AlertCircle } from "lucide-react";
+import { Loader2, ShieldCheck, CheckCircle2, AlertCircle, Building2, Check, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
-type PageState = "loading" | "ready" | "invalid" | "submitting" | "success" | "error";
+// ─── Types ─────────────────────────────────────────────────────────────────────
+
+type PageState = "loading" | "ready" | "invalid" | "submitting" | "error";
+
+interface OrgMembership {
+  orgName: string;
+  role: string;
+}
 
 interface InviteInfo {
   name: string;
   email: string;
   expiresAt: string;
+  orgMemberships: OrgMembership[];
+}
+
+// ─── Password policy ──────────────────────────────────────────────────────────
+
+interface PolicyRule {
+  label: string;
+  test: (pw: string) => boolean;
+}
+
+const POLICY_RULES: PolicyRule[] = [
+  { label: "At least 12 characters", test: (pw) => pw.length >= 12 },
+  { label: "One uppercase letter", test: (pw) => /[A-Z]/.test(pw) },
+  { label: "One lowercase letter", test: (pw) => /[a-z]/.test(pw) },
+  { label: "One number", test: (pw) => /[0-9]/.test(pw) },
+  { label: "One special character", test: (pw) => /[^A-Za-z0-9]/.test(pw) },
+];
+
+function PasswordPolicyChecklist({ password }: { password: string }) {
+  if (!password) return null;
+  return (
+    <ul className="space-y-1 mt-2">
+      {POLICY_RULES.map((rule) => {
+        const passed = rule.test(password);
+        return (
+          <li key={rule.label} className={`flex items-center gap-1.5 text-xs ${passed ? "text-green-600" : "text-slate-500"}`}>
+            {passed ? (
+              <Check className="h-3 w-3 shrink-0 text-green-600" />
+            ) : (
+              <X className="h-3 w-3 shrink-0 text-slate-400" />
+            )}
+            {rule.label}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function policyPassed(password: string) {
+  return POLICY_RULES.every((r) => r.test(password));
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const ORG_ROLE_LABELS: Record<string, string> = {
+  admin: "Admin",
+  org_admin: "Org Admin",
+  compliance_manager: "Compliance Manager",
+  it_contributor: "IT Contributor",
+  reviewer: "Reviewer",
+  executive_viewer: "Executive Viewer",
+  assessor: "Assessor",
+};
+
+function orgRoleLabel(role: string) {
+  return ORG_ROLE_LABELS[role] ?? role;
 }
 
 function getApiBase() {
@@ -36,6 +101,8 @@ async function acceptInvitation(token: string, password: string): Promise<void> 
   if (!res.ok) throw new Error(data.error ?? "Failed to accept invitation");
 }
 
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function InviteAccept() {
   const [, navigate] = useLocation();
   const token = new URLSearchParams(window.location.search).get("token") ?? "";
@@ -45,8 +112,11 @@ export default function InviteAccept() {
   const [invalidMessage, setInvalidMessage] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [passwordError, setPasswordError] = useState("");
+  const [confirmError, setConfirmError] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+
+  const allPoliciesMet = policyPassed(password);
+  const canSubmit = allPoliciesMet && password === confirm && confirm.length > 0;
 
   useEffect(() => {
     if (!token) {
@@ -66,20 +136,17 @@ export default function InviteAccept() {
   }, [token]);
 
   const handleSubmit = async () => {
-    setPasswordError("");
-    if (password.length < 8) {
-      setPasswordError("Password must be at least 8 characters");
-      return;
-    }
+    setConfirmError("");
+    if (!allPoliciesMet) return;
     if (password !== confirm) {
-      setPasswordError("Passwords do not match");
+      setConfirmError("Passwords do not match");
       return;
     }
-
     setState("submitting");
     try {
       await acceptInvitation(token, password);
-      setState("success");
+      // Redirect to login with ?invited=1 banner
+      navigate("/login?invited=1");
     } catch (err: any) {
       setErrorMessage(err.message ?? "Something went wrong. Please try again.");
       setState("error");
@@ -100,9 +167,7 @@ export default function InviteAccept() {
 
         <Card className="shadow-lg border-0">
           <CardHeader className="pb-4">
-            <CardTitle className="text-xl">
-              {state === "success" ? "Account Created!" : "Accept Your Invitation"}
-            </CardTitle>
+            <CardTitle className="text-xl">Accept Your Invitation</CardTitle>
             {state === "ready" && inviteInfo && (
               <CardDescription>
                 Welcome, <strong>{inviteInfo.name}</strong>! Set a password for{" "}
@@ -134,57 +199,66 @@ export default function InviteAccept() {
               </div>
             )}
 
-            {(state === "ready" || state === "submitting") && (
-              <div className="space-y-4">
+            {(state === "ready" || state === "submitting") && inviteInfo && (
+              <div className="space-y-5">
+                {/* Org memberships */}
+                {inviteInfo.orgMemberships.length > 0 && (
+                  <div className="rounded-md border bg-slate-50 p-3 space-y-2">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Organization Access</p>
+                    <div className="space-y-1.5">
+                      {inviteInfo.orgMemberships.map((m, i) => (
+                        <div key={i} className="flex items-center gap-2 text-sm">
+                          <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                          <span className="font-medium text-slate-700">{m.orgName}</span>
+                          <Badge variant="outline" className="text-xs ml-auto">{orgRoleLabel(m.role)}</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Password fields */}
                 <div className="space-y-1.5">
                   <Label htmlFor="ia-password">New Password</Label>
                   <Input
                     id="ia-password"
                     type="password"
                     value={password}
-                    onChange={(e) => { setPassword(e.target.value); setPasswordError(""); }}
-                    placeholder="Min. 8 characters"
+                    onChange={(e) => { setPassword(e.target.value); setConfirmError(""); }}
+                    placeholder="Min. 12 characters"
                     disabled={state === "submitting"}
                     autoFocus
                   />
+                  <PasswordPolicyChecklist password={password} />
                 </div>
+
                 <div className="space-y-1.5">
                   <Label htmlFor="ia-confirm">Confirm Password</Label>
                   <Input
                     id="ia-confirm"
                     type="password"
                     value={confirm}
-                    onChange={(e) => { setConfirm(e.target.value); setPasswordError(""); }}
+                    onChange={(e) => { setConfirm(e.target.value); setConfirmError(""); }}
                     placeholder="Repeat password"
                     disabled={state === "submitting"}
-                    onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+                    onKeyDown={(e) => e.key === "Enter" && canSubmit && handleSubmit()}
+                    className={confirmError ? "border-red-500" : ""}
                   />
+                  {confirmError && <p className="text-xs text-red-500">{confirmError}</p>}
+                  {!confirmError && confirm.length > 0 && password === confirm && (
+                    <p className="text-xs text-green-600 flex items-center gap-1">
+                      <Check className="h-3 w-3" /> Passwords match
+                    </p>
+                  )}
                 </div>
-                {passwordError && (
-                  <p className="text-sm text-red-500">{passwordError}</p>
-                )}
+
                 <Button
                   className="w-full"
                   onClick={handleSubmit}
-                  disabled={state === "submitting"}
+                  disabled={state === "submitting" || !canSubmit}
                 >
                   {state === "submitting" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                   {state === "submitting" ? "Activating account…" : "Activate Account"}
-                </Button>
-              </div>
-            )}
-
-            {state === "success" && (
-              <div className="space-y-4">
-                <div className="flex items-start gap-3 rounded-lg bg-green-50 border border-green-200 p-4">
-                  <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
-                  <div className="text-sm text-green-700">
-                    <p className="font-semibold mb-1">Your account is now active!</p>
-                    <p>You can now log in with your email and new password.</p>
-                  </div>
-                </div>
-                <Button className="w-full" onClick={() => navigate("/login")}>
-                  Go to Login
                 </Button>
               </div>
             )}

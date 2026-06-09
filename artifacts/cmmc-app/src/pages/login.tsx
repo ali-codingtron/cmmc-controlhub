@@ -473,9 +473,14 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const emailRef = useRef<HTMLInputElement>(null);
+  const [invitedBanner, setInvitedBanner] = useState(false);
 
   useEffect(() => {
     emailRef.current?.focus();
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("invited") === "1") {
+      setInvitedBanner(true);
+    }
   }, []);
 
   const form = useForm<z.infer<typeof loginSchema>>({
@@ -535,6 +540,23 @@ export default function Login() {
             <p className="text-sm text-muted-foreground">CMMC Compliance &amp; Evidence Management</p>
           </div>
         </div>
+
+        {invitedBanner && (
+          <div className="flex items-start gap-2.5 rounded-lg border border-green-200 bg-green-50 px-3 py-3 text-sm text-green-800">
+            <ShieldCheck className="h-4 w-4 shrink-0 mt-0.5 text-green-600" />
+            <div>
+              <p className="font-semibold">Account activated!</p>
+              <p className="text-green-700 text-xs mt-0.5">Your password has been set. Sign in below to get started.</p>
+            </div>
+            <button
+              className="ml-auto shrink-0 text-green-600 hover:text-green-800"
+              onClick={() => setInvitedBanner(false)}
+            >
+              <span className="sr-only">Dismiss</span>
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* Desktop heading */}
         <div className="hidden lg:flex items-center gap-4">
