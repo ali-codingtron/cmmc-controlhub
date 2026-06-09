@@ -541,7 +541,7 @@ paths:
           description: Removed
 
   # ─── INVITATIONS ────────────────────────────────────────────
-  /invitations/send:
+  /users/invite:
     post:
       operationId: sendInvitation
       tags: [users]
@@ -560,17 +560,23 @@ paths:
               schema:
                 $ref: "#/components/schemas/SendInvitationResponse"
 
-  /invitations/resend:
+  /users/{id}/resend-invite:
     post:
       operationId: resendInvitation
       tags: [users]
       summary: Resend an invitation to an invited user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ResendInvitationBody"
+              $ref: "#/components/schemas/ResendInviteBody"
       responses:
         "200":
           description: Invitation resent
@@ -579,17 +585,17 @@ paths:
               schema:
                 $ref: "#/components/schemas/SendInvitationResponse"
 
-  /invitations/cancel:
+  /users/{id}/cancel-invite:
     post:
       operationId: cancelInvitation
       tags: [users]
       summary: Cancel a pending invitation
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CancelInvitationBody"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
       responses:
         "200":
           description: Invitation cancelled
@@ -4607,6 +4613,12 @@ components:
         sendEmail:
           type: boolean
       required: [userId]
+
+    ResendInviteBody:
+      type: object
+      properties:
+        sendEmail:
+          type: boolean
 
     CancelInvitationBody:
       type: object

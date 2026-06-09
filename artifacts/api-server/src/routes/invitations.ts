@@ -285,22 +285,17 @@ async function handleCancelInvitation(req: Request, res: Response): Promise<void
 }
 
 // ─── Route registrations ───────────────────────────────────────────────────────
-const adminOrManager = requireRole("admin", "compliance_manager");
+const adminOnly = requireRole("admin");
 
-// Primary routes
-router.post("/invitations/send",   requireAuth, adminOrManager, handleSendInvitation);
-router.post("/invitations/resend", requireAuth, adminOrManager, handleResendInvitation);
-router.post("/invitations/cancel", requireAuth, adminOrManager, handleCancelInvitation);
+// Canonical routes (spec-primary)
+router.post("/users/invite", requireAuth, adminOnly, handleSendInvitation);
 
-// Spec-compliant aliases: /users/invite, /users/:id/resend-invite, /users/:id/cancel-invite
-router.post("/users/invite", requireAuth, adminOrManager, handleSendInvitation);
-
-router.post("/users/:id/resend-invite", requireAuth, adminOrManager, async (req, res) => {
+router.post("/users/:id/resend-invite", requireAuth, adminOnly, async (req, res) => {
   req.body = { ...req.body, userId: req.params.id };
   return handleResendInvitation(req, res);
 });
 
-router.post("/users/:id/cancel-invite", requireAuth, adminOrManager, async (req, res) => {
+router.post("/users/:id/cancel-invite", requireAuth, adminOnly, async (req, res) => {
   req.body = { ...req.body, userId: req.params.id };
   return handleCancelInvitation(req, res);
 });

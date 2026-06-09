@@ -730,8 +730,11 @@ export const SendInvitationBody = zod.object({
 /**
  * @summary Resend an invitation to an invited user
  */
+export const ResendInvitationParams = zod.object({
+  id: zod.coerce.string(),
+});
+
 export const ResendInvitationBody = zod.object({
-  userId: zod.string(),
   sendEmail: zod.boolean().optional(),
 });
 
@@ -744,8 +747,8 @@ export const ResendInvitationResponse = zod.object({
 /**
  * @summary Cancel a pending invitation
  */
-export const CancelInvitationBody = zod.object({
-  userId: zod.string(),
+export const CancelInvitationParams = zod.object({
+  id: zod.coerce.string(),
 });
 
 export const CancelInvitationResponse = zod.object({

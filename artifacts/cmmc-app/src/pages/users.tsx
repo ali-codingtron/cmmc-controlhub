@@ -1130,7 +1130,7 @@ export default function Users() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const isAdmin = me?.role === "admin";
-  const canInvite = me?.role === "admin" || me?.role === "compliance_manager";
+  const canInvite = isAdmin;
 
   const { data: emailStatus } = useQuery({
     queryKey: ["invitations", "email-status"],
@@ -1267,7 +1267,7 @@ export default function Users() {
 
   const handleResendInvite = async (u: User) => {
     try {
-      const result = await resendMutation.mutateAsync({ data: { userId: u.id } });
+      const result = await resendMutation.mutateAsync({ id: u.id, data: {} });
       if (result.inviteUrl && !result.emailSent) {
         setPendingInviteUrl(result.inviteUrl);
       } else {
@@ -1281,7 +1281,7 @@ export default function Users() {
 
   const handleCopyInviteLink = async (u: User) => {
     try {
-      const result = await resendMutation.mutateAsync({ data: { userId: u.id, sendEmail: false } as any });
+      const result = await resendMutation.mutateAsync({ id: u.id, data: { sendEmail: false } });
       if (result.inviteUrl) {
         try {
           await navigator.clipboard.writeText(result.inviteUrl);
@@ -1298,7 +1298,7 @@ export default function Users() {
 
   const handleCancelInvite = async (u: User) => {
     try {
-      await cancelMutation.mutateAsync({ data: { userId: u.id } });
+      await cancelMutation.mutateAsync({ id: u.id });
       toast({ title: `Invitation cancelled for ${u.email}` });
       invalidate();
     } catch (err: any) {
@@ -1319,6 +1319,38 @@ export default function Users() {
   });
 
   const isInvited = (u: User) => (u as any).status === "invited";
+
+  function UserStatusBadge({ u }: { u: User }) {
+    const status: string = (u as any).status ?? (u.isActive ? "active" : "deactivated");
+    switch (status) {
+      case "invited":
+        return (
+          <Badge variant="outline" className="border-amber-400 text-amber-700 gap-1 text-xs bg-amber-50">
+            <Mail className="h-3 w-3" /> Invited
+          </Badge>
+        );
+      case "pending_setup":
+        return (
+          <Badge variant="outline" className="border-blue-400 text-blue-700 gap-1 text-xs bg-blue-50">
+            Pending Setup
+          </Badge>
+        );
+      case "active":
+        return (
+          <Badge className="bg-green-600 hover:bg-green-600 text-white text-xs">Active</Badge>
+        );
+      case "suspended":
+        return (
+          <Badge variant="outline" className="border-orange-400 text-orange-700 text-xs bg-orange-50">
+            Suspended
+          </Badge>
+        );
+      case "deactivated":
+        return <Badge variant="secondary" className="text-xs">Deactivated</Badge>;
+      default:
+        return <Badge variant="secondary" className="text-xs">{status}</Badge>;
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -1432,17 +1464,7 @@ export default function Users() {
                       ) : null}
                     </TableCell>
                     <TableCell>
-                      {isInvited(u) ? (
-                        <Badge variant="outline" className="border-amber-400 text-amber-700 gap-1 text-xs bg-amber-50">
-                          <Mail className="h-3 w-3" /> Invited
-                        </Badge>
-                      ) : u.isActive ? (
-                        <Badge className="bg-green-600 hover:bg-green-600 text-white">
-                          Active
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary">Inactive</Badge>
-                      )}
+                      <UserStatusBadge u={u} />
                     </TableCell>
                     <TableCell>
                       {isInvited(u) ? (

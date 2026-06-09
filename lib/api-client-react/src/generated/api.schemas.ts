@@ -1458,6 +1458,10 @@ export interface ResendInvitationBody {
   sendEmail?: boolean;
 }
 
+export interface ResendInviteBody {
+  sendEmail?: boolean;
+}
+
 export interface CancelInvitationBody {
   userId: string;
 }

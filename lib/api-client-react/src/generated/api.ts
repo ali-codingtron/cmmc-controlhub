@@ -27,7 +27,6 @@ import type {
   AssessorControlPackage,
   AuditLogEntry,
   AuthResponse,
-  CancelInvitationBody,
   ChecklistCompletion,
   ChecklistTemplate,
   ClosePoamBody,
@@ -84,7 +83,7 @@ import type {
   Poam,
   RejectDocumentBody,
   RejectEvidenceBody,
-  ResendInvitationBody,
+  ResendInviteBody,
   ResetPasswordBody,
   RunDocChecksBody,
   SearchEvidenceParams,
@@ -2359,7 +2358,7 @@ export const useRemoveUserFromOrg = <
  * @summary Invite a new user by email
  */
 export const getSendInvitationUrl = () => {
-  return `/api/invitations/send`;
+  return `/api/users/invite`;
 };
 
 export const sendInvitation = async (
@@ -2444,19 +2443,20 @@ export const useSendInvitation = <
 /**
  * @summary Resend an invitation to an invited user
  */
-export const getResendInvitationUrl = () => {
-  return `/api/invitations/resend`;
+export const getResendInvitationUrl = (id: string) => {
+  return `/api/users/${id}/resend-invite`;
 };
 
 export const resendInvitation = async (
-  resendInvitationBody: ResendInvitationBody,
+  id: string,
+  resendInviteBody?: ResendInviteBody,
   options?: RequestInit,
 ): Promise<SendInvitationResponse> => {
-  return customFetch<SendInvitationResponse>(getResendInvitationUrl(), {
+  return customFetch<SendInvitationResponse>(getResendInvitationUrl(id), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(resendInvitationBody),
+    body: JSON.stringify(resendInviteBody),
   });
 };
 
@@ -2467,14 +2467,14 @@ export const getResendInvitationMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof resendInvitation>>,
     TError,
-    { data: BodyType<ResendInvitationBody> },
+    { id: string; data: BodyType<ResendInviteBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof resendInvitation>>,
   TError,
-  { data: BodyType<ResendInvitationBody> },
+  { id: string; data: BodyType<ResendInviteBody> },
   TContext
 > => {
   const mutationKey = ["resendInvitation"];
@@ -2488,11 +2488,11 @@ export const getResendInvitationMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof resendInvitation>>,
-    { data: BodyType<ResendInvitationBody> }
+    { id: string; data: BodyType<ResendInviteBody> }
   > = (props) => {
-    const { data } = props ?? {};
+    const { id, data } = props ?? {};
 
-    return resendInvitation(data, requestOptions);
+    return resendInvitation(id, data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -2501,7 +2501,7 @@ export const getResendInvitationMutationOptions = <
 export type ResendInvitationMutationResult = NonNullable<
   Awaited<ReturnType<typeof resendInvitation>>
 >;
-export type ResendInvitationMutationBody = BodyType<ResendInvitationBody>;
+export type ResendInvitationMutationBody = BodyType<ResendInviteBody>;
 export type ResendInvitationMutationError = ErrorType<unknown>;
 
 /**
@@ -2514,14 +2514,14 @@ export const useResendInvitation = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof resendInvitation>>,
     TError,
-    { data: BodyType<ResendInvitationBody> },
+    { id: string; data: BodyType<ResendInviteBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof resendInvitation>>,
   TError,
-  { data: BodyType<ResendInvitationBody> },
+  { id: string; data: BodyType<ResendInviteBody> },
   TContext
 > => {
   return useMutation(getResendInvitationMutationOptions(options));
@@ -2530,19 +2530,17 @@ export const useResendInvitation = <
 /**
  * @summary Cancel a pending invitation
  */
-export const getCancelInvitationUrl = () => {
-  return `/api/invitations/cancel`;
+export const getCancelInvitationUrl = (id: string) => {
+  return `/api/users/${id}/cancel-invite`;
 };
 
 export const cancelInvitation = async (
-  cancelInvitationBody: CancelInvitationBody,
+  id: string,
   options?: RequestInit,
 ): Promise<SuccessResponse> => {
-  return customFetch<SuccessResponse>(getCancelInvitationUrl(), {
+  return customFetch<SuccessResponse>(getCancelInvitationUrl(id), {
     ...options,
     method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(cancelInvitationBody),
   });
 };
 
@@ -2553,14 +2551,14 @@ export const getCancelInvitationMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof cancelInvitation>>,
     TError,
-    { data: BodyType<CancelInvitationBody> },
+    { id: string },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof cancelInvitation>>,
   TError,
-  { data: BodyType<CancelInvitationBody> },
+  { id: string },
   TContext
 > => {
   const mutationKey = ["cancelInvitation"];
@@ -2574,11 +2572,11 @@ export const getCancelInvitationMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof cancelInvitation>>,
-    { data: BodyType<CancelInvitationBody> }
+    { id: string }
   > = (props) => {
-    const { data } = props ?? {};
+    const { id } = props ?? {};
 
-    return cancelInvitation(data, requestOptions);
+    return cancelInvitation(id, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -2587,7 +2585,7 @@ export const getCancelInvitationMutationOptions = <
 export type CancelInvitationMutationResult = NonNullable<
   Awaited<ReturnType<typeof cancelInvitation>>
 >;
-export type CancelInvitationMutationBody = BodyType<CancelInvitationBody>;
+
 export type CancelInvitationMutationError = ErrorType<unknown>;
 
 /**
@@ -2600,14 +2598,14 @@ export const useCancelInvitation = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof cancelInvitation>>,
     TError,
-    { data: BodyType<CancelInvitationBody> },
+    { id: string },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof cancelInvitation>>,
   TError,
-  { data: BodyType<CancelInvitationBody> },
+  { id: string },
   TContext
 > => {
   return useMutation(getCancelInvitationMutationOptions(options));
