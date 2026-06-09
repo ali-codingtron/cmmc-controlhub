@@ -49,6 +49,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -91,6 +92,7 @@ import {
   Ban,
   Link,
   Clock,
+  UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -851,6 +853,109 @@ function InviteUrlBanner({ url, onDismiss }: { url: string; onDismiss: () => voi
   );
 }
 
+// ─── Create User Dialog ────────────────────────────────────────────────────────
+
+const EMPTY_CREATE: UserFormData = {
+  name: "",
+  email: "",
+  password: "",
+  role: "it_contributor",
+  title: "",
+  department: "",
+};
+
+interface CreateUserDialogProps {
+  open: boolean;
+  onClose: () => void;
+  onCreated: () => void;
+}
+
+function CreateUserDialog({ open, onClose, onCreated }: CreateUserDialogProps) {
+  const { toast } = useToast();
+  const [form, setForm] = useState<UserFormData>(EMPTY_CREATE);
+  const [errors, setErrors] = useState<Partial<Record<keyof UserFormData, string>>>({});
+
+  const createMutation = useCreateUser();
+
+  const setField = (field: keyof UserFormData, value: string) => {
+    setForm((f) => ({ ...f, [field]: value }));
+    setErrors((e) => ({ ...e, [field]: undefined }));
+  };
+
+  const validate = () => {
+    const errs: Partial<Record<keyof UserFormData, string>> = {};
+    if (!form.name.trim()) errs.name = "Name is required";
+    if (!form.email.trim()) errs.email = "Email is required";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
+      errs.email = "Invalid email address";
+    if (!form.password) errs.password = "Password is required";
+    else if (form.password.length < 8) errs.password = "Password must be at least 8 characters";
+    if (!form.role) errs.role = "Role is required";
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleClose = () => {
+    setForm(EMPTY_CREATE);
+    setErrors({});
+    onClose();
+  };
+
+  const handleSubmit = async () => {
+    if (!validate()) return;
+    try {
+      await createMutation.mutateAsync({
+        data: {
+          name: form.name.trim(),
+          email: form.email.trim(),
+          password: form.password,
+          role: form.role as any,
+          title: form.title || undefined,
+          department: form.department || undefined,
+        },
+      });
+      toast({ title: `${form.name.trim()} created successfully` });
+      handleClose();
+      onCreated();
+    } catch (err: any) {
+      const msg = err?.response?.data?.error ?? "Failed to create user";
+      if (msg.toLowerCase().includes("email")) {
+        setErrors({ email: "A user with this email already exists" });
+      } else {
+        toast({ title: msg, variant: "destructive" });
+      }
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="h-5 w-5 text-primary" />
+            Create User
+          </DialogTitle>
+          <DialogDescription>
+            Create a user with an immediate password. They can log in right away.
+          </DialogDescription>
+        </DialogHeader>
+
+        <UserForm data={form} onChange={setField} isEdit={false} errors={errors} />
+
+        <DialogFooter>
+          <Button variant="outline" onClick={handleClose} disabled={createMutation.isPending}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={createMutation.isPending} className="gap-2">
+            {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+            Create User
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Edit Dialog ───────────────────────────────────────────────────────────────
 
 const EMPTY_FORM: UserFormData = {
@@ -1123,7 +1228,7 @@ function ConfirmDialog({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-type DialogKind = "invite" | "edit" | "reset-password" | "deactivate" | "activate" | "delete";
+type DialogKind = "create" | "invite" | "edit" | "reset-password" | "deactivate" | "activate" | "delete";
 
 export default function Users() {
   const { user: me } = useAuth();
@@ -1362,11 +1467,17 @@ export default function Users() {
             {users.length} user{users.length !== 1 ? "s" : ""} total
           </p>
         </div>
-        {canInvite && (
-          <Button onClick={() => open("invite")} className="gap-2">
-            <Mail className="h-4 w-4" />
-            Invite User
-          </Button>
+        {isAdmin && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => open("create")} className="gap-2">
+              <UserPlus className="h-4 w-4" />
+              Create User
+            </Button>
+            <Button onClick={() => open("invite")} className="gap-2">
+              <Mail className="h-4 w-4" />
+              Invite User
+            </Button>
+          </div>
         )}
       </div>
 
@@ -1643,6 +1754,13 @@ export default function Users() {
           )}
         </CardContent>
       </Card>
+
+      {/* Create User Dialog */}
+      <CreateUserDialog
+        open={openDialog === "create"}
+        onClose={close}
+        onCreated={invalidate}
+      />
 
       {/* Invite Dialog */}
       <InviteDialog
