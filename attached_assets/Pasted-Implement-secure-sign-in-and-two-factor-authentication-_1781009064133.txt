@@ -1,0 +1,454 @@
+Implement secure sign-in and two-factor authentication for Control HUB while preserving all existing users, usernames, and passwords.
+
+Important:
+Do NOT reset existing passwords.
+Do NOT force users to create new usernames.
+Do NOT delete existing users.
+Do NOT break the current login flow.
+Do NOT require Microsoft SSO right now.
+
+Keep the current local username/password login, but add MFA as a second step after the existing password is successfully verified.
+
+Goal:
+Existing users should continue logging in with their same current username/email and password. After password login, users should be prompted to enroll in or complete MFA depending on their role and MFA status.
+
+1. Preserve Existing Accounts
+
+Before changing authentication:
+- inspect the current User model
+- inspect the current password field/hash field
+- inspect login flow
+- inspect session handling
+- inspect role and organization membership logic
+
+Rules:
+- keep all existing usernames/emails unchanged
+- keep all existing passwords/password hashes unchanged
+- do not invalidate existing accounts
+- do not require bulk password reset
+- do not migrate passwords unless absolutely necessary
+- if password hashing is weak, report it first and propose a separate migration plan later
+
+2. Add MFA Without Changing Passwords
+
+Implement TOTP authenticator-app MFA.
+
+Supported apps:
+- Microsoft Authenticator
+- Google Authenticator
+- 1Password
+- Bitwarden
+- Authy
+- any standard TOTP app
+
+Login flow:
+1. User enters existing username/email and password.
+2. App verifies password using the existing logic.
+3. If password is valid and MFA is required:
+   - if user has MFA enrolled, prompt for 6-digit code.
+   - if user has not enrolled, force MFA setup.
+4. After valid MFA, create the app session.
+5. If MFA is not required for that user yet, allow login normally.
+
+3. MFA Enforcement Policy
+
+Add an Admin setting:
+
+Security Settings > MFA Enforcement
+
+Options:
+- Disabled
+- Required for Admins only
+- Required for privileged roles
+- Required for all users
+
+Default initial setting:
+Required for Admins only
+
+Privileged roles:
+- Global Admin
+- Organization Admin
+- Compliance Manager
+- Reviewer
+
+Recommended final setting:
+Required for all users
+
+Assessor Read-Only should also require MFA once the organization is ready.
+
+4. MFA Enrollment Flow
+
+When MFA is required and the user has not enrolled:
+
+Show page:
+Set Up Two-Factor Authentication
+
+Steps:
+1. Display QR code.
+2. Display manual setup key.
+3. User scans QR code with authenticator app.
+4. User enters 6-digit verification code.
+5. App verifies code.
+6. MFA is enabled.
+7. Generate recovery codes.
+8. Require user to copy/download recovery codes before continuing.
+
+MFA setup should only happen after the existing password has been successfully verified.
+
+5. Recovery Codes
+
+Generate one-time recovery codes.
+
+Requirements:
+- generate 8 or 10 recovery codes
+- store only hashed recovery codes
+- show recovery codes only once
+- allow user to download/copy them
+- mark recovery code as used after successful login
+- allow Admin to regenerate/reset MFA if user loses access
+
+Recovery codes can be used instead of the authenticator code during MFA challenge.
+
+6. User MFA Fields
+
+Update User model with MFA fields.
+
+Add fields similar to:
+
+mfa_enabled Boolean default false
+mfa_required Boolean default false
+mfa_secret_encrypted String nullable
+mfa_enrolled_at DateTime nullable
+mfa_last_verified_at DateTime nullable
+mfa_recovery_codes_hash Json nullable
+mfa_reset_required Boolean default false
+last_login_at DateTime nullable
+failed_login_count Int default 0
+locked_until DateTime nullable
+
+Important:
+Encrypt MFA secret at rest.
+Do not store TOTP secret in plain text.
+Do not log MFA secret.
+Do not expose MFA secret through APIs.
+
+7. Security Settings Model
+
+Add or update SecuritySettings:
+
+id
+mfa_enforcement_mode
+require_mfa_for_admins
+require_mfa_for_all_users
+session_idle_timeout_minutes
+session_absolute_timeout_hours
+max_failed_login_attempts
+lockout_duration_minutes
+password_min_length
+created_at
+updated_at
+
+8. MFA API Routes
+
+Add backend routes:
+
+POST /api/auth/login
+- verifies existing username/password
+- if MFA required, returns mfa_required state instead of creating final session
+- if MFA not required, creates session
+
+POST /api/auth/mfa/setup/start
+- generates encrypted TOTP secret
+- returns QR code URI and manual setup key
+
+POST /api/auth/mfa/setup/verify
+- verifies first TOTP code
+- enables MFA
+- generates recovery codes
+
+POST /api/auth/mfa/verify
+- verifies TOTP code during login
+- creates final session if valid
+
+POST /api/auth/mfa/recovery-code
+- verifies one-time recovery code
+- creates final session if valid
+- marks recovery code as used
+
+POST /api/auth/mfa/disable
+- Admin only or user with password + MFA confirmation
+
+POST /api/auth/mfa/reset
+- Admin only
+- resets user MFA enrollment
+- requires reason
+- logs audit event
+
+POST /api/auth/logout
+- destroys session
+
+9. Login UI Updates
+
+Update login screen.
+
+Flow A — existing user without MFA required:
+- username/password works as before
+
+Flow B — existing user with MFA required and already enrolled:
+- username/password
+- then MFA code page
+- then dashboard
+
+Flow C — existing user with MFA required but not enrolled:
+- username/password
+- forced MFA setup
+- recovery codes
+- dashboard
+
+Do not change the existing username/password fields.
+
+Add:
+- “Enter authenticator code”
+- “Use recovery code”
+- “Need help? Contact administrator”
+
+10. Admin User Management Updates
+
+On Users page, show MFA status:
+
+Columns:
+- Name
+- Email
+- Role
+- Organizations
+- Status
+- MFA Enabled
+- MFA Required
+- Last Login
+- Actions
+
+User actions:
+- Require MFA
+- Reset MFA
+- Disable MFA
+- Revoke Sessions
+- Deactivate User
+
+Admin should be able to:
+- require MFA for individual user
+- reset MFA for a locked-out user
+- view MFA enrollment status
+- not view MFA secrets or recovery codes
+
+11. Security Center Page
+
+Add Admin > Security Center.
+
+Show:
+- MFA enforcement mode
+- users with MFA enabled
+- users missing MFA
+- privileged users missing MFA
+- failed login attempts
+- locked accounts
+- recent login activity
+- recent MFA events
+- recent security events
+
+Add quick actions:
+- Require MFA for all admins
+- Require MFA for all users
+- Reset user MFA
+- View audit logs
+
+12. Session Security
+
+Harden sessions.
+
+Requirements:
+- use server-side sessions or secure signed session cookies
+- cookies must be HttpOnly
+- cookies must be Secure in production
+- cookies must use SameSite=Lax or Strict
+- regenerate session ID after successful login
+- destroy session on logout
+- idle timeout
+- absolute timeout
+- revoke all sessions for user
+- do not store tokens or session IDs in localStorage/sessionStorage
+
+Suggested defaults:
+- idle timeout: 30 minutes
+- absolute timeout: 12 hours
+
+13. Login Rate Limiting and Lockout
+
+Add brute-force protection.
+
+Rules:
+- limit login attempts by account and IP
+- after 5 failed attempts, lock account for 15 minutes
+- show generic error:
+  “Invalid username or password.”
+- do not reveal whether the account exists
+- audit log failed attempts
+- show admin warning for repeated failures
+
+MFA attempts:
+- limit MFA attempts
+- after repeated failed MFA attempts, require re-login
+- audit log failed MFA attempts
+
+14. Audit Logging
+
+Add audit log events for:
+
+Authentication:
+- login success
+- login failure
+- logout
+- account locked
+- account unlocked
+- session expired
+- session revoked
+
+MFA:
+- MFA setup started
+- MFA enabled
+- MFA challenge success
+- MFA challenge failure
+- recovery code used
+- recovery codes regenerated
+- MFA reset by admin
+- MFA disabled
+
+Admin actions:
+- MFA policy changed
+- user MFA required
+- user MFA reset
+- user sessions revoked
+
+Each audit log should include:
+- user ID if known
+- email/username attempted
+- organization ID if applicable
+- IP address
+- user agent
+- action
+- success/failure
+- timestamp
+- reason/details
+
+15. Do Not Break RBAC
+
+After login and MFA, existing authorization still applies.
+
+Do not change:
+- role assignments
+- organization memberships
+- assessor read-only rules
+- demo mode rules
+
+Every protected API route should still verify:
+- authenticated user
+- organization access
+- role permissions
+- object belongs to organization
+
+16. Rollout Plan
+
+Implement rollout safely.
+
+Phase 1:
+- add MFA database fields
+- add MFA setup and verify routes
+- add Security Settings
+- add Admin Security Center
+- keep MFA enforcement disabled by default
+
+Phase 2:
+- enable MFA for Global Admins only
+- test admin login and recovery codes
+
+Phase 3:
+- enable MFA for Organization Admin and Compliance Manager
+
+Phase 4:
+- enable MFA for all users
+
+17. Migration Safety
+
+Before database migration:
+- back up user/auth tables
+- confirm existing users remain
+- confirm existing password hashes remain
+- confirm existing login still works if MFA is disabled
+
+After migration:
+- existing users should still login with same username/password
+- MFA fields should default to disabled/not enrolled
+- no user should be locked out automatically unless enforcement is enabled
+
+18. Production Safety
+
+Add environment variables:
+
+SESSION_SECRET
+MFA_ENCRYPTION_KEY
+
+Startup checks:
+- SESSION_SECRET must exist in production
+- MFA_ENCRYPTION_KEY must exist in production
+- do not start MFA setup if encryption key is missing
+
+Do not log these values.
+
+19. Acceptance Tests
+
+Test A:
+Existing user logs in with same username and password while MFA enforcement is disabled.
+Login works exactly as before.
+
+Test B:
+Enable MFA required for Admins.
+Admin logs in with same username/password.
+Admin is forced to set up MFA.
+
+Test C:
+Admin scans QR code with Microsoft Authenticator.
+Admin enters 6-digit code.
+MFA enables successfully.
+Recovery codes are displayed once.
+
+Test D:
+Admin logs out and logs back in.
+Same username/password works.
+MFA code is required.
+Successful MFA opens dashboard.
+
+Test E:
+Wrong MFA code fails and is audit logged.
+
+Test F:
+Recovery code works once and cannot be reused.
+
+Test G:
+Admin resets MFA for a user.
+User is forced to enroll again at next login.
+
+Test H:
+Existing non-admin users are not affected until MFA is required for their role or account.
+
+Test I:
+No existing usernames, passwords, roles, or organizations are changed.
+
+Test J:
+Assessor Read-Only role remains read-only after MFA login.
+
+Test K:
+Demo mode still works and remains read-only.
+
+20. Important
+
+Keep all current usernames and passwords unchanged.
+This is an MFA and session security enhancement, not a user migration or password reset project.
