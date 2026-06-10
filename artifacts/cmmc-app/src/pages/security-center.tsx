@@ -37,6 +37,8 @@ import {
   CheckCircle2,
   XCircle,
   Activity,
+  KeyRound,
+  MailX,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
@@ -337,6 +339,74 @@ export default function SecurityCenter() {
                 ))}
               </TableBody>
             </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Password Reset Activity */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <KeyRound className="h-4 w-4" />
+            Password Reset Activity
+          </CardTitle>
+          <CardDescription>Self-service and admin-triggered password reset statistics.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex items-center gap-3 rounded-lg border p-3">
+              <div className="rounded-lg bg-amber-50 p-2 shrink-0">
+                <KeyRound className="h-4 w-4 text-amber-600" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold">{(data as any)?.passwordResetStats?.pendingCount ?? 0}</div>
+                <div className="text-xs text-muted-foreground">Pending Reset Links</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 rounded-lg border p-3">
+              <div className="rounded-lg bg-green-50 p-2 shrink-0">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold">{(data as any)?.passwordResetStats?.completedLast30Days ?? 0}</div>
+                <div className="text-xs text-muted-foreground">Completed (last 30 days)</div>
+              </div>
+            </div>
+          </div>
+
+          {((data as any)?.recentResetEvents?.length ?? 0) === 0 ? (
+            <p className="text-sm text-muted-foreground py-2">No password reset activity recorded yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {(data as any)?.recentResetEvents?.map((evt: any) => (
+                <div key={evt.id} className="flex items-start gap-3 py-2 border-b last:border-0">
+                  <div className="shrink-0 mt-0.5">
+                    {evt.action?.includes("fail") || evt.action?.includes("unknown") ? (
+                      <MailX className="h-4 w-4 text-red-500" />
+                    ) : evt.action?.includes("completed") || evt.action?.includes("sent") ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <KeyRound className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant={actionBadgeColor(evt.action ?? "") as any} className="text-xs">
+                        {actionLabel(evt.action ?? "")}
+                      </Badge>
+                      <span className="text-sm font-medium truncate">{evt.userName ?? "System"}</span>
+                      {evt.entityLabel && evt.entityLabel !== evt.userName && (
+                        <span className="text-xs text-muted-foreground truncate">→ {evt.entityLabel}</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {formatDate(evt.timestamp)}
+                      {evt.ipAddress && <span className="ml-2">from {evt.ipAddress}</span>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>

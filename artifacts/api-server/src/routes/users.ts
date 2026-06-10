@@ -15,11 +15,15 @@ import {
   checklistCompletionsTable,
   procedureTaskRulesTable,
   evidenceItemsTable,
+  passwordResetTokensTable,
 } from "@workspace/db";
 import { eq, and, isNull } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
 import { logAudit } from "../lib/audit";
 import { randomUUID } from "crypto";
+import { logger } from "../lib/logger";
+import { sendPasswordResetEmail, getAppBaseUrl } from "../lib/email";
+import { generateResetToken, RESET_TOKEN_EXPIRY_MINUTES } from "../lib/password-reset-token";
 
 const router = Router();
 const SALT_ROUNDS = 12;
@@ -374,6 +378,69 @@ router.post("/users/:id/reset-password", requireAuth, requireRole("admin"), asyn
   await logAudit(req, "password_reset", "user", existing.id, { entityLabel: existing.email });
 
   res.json({ success: true });
+});
+
+// ── Admin: Send Password Reset Email ─────────────────────────────────────────
+router.post("/users/:id/send-password-reset", requireAuth, requireRole("admin"), async (req, res) => {
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(and(eq(usersTable.id, req.params.id), eq(usersTable.isActive, true)))
+    .limit(1);
+
+  if (!user) {
+    res.status(404).json({ error: "User not found or inactive" });
+    return;
+  }
+
+  // Revoke existing pending tokens
+  await db
+    .update(passwordResetTokensTable)
+    .set({ status: "revoked", updatedAt: new Date() })
+    .where(
+      and(
+        eq(passwordResetTokensTable.userId, user.id),
+        eq(passwordResetTokensTable.status, "pending"),
+      ),
+    );
+
+  const { rawToken, tokenHash } = generateResetToken();
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + RESET_TOKEN_EXPIRY_MINUTES * 60 * 1000);
+
+  await db.insert(passwordResetTokensTable).values({
+    id: randomUUID(),
+    userId: user.id,
+    tokenHash,
+    status: "pending",
+    expiresAt,
+    requestedAt: now,
+    requestedIp: req.ip ?? "unknown",
+    requestedUserAgent: req.headers["user-agent"] ?? "",
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  await logAudit(req, "password_reset_link_sent_by_admin" as any, "user", user.id, {
+    entityLabel: user.email,
+    newValue: { sentBy: (req as any).user?.email },
+  });
+
+  const resetUrl = `${getAppBaseUrl()}/reset-password?token=${rawToken}`;
+  let emailSent = false;
+
+  try {
+    await sendPasswordResetEmail({
+      toEmail: user.email,
+      toName: user.name.split(" ")[0] || user.name,
+      resetUrl,
+    });
+    emailSent = true;
+  } catch (err) {
+    logger.warn({ err, email: user.email }, "Failed to send admin-triggered password reset email");
+  }
+
+  res.json({ success: true, emailSent, resetUrl: emailSent ? undefined : resetUrl });
 });
 
 // ── Get user org memberships ─────────────────────────────────────────────────

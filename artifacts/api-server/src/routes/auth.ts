@@ -1,7 +1,7 @@
 import { Router } from "express";
 import bcrypt from 'bcryptjs';
-import { db, usersTable, auditLogsTable, organizationUsersTable, securitySettingsTable } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { db, usersTable, auditLogsTable, organizationUsersTable, securitySettingsTable, passwordResetTokensTable } from "@workspace/db";
+import { eq, sql, and } from "drizzle-orm";
 import { signToken, requireAuth, requireRole } from "../lib/auth";
 import {
   encryptSecret,
@@ -16,6 +16,15 @@ import {
 } from "../lib/mfa";
 import { signMfaStateToken, verifyMfaStateToken } from "../lib/mfa-jwt";
 import { randomUUID } from "crypto";
+import { logger } from "../lib/logger";
+import { sendPasswordResetEmail, getAppBaseUrl } from "../lib/email";
+import {
+  generateResetToken,
+  hashResetToken,
+  checkForgotPasswordRateLimit,
+  validatePasswordPolicy,
+  RESET_TOKEN_EXPIRY_MINUTES,
+} from "../lib/password-reset-token";
 
 checkStartup();
 
@@ -796,6 +805,7 @@ router.get("/auth/security-center", requireAuth, requireRole("admin"), async (re
 
   const privilegedRoles = ["admin", "compliance_manager", "reviewer"];
   const now = new Date();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
   const enrolled = allUsers.filter((u) => u.mfaEnabled);
   const notEnrolled = allUsers.filter((u) => !u.mfaEnabled);
@@ -811,9 +821,46 @@ router.get("/auth/security-center", requireAuth, requireRole("admin"), async (re
   const recentEvents = await db
     .select()
     .from(auditLogsTable)
-    .where(sql`${auditLogsTable.action} = ANY(ARRAY[${sql.raw(mfaActionTypes.map(v => `'${v}'`).join(","))}]::audit_action[])`)
+    .where(sql`${auditLogsTable.action}::text = ANY(ARRAY[${sql.raw(mfaActionTypes.map(v => `'${v}'`).join(","))}])`)
     .orderBy(sql`${auditLogsTable.timestamp} DESC`)
     .limit(50);
+
+  // ── Password Reset Stats ──────────────────────────────────────────────────
+  const [pendingRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(passwordResetTokensTable)
+    .where(
+      and(
+        eq(passwordResetTokensTable.status, "pending"),
+        sql`${passwordResetTokensTable.expiresAt} > ${now}`,
+      ),
+    );
+
+  const [completedRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(passwordResetTokensTable)
+    .where(
+      and(
+        eq(passwordResetTokensTable.status, "used"),
+        sql`${passwordResetTokensTable.usedAt} >= ${thirtyDaysAgo}`,
+      ),
+    );
+
+  const resetActionTypes = [
+    "password_reset_requested",
+    "password_reset_completed",
+    "password_reset_email_sent",
+    "password_reset_email_failed",
+    "password_reset_link_sent_by_admin",
+    "password_reset_requested_unknown_email",
+  ];
+
+  const recentResetEvents = await db
+    .select()
+    .from(auditLogsTable)
+    .where(sql`${auditLogsTable.action}::text = ANY(ARRAY[${sql.raw(resetActionTypes.map(v => `'${v}'`).join(","))}])`)
+    .orderBy(sql`${auditLogsTable.timestamp} DESC`)
+    .limit(25);
 
   res.json({
     settings,
@@ -828,7 +875,295 @@ router.get("/auth/security-center", requireAuth, requireRole("admin"), async (re
       lockedUntil: u.lockedUntil, failedLoginCount: u.failedLoginCount,
     })),
     recentEvents,
+    passwordResetStats: {
+      pendingCount: pendingRow?.count ?? 0,
+      completedLast30Days: completedRow?.count ?? 0,
+    },
+    recentResetEvents,
   });
+});
+
+// ─── Forgot Password ─────────────────────────────────────────────────────────
+
+router.post("/auth/forgot-password", async (req, res) => {
+  const { email } = req.body;
+  if (!email || typeof email !== "string") {
+    res.status(400).json({ error: "Email is required" });
+    return;
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+  const ip = req.ip ?? "unknown";
+  const ua = req.headers["user-agent"] ?? "";
+
+  // Always respond immediately — prevents timing-based enumeration
+  res.json({ success: true });
+
+  if (!checkForgotPasswordRateLimit(ip, normalizedEmail)) {
+    return;
+  }
+
+  setImmediate(async () => {
+    try {
+      const [user] = await db
+        .select()
+        .from(usersTable)
+        .where(and(eq(usersTable.email, normalizedEmail), eq(usersTable.isActive, true)))
+        .limit(1);
+
+      if (!user) {
+        await db.insert(auditLogsTable).values({
+          id: randomUUID(),
+          action: "password_reset_requested_unknown_email" as any,
+          entityType: "user",
+          entityLabel: normalizedEmail,
+          ipAddress: ip,
+          userAgent: ua,
+          timestamp: new Date(),
+        });
+        return;
+      }
+
+      // Revoke any existing pending tokens
+      await db
+        .update(passwordResetTokensTable)
+        .set({ status: "revoked", updatedAt: new Date() })
+        .where(
+          and(
+            eq(passwordResetTokensTable.userId, user.id),
+            eq(passwordResetTokensTable.status, "pending"),
+          ),
+        );
+
+      const { rawToken, tokenHash } = generateResetToken();
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + RESET_TOKEN_EXPIRY_MINUTES * 60 * 1000);
+
+      await db.insert(passwordResetTokensTable).values({
+        id: randomUUID(),
+        userId: user.id,
+        tokenHash,
+        status: "pending",
+        expiresAt,
+        requestedAt: now,
+        requestedIp: ip,
+        requestedUserAgent: ua,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await db.insert(auditLogsTable).values({
+        id: randomUUID(),
+        userId: user.id,
+        userName: user.name,
+        action: "password_reset_requested" as any,
+        entityType: "user",
+        entityId: user.id,
+        entityLabel: user.email,
+        ipAddress: ip,
+        userAgent: ua,
+        timestamp: now,
+      });
+
+      const resetUrl = `${getAppBaseUrl()}/reset-password?token=${rawToken}`;
+
+      try {
+        await sendPasswordResetEmail({
+          toEmail: user.email,
+          toName: user.name.split(" ")[0] || user.name,
+          resetUrl,
+        });
+        await db.insert(auditLogsTable).values({
+          id: randomUUID(),
+          userId: user.id,
+          userName: user.name,
+          action: "password_reset_email_sent" as any,
+          entityType: "user",
+          entityId: user.id,
+          entityLabel: user.email,
+          ipAddress: ip,
+          userAgent: ua,
+          timestamp: new Date(),
+        });
+      } catch (err) {
+        logger.error({ err, email: user.email }, "Failed to send password reset email");
+        await db.insert(auditLogsTable).values({
+          id: randomUUID(),
+          userId: user.id,
+          userName: user.name,
+          action: "password_reset_email_failed" as any,
+          entityType: "user",
+          entityId: user.id,
+          entityLabel: user.email,
+          ipAddress: ip,
+          userAgent: ua,
+          newValue: { error: String(err) },
+          timestamp: new Date(),
+        });
+      }
+    } catch (err) {
+      logger.error({ err }, "Error processing forgot password request");
+    }
+  });
+});
+
+// ─── Validate Reset Token ────────────────────────────────────────────────────
+
+router.get("/auth/reset-password/validate", async (req, res) => {
+  const rawToken = req.query.token as string | undefined;
+  if (!rawToken) {
+    res.json({ valid: false, status: "invalid" });
+    return;
+  }
+
+  const tokenHash = hashResetToken(rawToken);
+  const now = new Date();
+
+  const [token] = await db
+    .select()
+    .from(passwordResetTokensTable)
+    .where(eq(passwordResetTokensTable.tokenHash, tokenHash))
+    .limit(1);
+
+  if (!token) {
+    res.json({ valid: false, status: "invalid" });
+    return;
+  }
+
+  if (token.status === "used") {
+    res.json({ valid: false, status: "used" });
+    return;
+  }
+
+  if (token.status === "revoked" || token.status === "expired") {
+    res.json({ valid: false, status: "expired" });
+    return;
+  }
+
+  if (token.expiresAt < now) {
+    await db
+      .update(passwordResetTokensTable)
+      .set({ status: "expired", updatedAt: new Date() })
+      .where(eq(passwordResetTokensTable.id, token.id));
+    res.json({ valid: false, status: "expired" });
+    return;
+  }
+
+  if (token.status !== "pending") {
+    res.json({ valid: false, status: "invalid" });
+    return;
+  }
+
+  const [user] = await db
+    .select({ name: usersTable.name })
+    .from(usersTable)
+    .where(eq(usersTable.id, token.userId))
+    .limit(1);
+
+  res.json({
+    valid: true,
+    status: "valid",
+    firstName: user?.name?.split(" ")[0] ?? "",
+  });
+});
+
+// ─── Reset Password ──────────────────────────────────────────────────────────
+
+router.post("/auth/reset-password", async (req, res) => {
+  const { token: rawToken, newPassword, confirmPassword } = req.body;
+
+  if (!rawToken || !newPassword || !confirmPassword) {
+    res.status(400).json({ error: "token, newPassword, and confirmPassword are required" });
+    return;
+  }
+
+  if (newPassword !== confirmPassword) {
+    res.status(400).json({ error: "Passwords do not match" });
+    return;
+  }
+
+  const policyError = validatePasswordPolicy(newPassword);
+  if (policyError) {
+    res.status(400).json({ error: policyError });
+    return;
+  }
+
+  const tokenHash = hashResetToken(rawToken);
+  const now = new Date();
+  const ip = req.ip ?? "unknown";
+  const ua = req.headers["user-agent"] ?? "";
+
+  const [token] = await db
+    .select()
+    .from(passwordResetTokensTable)
+    .where(eq(passwordResetTokensTable.tokenHash, tokenHash))
+    .limit(1);
+
+  if (!token) {
+    res.status(400).json({ code: "invalid", error: "This password reset link is invalid." });
+    return;
+  }
+
+  if (token.status === "used") {
+    res.status(400).json({ code: "used", error: "This password reset link has already been used." });
+    return;
+  }
+
+  if (token.status !== "pending" || token.expiresAt < now) {
+    res.status(400).json({ code: "expired", error: "This password reset link has expired. Please request a new one." });
+    return;
+  }
+
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, token.userId))
+    .limit(1);
+
+  if (!user || !user.isActive) {
+    res.status(400).json({ code: "invalid", error: "This password reset link is invalid." });
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+
+  await db
+    .update(usersTable)
+    .set({ passwordHash, failedLoginCount: 0, lockedUntil: null, updatedAt: now })
+    .where(eq(usersTable.id, user.id));
+
+  await db
+    .update(passwordResetTokensTable)
+    .set({ status: "used", usedAt: now, updatedAt: now })
+    .where(eq(passwordResetTokensTable.id, token.id));
+
+  // Revoke any other pending tokens for this user
+  await db
+    .update(passwordResetTokensTable)
+    .set({ status: "revoked", updatedAt: now })
+    .where(
+      and(
+        eq(passwordResetTokensTable.userId, user.id),
+        eq(passwordResetTokensTable.status, "pending"),
+      ),
+    );
+
+  await db.insert(auditLogsTable).values([
+    {
+      id: randomUUID(),
+      userId: user.id,
+      userName: user.name,
+      action: "password_reset_completed" as any,
+      entityType: "user",
+      entityId: user.id,
+      entityLabel: user.email,
+      ipAddress: ip,
+      userAgent: ua,
+      timestamp: now,
+    },
+  ]);
+
+  res.json({ success: true });
 });
 
 export default router;

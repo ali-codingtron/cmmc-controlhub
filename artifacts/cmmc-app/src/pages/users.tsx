@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import {
   useListUsers,
   getListUsersQueryKey,
@@ -1267,6 +1267,23 @@ export default function Users() {
   const resendMutation = useResendInvitation();
   const cancelMutation = useCancelInvitation();
 
+  const sendResetMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const token = localStorage.getItem("auth_token");
+      const base = (import.meta.env.BASE_URL ?? "").replace(/\/$/, "");
+      const res = await fetch(`${base}/api/users/${userId}/send-password-reset`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to send reset email");
+      return data as { success: boolean; emailSent: boolean; resetUrl?: string };
+    },
+  });
+
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [openDialog, setOpenDialog] = useState<DialogKind | null>(null);
   const [search, setSearch] = useState("");
@@ -1406,6 +1423,19 @@ export default function Users() {
       invalidate();
     } catch (err: any) {
       toast({ title: err?.response?.data?.error ?? "Failed to cancel invitation", variant: "destructive" });
+    }
+  };
+
+  const handleSendPasswordReset = async (u: User) => {
+    try {
+      const result = await sendResetMutation.mutateAsync(u.id);
+      if (result.resetUrl && !result.emailSent) {
+        setPendingInviteUrl(result.resetUrl);
+      } else {
+        toast({ title: `Password reset email sent to ${u.email}` });
+      }
+    } catch (err: any) {
+      toast({ title: err?.message ?? "Failed to send password reset email", variant: "destructive" });
     }
   };
 
@@ -1670,6 +1700,14 @@ export default function Users() {
                                 >
                                   <Key className="h-4 w-4" />
                                   Reset Password
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleSendPasswordReset(u)}
+                                  className="gap-2"
+                                  disabled={sendResetMutation.isPending}
+                                >
+                                  <MailCheck className="h-4 w-4" />
+                                  Send Reset Email
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 {u.isActive ? (

@@ -474,12 +474,16 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const emailRef = useRef<HTMLInputElement>(null);
   const [invitedBanner, setInvitedBanner] = useState(false);
+  const [resetBanner, setResetBanner] = useState(false);
 
   useEffect(() => {
     emailRef.current?.focus();
     const params = new URLSearchParams(window.location.search);
     if (params.get("invited") === "1") {
       setInvitedBanner(true);
+    }
+    if (params.get("reset") === "success") {
+      setResetBanner(true);
     }
   }, []);
 
@@ -558,6 +562,23 @@ export default function Login() {
           </div>
         )}
 
+        {resetBanner && (
+          <div className="flex items-start gap-2.5 rounded-lg border border-green-200 bg-green-50 px-3 py-3 text-sm text-green-800">
+            <ShieldCheck className="h-4 w-4 shrink-0 mt-0.5 text-green-600" />
+            <div>
+              <p className="font-semibold">Password reset successfully!</p>
+              <p className="text-green-700 text-xs mt-0.5">Your new password is active. Sign in below.</p>
+            </div>
+            <button
+              className="ml-auto shrink-0 text-green-600 hover:text-green-800"
+              onClick={() => setResetBanner(false)}
+            >
+              <span className="sr-only">Dismiss</span>
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Desktop heading */}
         <div className="hidden lg:flex items-center gap-4">
           <img
@@ -625,6 +646,15 @@ export default function Login() {
                 </FormItem>
               )}
             />
+
+            <div className="flex justify-end -mt-1">
+              <a
+                href="/forgot-password"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors underline-offset-4 hover:underline"
+              >
+                Forgot password?
+              </a>
+            </div>
 
             {error && (
               <div
