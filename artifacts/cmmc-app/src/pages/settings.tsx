@@ -350,7 +350,7 @@ function EmailSettingsCard() {
 
             <div className="border-t pt-4">
               <p className="text-sm text-muted-foreground mb-3">
-                Send a test email to your account to confirm Resend connectivity.
+                Send a test email to your account to verify delivery is working.
               </p>
               <Button
                 onClick={() => testMutation.mutate()}

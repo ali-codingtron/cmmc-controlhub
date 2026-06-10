@@ -822,11 +822,11 @@ function InviteUrlBanner({ url, onDismiss }: { url: string; onDismiss: () => voi
   };
 
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-2">
+    <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-2">
       <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2 text-sm font-medium text-amber-800">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          Email not configured — copy this invitation link manually
+        <div className="flex items-center gap-2 text-sm font-medium text-blue-800">
+          <Link className="h-4 w-4 shrink-0" />
+          Invitation link — share this with the user
         </div>
         <Button variant="ghost" size="icon" className="h-6 w-6 -mt-0.5 shrink-0" onClick={onDismiss}>
           <X className="h-3.5 w-3.5" />
@@ -844,10 +844,8 @@ function InviteUrlBanner({ url, onDismiss }: { url: string; onDismiss: () => voi
           {copied ? "Copied!" : "Copy"}
         </Button>
       </div>
-      <p className="text-xs text-amber-700">
-        Set <code className="font-mono bg-amber-100 px-1 rounded">SMTP_HOST</code>,{" "}
-        <code className="font-mono bg-amber-100 px-1 rounded">SMTP_USER</code>, and{" "}
-        <code className="font-mono bg-amber-100 px-1 rounded">SMTP_PASSWORD</code> environment variables to enable automatic email delivery.
+      <p className="text-xs text-blue-700">
+        This link expires in 7 days. The user will set their password when they accept.
       </p>
     </div>
   );
@@ -1489,9 +1487,7 @@ export default function Users() {
             <p className="font-semibold">Email delivery not configured</p>
             <p className="text-amber-700 mt-0.5">
               Invitation emails won't be sent automatically. When you invite a user, you'll receive a link to share manually.
-              Set <code className="font-mono bg-amber-100 px-1 rounded">SMTP_HOST</code>,{" "}
-              <code className="font-mono bg-amber-100 px-1 rounded">SMTP_USER</code>, and{" "}
-              <code className="font-mono bg-amber-100 px-1 rounded">SMTP_PASSWORD</code> to enable email delivery.
+              Configure your email provider in <strong>Settings &gt; Email Delivery</strong> to enable automatic sending.
             </p>
           </div>
         </div>
