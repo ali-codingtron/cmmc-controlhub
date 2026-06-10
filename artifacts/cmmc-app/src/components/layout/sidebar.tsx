@@ -387,7 +387,9 @@ export function Sidebar() {
             </div>
           )}
 
-          {!isDemoMode && (
+          <NavLink href="/settings" icon={Settings} label="Settings" />
+
+          {!isDemoMode && isAdmin && (
             <>
               <div className="pt-2">
                 <div className="px-3 py-1 text-[10px] uppercase tracking-wider font-semibold text-sidebar-foreground/40">
@@ -396,9 +398,8 @@ export function Sidebar() {
               </div>
               <NavLink href="/audit-logs" icon={History} label="Audit Trail" />
               <NavLink href="/users" icon={Users} label="Users" />
-              {isAdmin && <NavLink href="/organizations" icon={Building2} label="Organizations" />}
-              {isAdmin && <NavLink href="/security" icon={ShieldCheck} label="Security Center" />}
-              <NavLink href="/settings" icon={Settings} label="Settings" />
+              <NavLink href="/organizations" icon={Building2} label="Organizations" />
+              <NavLink href="/security" icon={ShieldCheck} label="Security Center" />
             </>
           )}
         </nav>
