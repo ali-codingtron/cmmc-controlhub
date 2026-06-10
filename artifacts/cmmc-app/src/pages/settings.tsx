@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
@@ -6,7 +7,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Eye, EyeOff, User, KeyRound, Shield } from "lucide-react";
+import { Eye, EyeOff, User, KeyRound, Shield, Mail, AlertTriangle, CheckCircle2, Send } from "lucide-react";
+
+function apiFetch(path: string, opts?: RequestInit) {
+  const token = localStorage.getItem("auth_token");
+  const base = (import.meta.env.BASE_URL ?? "").replace(/\/$/, "");
+  return fetch(`${base}${path}`, {
+    ...opts,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...opts?.headers,
+    },
+  });
+}
 
 function ProfileCard() {
   const { user } = useAuth();
@@ -19,10 +33,8 @@ function ProfileCard() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const token = localStorage.getItem("auth_token");
-      const res = await fetch("/api/auth/profile", {
+      const res = await apiFetch("/api/auth/profile", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ name, title, department }),
       });
       if (!res.ok) throw new Error("Failed to update profile");
@@ -110,10 +122,8 @@ function ChangePasswordCard() {
 
     setSaving(true);
     try {
-      const token = localStorage.getItem("auth_token");
-      const res = await fetch("/api/auth/change-password", {
+      const res = await apiFetch("/api/auth/change-password", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ currentPassword, newPassword }),
       });
       const data = await res.json();
@@ -239,7 +249,146 @@ function SecurityInfoCard() {
   );
 }
 
+interface EmailSettingsInfo {
+  provider: string;
+  fromAddress: string;
+  configured: boolean;
+  missingKey: boolean;
+}
+
+function EmailSettingsCard() {
+  const { toast } = useToast();
+
+  const { data: info, isLoading } = useQuery<EmailSettingsInfo>({
+    queryKey: ["admin", "email-settings"],
+    queryFn: async () => {
+      const res = await apiFetch("/api/admin/email-settings");
+      if (!res.ok) throw new Error("Failed to load email settings");
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
+
+  const testMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiFetch("/api/admin/email-settings/test", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Test failed");
+      return data as { success: boolean; sentTo: string };
+    },
+    onSuccess: (data) => {
+      toast({ title: "Test email sent", description: `Delivered to ${data.sentTo}` });
+    },
+    onError: (err: any) => {
+      toast({ title: "Test email failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const providerLabel = (p: string) => {
+    if (p === "resend") return "Resend";
+    if (p === "smtp") return "SMTP";
+    return "Not configured";
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Mail className="h-5 w-5 text-primary" />
+          <CardTitle>Email Delivery</CardTitle>
+        </div>
+        <CardDescription>
+          Outbound email for invitations, password setup, MFA recovery, and notifications.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : info ? (
+          <>
+            {info.missingKey && (
+              <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-semibold text-amber-800">API key not configured</p>
+                  <p className="text-amber-700 mt-0.5">
+                    {info.provider === "resend"
+                      ? "The RESEND_API_KEY secret is missing. Add it in Replit Secrets to enable email delivery."
+                      : "Email delivery credentials are missing. Check your EMAIL_PROVIDER and related secrets."}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {info.configured && (
+              <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 p-4">
+                <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
+                <p className="text-sm font-medium text-green-800">Email delivery is active</p>
+              </div>
+            )}
+
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between py-2 border-b items-center">
+                <span className="text-muted-foreground">Provider</span>
+                <Badge variant={info.configured ? "default" : "secondary"} className="capitalize">
+                  {providerLabel(info.provider)}
+                </Badge>
+              </div>
+              <div className="flex justify-between py-2 border-b items-center">
+                <span className="text-muted-foreground">From address</span>
+                <span className="font-mono text-xs">{info.fromAddress}</span>
+              </div>
+              <div className="flex justify-between py-2 items-center">
+                <span className="text-muted-foreground">Status</span>
+                {info.configured ? (
+                  <Badge className="bg-green-600 hover:bg-green-600 text-white">Connected</Badge>
+                ) : (
+                  <Badge variant="destructive">Not Connected</Badge>
+                )}
+              </div>
+            </div>
+
+            <div className="border-t pt-4">
+              <p className="text-sm text-muted-foreground mb-3">
+                Send a test email to your account to confirm Resend connectivity.
+              </p>
+              <Button
+                onClick={() => testMutation.mutate()}
+                disabled={testMutation.isPending || !info.configured}
+                variant="outline"
+                className="gap-2"
+              >
+                {testMutation.isPending ? (
+                  <>
+                    <Send className="h-4 w-4 animate-pulse" />
+                    Sending…
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    Send Test Email
+                  </>
+                )}
+              </Button>
+              {!info.configured && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Configure email credentials above to enable the test.
+                </p>
+              )}
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-destructive">Failed to load email settings.</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Settings() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+
   return (
     <div className="p-6 space-y-6 max-w-2xl">
       <div>
@@ -250,6 +399,16 @@ export default function Settings() {
       <ProfileCard />
       <ChangePasswordCard />
       <SecurityInfoCard />
+
+      {isAdmin && (
+        <>
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight">Admin</h2>
+            <p className="text-muted-foreground text-sm mt-0.5">System configuration — visible to global admins only.</p>
+          </div>
+          <EmailSettingsCard />
+        </>
+      )}
     </div>
   );
 }

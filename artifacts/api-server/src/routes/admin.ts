@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { getEmailProviderInfo, sendTestEmail } from "../lib/email";
 import {
   db,
   controlsTable,
@@ -461,6 +462,29 @@ router.post("/admin/backfill/roadmap", requireAuth, requireAdmin, async (req, re
     stepsUpdated,
     alreadyComplete: allActions.length - updated - created,
   });
+});
+
+// ── GET /api/admin/email-settings ─────────────────────────────────────────────
+router.get("/admin/email-settings", requireAuth, requireAdmin, (_req, res) => {
+  const info = getEmailProviderInfo();
+  res.json(info);
+});
+
+// ── POST /api/admin/email-settings/test ───────────────────────────────────────
+router.post("/admin/email-settings/test", requireAuth, requireAdmin, async (req, res) => {
+  const adminUser = req.authUser;
+  if (!adminUser?.email) {
+    res.status(400).json({ error: "Could not determine admin email address" });
+    return;
+  }
+
+  try {
+    await sendTestEmail({ toEmail: adminUser.email, toName: adminUser.name ?? "Admin" });
+    res.json({ success: true, sentTo: adminUser.email });
+  } catch (err: any) {
+    req.log.warn({ err: err.message }, "Test email failed");
+    res.status(500).json({ error: err.message ?? "Failed to send test email" });
+  }
 });
 
 export default router;
