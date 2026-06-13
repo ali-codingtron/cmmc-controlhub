@@ -19,6 +19,7 @@ import {
   DatabaseZap,
   Map,
   Cable,
+  HelpCircle,
 } from "lucide-react";
 
 import { useAuth } from "@/lib/auth";
@@ -387,6 +388,7 @@ export function Sidebar() {
             </div>
           )}
 
+          <NavLink href="/help" icon={HelpCircle} label="Help & User Guide" />
           <NavLink href="/settings" icon={Settings} label="Settings" />
 
           {!isDemoMode && isAdmin && (

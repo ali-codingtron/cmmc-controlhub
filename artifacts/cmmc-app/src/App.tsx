@@ -69,6 +69,11 @@ import PaRoadmap from "@/pages/pa-roadmap";
 import InviteAccept from "@/pages/invite-accept";
 import ForgotPassword from "@/pages/forgot-password";
 import ResetPassword from "@/pages/reset-password";
+import Help from "@/pages/help";
+import HelpArticle from "@/pages/help-article";
+import HelpFaq from "@/pages/help-faq";
+import HelpVideos from "@/pages/help-videos";
+import HelpAdmin from "@/pages/help-admin";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -198,6 +203,11 @@ function AppRoutes() {
               <Route path="/pre-assessment/results/:id">
                 {(params: { id: string }) => <PaResults id={params.id} />}
               </Route>
+              <Route path="/help/article/:slug" component={HelpArticle} />
+              <Route path="/help/faq" component={HelpFaq} />
+              <Route path="/help/videos" component={HelpVideos} />
+              <Route path="/help/admin" component={HelpAdmin} />
+              <Route path="/help" component={Help} />
               <Route component={NotFound} />
             </Switch>
           </Guard>

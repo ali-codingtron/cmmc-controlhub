@@ -21,6 +21,7 @@ import roadmapRouter from "./roadmap";
 import preAssessmentRouter from "./pre-assessment";
 import docTemplateLibraryRouter from "./doc-template-library";
 import invitationsRouter from "./invitations";
+import helpRouter from "./help";
 
 const router: IRouter = Router();
 
@@ -46,5 +47,6 @@ router.use(roadmapRouter);
 router.use("/pre-assessment", preAssessmentRouter);
 router.use(docTemplateLibraryRouter);
 router.use(invitationsRouter);
+router.use(helpRouter);
 
 export default router;

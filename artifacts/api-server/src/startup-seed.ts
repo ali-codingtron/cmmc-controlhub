@@ -11,6 +11,9 @@ import {
   checklistItemsTable,
   organizationsTable,
   securitySettingsTable,
+  helpCategoriesTable,
+  helpArticlesTable,
+  faqItemsTable,
 } from "@workspace/db";
 import { count, eq, sql } from "drizzle-orm";
 import { seedMonitoringItemsForOrg } from "./routes/monitoring";
@@ -18,6 +21,7 @@ import { seedControlConfigure } from "./routes/configure";
 import { seedRoadmapActions, seedProcedureSteps } from "./routes/roadmap";
 import { logger } from "./lib/logger";
 import { DOCUMENT_TEMPLATES } from "./data/document-templates-data";
+import { HELP_CATEGORIES, HELP_ARTICLES, FAQ_ITEMS } from "./data/help-seed-data";
 import { seedDemoOrg } from "./demo-seed-org";
 
 // __dirname is injected by the esbuild build banner and points to dist/ at runtime
@@ -209,6 +213,60 @@ async function migrateAuditEnum() {
   }
 }
 
+async function seedHelpContent() {
+  const [{ value: existing }] = await db.select({ value: count() }).from(helpCategoriesTable);
+  if (existing > 0) return;
+
+  logger.info("Seeding help center content...");
+
+  const catIdMap: Record<string, string> = {};
+  for (const cat of HELP_CATEGORIES) {
+    const id = randomUUID();
+    catIdMap[cat.name] = id;
+    await db.insert(helpCategoriesTable).values({
+      id,
+      name: cat.name,
+      description: cat.description,
+      icon: cat.icon,
+      sortOrder: cat.sortOrder,
+      createdAt: new Date(),
+    }).onConflictDoNothing();
+  }
+
+  for (const article of HELP_ARTICLES) {
+    await db.insert(helpArticlesTable).values({
+      id: randomUUID(),
+      slug: article.slug,
+      title: article.title,
+      categoryId: catIdMap[article.categoryName] ?? null,
+      module: article.module ?? null,
+      content: article.content,
+      summary: article.summary,
+      keywords: article.keywords,
+      roleVisibility: article.roleVisibility ?? null,
+      sortOrder: article.sortOrder,
+      status: "published",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).onConflictDoNothing();
+  }
+
+  for (const faq of FAQ_ITEMS) {
+    await db.insert(faqItemsTable).values({
+      id: randomUUID(),
+      question: faq.question,
+      answer: faq.answer,
+      category: faq.category,
+      sortOrder: faq.sortOrder,
+      status: "published",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).onConflictDoNothing();
+  }
+
+  logger.info("Help center content seeded.");
+}
+
 export async function runStartupSeed() {
   try {
     await migrateAuditEnum();
@@ -221,6 +279,7 @@ export async function runStartupSeed() {
     await seedProcedureSteps();
     await seedDemoOrg();
     await seedSecuritySettings();
+    await seedHelpContent();
   } catch (err) {
     logger.error({ err }, "Startup seed failed — app will continue but may lack reference data");
   }

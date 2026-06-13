@@ -14,3 +14,4 @@ export * from "./roadmap";
 export * from "./pre-assessment";
 export * from "./doc-template-library";
 export * from "./password-reset";
+export * from "./help";

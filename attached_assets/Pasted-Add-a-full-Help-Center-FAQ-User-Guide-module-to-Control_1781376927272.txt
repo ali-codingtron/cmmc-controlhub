@@ -1,0 +1,410 @@
+Add a full Help Center / FAQ / User Guide module to Control HUB.
+
+Goal:
+Users need built-in help so they can understand how to use the system without asking an admin every time.
+
+The Help Center should explain:
+- what each module does
+- how to use the system
+- how to complete common workflows
+- what roles can and cannot do
+- how to upload evidence
+- how to use controls, documentation, SSP, monitoring, POA&M, reports, pre-assessment, and roadmap features
+
+1. Add Help Center Navigation
+
+Add a Help icon or menu item in the sidebar or top-right user menu.
+
+Label:
+Help & User Guide
+
+Routes:
+- /help
+- /help/getting-started
+- /help/faq
+- /help/user-guide
+- /help/videos
+- /help/release-notes
+
+2. Help Center Home Page
+
+Create a Help Center landing page with sections:
+
+- Getting Started
+- Dashboard
+- Controls
+- Evidence
+- Documentation
+- SSP
+- Monitoring Tracker
+- POA&M
+- Implementation Roadmap
+- Pre-Assessment
+- Reports
+- Users & Roles
+- MFA / Login Help
+- FAQ
+- Troubleshooting
+
+Add search bar:
+“Search help articles…”
+
+Search should match:
+- title
+- module
+- keywords
+- article content
+
+3. Contextual Help Buttons
+
+Add a small Help / ? button on each major page.
+
+Examples:
+- Dashboard page → “How to read the dashboard”
+- Controls page → “How to use the control library”
+- Evidence page → “How to upload and approve evidence”
+- Monitoring Tracker → “How recurring reviews work”
+- POA&M page → “How to track remediation”
+- Pre-Assessment → “How tenant scans work”
+- Reports → “How to generate client reports”
+
+Clicking help should open:
+- a side panel
+or
+- modal
+or
+- link to the relevant help article
+
+4. User Guide Content
+
+Create built-in user guide articles.
+
+Required articles:
+
+A. Getting Started
+Explain:
+- selecting an organization
+- understanding roles
+- navigating the sidebar
+- using the dashboard
+- first recommended actions
+
+B. Dashboard Guide
+Explain:
+- readiness score
+- controls breakdown
+- evidence health
+- monitoring health
+- POA&M health
+- domain readiness
+- recent activity
+- recommended next actions
+
+C. Controls Guide
+Explain:
+- control library
+- implementation tab
+- configure tab
+- evidence tab
+- monitoring tab
+- POA&M tab
+- SSP tab
+- status meanings
+
+D. Evidence Guide
+Explain:
+- add evidence
+- bulk upload
+- evidence types
+- evidence statuses
+- linking evidence to controls
+- preview/download
+- removing evidence from a control
+- archiving evidence
+- evidence naming conventions
+
+E. Documentation Guide
+Explain:
+- all documents
+- uploaded documents
+- document-like evidence
+- template library
+- generated documents
+- document status workflow
+- document gap analysis
+
+F. SSP Guide
+Explain:
+- SSP overview
+- SSP sections
+- SSP control mapping
+- importing/uploading SSP
+- editing narratives
+- exporting SSP
+
+G. Monitoring Tracker Guide
+Explain:
+- Open / In Progress / Current
+- frequency logic
+- last completed
+- next due
+- overdue logic
+- evidence to retain
+- recurring reviews
+
+H. POA&M Guide
+Explain:
+- creating POA&M items
+- linking to controls
+- risk levels
+- statuses
+- closure evidence
+- editing POA&M items
+
+I. Implementation Roadmap Guide
+Explain:
+- priority actions
+- impact score
+- phases
+- controls supported
+- evidence placement
+- completion tracking
+
+J. Pre-Assessment Guide
+Explain:
+- tenant-connected scan
+- Microsoft admin consent
+- tenant scan health
+- findings
+- evidence requests
+- recommended roadmap
+- why it is not an official CMMC assessment
+
+K. Reports Guide
+Explain:
+- executive readiness report
+- domain readiness report
+- gap analysis report
+- evidence inventory
+- POA&M report
+- monitoring report
+- pre-assessment report
+
+L. User Roles Guide
+Explain role permissions:
+- Global Admin
+- Organization Admin
+- Compliance Manager
+- IT Contributor
+- Reviewer
+- Executive Viewer
+- Assessor Read-Only
+- Demo Viewer
+
+M. Login / MFA Guide
+Explain:
+- accepting invitations
+- setting a password
+- password reset
+- MFA setup
+- recovery codes
+- what to do if locked out
+
+5. FAQ Page
+
+Create an FAQ page with common questions.
+
+Seed FAQs:
+
+- What is Control HUB?
+- Is this an official CMMC assessment?
+- What does “Tenant Scan Health” mean?
+- What does “Controls Touched by Tenant Scan” mean?
+- Why does evidence start as Draft?
+- What is the difference between Evidence and Documents?
+- What is the difference between Implementation and Configure?
+- What does Current mean in Monitoring Tracker?
+- Why is a monitoring item overdue?
+- How do I upload evidence?
+- How do I bulk upload evidence?
+- How do I link evidence to multiple controls?
+- How do I remove evidence from a control without deleting it?
+- How do I create a POA&M?
+- How do I close a POA&M?
+- How do I generate a report?
+- What can an Assessor Read-Only user see?
+- How do I invite a user?
+- How do I reset a password?
+- How does MFA work?
+- How do I connect a Microsoft tenant?
+- What Microsoft permissions are required?
+- Why might Intune data be unavailable?
+
+6. Step-by-Step Workflow Guides
+
+Add workflow articles for:
+
+- Invite a new user
+- Accept an invitation and set password
+- Upload evidence to a control
+- Bulk upload evidence
+- Approve evidence
+- Generate a document
+- Import or manage SSP
+- Complete monitoring review
+- Create and close a POA&M
+- Run tenant-connected pre-assessment
+- Resolve a pre-assessment finding
+- Generate executive report
+- Prepare an assessor package
+
+7. Help Article Data Model
+
+Create models:
+
+HelpArticle
+- id
+- slug
+- title
+- category
+- module
+- content
+- summary
+- keywords
+- role_visibility
+- sort_order
+- status
+- created_at
+- updated_at
+
+HelpCategory
+- id
+- name
+- description
+- sort_order
+
+FAQItem
+- id
+- question
+- answer
+- category
+- sort_order
+- status
+
+8. Admin Help Editor
+
+Add Admin-only Help Editor.
+
+Admins can:
+- create help articles
+- edit help articles
+- archive help articles
+- create FAQs
+- reorder categories
+- add links to pages/modules
+
+Do not require code changes to update help content.
+
+9. Role-Based Help
+
+Help content should adapt by role.
+
+Examples:
+- Assessor Read-Only users should see help for reviewing evidence/reports, not help for uploading/editing.
+- IT Contributors should see evidence and monitoring help.
+- Global Admins should see user/security/settings help.
+- Demo users should see public demo guidance only.
+
+10. In-App Tooltips
+
+Add short tooltips for confusing terms:
+
+- Tenant Scan Health
+- Assessment Confidence
+- Controls Touched
+- Evidence Status
+- Assessor Ready
+- Current
+- POA&M
+- SSP
+- Implementation Narrative
+- Configure Steps
+- CMMC Level
+- Domain Readiness
+
+Tooltips should be brief and link to full help article.
+
+11. Video Help
+
+Add Help > Videos page.
+
+For now, include:
+- Control HUB demo walkthrough video
+- placeholder for future tutorial videos
+
+Video topics:
+- Getting started
+- Uploading evidence
+- Running pre-assessment
+- Monitoring tracker
+- Generating reports
+
+12. Support / Contact
+
+Add a support section:
+
+Need help?
+Email:
+info@carmetechnology.com
+
+Button:
+Contact Support
+
+mailto:
+info@carmetechnology.com?subject=Control%20HUB%20Support%20Request
+
+13. Help Search
+
+Help search should support:
+- partial text
+- module names
+- FAQ questions
+- keywords
+
+Display results with:
+- title
+- category
+- short summary
+- link
+
+14. Acceptance Tests
+
+Test A:
+Open Help Center.
+User sees categories and search.
+
+Test B:
+Search “bulk upload.”
+Evidence bulk upload help appears.
+
+Test C:
+Open Controls page and click Help.
+Relevant Controls guide opens.
+
+Test D:
+Open Monitoring Tracker and click Help.
+Monitoring Tracker guide opens.
+
+Test E:
+Assessor Read-Only user opens Help.
+They see read-only guidance, not admin/editing instructions.
+
+Test F:
+Admin edits a help article.
+Change appears without redeploying.
+
+Test G:
+FAQ page loads and answers common questions.
+
+Test H:
+Contact Support opens email to info@carmetechnology.com.
