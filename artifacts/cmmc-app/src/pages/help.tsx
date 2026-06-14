@@ -1,14 +1,14 @@
 import { useState, useMemo } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import {
-  Search, HelpCircle, BookOpen, ChevronRight, ArrowRight,
+  Search, HelpCircle, BookOpen, ChevronRight, ArrowRight, ArrowLeft,
   Rocket, LayoutDashboard, ShieldCheck, FileText, Activity,
   AlertTriangle, Map, Cable, BarChart3, Users, Lock,
   GitBranch, Wrench, Mail,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 function apiFetch(path: string, opts?: RequestInit) {
@@ -58,6 +58,9 @@ interface SearchResult {
 export default function Help() {
   const [searchQuery, setSearchQuery] = useState("");
   const [, setLocation] = useLocation();
+  const search = useSearch();
+  const params = new URLSearchParams(search);
+  const selectedCategory = params.get("category") ?? "";
 
   const { data: categories = [] } = useQuery<Category[]>({
     queryKey: ["help-categories"],
@@ -77,6 +80,16 @@ export default function Help() {
   });
 
   const featuredArticles = useMemo(() => articles.slice(0, 6), [articles]);
+
+  const categoryArticles = useMemo(
+    () => selectedCategory ? articles.filter((a) => a.categoryName === selectedCategory) : [],
+    [articles, selectedCategory]
+  );
+
+  const activeCat = useMemo(
+    () => categories.find((c) => c.name === selectedCategory),
+    [categories, selectedCategory]
+  );
 
   const isSearching = searchQuery.length >= 2;
 
@@ -102,7 +115,6 @@ export default function Help() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10 h-11"
-            autoFocus
           />
         </div>
       </div>
@@ -148,20 +160,78 @@ export default function Help() {
             <div className="space-y-2">
               <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">FAQ</h3>
               {searchResults!.faq.map((f) => (
-                <Card key={f.id} className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => setLocation(`/help/faq#faq-${f.id}`)}>
-                  <CardContent className="py-4">
-                    <p className="font-medium text-sm">{f.question}</p>
-                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{f.answer}</p>
-                  </CardContent>
-                </Card>
+                <Link key={f.id} href={`/help/faq`}>
+                  <Card className="cursor-pointer hover:bg-accent/50 transition-colors">
+                    <CardContent className="py-4">
+                      <p className="font-medium text-sm">{f.question}</p>
+                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{f.answer}</p>
+                    </CardContent>
+                  </Card>
+                </Link>
               ))}
             </div>
           )}
         </div>
       )}
 
-      {/* Main content when not searching */}
-      {!isSearching && (
+      {/* Category drill-down view */}
+      {!isSearching && selectedCategory && (
+        <div className="space-y-6">
+          {/* Back + heading */}
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={() => setLocation("/help")} className="gap-1.5 -ml-2">
+              <ArrowLeft className="h-4 w-4" />
+              All Categories
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {activeCat && (() => {
+              const Icon = ICON_MAP[activeCat.icon] ?? HelpCircle;
+              return (
+                <div className="rounded-lg bg-primary/10 p-2.5 shrink-0">
+                  <Icon className="h-6 w-6 text-primary" />
+                </div>
+              );
+            })()}
+            <div>
+              <h2 className="text-2xl font-semibold">{selectedCategory}</h2>
+              {activeCat && <p className="text-sm text-muted-foreground mt-0.5">{activeCat.description}</p>}
+            </div>
+          </div>
+
+          {categoryArticles.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                <BookOpen className="h-8 w-8 mx-auto mb-3 opacity-40" />
+                <p>No articles in this category yet.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {categoryArticles.map((a) => (
+                <Link key={a.id} href={`/help/article/${a.slug}`}>
+                  <Card className="cursor-pointer hover:bg-accent/50 transition-colors">
+                    <CardContent className="py-4 flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        {a.module && (
+                          <Badge variant="secondary" className="text-xs mb-1.5">{a.module}</Badge>
+                        )}
+                        <h4 className="font-medium text-sm leading-snug">{a.title}</h4>
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{a.summary}</p>
+                      </div>
+                      <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Home view */}
+      {!isSearching && !selectedCategory && (
         <>
           {/* Quick Links */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -206,7 +276,11 @@ export default function Help() {
               {categories.map((cat) => {
                 const Icon = ICON_MAP[cat.icon] ?? HelpCircle;
                 return (
-                  <Card key={cat.id} className="cursor-pointer hover:bg-accent/50 transition-colors group" onClick={() => setLocation(`/help?category=${encodeURIComponent(cat.name)}`)}>
+                  <Card
+                    key={cat.id}
+                    className="cursor-pointer hover:bg-accent/50 transition-colors group"
+                    onClick={() => setLocation(`/help?category=${encodeURIComponent(cat.name)}`)}
+                  >
                     <CardContent className="p-5">
                       <div className="flex items-start gap-3">
                         <div className="rounded-lg bg-primary/10 p-2 shrink-0">
