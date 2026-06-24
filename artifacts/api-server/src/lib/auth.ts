@@ -1,8 +1,8 @@
 import jwt from "jsonwebtoken";
 import { Request, Response, NextFunction } from "express";
-import { db, usersTable, breakGlassSessionsTable } from "@workspace/db";
+import { db, usersTable, breakGlassSessionsTable, auditLogsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
 
 const JWT_SECRET = process.env.SESSION_SECRET ?? "cmmc-dev-secret-change-in-prod";
 const BREAK_GLASS_IDLE_MINUTES = 15;
@@ -38,6 +38,18 @@ declare global {
       isBreakGlass?: boolean;
     }
   }
+}
+
+function logSessionRevoked(session: { id: string; userId: string }, reason: string) {
+  db.insert(auditLogsTable).values({
+    id: randomUUID(),
+    userId: session.userId,
+    action: "break_glass_session_revoked" as any,
+    entityType: "break_glass_session",
+    entityId: session.id,
+    newValue: { reason, revokedAt: new Date().toISOString() },
+    timestamp: new Date(),
+  }).catch(() => {});
 }
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
@@ -78,22 +90,22 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     const now = new Date();
 
     if (session.expiresAt < now) {
-      // Mark as revoked on absolute expiry
       db.update(breakGlassSessionsTable)
         .set({ revokedAt: now })
         .where(eq(breakGlassSessionsTable.id, session.id))
         .catch(() => {});
+      logSessionRevoked(session, "absolute_expiry");
       res.status(401).json({ error: "Break-glass session has expired" });
       return;
     }
 
     const idleLimit = new Date(session.lastActiveAt.getTime() + BREAK_GLASS_IDLE_MINUTES * 60 * 1000);
     if (now > idleLimit) {
-      // Mark as revoked on idle timeout
       db.update(breakGlassSessionsTable)
         .set({ revokedAt: now })
         .where(eq(breakGlassSessionsTable.id, session.id))
         .catch(() => {});
+      logSessionRevoked(session, "idle_timeout");
       res.status(401).json({ error: "Break-glass session timed out due to inactivity" });
       return;
     }

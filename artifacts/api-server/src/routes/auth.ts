@@ -32,10 +32,20 @@ const router = Router();
 
 // ─── Break-Glass Per-IP Rate Limiter ─────────────────────────────────────────
 // Tracks failed login attempts targeting the break-glass account, keyed by IP.
-// Sends an alert email after ALERT_THRESHOLD consecutive failures from the same IP.
-const BG_IP_WINDOW_MS = 15 * 60 * 1000; // 15 min window
+// • Sends alert email at ALERT_THRESHOLD failures from the same IP within the window.
+// • Enforces a hard deny (429) at BLOCK_THRESHOLD failures within the window.
+const BG_IP_WINDOW_MS = 15 * 60 * 1000; // 15 min sliding window
 const BG_IP_ALERT_THRESHOLD = 3;
+const BG_IP_BLOCK_THRESHOLD = 10;
 const bgIpFailures = new Map<string, { count: number; windowStart: number; alerted: boolean }>();
+
+/** Returns true if this IP is currently rate-limited (should receive 429). */
+function isBreakGlassIpBlocked(ip: string): boolean {
+  const entry = bgIpFailures.get(ip);
+  if (!entry) return false;
+  if (Date.now() - entry.windowStart > BG_IP_WINDOW_MS) return false;
+  return entry.count >= BG_IP_BLOCK_THRESHOLD;
+}
 
 function trackBreakGlassFailure(ip: string, user: { email: string; name: string }) {
   const now = Date.now();
@@ -116,6 +126,15 @@ router.post("/auth/login", async (req, res) => {
 
   if (!user.passwordHash) {
     res.status(401).json({ error: "Invalid credentials" });
+    return;
+  }
+
+  // Break-glass: enforce per-IP block before attempting password verification
+  if (user.isBreakGlass && isBreakGlassIpBlocked(req.ip ?? "unknown")) {
+    res.status(429).json({
+      error: "Too many failed login attempts from this IP. Try again in 15 minutes.",
+      retryAfter: 900,
+    });
     return;
   }
 
@@ -222,13 +241,39 @@ router.post("/auth/login", async (req, res) => {
 
   if (user.isBreakGlass) {
     // Revoke any prior open sessions (single-session enforcement)
-    await db
-      .update(breakGlassSessionsTable)
-      .set({ revokedAt: loginNow })
+    const priorSessions = await db
+      .select({ id: breakGlassSessionsTable.id })
+      .from(breakGlassSessionsTable)
       .where(and(
         eq(breakGlassSessionsTable.userId, user.id),
         isNull(breakGlassSessionsTable.revokedAt),
       ));
+
+    if (priorSessions.length > 0) {
+      await db
+        .update(breakGlassSessionsTable)
+        .set({ revokedAt: loginNow })
+        .where(and(
+          eq(breakGlassSessionsTable.userId, user.id),
+          isNull(breakGlassSessionsTable.revokedAt),
+        ));
+
+      // Emit a revocation audit event for each displaced session
+      for (const prior of priorSessions) {
+        await db.insert(auditLogsTable).values({
+          id: randomUUID(),
+          userId: user.id,
+          userName: user.name,
+          action: "break_glass_session_revoked" as any,
+          entityType: "break_glass_session",
+          entityId: prior.id,
+          entityLabel: user.email,
+          ipAddress: req.ip,
+          newValue: { reason: "displaced_by_new_login", revokedAt: loginNow.toISOString() },
+          timestamp: loginNow,
+        });
+      }
+    }
 
     await db.insert(breakGlassSessionsTable).values({
       id: randomUUID(),

@@ -194,17 +194,32 @@ async function seedSecuritySettings() {
 }
 
 async function migrateBreakGlassColumns() {
-  // Adds break-glass user columns if they don't exist (idempotent via IF NOT EXISTS)
+  // Idempotent: adds break-glass columns and session table if they don't already exist
   const migrations = [
+    // User flags
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS is_break_glass boolean NOT NULL DEFAULT false`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_exempt boolean NOT NULL DEFAULT false`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS sso_disabled boolean NOT NULL DEFAULT false`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider varchar(50) NOT NULL DEFAULT 'local'`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS global_role varchar(50)`,
+    // Break-glass sessions table
+    `CREATE TABLE IF NOT EXISTS break_glass_sessions (
+      id text PRIMARY KEY,
+      user_id text NOT NULL,
+      token_hash text NOT NULL UNIQUE,
+      ip_address text,
+      user_agent text,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      last_active_at timestamptz NOT NULL DEFAULT now(),
+      expires_at timestamptz NOT NULL,
+      revoked_at timestamptz
+    )`,
   ];
   for (const stmt of migrations) {
     try {
       await db.execute(sql.raw(stmt));
     } catch (_e) {
-      // Column already exists — safe to ignore
+      // Already exists — safe to ignore
     }
   }
 }
