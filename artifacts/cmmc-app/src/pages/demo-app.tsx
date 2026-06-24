@@ -68,9 +68,7 @@ export default function DemoApp() {
     >
       {/* branding */}
       <div className="flex items-center gap-3 mb-10">
-        <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center">
-          <Shield className="h-5 w-5 text-white" />
-        </div>
+        <img src="/assets/control-hub-icon.png" alt="Control HUB" className="h-9 w-9 rounded-lg" />
         <span className="text-xl font-black text-white tracking-tight">Control HUB</span>
         <span className="text-slate-600">·</span>
         <img

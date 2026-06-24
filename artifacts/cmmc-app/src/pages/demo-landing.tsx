@@ -128,9 +128,7 @@ export default function DemoLanding() {
       <header className="sticky top-0 z-50" style={{ background: "#0F172A", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-7 w-7 rounded-md bg-blue-600 flex items-center justify-center">
-              <Shield className="h-4 w-4 text-white" />
-            </div>
+            <img src="/assets/control-hub-icon.png" alt="Control HUB" className="h-8 w-8 rounded-lg" />
             <span className="font-bold text-lg text-white tracking-tight">Control HUB</span>
             <span className="hidden sm:flex items-center gap-1 text-xs text-slate-500 font-medium">
               <span className="text-slate-600 mx-1">·</span>
@@ -410,9 +408,7 @@ export default function DemoLanding() {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
             <div className="flex flex-col items-center sm:items-start gap-2">
               <div className="flex items-center gap-2">
-                <div className="h-6 w-6 rounded-md bg-blue-600 flex items-center justify-center">
-                  <Shield className="h-3.5 w-3.5 text-white" />
-                </div>
+                <img src="/assets/control-hub-icon.png" alt="Control HUB" className="h-7 w-7 rounded-md" />
                 <span className="font-bold text-sm text-white">Control HUB</span>
                 <img src={carmetechLogo} alt="Carme Technology" className="h-8 rounded" style={{ background: "#1C1A0A" }} />
               </div>

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Shield, ArrowLeft, ArrowRight, ExternalLink } from "lucide-react";
+import { ArrowLeft, ArrowRight, ExternalLink } from "lucide-react";
 import carmetechLogo from "@assets/Carme_Tech_Logo_Official_1779981155506.png";
 
 const CONSULTATION_HREF = "mailto:info@carmetechnology.com?subject=Control%20HUB%20Consultation%20Request";
@@ -129,9 +129,7 @@ export default function DemoVideo() {
             Back
           </button>
           <div className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded-md bg-blue-600 flex items-center justify-center">
-              <Shield className="h-3.5 w-3.5 text-white" />
-            </div>
+            <img src="/assets/control-hub-icon.png" alt="Control HUB" className="h-7 w-7 rounded-md" />
             <span className="font-bold text-sm text-white">Control HUB</span>
             <span className="text-slate-600 text-xs">·</span>
             <img
@@ -237,9 +235,7 @@ export default function DemoVideo() {
       >
         <div className="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <div className="h-5 w-5 rounded bg-blue-600 flex items-center justify-center">
-              <Shield className="h-3 w-3 text-white" />
-            </div>
+            <img src="/assets/control-hub-icon.png" alt="Control HUB" className="h-6 w-6 rounded" />
             <span className="text-sm font-bold text-white">Control HUB</span>
             <img
               src={carmetechLogo}
