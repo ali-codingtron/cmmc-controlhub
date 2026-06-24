@@ -274,32 +274,53 @@ export async function sendBreakGlassLoginAlert(opts: {
   ipAddress: string;
   userAgent: string;
   timestamp: string;
+  /** When set, this is a failed-attempt alert rather than a successful login alert */
+  failedAttempts?: number;
 }): Promise<void> {
-  const { email, name, ipAddress, userAgent, timestamp } = opts;
+  const { email, name, ipAddress, userAgent, timestamp, failedAttempts } = opts;
   const alertEmail = process.env.BREAK_GLASS_ALERT_EMAIL || email;
   const dateStr = new Date(timestamp).toUTCString();
+  const isFailed = failedAttempts !== undefined;
+
+  const subjectLine = isFailed
+    ? `⚠️ Control HUB — Break-Glass: ${failedAttempts} Failed Login Attempts`
+    : "⚠️ Control HUB — Break-Glass Account Login";
+
+  const intro = isFailed
+    ? `<p style="color:#374151;margin-bottom:16px;"><strong>${failedAttempts} failed login attempts</strong> have been detected against the Control HUB break-glass account from IP <strong>${escapeHtml(ipAddress)}</strong>. This may indicate a brute-force attack. Review the audit trail immediately.</p>`
+    : `<p style="color:#374151;margin-bottom:16px;">The Control HUB break-glass emergency account has been accessed. If this was not you, contact your security team immediately and revoke the session.</p>`;
 
   const html = emailShell(`
-    <h2 style="color:#b91c1c;margin-bottom:8px;">⚠️ Break-Glass Account Login Alert</h2>
+    <h2 style="color:#b91c1c;margin-bottom:8px;">${isFailed ? "⚠️ Break-Glass Failed Login Attempts" : "⚠️ Break-Glass Account Login Alert"}</h2>
     <p style="color:#374151;margin-bottom:8px;">Hi ${escapeHtml(name)},</p>
-    <p style="color:#374151;margin-bottom:16px;">The Control HUB break-glass emergency account has been accessed. If this was not you, contact your security team immediately and revoke the session.</p>
+    ${intro}
     <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:12px 16px;margin-bottom:24px;">
       <table style="width:100%;font-size:13px;color:#374151;">
-        <tr><td style="font-weight:600;padding:3px 0;width:100px;">Account</td><td>${escapeHtml(email)}</td></tr>
+        <tr><td style="font-weight:600;padding:3px 0;width:130px;">Account</td><td>${escapeHtml(email)}</td></tr>
         <tr><td style="font-weight:600;padding:3px 0;">Time</td><td>${escapeHtml(dateStr)}</td></tr>
         <tr><td style="font-weight:600;padding:3px 0;">IP Address</td><td>${escapeHtml(ipAddress)}</td></tr>
-        <tr><td style="font-weight:600;padding:3px 0;">User Agent</td><td style="word-break:break-all;">${escapeHtml(userAgent.substring(0, 200))}</td></tr>
+        ${isFailed ? `<tr><td style="font-weight:600;padding:3px 0;">Failed Attempts</td><td style="color:#b91c1c;font-weight:700;">${failedAttempts} (from this IP in 15 min)</td></tr>` : `<tr><td style="font-weight:600;padding:3px 0;">User Agent</td><td style="word-break:break-all;">${escapeHtml(userAgent.substring(0, 200))}</td></tr>`}
       </table>
     </div>
-    <p style="color:#6b7280;font-size:13px;">This session will automatically expire after 4 hours absolute or 15 minutes of inactivity. All actions taken by this account are recorded in the audit trail.</p>
+    ${isFailed
+      ? `<p style="color:#6b7280;font-size:13px;">All failed attempts are recorded in the audit trail. If this activity is unauthorized, consider locking the break-glass account and rotating credentials immediately.</p>`
+      : `<p style="color:#6b7280;font-size:13px;">This session will automatically expire after 4 hours absolute or 15 minutes of inactivity. All actions taken by this account are recorded in the audit trail.</p>`}
   `);
+
+  const textBody = isFailed
+    ? `BREAK-GLASS FAILED LOGIN ALERT\n\nAccount: ${email}\nTime: ${dateStr}\nIP: ${ipAddress}\nFailed Attempts: ${failedAttempts} (from this IP in 15 min)\n\nReview the audit trail and consider rotating credentials immediately.`
+    : `BREAK-GLASS LOGIN ALERT\n\nAccount: ${email}\nTime: ${dateStr}\nIP: ${ipAddress}\nUser Agent: ${userAgent}\n\nIf this was not authorized, contact your security team immediately.`;
 
   await sendEmail({
     to: alertEmail,
-    subject: "⚠️ Control HUB — Break-Glass Account Login",
+    subject: subjectLine,
     html,
-    text: `BREAK-GLASS LOGIN ALERT\n\nAccount: ${email}\nTime: ${dateStr}\nIP: ${ipAddress}\nUser Agent: ${userAgent}\n\nIf this was not authorized, contact your security team immediately.`,
+    text: textBody,
   });
 
-  logger.warn({ email, ipAddress }, "Break-glass login alert sent");
+  if (isFailed) {
+    logger.warn({ email, ipAddress, failedAttempts }, "Break-glass failed-attempt alert sent");
+  } else {
+    logger.warn({ email, ipAddress }, "Break-glass login alert sent");
+  }
 }

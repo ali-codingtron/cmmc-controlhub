@@ -76,13 +76,24 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     }
 
     const now = new Date();
+
     if (session.expiresAt < now) {
+      // Mark as revoked on absolute expiry
+      db.update(breakGlassSessionsTable)
+        .set({ revokedAt: now })
+        .where(eq(breakGlassSessionsTable.id, session.id))
+        .catch(() => {});
       res.status(401).json({ error: "Break-glass session has expired" });
       return;
     }
 
     const idleLimit = new Date(session.lastActiveAt.getTime() + BREAK_GLASS_IDLE_MINUTES * 60 * 1000);
     if (now > idleLimit) {
+      // Mark as revoked on idle timeout
+      db.update(breakGlassSessionsTable)
+        .set({ revokedAt: now })
+        .where(eq(breakGlassSessionsTable.id, session.id))
+        .catch(() => {});
       res.status(401).json({ error: "Break-glass session timed out due to inactivity" });
       return;
     }

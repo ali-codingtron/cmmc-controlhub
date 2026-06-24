@@ -30,6 +30,34 @@ checkStartup();
 
 const router = Router();
 
+// ─── Break-Glass Per-IP Rate Limiter ─────────────────────────────────────────
+// Tracks failed login attempts targeting the break-glass account, keyed by IP.
+// Sends an alert email after ALERT_THRESHOLD consecutive failures from the same IP.
+const BG_IP_WINDOW_MS = 15 * 60 * 1000; // 15 min window
+const BG_IP_ALERT_THRESHOLD = 3;
+const bgIpFailures = new Map<string, { count: number; windowStart: number; alerted: boolean }>();
+
+function trackBreakGlassFailure(ip: string, user: { email: string; name: string }) {
+  const now = Date.now();
+  const entry = bgIpFailures.get(ip);
+  if (!entry || now - entry.windowStart > BG_IP_WINDOW_MS) {
+    bgIpFailures.set(ip, { count: 1, windowStart: now, alerted: false });
+    return;
+  }
+  entry.count++;
+  if (entry.count >= BG_IP_ALERT_THRESHOLD && !entry.alerted) {
+    entry.alerted = true;
+    sendBreakGlassLoginAlert({
+      email: user.email,
+      name: user.name,
+      ipAddress: ip,
+      userAgent: "break-glass-failed-attempts",
+      timestamp: new Date().toISOString(),
+      failedAttempts: entry.count,
+    }).catch((e) => logger.warn({ err: e }, "Failed to send break-glass failure alert"));
+  }
+}
+
 async function getSecuritySettings() {
   const rows = await db.select().from(securitySettingsTable).limit(1);
   if (rows.length > 0) return rows[0];
@@ -105,26 +133,45 @@ router.post("/auth/login", async (req, res) => {
       updatedAt: new Date(),
     }).where(eq(usersTable.id, user.id));
 
-    await db.insert(auditLogsTable).values({
-      id: randomUUID(),
-      userId: user.id,
-      userName: user.name,
-      action: "login_failed",
-      entityType: "user",
-      entityId: user.id,
-      entityLabel: user.email,
-      ipAddress: req.ip,
-      userAgent: req.headers["user-agent"],
-      newValue: { failedAttempts: newCount },
-      timestamp: new Date(),
-    });
-
-    if (lockedUntil) {
+    // Break-glass specific: track per-IP failures and send alert at threshold
+    if (user.isBreakGlass) {
+      trackBreakGlassFailure(req.ip ?? "unknown", { email: user.email, name: user.name });
       await db.insert(auditLogsTable).values({
         id: randomUUID(),
         userId: user.id,
         userName: user.name,
-        action: "account_locked",
+        action: "break_glass_login" as any,
+        entityType: "user",
+        entityId: user.id,
+        entityLabel: user.email,
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
+        newValue: { success: false, failedAttempts: newCount },
+        timestamp: new Date(),
+      });
+    } else {
+      await db.insert(auditLogsTable).values({
+        id: randomUUID(),
+        userId: user.id,
+        userName: user.name,
+        action: "login_failed",
+        entityType: "user",
+        entityId: user.id,
+        entityLabel: user.email,
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
+        newValue: { failedAttempts: newCount },
+        timestamp: new Date(),
+      });
+    }
+
+    if (lockedUntil) {
+      const lockAction = user.isBreakGlass ? ("break_glass_account_locked" as any) : "account_locked";
+      await db.insert(auditLogsTable).values({
+        id: randomUUID(),
+        userId: user.id,
+        userName: user.name,
+        action: lockAction,
         entityType: "user",
         entityId: user.id,
         entityLabel: user.email,
@@ -170,23 +217,11 @@ router.post("/auth/login", async (req, res) => {
   const loginNow = new Date();
   await db.update(usersTable).set({ lastLoginAt: loginNow }).where(eq(usersTable.id, user.id));
 
-  await db.insert(auditLogsTable).values({
-    id: randomUUID(),
-    userId: user.id,
-    userName: user.name,
-    action: "logged_in",
-    entityType: "user",
-    entityId: user.id,
-    entityLabel: user.email,
-    ipAddress: req.ip,
-    userAgent: req.headers["user-agent"],
-    timestamp: loginNow,
-  });
-
   const tokenExpiry = user.isBreakGlass ? "4h" : "24h";
   const token = signToken({ id: user.id, name: user.name, email: user.email, role: user.role }, tokenExpiry);
 
   if (user.isBreakGlass) {
+    // Revoke any prior open sessions (single-session enforcement)
     await db
       .update(breakGlassSessionsTable)
       .set({ revokedAt: loginNow })
@@ -206,6 +241,7 @@ router.post("/auth/login", async (req, res) => {
       expiresAt: new Date(loginNow.getTime() + 4 * 60 * 60 * 1000),
     });
 
+    // Single authoritative audit event for break-glass login (replaces generic logged_in)
     await db.insert(auditLogsTable).values({
       id: randomUUID(),
       userId: user.id,
@@ -216,7 +252,7 @@ router.post("/auth/login", async (req, res) => {
       entityLabel: user.email,
       ipAddress: req.ip,
       userAgent: req.headers["user-agent"],
-      newValue: { ipAddress: req.ip, userAgent: req.headers["user-agent"] },
+      newValue: { success: true, ipAddress: req.ip, userAgent: req.headers["user-agent"] },
       timestamp: loginNow,
     });
 
@@ -231,6 +267,20 @@ router.post("/auth/login", async (req, res) => {
     res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role }, isBreakGlass: true });
     return;
   }
+
+  // Standard login audit event for non-break-glass users
+  await db.insert(auditLogsTable).values({
+    id: randomUUID(),
+    userId: user.id,
+    userName: user.name,
+    action: "logged_in",
+    entityType: "user",
+    entityId: user.id,
+    entityLabel: user.email,
+    ipAddress: req.ip,
+    userAgent: req.headers["user-agent"],
+    timestamp: loginNow,
+  });
 
   res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
 });

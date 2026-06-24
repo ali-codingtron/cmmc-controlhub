@@ -203,6 +203,8 @@ async function migrateAuditEnum() {
     "mfa_recovery_code_used", "mfa_reset_by_admin", "mfa_disabled", "mfa_policy_changed",
     "mfa_required_set",
     "user_invited", "invitation_resent", "invitation_cancelled", "invitation_accepted",
+    "break_glass_login", "break_glass_account_created", "break_glass_password_rotated",
+    "break_glass_session_revoked", "break_glass_account_locked",
   ];
   for (const val of missingValues) {
     try {
