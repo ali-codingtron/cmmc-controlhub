@@ -106,7 +106,14 @@ export async function exchangeCodeForToken(
   return { id_token: data.id_token, access_token: data.access_token };
 }
 
-export function parseIdToken(idToken: string): { email: string; name: string; sub: string; tid?: string } {
+export function parseIdToken(idToken: string): {
+  email: string;
+  name: string;
+  sub: string;
+  tid?: string;
+  iss?: string;
+  aud?: string | string[];
+} {
   const parts = idToken.split(".");
   if (parts.length < 2) throw new Error("Invalid id_token format");
 
@@ -122,9 +129,11 @@ export function parseIdToken(idToken: string): { email: string; name: string; su
   const name = (decoded.name ?? decoded.display_name ?? email) as string | undefined;
   const sub = (decoded.sub ?? decoded.oid) as string | undefined;
   const tid = decoded.tid as string | undefined;
+  const iss = decoded.iss as string | undefined;
+  const aud = decoded.aud as string | string[] | undefined;
 
   if (!email) throw new Error("No email claim found in id_token (openid profile email scopes required)");
   if (!sub) throw new Error("No subject (sub/oid) claim found in id_token");
 
-  return { email: email.toLowerCase().trim(), name: name ?? email, sub, tid };
+  return { email: email.toLowerCase().trim(), name: name ?? email, sub, tid, iss, aud };
 }

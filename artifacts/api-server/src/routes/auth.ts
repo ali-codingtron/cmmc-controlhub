@@ -1414,13 +1414,42 @@ router.get("/auth/sso/callback", async (req, res) => {
     return;
   }
 
-  let userInfo: { email: string; name: string; sub: string };
+  let userInfo: { email: string; name: string; sub: string; tid?: string; iss?: string; aud?: string | string[] };
   try {
     userInfo = parseIdToken(idToken);
   } catch (e) {
     logger.error({ err: e }, "SSO id_token parse failed");
     res.redirect(`${frontendBase}/login?sso_error=invalid_token`);
     return;
+  }
+
+  // Validate OIDC claims against the registered SSO config
+  // tid must match the configured tenant
+  if (userInfo.tid && userInfo.tid !== cfg.tenantId) {
+    logger.warn({ tid: userInfo.tid, expected: cfg.tenantId }, "SSO id_token tenant mismatch");
+    res.redirect(`${frontendBase}/login?sso_error=token_tenant_mismatch`);
+    return;
+  }
+  // aud must include (or equal) the registered client_id
+  if (userInfo.aud) {
+    const audList = Array.isArray(userInfo.aud) ? userInfo.aud : [userInfo.aud];
+    if (!audList.includes(cfg.clientId)) {
+      logger.warn({ aud: userInfo.aud, expected: cfg.clientId }, "SSO id_token audience mismatch");
+      res.redirect(`${frontendBase}/login?sso_error=token_audience_mismatch`);
+      return;
+    }
+  }
+  // iss must be from the expected Microsoft tenant endpoint
+  if (userInfo.iss) {
+    const expectedIssuers = [
+      `https://login.microsoftonline.com/${cfg.tenantId}/v2.0`,
+      `https://sts.windows.net/${cfg.tenantId}/`,
+    ];
+    if (!expectedIssuers.some((e) => userInfo.iss!.startsWith(e.replace(/\/$/, "")))) {
+      logger.warn({ iss: userInfo.iss }, "SSO id_token issuer mismatch");
+      res.redirect(`${frontendBase}/login?sso_error=token_issuer_mismatch`);
+      return;
+    }
   }
 
   // Find or create the Control HUB user

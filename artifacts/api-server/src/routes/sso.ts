@@ -2,27 +2,20 @@ import { Router } from "express";
 import { db, ssoConfigsTable, organizationsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireOrg } from "../middleware/org";
 import { encryptSecret, decryptSecret } from "../lib/mfa";
 import { randomUUID } from "crypto";
 
 const router = Router();
 
+// Requires the user to have admin or compliance_manager role.
+// Must be used AFTER requireOrg (which verifies org membership first).
 function requireOrgAdmin(req: any, res: any, next: any) {
   const role = req.authUser?.role;
   if (role !== "admin" && role !== "compliance_manager") {
     res.status(403).json({ error: "Org admin access required" });
     return;
   }
-  next();
-}
-
-function requireOrg(req: any, res: any, next: any) {
-  const orgId = req.headers["x-organization-id"] as string | undefined;
-  if (!orgId) {
-    res.status(400).json({ error: "X-Organization-ID header required" });
-    return;
-  }
-  req.orgId = orgId;
   next();
 }
 
