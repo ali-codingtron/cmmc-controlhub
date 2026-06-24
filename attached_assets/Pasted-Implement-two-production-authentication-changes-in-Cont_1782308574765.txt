@@ -1,0 +1,443 @@
+Implement two production authentication changes in Control HUB:
+
+1. Create a local-only break-glass Global Administrator account.
+2. Add Microsoft Entra ID single sign-on for normal Control HUB users.
+
+Do not change, reset, migrate, or invalidate any existing usernames or passwords.
+
+====================================================================
+A. PRODUCTION BREAK-GLASS GLOBAL ADMINISTRATOR
+====================================================================
+
+Create this production account:
+
+Email / Username:
+sysadmin@controlhub.com
+
+This must be a local Control HUB account only.
+
+Account requirements:
+- Role: Global Admin
+- Status: Active
+- Access to every existing organization
+- Automatically authorized for every future organization
+- Full permissions across the entire platform
+- Local username/password authentication only
+- Microsoft SSO linking disabled
+- MFA exempt for this exact account only
+- Not affected by organization-level MFA enforcement
+- Not a demo account
+- Not restricted to an OrganizationUser membership
+
+Important:
+Do not hardcode the password in source code, migrations, seed files, logs, or the database as plaintext.
+
+Read the initial credentials from Replit production secrets:
+
+CONTROL_HUB_SYSADMIN_EMAIL
+CONTROL_HUB_SYSADMIN_INITIAL_PASSWORD
+
+Create an idempotent production setup command such as:
+
+pnpm create:system-admin
+
+Behavior:
+- find the user by normalized email
+- if the user does not exist, create it
+- hash the password using the app’s existing secure password-hashing method
+- assign Global Admin
+- set is_break_glass = true
+- set mfa_exempt = true
+- set sso_disabled = true
+- set status = Active
+- grant global organization access
+- do not create duplicate accounts
+- if the account already exists, do not change its password unless an explicit rotate-password option is supplied
+
+Add or update fields such as:
+
+User:
+- global_role
+- is_break_glass
+- mfa_exempt
+- sso_disabled
+- auth_provider
+- status
+- last_login_at
+- failed_login_count
+- locked_until
+
+Use:
+- auth_provider = local
+- global_role = GLOBAL_ADMIN
+- is_break_glass = true
+- mfa_exempt = true
+- sso_disabled = true
+
+Global access must be determined by the Global Admin role. Do not require a separate membership row for every organization.
+
+Protect the MFA exception:
+- check the exact user/account flag
+- do not exempt every Global Admin from MFA
+- do not allow this exemption to be inherited by another role
+- do not allow users to make themselves MFA-exempt
+
+Protect the account from accidental changes:
+- do not allow normal Organization Admins to edit, delete, deactivate, demote, or link Microsoft SSO to this account
+- display a “Break-Glass Administrator” badge to Global Admins
+- do not expose the account on public demo pages
+- require explicit confirmation and audit reason for security changes
+
+Because this account is MFA-exempt, add compensating protections:
+- maximum 5 failed password attempts
+- 15-minute account lockout
+- rate limiting by account and IP
+- 15-minute idle session timeout
+- 4-hour absolute session lifetime
+- session ID regeneration after login
+- only one active session at a time
+- revoke previous session when a new login succeeds
+- record IP address and user agent
+- send a security alert through Resend to info@carmetechnology.com every time this account logs in successfully
+- send an alert after repeated failed login attempts
+
+Do not display or email the account password.
+
+Add audit events:
+- break-glass account created
+- break-glass login succeeded
+- break-glass login failed
+- break-glass account locked
+- break-glass session revoked
+- break-glass password rotated
+- break-glass account settings changed
+
+====================================================================
+B. MICROSOFT ENTRA ID SSO
+====================================================================
+
+Add “Sign in with Microsoft” to the normal Control HUB login page.
+
+Keep the existing local email/password login fully functional.
+
+The login screen should offer:
+- Email / Password
+- Sign in with Microsoft
+- Forgot Password
+
+Existing users must keep their current local passwords and may continue using them.
+
+Use a separate Microsoft Entra app registration dedicated to interactive user sign-in.
+
+Do not reuse the tenant-connected pre-assessment app registration or its application permissions.
+
+Use separate environment variables:
+
+MICROSOFT_SSO_CLIENT_ID
+MICROSOFT_SSO_CLIENT_SECRET
+MICROSOFT_SSO_REDIRECT_URI
+MICROSOFT_SSO_AUTHORITY
+APP_BASE_URL
+
+Production values should use:
+
+MICROSOFT_SSO_REDIRECT_URI=https://controlhub.carmetechnology.com/api/auth/microsoft/callback
+
+MICROSOFT_SSO_AUTHORITY=https://login.microsoftonline.com/organizations/v2.0
+
+APP_BASE_URL=https://controlhub.carmetechnology.com
+
+Do not expose the client secret to the browser.
+
+1. SSO Protocol
+
+Use Microsoft OpenID Connect with:
+- authorization code flow
+- PKCE
+- state validation
+- nonce validation
+- server-side token exchange
+
+Request only the sign-in scopes needed initially:
+- openid
+- profile
+- email
+
+Use User.Read delegated permission only if needed to obtain a reliable user profile.
+
+Do not request tenant-assessment application permissions for login.
+
+2. Routes
+
+Create routes similar to:
+
+GET /api/auth/microsoft/start
+- create state, nonce, and PKCE values
+- store them securely server-side
+- redirect to Microsoft
+
+GET /api/auth/microsoft/callback
+- validate state
+- validate nonce
+- exchange authorization code
+- validate token signature, issuer, audience, and expiration
+- identify or link the Control HUB user
+- create secure Control HUB session
+- redirect to the intended page
+
+POST /api/auth/logout
+- destroy the Control HUB session
+
+3. Existing-User-Only Authorization
+
+Microsoft authentication must not automatically create an authorized Control HUB user.
+
+A Microsoft user can sign in only if:
+- the user already exists in Control HUB
+- the user is Active
+- the user has at least one organization membership or is a Global Admin
+- Microsoft SSO is not disabled for that account
+
+First Microsoft login:
+
+A. If the user already has microsoft_tenant_id and microsoft_object_id:
+- match using those immutable identifiers
+- permit login if the user is active and authorized
+
+B. If no Microsoft identity is linked yet:
+- use the normalized Microsoft email or preferred username only to find an existing pre-provisioned Control HUB account
+- verify that only one active account matches
+- link the Microsoft tenant ID and object ID
+- preserve all existing Control HUB roles and organization memberships
+
+C. If no pre-provisioned user exists:
+- deny access
+- show:
+  “Access has not been provisioned. Contact your Control HUB administrator.”
+
+Do not auto-register unknown Microsoft users.
+
+After initial linking, use:
+- Microsoft tenant ID claim: tid
+- Microsoft object ID claim: oid
+
+Do not use email, UPN, or display name as the permanent authorization identifier.
+
+4. User Fields
+
+Add fields such as:
+
+- microsoft_tenant_id
+- microsoft_object_id
+- microsoft_display_name
+- microsoft_email
+- microsoft_linked_at
+- last_sso_login_at
+- sso_disabled
+- auth_provider
+
+Allow auth_provider values:
+- local
+- microsoft
+- both
+
+Existing users default to:
+local
+
+After successful Microsoft linking, normal users can become:
+both
+
+The break-glass sysadmin account must remain:
+- auth_provider = local
+- sso_disabled = true
+- microsoft_tenant_id = null
+- microsoft_object_id = null
+
+If sysadmin@controlhub.com attempts Microsoft linking, reject it.
+
+5. Authorization After SSO
+
+Microsoft only authenticates the identity.
+
+Control HUB remains authoritative for:
+- roles
+- organization assignments
+- permissions
+- Assessor Read-Only restrictions
+- Global Admin access
+- account status
+- demo restrictions
+
+Do not derive Control HUB roles from Microsoft group membership during this phase.
+
+6. MFA Behavior
+
+Do not make the sysadmin account complete MFA.
+
+For all other local users:
+- retain the existing Control HUB TOTP MFA workflow and enforcement settings
+
+For Microsoft SSO users:
+- do not silently treat Microsoft login as satisfying Control HUB MFA unless that behavior is explicitly configured and validated
+- initially, if the Control HUB account has mfa_required = true, require the existing Control HUB MFA challenge after Microsoft authentication
+- add a future setting called trust_microsoft_mfa, default false
+- do not enable trust_microsoft_mfa globally during this implementation
+
+7. Account Linking Controls
+
+On the Users page, show:
+- authentication method
+- Microsoft linked: Yes/No
+- Microsoft tenant ID, partially masked
+- last SSO login
+- local login enabled
+- SSO enabled
+
+Admin actions:
+- Enable Microsoft SSO
+- Disable Microsoft SSO
+- Unlink Microsoft account
+- Revoke sessions
+
+Unlinking Microsoft must:
+- require confirmation
+- require a reason
+- retain the user’s local account/password
+- revoke active sessions
+- write an audit record
+
+8. Secure Sessions
+
+Both local login and Microsoft SSO must create the same secure Control HUB session.
+
+Requirements:
+- HttpOnly cookie
+- Secure in production
+- SameSite=Lax or Strict
+- server-side session or securely signed session
+- regenerate session after authentication
+- idle timeout
+- absolute timeout
+- logout invalidation
+- session revocation support
+- no auth tokens stored in localStorage
+- no Microsoft access or ID tokens exposed to client-side JavaScript
+
+9. SSO Audit Logs
+
+Log:
+- Microsoft SSO started
+- Microsoft SSO succeeded
+- Microsoft SSO failed
+- unknown Microsoft user denied
+- Microsoft identity linked
+- Microsoft identity unlinked
+- inactive user denied
+- user without organization denied
+- sysadmin Microsoft linking denied
+- session created
+- session revoked
+
+Do not log:
+- authorization codes
+- client secret
+- access tokens
+- ID tokens
+- PKCE verifier
+- raw state or nonce values
+
+10. Error Handling
+
+Provide clear user-facing errors:
+
+- Access not provisioned
+- Account is inactive
+- Account has no organization assignment
+- Microsoft sign-in was cancelled
+- Microsoft identity is already linked to another user
+- Microsoft SSO is disabled for this account
+- Sign-in configuration is temporarily unavailable
+
+Show detailed technical errors only to administrators and server logs.
+
+Do not expose tokens, secrets, stack traces, or internal database details.
+
+====================================================================
+C. MIGRATION AND PRODUCTION SAFETY
+====================================================================
+
+Before migration:
+- back up the User, OrganizationUser, Session, MFA, and authentication-related tables
+- report the number of existing users
+- report the current password-hashing method
+- confirm no existing password hashes will be changed
+
+Migration rules:
+- preserve every existing username/email
+- preserve every existing password hash
+- preserve all organization memberships
+- preserve all roles
+- preserve MFA settings
+- preserve invitation status
+- add new SSO fields as nullable
+- default existing auth_provider to local
+- default existing sso_disabled to false except the break-glass account
+
+Do not automatically link existing users to Microsoft.
+
+Create a migration dry-run report before applying production changes.
+
+====================================================================
+D. ACCEPTANCE TESTS
+====================================================================
+
+Test 1 — Existing Local User:
+- existing user logs in with the same username and password
+- no password reset or migration occurs
+- existing role and organizations remain unchanged
+
+Test 2 — Break-Glass Account:
+- sysadmin@controlhub.com logs in through local login
+- exact configured password works
+- MFA is not requested
+- account sees every existing organization
+- account sees a newly created organization without adding a membership
+- login alert is sent to info@carmetechnology.com
+- audit event is created
+
+Test 3 — Break-Glass SSO Restriction:
+- attempt to link sysadmin@controlhub.com to Microsoft
+- request is denied
+- audit event is created
+
+Test 4 — Existing User Microsoft SSO:
+- existing active user signs in with Microsoft
+- email is used only for initial matching
+- tid and oid are saved
+- user receives their existing Control HUB role and organization access
+
+Test 5 — Returning SSO User:
+- Microsoft email/UPN changes
+- user still matches by tid + oid
+
+Test 6 — Unknown Microsoft User:
+- unknown user signs in with Microsoft
+- access is denied
+- no user or organization membership is created
+
+Test 7 — Assessor User:
+- assessor signs in with Microsoft
+- assessor remains read-only
+- write API requests return 403
+
+Test 8 — Existing MFA:
+- normal MFA-required local user still receives MFA challenge
+- break-glass account is the only explicit MFA exemption
+
+Test 9 — Logout:
+- logout destroys the session
+- protected pages cannot be reopened without authentication
+
+Test 10 — Demo:
+- public demo remains accessible and read-only
+- demo mode does not grant access to production organizations
