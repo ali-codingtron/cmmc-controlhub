@@ -488,12 +488,17 @@ export default function Login() {
   const [resetBanner, setResetBanner] = useState(false);
 
   // SSO login state
-  const [ssoMode, setSsoMode] = useState(false);
-  const [ssoEmail, setSsoEmail] = useState("");
   const [ssoLoading, setSsoLoading] = useState(false);
   const [ssoError, setSsoError] = useState("");
+  const [ssoConfigured, setSsoConfigured] = useState<boolean | null>(null);
 
   useEffect(() => {
+    // Check whether Microsoft SSO is configured
+    fetch("/api/auth/sso/status")
+      .then((r) => r.json())
+      .then((d) => setSsoConfigured(d.configured === true))
+      .catch(() => setSsoConfigured(false));
+
     const params = new URLSearchParams(window.location.search);
 
     // Handle SSO callback token
@@ -502,27 +507,28 @@ export default function Login() {
       window.history.replaceState({}, "", window.location.pathname);
       loginWithToken(ssoToken)
         .then(() => setLocation("/"))
-        .catch(() => setError("SSO sign-in failed. Please try again."));
+        .catch(() => setSsoError("Microsoft sign-in failed. Please try again."));
       return;
     }
 
-    // Handle SSO error codes from callback
+    // Handle SSO error codes returned from the callback redirect
     const ssoErrorParam = params.get("sso_error");
     if (ssoErrorParam) {
       window.history.replaceState({}, "", window.location.pathname);
       const msgs: Record<string, string> = {
-        invalid_state: "SSO session expired. Please try again.",
+        access_denied: "Microsoft sign-in was cancelled.",
+        not_provisioned: "Access has not been provisioned. Contact your Control HUB administrator.",
+        invalid_state: "Microsoft sign-in session expired. Please try again.",
         token_exchange_failed: "Microsoft authentication failed. Please try again.",
         invalid_token: "Invalid response from Microsoft. Contact your administrator.",
-        config_not_found: "SSO configuration not found. Contact your administrator.",
-        missing_params: "Incomplete SSO callback. Please try again.",
-        account_inactive: "Your account is inactive. Contact your administrator.",
-        sso_disabled: "SSO login is not permitted for your account.",
-        token_tenant_mismatch: "Microsoft tenant does not match the configured SSO. Contact your administrator.",
-        token_audience_mismatch: "SSO token audience mismatch. Contact your administrator.",
-        token_issuer_mismatch: "SSO token issuer mismatch. Contact your administrator.",
+        config_not_found: "Microsoft SSO is not configured. Contact your administrator.",
+        missing_params: "Incomplete sign-in response. Please try again.",
+        account_inactive: "Your Control HUB account is inactive. Contact your administrator.",
+        sso_disabled: "Microsoft SSO is disabled for this account.",
+        token_audience_mismatch: "Microsoft SSO token audience mismatch. Contact your administrator.",
+        token_issuer_mismatch: "Microsoft SSO token issuer mismatch. Contact your administrator.",
       };
-      setError(msgs[ssoErrorParam] ?? "SSO authentication failed. Please try again.");
+      setSsoError(msgs[ssoErrorParam] ?? "Microsoft sign-in failed. Please try again.");
     }
 
     emailRef.current?.focus();
@@ -530,21 +536,19 @@ export default function Login() {
     if (params.get("reset") === "success") setResetBanner(true);
   }, []);
 
-  const handleSsoSubmit = async () => {
-    const email = ssoEmail.trim().toLowerCase();
-    if (!email) return;
+  const handleMicrosoftLogin = async () => {
     setSsoLoading(true);
     setSsoError("");
     try {
-      const res = await fetch(`/api/auth/sso/initiate?email=${encodeURIComponent(email)}`);
+      const res = await fetch("/api/auth/microsoft/initiate");
       const data = await res.json();
       if (!res.ok) {
-        setSsoError(data.error ?? "No SSO configured for this domain.");
+        setSsoError(data.error ?? "Microsoft sign-in is temporarily unavailable. Please try again.");
         return;
       }
       window.location.href = data.authUrl;
     } catch {
-      setSsoError("Failed to initiate SSO. Please try again.");
+      setSsoError("Microsoft sign-in is temporarily unavailable. Please try again.");
     } finally {
       setSsoLoading(false);
     }
@@ -746,31 +750,35 @@ export default function Login() {
           </form>
         </Form>
 
-        {/* SSO Divider */}
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t border-border" />
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-background px-2 text-muted-foreground">Or</span>
-          </div>
-        </div>
-
-        {ssoMode ? (
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Work email address</label>
-              <Input
-                type="email"
-                placeholder="name@company.com"
-                value={ssoEmail}
-                onChange={(e) => { setSsoEmail(e.target.value); setSsoError(""); }}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSsoSubmit(); } }}
-                autoFocus
-                className="h-10"
-                disabled={ssoLoading}
-              />
+        {ssoConfigured === true && (
+          <>
+          {/* SSO Divider */}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-border" />
             </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">Or</span>
+            </div>
+          </div>
+          </>
+        )}
+
+        {ssoConfigured === true && (
+          <div className="space-y-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-10 gap-2.5"
+              disabled={ssoLoading}
+              onClick={handleMicrosoftLogin}
+            >
+              {ssoLoading ? (
+                <><Loader2 className="h-4 w-4 animate-spin" />Redirecting to Microsoft…</>
+              ) : (
+                <><MicrosoftIcon />Sign in with Microsoft</>
+              )}
+            </Button>
             {ssoError && (
               <div
                 role="alert"
@@ -780,43 +788,7 @@ export default function Login() {
                 <span>{ssoError}</span>
               </div>
             )}
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full h-10 gap-2.5"
-              disabled={ssoLoading || !ssoEmail.trim()}
-              onClick={handleSsoSubmit}
-            >
-              {ssoLoading ? (
-                <><Loader2 className="h-4 w-4 animate-spin" />Redirecting to Microsoft…</>
-              ) : (
-                <><MicrosoftIcon />Continue with Microsoft</>
-              )}
-            </Button>
-            <button
-              type="button"
-              className="w-full text-center text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-1"
-              onClick={() => { setSsoMode(false); setSsoEmail(""); setSsoError(""); }}
-            >
-              <ArrowLeft className="h-3 w-3" />Back to password login
-            </button>
           </div>
-        ) : (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full h-10 gap-2.5"
-            onClick={() => {
-              const mainEmail = form.getValues("email");
-              setSsoMode(true);
-              setError("");
-              setSsoError("");
-              if (mainEmail) setSsoEmail(mainEmail);
-            }}
-          >
-            <MicrosoftIcon />
-            Sign in with Microsoft
-          </Button>
         )}
 
         <p className="text-center text-xs text-muted-foreground">

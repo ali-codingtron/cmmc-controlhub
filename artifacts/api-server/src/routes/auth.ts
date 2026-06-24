@@ -1,8 +1,10 @@
 import { Router } from "express";
 import bcrypt from 'bcryptjs';
-import { db, usersTable, auditLogsTable, organizationUsersTable, securitySettingsTable, passwordResetTokensTable, breakGlassSessionsTable, ssoConfigsTable } from "@workspace/db";
+import { db, usersTable, auditLogsTable, organizationUsersTable, securitySettingsTable, passwordResetTokensTable, breakGlassSessionsTable } from "@workspace/db";
 import { eq, sql, and, isNull } from "drizzle-orm";
 import {
+  getMicrosoftSsoConfig,
+  isSsoConfigured,
   generatePkce,
   generateState,
   storeOauthState,
@@ -10,6 +12,7 @@ import {
   buildAuthorizationUrl,
   exchangeCodeForToken,
   parseIdToken,
+  validateMultiTenantClaims,
 } from "../lib/sso";
 import { signToken, requireAuth, requireRole, hashJwtToken } from "../lib/auth";
 import {
@@ -1319,57 +1322,71 @@ router.post("/auth/reset-password", async (req, res) => {
   res.json({ success: true });
 });
 
-// ─── SSO: Entra ID OAuth2/PKCE ────────────────────────────────────────────────
+// ─── Microsoft SSO: Global Multi-Tenant OAuth2/PKCE ──────────────────────────
 
-// GET /api/auth/sso/initiate?email=<email>
-// Looks up the SSO config for the email's domain and returns the Microsoft
-// authorization URL. No authentication required (user is signing in).
-router.get("/auth/sso/initiate", async (req, res) => {
-  const rawEmail = (req.query.email as string | undefined)?.toLowerCase().trim();
-  if (!rawEmail) {
-    res.status(400).json({ error: "email query parameter is required" });
+// GET /api/auth/sso/status  (public — no auth required)
+// Returns whether Microsoft SSO is configured, for the login page to decide
+// whether to show the "Sign in with Microsoft" button.
+router.get("/auth/sso/status", (_req, res) => {
+  const configured = isSsoConfigured();
+  if (!configured) {
+    res.json({ configured: false });
     return;
   }
+  const cfg = getMicrosoftSsoConfig()!;
+  const maskedClientId = cfg.clientId.slice(0, 8) + "••••••••" + cfg.clientId.slice(-4);
+  res.json({
+    configured: true,
+    clientId: maskedClientId,
+    authority: cfg.authority,
+    redirectUri: cfg.redirectUri,
+  });
+});
 
-  const atIdx = rawEmail.indexOf("@");
-  if (atIdx < 1) {
-    res.status(400).json({ error: "Invalid email address" });
-    return;
-  }
-  const domain = rawEmail.slice(atIdx + 1);
-
-  const [cfg] = await db
-    .select()
-    .from(ssoConfigsTable)
-    .where(and(eq(ssoConfigsTable.emailDomain, domain), eq(ssoConfigsTable.enabled, true)))
-    .limit(1);
-
+// GET /api/auth/microsoft/initiate  (public — no auth required)
+// Generates a PKCE challenge + opaque state and returns the Microsoft
+// authorization URL. The client redirects the browser to that URL.
+router.get("/auth/microsoft/initiate", async (req, res) => {
+  const cfg = getMicrosoftSsoConfig();
   if (!cfg) {
-    res.status(404).json({ error: "No SSO configured for this email domain. Contact your administrator." });
+    res.status(503).json({ error: "Microsoft sign-in is not configured. Contact your administrator." });
     return;
   }
+
+  const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? req.ip ?? "unknown";
+  const ua = req.headers["user-agent"] ?? "unknown";
 
   const { codeVerifier, codeChallenge } = generatePkce();
   const state = generateState();
-  storeOauthState(state, codeVerifier, cfg.organizationId, cfg.id);
+  storeOauthState(state, codeVerifier);
 
-  const callbackUrl = `${getAppBaseUrl()}/api/auth/sso/callback`;
-  const authUrl = buildAuthorizationUrl(cfg.tenantId, cfg.clientId, callbackUrl, state, codeChallenge);
+  const authUrl = buildAuthorizationUrl(cfg.authority, cfg.clientId, cfg.redirectUri, state, codeChallenge);
 
-  res.json({ authUrl, provider: cfg.provider });
+  await db.insert(auditLogsTable).values({
+    id: randomUUID(),
+    action: "microsoft_sso_started" as any,
+    entityType: "user",
+    entityLabel: "microsoft_sso",
+    ipAddress: ip,
+    userAgent: ua,
+    timestamp: new Date(),
+  });
+
+  res.json({ authUrl });
 });
 
-// GET /api/auth/sso/callback?code=<code>&state=<state>
-// Microsoft redirects here after authentication. Exchanges the code for tokens,
-// extracts user info, creates or links the Control HUB user, issues a JWT,
-// and redirects the browser back to the frontend with ?sso_token=<jwt>.
-router.get("/auth/sso/callback", async (req, res) => {
+// GET /api/auth/microsoft/callback?code=<code>&state=<state>
+// Microsoft redirects here after authentication.
+// Validates the callback, exchanges the code for tokens, matches the existing
+// Control HUB user (or denies access), issues a JWT, and redirects to the frontend.
+router.get("/auth/microsoft/callback", async (req, res) => {
   const { code, state, error: msError } = req.query as Record<string, string>;
   const frontendBase = getAppBaseUrl();
 
   if (msError) {
-    logger.warn({ msError }, "Microsoft SSO error returned in callback");
-    res.redirect(`${frontendBase}/login?sso_error=${encodeURIComponent(msError)}`);
+    logger.warn({ msError }, "Microsoft returned an error in the SSO callback");
+    const errCode = msError === "access_denied" ? "access_denied" : "token_exchange_failed";
+    res.redirect(`${frontendBase}/login?sso_error=${encodeURIComponent(errCode)}`);
     return;
   }
 
@@ -1384,169 +1401,215 @@ router.get("/auth/sso/callback", async (req, res) => {
     return;
   }
 
-  const [cfg] = await db
-    .select()
-    .from(ssoConfigsTable)
-    .where(eq(ssoConfigsTable.id, stateData.configId))
-    .limit(1);
-  if (!cfg || !cfg.enabled) {
+  const cfg = getMicrosoftSsoConfig();
+  if (!cfg) {
     res.redirect(`${frontendBase}/login?sso_error=config_not_found`);
     return;
   }
 
-  const callbackUrl = `${getAppBaseUrl()}/api/auth/sso/callback`;
+  const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? req.ip ?? "unknown";
+  const ua = req.headers["user-agent"] ?? "unknown";
+  const now = new Date();
 
   let idToken: string;
   try {
-    const clientSecret = decryptSecret(cfg.clientSecretEnc);
     const tokens = await exchangeCodeForToken(
-      cfg.tenantId,
+      cfg.authority,
       cfg.clientId,
-      clientSecret,
+      cfg.clientSecret,
       code,
-      callbackUrl,
+      cfg.redirectUri,
       stateData.codeVerifier
     );
     idToken = tokens.id_token;
   } catch (e) {
-    logger.error({ err: e }, "SSO token exchange failed");
+    logger.error({ err: e }, "Microsoft SSO token exchange failed");
+    await db.insert(auditLogsTable).values({
+      id: randomUUID(),
+      action: "microsoft_sso_failed" as any,
+      entityType: "user",
+      entityLabel: "microsoft_sso",
+      ipAddress: ip,
+      userAgent: ua,
+      newValue: { reason: "token_exchange_failed" },
+      timestamp: now,
+    });
     res.redirect(`${frontendBase}/login?sso_error=token_exchange_failed`);
     return;
   }
 
-  let userInfo: { email: string; name: string; sub: string; tid?: string; iss?: string; aud?: string | string[] };
+  let userInfo: ReturnType<typeof parseIdToken>;
   try {
     userInfo = parseIdToken(idToken);
   } catch (e) {
-    logger.error({ err: e }, "SSO id_token parse failed");
+    logger.error({ err: e }, "Microsoft SSO id_token parse failed");
     res.redirect(`${frontendBase}/login?sso_error=invalid_token`);
     return;
   }
 
-  // Validate OIDC claims against the registered SSO config
-  // tid must match the configured tenant
-  if (userInfo.tid && userInfo.tid !== cfg.tenantId) {
-    logger.warn({ tid: userInfo.tid, expected: cfg.tenantId }, "SSO id_token tenant mismatch");
-    res.redirect(`${frontendBase}/login?sso_error=token_tenant_mismatch`);
+  // Validate aud + iss claims
+  const claimError = validateMultiTenantClaims(userInfo, cfg.clientId);
+  if (claimError) {
+    await db.insert(auditLogsTable).values({
+      id: randomUUID(),
+      action: "microsoft_sso_failed" as any,
+      entityType: "user",
+      entityLabel: userInfo.email,
+      ipAddress: ip,
+      userAgent: ua,
+      newValue: { reason: claimError },
+      timestamp: now,
+    });
+    res.redirect(`${frontendBase}/login?sso_error=${encodeURIComponent(claimError)}`);
     return;
   }
-  // aud must include (or equal) the registered client_id
-  if (userInfo.aud) {
-    const audList = Array.isArray(userInfo.aud) ? userInfo.aud : [userInfo.aud];
-    if (!audList.includes(cfg.clientId)) {
-      logger.warn({ aud: userInfo.aud, expected: cfg.clientId }, "SSO id_token audience mismatch");
-      res.redirect(`${frontendBase}/login?sso_error=token_audience_mismatch`);
-      return;
-    }
-  }
-  // iss must be from the expected Microsoft tenant endpoint
-  if (userInfo.iss) {
-    const expectedIssuers = [
-      `https://login.microsoftonline.com/${cfg.tenantId}/v2.0`,
-      `https://sts.windows.net/${cfg.tenantId}/`,
-    ];
-    if (!expectedIssuers.some((e) => userInfo.iss!.startsWith(e.replace(/\/$/, "")))) {
-      logger.warn({ iss: userInfo.iss }, "SSO id_token issuer mismatch");
-      res.redirect(`${frontendBase}/login?sso_error=token_issuer_mismatch`);
-      return;
-    }
+
+  // ── User matching ──────────────────────────────────────────────────────────
+  // Phase A: try immutable tid + oid (returning SSO users)
+  let user: typeof usersTable.$inferSelect | undefined;
+  if (userInfo.tid && userInfo.oid) {
+    const [byMsId] = await db
+      .select()
+      .from(usersTable)
+      .where(
+        and(
+          eq(usersTable.microsoftTenantId, userInfo.tid),
+          eq(usersTable.microsoftObjectId, userInfo.oid)
+        )
+      )
+      .limit(1);
+    if (byMsId) user = byMsId;
   }
 
-  // Find or create the Control HUB user
-  let [user] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.email, userInfo.email))
-    .limit(1);
+  // Phase B: first-time linking — match by email
+  const isFirstLink = !user;
+  if (!user) {
+    const [byEmail] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, userInfo.email))
+      .limit(1);
+    if (byEmail) user = byEmail;
+  }
 
-  const now = new Date();
-  const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? req.ip ?? "unknown";
-  const ua = req.headers["user-agent"] ?? "unknown";
+  // Phase C: no match — deny access
+  if (!user) {
+    logger.warn({ email: userInfo.email, tid: userInfo.tid }, "Microsoft SSO: unknown user denied");
+    await db.insert(auditLogsTable).values({
+      id: randomUUID(),
+      action: "microsoft_user_denied" as any,
+      entityType: "user",
+      entityLabel: userInfo.email,
+      ipAddress: ip,
+      userAgent: ua,
+      newValue: { tid: userInfo.tid, oid: userInfo.oid, reason: "user_not_found" },
+      timestamp: now,
+    });
+    res.redirect(`${frontendBase}/login?sso_error=not_provisioned`);
+    return;
+  }
 
-  if (user) {
-    // Existing user — check they are active and SSO not disabled
-    if (!user.isActive) {
-      res.redirect(`${frontendBase}/login?sso_error=account_inactive`);
-      return;
-    }
-    if ((user as any).ssoDisabled) {
-      res.redirect(`${frontendBase}/login?sso_error=sso_disabled`);
-      return;
-    }
-    // Update last login
-    await db
-      .update(usersTable)
-      .set({ lastLoginAt: now, updatedAt: now })
-      .where(eq(usersTable.id, user.id));
-  } else {
-    // New user — create and add to org
-    const newId = randomUUID();
-    [user] = await db
-      .insert(usersTable)
-      .values({
-        id: newId,
-        name: userInfo.name,
-        email: userInfo.email,
-        passwordHash: null,
-        role: "it_contributor",
-        isActive: true,
-        status: "active",
+  // Block break-glass account from SSO linking
+  if (user.isBreakGlass) {
+    logger.warn({ email: user.email }, "Microsoft SSO: break-glass account linking denied");
+    await db.insert(auditLogsTable).values({
+      id: randomUUID(),
+      userId: user.id,
+      userName: user.name,
+      action: "microsoft_breakglass_denied" as any,
+      entityType: "user",
+      entityId: user.id,
+      entityLabel: user.email,
+      ipAddress: ip,
+      userAgent: ua,
+      newValue: { reason: "break_glass_account_cannot_use_sso" },
+      timestamp: now,
+    });
+    res.redirect(`${frontendBase}/login?sso_error=sso_disabled`);
+    return;
+  }
+
+  // Check account health
+  if (!user.isActive) {
+    await db.insert(auditLogsTable).values({
+      id: randomUUID(),
+      userId: user.id,
+      userName: user.name,
+      action: "sso_inactive_account_denied" as any,
+      entityType: "user",
+      entityId: user.id,
+      entityLabel: user.email,
+      ipAddress: ip,
+      userAgent: ua,
+      timestamp: now,
+    });
+    res.redirect(`${frontendBase}/login?sso_error=account_inactive`);
+    return;
+  }
+
+  if (user.ssoDisabled) {
+    await db.insert(auditLogsTable).values({
+      id: randomUUID(),
+      userId: user.id,
+      userName: user.name,
+      action: "sso_disabled_account_denied" as any,
+      entityType: "user",
+      entityId: user.id,
+      entityLabel: user.email,
+      ipAddress: ip,
+      userAgent: ua,
+      timestamp: now,
+    });
+    res.redirect(`${frontendBase}/login?sso_error=sso_disabled`);
+    return;
+  }
+
+  // ── Link Microsoft identity on first SSO login ─────────────────────────────
+  if (isFirstLink && userInfo.tid && userInfo.oid) {
+    await db.update(usersTable)
+      .set({
+        microsoftTenantId: userInfo.tid,
+        microsoftObjectId: userInfo.oid,
+        microsoftLinkedAt: now,
+        lastSsoLoginAt: now,
         lastLoginAt: now,
-        createdAt: now,
         updatedAt: now,
       } as any)
-      .returning();
+      .where(eq(usersTable.id, user.id));
 
-    // Add to org
-    await db
-      .insert(organizationUsersTable)
-      .values({
-        userId: newId,
-        organizationId: cfg.organizationId,
-        role: "member",
-        joinedAt: now,
-      } as any)
-      .onConflictDoNothing();
+    await db.insert(auditLogsTable).values({
+      id: randomUUID(),
+      userId: user.id,
+      userName: user.name,
+      action: "microsoft_identity_linked" as any,
+      entityType: "user",
+      entityId: user.id,
+      entityLabel: user.email,
+      ipAddress: ip,
+      userAgent: ua,
+      newValue: { tid: userInfo.tid, oid: userInfo.oid },
+      timestamp: now,
+    });
+  } else {
+    // Returning user — just update last login timestamps
+    await db.update(usersTable)
+      .set({ lastSsoLoginAt: now, lastLoginAt: now, updatedAt: now } as any)
+      .where(eq(usersTable.id, user.id));
   }
 
-  // Ensure org membership exists
-  const [membership] = await db
-    .select({ userId: organizationUsersTable.userId })
-    .from(organizationUsersTable)
-    .where(
-      and(
-        eq(organizationUsersTable.userId, user.id),
-        eq(organizationUsersTable.organizationId, cfg.organizationId)
-      )
-    )
-    .limit(1);
-
-  if (!membership) {
-    await db
-      .insert(organizationUsersTable)
-      .values({
-        userId: user.id,
-        organizationId: cfg.organizationId,
-        role: "member",
-        joinedAt: now,
-      } as any)
-      .onConflictDoNothing();
-  }
-
-  // Audit log
+  // Successful SSO audit
   await db.insert(auditLogsTable).values({
     id: randomUUID(),
     userId: user.id,
     userName: user.name,
-    action: "sso_login" as any,
+    action: "microsoft_sso_success" as any,
     entityType: "user",
     entityId: user.id,
     entityLabel: user.email,
-    newValue: { provider: cfg.provider, orgId: cfg.organizationId },
     ipAddress: ip,
     userAgent: ua,
+    newValue: { tid: userInfo.tid, firstLink: isFirstLink },
     timestamp: now,
-    organizationId: cfg.organizationId,
   });
 
   const jwtToken = signToken({ id: user.id, name: user.name, email: user.email, role: user.role });

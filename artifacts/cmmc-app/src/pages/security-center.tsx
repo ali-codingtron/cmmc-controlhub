@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetSecurityCenter,
@@ -39,6 +39,7 @@ import {
   Activity,
   KeyRound,
   MailX,
+  Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
@@ -78,6 +79,20 @@ export default function SecurityCenter() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
+
+  const [ssoStatus, setSsoStatus] = useState<{
+    configured: boolean;
+    clientId?: string;
+    authority?: string;
+    redirectUri?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/sso/status")
+      .then((r) => r.json())
+      .then(setSsoStatus)
+      .catch(() => setSsoStatus({ configured: false }));
+  }, []);
 
   if (user?.role !== "admin") {
     setLocation("/");
@@ -459,6 +474,61 @@ export default function SecurityCenter() {
                 </div>
               ))}
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Microsoft SSO Status — read-only, global admin only */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Building2 className="h-4 w-4" />
+            Microsoft SSO Authentication
+          </CardTitle>
+          <CardDescription>
+            Global Microsoft Entra ID configuration status. Credentials are stored in server environment variables and are not editable here.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {ssoStatus === null ? (
+            <div className="text-sm text-muted-foreground">Loading…</div>
+          ) : ssoStatus.configured ? (
+            <>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                <span className="text-sm font-medium text-green-700">Microsoft SSO: Configured</span>
+              </div>
+              <div className="rounded-lg border bg-muted/30 divide-y text-sm">
+                <div className="px-4 py-2.5 flex items-center justify-between gap-4">
+                  <span className="text-muted-foreground">Client ID</span>
+                  <span className="font-mono text-xs">{ssoStatus.clientId ?? "—"}</span>
+                </div>
+                <div className="px-4 py-2.5 flex items-center justify-between gap-4">
+                  <span className="text-muted-foreground">Authority</span>
+                  <span className="font-mono text-xs break-all text-right">{ssoStatus.authority ?? "—"}</span>
+                </div>
+                <div className="px-4 py-2.5 flex items-center justify-between gap-4">
+                  <span className="text-muted-foreground">Redirect URI</span>
+                  <span className="font-mono text-xs break-all text-right">{ssoStatus.redirectUri ?? "—"}</span>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Users can sign in with their Microsoft work accounts. The first sign-in links their Microsoft identity to their existing Control HUB account by email. Subsequent logins use the immutable tenant + object ID.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-2">
+                <XCircle className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-sm text-muted-foreground">Microsoft SSO: Not Configured</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                To enable Microsoft SSO, set the following server environment variables:
+                <code className="block mt-1.5 p-2 rounded bg-muted font-mono text-[11px] leading-relaxed whitespace-pre">
+                  {`MICROSOFT_SSO_CLIENT_ID\nMICROSOFT_SSO_CLIENT_SECRET\nMICROSOFT_SSO_REDIRECT_URI\nMICROSOFT_SSO_AUTHORITY\nAPP_BASE_URL`}
+                </code>
+              </p>
+            </>
           )}
         </CardContent>
       </Card>

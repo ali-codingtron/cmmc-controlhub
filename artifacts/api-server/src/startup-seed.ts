@@ -217,6 +217,49 @@ async function migrateSsoTable() {
   }
 }
 
+async function migrateFaqTable() {
+  const stmts = [
+    `DO $$ BEGIN
+       IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'help_article_status') THEN
+         CREATE TYPE help_article_status AS ENUM ('published', 'draft', 'archived');
+       END IF;
+     END $$`,
+    `CREATE TABLE IF NOT EXISTS faq_items (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      question text NOT NULL,
+      answer text NOT NULL,
+      category text NOT NULL DEFAULT 'General',
+      sort_order integer NOT NULL DEFAULT 0,
+      status help_article_status NOT NULL DEFAULT 'published',
+      created_at timestamp NOT NULL DEFAULT now(),
+      updated_at timestamp NOT NULL DEFAULT now()
+    )`,
+  ];
+  for (const stmt of stmts) {
+    try {
+      await db.execute(sql.raw(stmt));
+    } catch (_e) {
+      // Already exists — safe to ignore
+    }
+  }
+}
+
+async function migrateMicrosoftSsoColumns() {
+  const migrations = [
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS microsoft_tenant_id text`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS microsoft_object_id text`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS microsoft_linked_at timestamptz`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS last_sso_login_at timestamptz`,
+  ];
+  for (const stmt of migrations) {
+    try {
+      await db.execute(sql.raw(stmt));
+    } catch (_e) {
+      // Already exists — safe to ignore
+    }
+  }
+}
+
 async function migrateBreakGlassColumns() {
   // Idempotent: adds break-glass columns and session table if they don't already exist
   const migrations = [
@@ -262,6 +305,10 @@ async function migrateAuditEnum() {
     "break_glass_session_revoked", "break_glass_account_locked",
     "break_glass_login_success", "break_glass_login_failed", "break_glass_settings_changed",
     "sso_login",
+    "microsoft_sso_started", "microsoft_sso_success", "microsoft_sso_failed",
+    "microsoft_identity_linked", "microsoft_identity_unlinked",
+    "microsoft_user_denied", "microsoft_breakglass_denied",
+    "sso_disabled_account_denied", "sso_inactive_account_denied",
   ];
   for (const val of missingValues) {
     try {
@@ -273,10 +320,28 @@ async function migrateAuditEnum() {
 }
 
 async function seedHelpContent() {
-  const [{ value: existing }] = await db.select({ value: count() }).from(helpCategoriesTable);
-  if (existing > 0) return;
+  const [{ value: catCount }] = await db.select({ value: count() }).from(helpCategoriesTable);
+  const [{ value: faqCount }] = await db.select({ value: count() }).from(faqItemsTable);
+  if (catCount > 0 && faqCount > 0) return;
 
   logger.info("Seeding help center content...");
+
+  if (faqCount === 0) {
+    for (const faq of FAQ_ITEMS) {
+      await db.insert(faqItemsTable).values({
+        id: randomUUID(),
+        question: faq.question,
+        answer: faq.answer,
+        category: faq.category,
+        sortOrder: faq.sortOrder,
+        status: "published",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).onConflictDoNothing();
+    }
+  }
+
+  if (catCount > 0) return;
 
   const catIdMap: Record<string, string> = {};
   for (const cat of HELP_CATEGORIES) {
@@ -329,6 +394,8 @@ async function seedHelpContent() {
 export async function runStartupSeed() {
   try {
     await migrateSsoTable();
+    await migrateFaqTable();
+    await migrateMicrosoftSsoColumns();
     await migrateBreakGlassColumns();
     await migrateAuditEnum();
     await seedDomainControls();

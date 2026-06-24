@@ -1,0 +1,376 @@
+Revise the Microsoft SSO implementation.
+
+The current SSO Settings page is using the wrong architecture. It asks administrators to enter a separate Application Client ID, Tenant ID, Client Secret, and email domain for each organization.
+
+I do not want each organization to create or configure its own Entra app registration.
+
+Control HUB must use the single Control HUB-owned multi-tenant Microsoft Entra app registration whose credentials are already stored in Replit production secrets.
+
+====================================================================
+1. REMOVE THE SSO SETTINGS PAGE
+====================================================================
+
+Remove “SSO Settings” from the application sidebar.
+
+Remove the organization-facing SSO configuration form that asks for:
+
+- Application Client ID
+- Directory Tenant ID
+- Client Secret
+- Email Domain
+
+Remove or disable the route:
+
+/sso-settings
+
+Do not require organization administrators to configure Microsoft SSO.
+
+Do not store Microsoft client secrets in the database.
+
+Do not display or accept Microsoft client secrets through the Control HUB UI.
+
+Microsoft SSO is a global platform authentication provider, not a separate app registration configured by each Control HUB organization.
+
+====================================================================
+2. USE THE GLOBAL REPLIT SECRETS
+====================================================================
+
+Use these production environment variables exclusively:
+
+MICROSOFT_SSO_CLIENT_ID
+MICROSOFT_SSO_CLIENT_SECRET
+MICROSOFT_SSO_REDIRECT_URI
+MICROSOFT_SSO_AUTHORITY
+APP_BASE_URL
+
+Expected production values:
+
+MICROSOFT_SSO_REDIRECT_URI=https://controlhub.carmetechnology.com/api/auth/microsoft/callback
+
+MICROSOFT_SSO_AUTHORITY=https://login.microsoftonline.com/organizations/v2.0
+
+APP_BASE_URL=https://controlhub.carmetechnology.com
+
+Do not fall back to a replit.dev preview URL in production.
+
+Do not read SSO credentials from organization database records.
+
+Do not expose MICROSOFT_SSO_CLIENT_SECRET to the browser, API responses, logs, or UI.
+
+====================================================================
+3. USE ONE CANONICAL CALLBACK ROUTE
+====================================================================
+
+Inspect the current implementation and identify the actual callback route.
+
+Use one canonical production route:
+
+/api/auth/microsoft/callback
+
+The complete production redirect URI must be:
+
+https://controlhub.carmetechnology.com/api/auth/microsoft/callback
+
+Update all of the following to use this same URI:
+
+- Microsoft authorization request
+- OAuth callback handler
+- environment variable validation
+- production configuration
+- login flow
+- error handling
+
+Do not use:
+
+- temporary replit.dev URLs in production
+- /api/auth/sso/callback in one location and /api/auth/microsoft/callback in another
+- dynamically generated production callback URLs
+
+If development testing requires a Replit preview callback, support it through a separate development environment variable:
+
+MICROSOFT_SSO_DEV_REDIRECT_URI
+
+Do not display the development callback to production users.
+
+====================================================================
+4. GLOBAL MICROSOFT SIGN-IN FLOW
+====================================================================
+
+The normal login page should show:
+
+- Email
+- Password
+- Sign In
+- Sign in with Microsoft
+- Forgot Password
+
+When the user clicks Sign in with Microsoft:
+
+1. Create secure state, nonce, and PKCE values.
+2. Store them securely server-side.
+3. Redirect to Microsoft using the global multi-tenant app registration.
+4. Use the organizations authority.
+5. Request only the required sign-in scopes:
+   - openid
+   - profile
+   - email
+6. Microsoft authenticates the user.
+7. Microsoft redirects to the canonical production callback.
+8. Validate:
+   - state
+   - nonce
+   - issuer
+   - audience
+   - expiration
+   - token signature
+9. Locate the existing Control HUB user.
+10. Create a secure Control HUB session.
+
+Microsoft authentication only proves identity.
+
+Control HUB remains authoritative for:
+
+- whether the user is allowed access
+- user status
+- organization assignments
+- roles
+- permissions
+- assessor read-only restrictions
+- Global Admin access
+
+====================================================================
+5. EXISTING USER MATCHING
+====================================================================
+
+Do not automatically create an authorized user after Microsoft login.
+
+The user must already exist in Control HUB.
+
+First Microsoft sign-in:
+
+A. If the Control HUB user already has a stored Microsoft tenant ID and object ID:
+- match using microsoft_tenant_id + microsoft_object_id
+
+B. If the account is not linked yet:
+- use normalized email only to find an existing active Control HUB user
+- ensure exactly one user matches
+- link the Microsoft tenant ID and Microsoft object ID
+- preserve the user’s existing password
+- preserve existing role
+- preserve existing organization memberships
+- preserve existing MFA configuration
+
+C. If no existing user matches:
+- deny access
+- show:
+  “Access has not been provisioned. Contact your Control HUB administrator.”
+
+After initial linking, use the immutable Microsoft claims:
+
+- tid
+- oid
+
+Do not use email, UPN, or email domain as the permanent identity key.
+
+====================================================================
+6. REMOVE EMAIL-DOMAIN AUTO-DETECTION DEPENDENCY
+====================================================================
+
+Do not require an organization administrator to configure an email domain before Microsoft login works.
+
+The Sign in with Microsoft button should be globally available when Microsoft SSO is configured.
+
+The user may enter their Microsoft account directly through Microsoft’s sign-in page.
+
+If tenant restrictions are needed later, add a server-side organization tenant allowlist using Microsoft tenant IDs.
+
+Do not use email domain alone as the security boundary.
+
+====================================================================
+7. OPTIONAL GLOBAL-ADMIN DIAGNOSTICS ONLY
+====================================================================
+
+I do not want an SSO Settings section in the sidebar.
+
+If diagnostics are needed, place a small read-only Microsoft SSO status card under:
+
+Security Center > Authentication
+
+Make it visible to Global Admin only.
+
+Show:
+
+- Microsoft SSO: Configured / Not Configured
+- Client ID: masked
+- Authority
+- Production Redirect URI
+- Last successful SSO login
+- Last SSO error
+- Test Configuration button
+
+Do not show:
+
+- client secret
+- editable client ID
+- editable tenant ID
+- editable email domain
+- editable secret fields
+
+The actual configuration remains in Replit production secrets.
+
+====================================================================
+8. ENVIRONMENT VALIDATION
+====================================================================
+
+At application startup, validate:
+
+- MICROSOFT_SSO_CLIENT_ID exists
+- MICROSOFT_SSO_CLIENT_SECRET exists
+- MICROSOFT_SSO_REDIRECT_URI exists
+- MICROSOFT_SSO_AUTHORITY exists
+- APP_BASE_URL exists
+
+If configuration is incomplete:
+
+- hide or disable Sign in with Microsoft
+- keep local username/password login working
+- show an admin-only configuration warning
+- do not show secrets
+- do not break the entire login page
+
+====================================================================
+9. KEEP LOCAL LOGIN
+====================================================================
+
+Do not remove local username/password login.
+
+Do not change existing usernames.
+
+Do not change existing password hashes.
+
+Do not reset existing passwords.
+
+Users may continue logging in locally.
+
+The local break-glass account:
+
+sysadmin@controlhub.com
+
+must remain:
+
+- local login only
+- Microsoft SSO disabled
+- not linkable to Microsoft
+- Global Admin
+- MFA exempt according to its existing explicit exemption
+
+If Microsoft linking is attempted for this account, reject it and write an audit event.
+
+====================================================================
+10. USER MANAGEMENT DISPLAY
+====================================================================
+
+On Users & Roles, add authentication information:
+
+- Local Login Enabled
+- Microsoft SSO Linked
+- Microsoft Tenant
+- Last SSO Login
+
+Admin actions:
+
+- Enable SSO for User
+- Disable SSO for User
+- Unlink Microsoft Identity
+- Revoke Sessions
+
+Do not allow users to change their own organizations or roles through Microsoft sign-in.
+
+====================================================================
+11. AUDIT EVENTS
+====================================================================
+
+Log:
+
+- Microsoft SSO started
+- Microsoft SSO succeeded
+- Microsoft SSO failed
+- Microsoft identity linked
+- Microsoft identity unlinked
+- unknown Microsoft user denied
+- inactive user denied
+- user without organization denied
+- SSO-disabled account denied
+- break-glass account linking denied
+- session created
+- session revoked
+
+Do not log:
+
+- client secret
+- authorization code
+- access token
+- ID token
+- PKCE verifier
+- raw state
+- raw nonce
+
+====================================================================
+12. ERROR HANDLING
+====================================================================
+
+Display Microsoft sign-in errors on the login page near the Microsoft button.
+
+User-facing errors:
+
+- Microsoft sign-in was cancelled.
+- Access has not been provisioned.
+- Your Control HUB account is inactive.
+- Your account has not been assigned to an organization.
+- Microsoft SSO is disabled for this account.
+- This Microsoft identity is already linked to another account.
+- Microsoft sign-in is temporarily unavailable.
+
+Do not expose stack traces, OAuth tokens, client secrets, or internal database errors.
+
+====================================================================
+13. ACCEPTANCE TESTS
+====================================================================
+
+Test A:
+Open production login page.
+Local login and Sign in with Microsoft are available.
+
+Test B:
+Click Sign in with Microsoft.
+Microsoft uses the Control HUB multi-tenant app registration.
+No organization-specific configuration page is required.
+
+Test C:
+Microsoft redirects to:
+
+https://controlhub.carmetechnology.com/api/auth/microsoft/callback
+
+Test D:
+Existing Control HUB user signs in with Microsoft.
+The account is linked and existing organization/role access is retained.
+
+Test E:
+Unknown Microsoft user signs in.
+Access is denied.
+No Control HUB user is automatically created.
+
+Test F:
+Existing user can still use their current local password.
+
+Test G:
+sysadmin@controlhub.com cannot link to Microsoft and can still use local login.
+
+Test H:
+SSO Settings no longer appears in the sidebar.
+
+Test I:
+No Microsoft client secret exists in organization records or UI fields.
+
+Test J:
+Security Center shows only a read-only global SSO status to Global Admins.

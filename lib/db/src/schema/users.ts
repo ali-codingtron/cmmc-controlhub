@@ -55,6 +55,10 @@ export const usersTable = pgTable("users", {
   ssoDisabled: boolean("sso_disabled").notNull().default(false),
   authProvider: varchar("auth_provider", { length: 50 }).notNull().default("local"),
   globalRole: varchar("global_role", { length: 50 }),
+  microsoftTenantId: text("microsoft_tenant_id"),
+  microsoftObjectId: text("microsoft_object_id"),
+  microsoftLinkedAt: timestamp("microsoft_linked_at"),
+  lastSsoLoginAt: timestamp("last_sso_login_at"),
 });
 
 export const securitySettingsTable = pgTable("security_settings", {

@@ -390,9 +390,6 @@ export function Sidebar() {
 
           <NavLink href="/help" icon={HelpCircle} label="Help & User Guide" />
           <NavLink href="/settings" icon={Settings} label="Settings" />
-          {(user?.role === "admin" || user?.role === "compliance_manager") && (
-            <NavLink href="/sso-settings" icon={ShieldCheck} label="SSO Settings" />
-          )}
 
           {!isDemoMode && isAdmin && (
             <>

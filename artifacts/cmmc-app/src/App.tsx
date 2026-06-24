@@ -74,7 +74,6 @@ import HelpArticle from "@/pages/help-article";
 import HelpFaq from "@/pages/help-faq";
 import HelpVideos from "@/pages/help-videos";
 import HelpAdmin from "@/pages/help-admin";
-import SsoSettings from "@/pages/sso-settings";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -209,7 +208,6 @@ function AppRoutes() {
               <Route path="/help/videos" component={HelpVideos} />
               <Route path="/help/admin" component={HelpAdmin} />
               <Route path="/help" component={Help} />
-              <Route path="/sso-settings" component={SsoSettings} />
               <Route component={NotFound} />
             </Switch>
           </Guard>
