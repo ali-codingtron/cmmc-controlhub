@@ -1362,15 +1362,20 @@ router.get("/auth/microsoft/initiate", async (req, res) => {
 
   const authUrl = buildAuthorizationUrl(cfg.authority, cfg.clientId, cfg.redirectUri, state, codeChallenge);
 
-  await db.insert(auditLogsTable).values({
-    id: randomUUID(),
-    action: "microsoft_sso_started" as any,
-    entityType: "user",
-    entityLabel: "microsoft_sso",
-    ipAddress: ip,
-    userAgent: ua,
-    timestamp: new Date(),
-  });
+  try {
+    await db.insert(auditLogsTable).values({
+      id: randomUUID(),
+      action: "microsoft_sso_started" as any,
+      entityType: "user",
+      entityId: "anonymous",
+      entityLabel: "microsoft_sso",
+      ipAddress: ip,
+      userAgent: ua,
+      timestamp: new Date(),
+    });
+  } catch (auditErr) {
+    logger.warn({ err: auditErr }, "SSO initiate audit log failed (non-blocking)");
+  }
 
   res.json({ authUrl });
 });
@@ -1428,6 +1433,7 @@ router.get("/auth/microsoft/callback", async (req, res) => {
       id: randomUUID(),
       action: "microsoft_sso_failed" as any,
       entityType: "user",
+      entityId: "anonymous",
       entityLabel: "microsoft_sso",
       ipAddress: ip,
       userAgent: ua,
@@ -1454,6 +1460,7 @@ router.get("/auth/microsoft/callback", async (req, res) => {
       id: randomUUID(),
       action: "microsoft_sso_failed" as any,
       entityType: "user",
+      entityId: userInfo.email,
       entityLabel: userInfo.email,
       ipAddress: ip,
       userAgent: ua,
@@ -1499,6 +1506,7 @@ router.get("/auth/microsoft/callback", async (req, res) => {
       id: randomUUID(),
       action: "microsoft_user_denied" as any,
       entityType: "user",
+      entityId: userInfo.email,
       entityLabel: userInfo.email,
       ipAddress: ip,
       userAgent: ua,
