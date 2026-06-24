@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
-import { Eye, EyeOff, Loader2, Lock, Network, ShieldCheck, KeyRound, Copy, Check, ArrowLeft, QrCode, Smartphone } from "lucide-react";
+import { Eye, EyeOff, Loader2, Lock, Network, ShieldCheck, KeyRound, Copy, Check, ArrowLeft, QrCode, Smartphone, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import QRCode from "qrcode";
 import { mfaVerify, mfaSetupStart, mfaSetupVerify, mfaRecoveryCode } from "@workspace/api-client-react";
@@ -491,6 +491,7 @@ export default function Login() {
   const [ssoMode, setSsoMode] = useState(false);
   const [ssoEmail, setSsoEmail] = useState("");
   const [ssoLoading, setSsoLoading] = useState(false);
+  const [ssoError, setSsoError] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -506,8 +507,8 @@ export default function Login() {
     }
 
     // Handle SSO error codes from callback
-    const ssoError = params.get("sso_error");
-    if (ssoError) {
+    const ssoErrorParam = params.get("sso_error");
+    if (ssoErrorParam) {
       window.history.replaceState({}, "", window.location.pathname);
       const msgs: Record<string, string> = {
         invalid_state: "SSO session expired. Please try again.",
@@ -517,8 +518,11 @@ export default function Login() {
         missing_params: "Incomplete SSO callback. Please try again.",
         account_inactive: "Your account is inactive. Contact your administrator.",
         sso_disabled: "SSO login is not permitted for your account.",
+        token_tenant_mismatch: "Microsoft tenant does not match the configured SSO. Contact your administrator.",
+        token_audience_mismatch: "SSO token audience mismatch. Contact your administrator.",
+        token_issuer_mismatch: "SSO token issuer mismatch. Contact your administrator.",
       };
-      setError(msgs[ssoError] ?? "SSO authentication failed. Please try again.");
+      setError(msgs[ssoErrorParam] ?? "SSO authentication failed. Please try again.");
     }
 
     emailRef.current?.focus();
@@ -530,17 +534,17 @@ export default function Login() {
     const email = ssoEmail.trim().toLowerCase();
     if (!email) return;
     setSsoLoading(true);
-    setError("");
+    setSsoError("");
     try {
       const res = await fetch(`/api/auth/sso/initiate?email=${encodeURIComponent(email)}`);
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "No SSO configured for this domain.");
+        setSsoError(data.error ?? "No SSO configured for this domain.");
         return;
       }
       window.location.href = data.authUrl;
     } catch {
-      setError("Failed to initiate SSO. Please try again.");
+      setSsoError("Failed to initiate SSO. Please try again.");
     } finally {
       setSsoLoading(false);
     }
@@ -760,13 +764,22 @@ export default function Login() {
                 type="email"
                 placeholder="name@company.com"
                 value={ssoEmail}
-                onChange={(e) => setSsoEmail(e.target.value)}
+                onChange={(e) => { setSsoEmail(e.target.value); setSsoError(""); }}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSsoSubmit(); } }}
                 autoFocus
                 className="h-10"
                 disabled={ssoLoading}
               />
             </div>
+            {ssoError && (
+              <div
+                role="alert"
+                className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
+              >
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{ssoError}</span>
+              </div>
+            )}
             <Button
               type="button"
               variant="outline"
@@ -783,7 +796,7 @@ export default function Login() {
             <button
               type="button"
               className="w-full text-center text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-1"
-              onClick={() => { setSsoMode(false); setSsoEmail(""); setError(""); }}
+              onClick={() => { setSsoMode(false); setSsoEmail(""); setSsoError(""); }}
             >
               <ArrowLeft className="h-3 w-3" />Back to password login
             </button>
@@ -793,7 +806,13 @@ export default function Login() {
             type="button"
             variant="outline"
             className="w-full h-10 gap-2.5"
-            onClick={() => { setSsoMode(true); setError(""); }}
+            onClick={() => {
+              const mainEmail = form.getValues("email");
+              setSsoMode(true);
+              setError("");
+              setSsoError("");
+              if (mainEmail) setSsoEmail(mainEmail);
+            }}
           >
             <MicrosoftIcon />
             Sign in with Microsoft
