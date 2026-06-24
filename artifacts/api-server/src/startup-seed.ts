@@ -10,6 +10,7 @@ import {
   documentTemplatesTable,
   checklistItemsTable,
   organizationsTable,
+  organizationUsersTable,
   securitySettingsTable,
   helpCategoriesTable,
   helpArticlesTable,
@@ -115,6 +116,58 @@ async function seedInitialAdmin() {
   }).onConflictDoNothing();
 
   logger.info("Initial admin created: admin@example.com / Admin1234! — change this password immediately");
+}
+
+async function seedBreakGlassAccount() {
+  const BREAK_GLASS_EMAIL = "sysadmin@controlhub.com";
+
+  const [existing] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.email, BREAK_GLASS_EMAIL))
+    .limit(1);
+
+  let userId: string;
+
+  if (!existing) {
+    userId = randomUUID();
+    const hash = await bcrypt.hash("Admin1234!", 10);
+    await db.insert(usersTable).values({
+      id: userId,
+      name: "System Administrator (Break Glass)",
+      email: BREAK_GLASS_EMAIL,
+      passwordHash: hash,
+      role: "admin",
+      status: "active",
+      title: "System Administrator",
+      department: "Information Technology",
+      isActive: true,
+      isBreakGlass: true,
+      mfaExempt: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).onConflictDoNothing();
+    logger.info({ email: BREAK_GLASS_EMAIL }, "Break-glass account created — change the password immediately");
+  } else {
+    userId = existing.id;
+  }
+
+  // Ensure membership in every organization
+  const orgs = await db.select({ id: organizationsTable.id }).from(organizationsTable);
+  for (const org of orgs) {
+    await db.insert(organizationUsersTable).values({
+      id: randomUUID(),
+      organizationId: org.id,
+      userId,
+      role: "org_admin",
+      status: "active",
+      joinedAt: new Date(),
+    }).onConflictDoNothing();
+  }
+
+  if (orgs.length > 0) {
+    logger.info({ email: BREAK_GLASS_EMAIL, orgs: orgs.length }, "Break-glass account org memberships ensured");
+  }
 }
 
 async function seedDocumentTemplates() {
@@ -400,6 +453,7 @@ export async function runStartupSeed() {
     await migrateAuditEnum();
     await seedDomainControls();
     await seedInitialAdmin();
+    await seedBreakGlassAccount();
     await seedDocumentTemplates();
     await seedMonitoringItems();
     await seedControlConfigure();
