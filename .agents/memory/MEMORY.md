@@ -2,3 +2,5 @@
 - [Demo experience](demo-experience.md) — Public /demo landing page, demo login endpoint, seed script, read-only mode, guided tour.
 - [Doc Template Library](doc-template-library.md) — 67-template CMMC L2 library; ZIP import, satellite tables, generate wizard, DOCX/PDF export, control detail tab.
 - [TOTP MFA implementation](totp-mfa.md) — Full MFA flow: otplib v13 functional API, encrypted secrets, state tokens, lockout, enforcement policy, Security Center.
+- [Help Center module](help-center.md) — 14 categories, 22 articles, 23 FAQ items; custom MarkdownContent renderer; admin editor; seeded via seedHelpContent() at startup.
+- [Break-glass account](break-glass.md) — sysadmin@controlhub.com; is_break_glass + mfa_exempt columns; break_glass_sessions table; 4h JWT; single-session revoke; idle 15m/absolute 4h enforcement in requireAuth.

@@ -48,6 +48,8 @@ router.get("/users", requireAuth, async (req, res) => {
       mfaResetRequired: usersTable.mfaResetRequired,
       lockedUntil: usersTable.lockedUntil,
       failedLoginCount: usersTable.failedLoginCount,
+      isBreakGlass: usersTable.isBreakGlass,
+      mfaExempt: usersTable.mfaExempt,
       invitationExpiresAt: userInvitationsTable.expiresAt,
     })
     .from(usersTable)
@@ -158,6 +160,11 @@ router.patch("/users/:id", requireAuth, requireRole("admin"), async (req, res) =
     return;
   }
 
+  if (existing.isBreakGlass) {
+    res.status(403).json({ error: "The break-glass emergency account cannot be modified through the UI. Use the CLI script to rotate credentials." });
+    return;
+  }
+
   // If email is changing, check for conflicts
   if (email && email.toLowerCase() !== existing.email) {
     const conflict = await db
@@ -211,13 +218,18 @@ router.patch("/users/:id", requireAuth, requireRole("admin"), async (req, res) =
 // ── Delete user ──────────────────────────────────────────────────────────────
 router.delete("/users/:id", requireAuth, requireRole("admin"), async (req, res) => {
   const [existing] = await db
-    .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email })
+    .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, isBreakGlass: usersTable.isBreakGlass })
     .from(usersTable)
     .where(eq(usersTable.id, req.params.id))
     .limit(1);
 
   if (!existing) {
     res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  if (existing.isBreakGlass) {
+    res.status(403).json({ error: "The break-glass emergency account cannot be deleted. Deactivate it via the CLI if needed." });
     return;
   }
 
@@ -272,13 +284,18 @@ router.delete("/users/:id", requireAuth, requireRole("admin"), async (req, res) 
 // ── Deactivate user ──────────────────────────────────────────────────────────
 router.post("/users/:id/deactivate", requireAuth, requireRole("admin"), async (req, res) => {
   const [existing] = await db
-    .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email })
+    .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, isBreakGlass: usersTable.isBreakGlass })
     .from(usersTable)
     .where(eq(usersTable.id, req.params.id))
     .limit(1);
 
   if (!existing) {
     res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  if (existing.isBreakGlass) {
+    res.status(403).json({ error: "The break-glass emergency account cannot be deactivated through the UI. Use the CLI script to manage it." });
     return;
   }
 

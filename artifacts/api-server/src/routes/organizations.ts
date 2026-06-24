@@ -10,7 +10,7 @@ import {
   poamsTable,
   controlsTable,
 } from "@workspace/db";
-import { eq, and, count, or, desc } from "drizzle-orm";
+import { eq, and, count, or, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { randomUUID } from "crypto";
 
@@ -26,6 +26,24 @@ function requireAdmin(req: any, res: any, next: any) {
 
 router.get("/organizations/my-orgs", requireAuth, async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
+
+  if (req.isBreakGlass) {
+    const allOrgs = await db
+      .select({
+        id: organizationsTable.id,
+        name: organizationsTable.name,
+        shortName: organizationsTable.shortName,
+        cmmcTargetLevel: organizationsTable.cmmcTargetLevel,
+        industry: organizationsTable.industry,
+        isActive: organizationsTable.isActive,
+        role: sql<string>`'admin'`,
+      })
+      .from(organizationsTable)
+      .where(eq(organizationsTable.isActive, true))
+      .orderBy(organizationsTable.name);
+    res.json(allOrgs);
+    return;
+  }
 
   const memberships = await db
     .select({

@@ -50,6 +50,8 @@ export const usersTable = pgTable("users", {
   mfaResetRequired: boolean("mfa_reset_required").notNull().default(false),
   failedLoginCount: integer("failed_login_count").notNull().default(0),
   lockedUntil: timestamp("locked_until"),
+  isBreakGlass: boolean("is_break_glass").notNull().default(false),
+  mfaExempt: boolean("mfa_exempt").notNull().default(false),
 });
 
 export const securitySettingsTable = pgTable("security_settings", {
@@ -58,6 +60,18 @@ export const securitySettingsTable = pgTable("security_settings", {
   maxFailedLoginAttempts: integer("max_failed_login_attempts").notNull().default(5),
   lockoutDurationMinutes: integer("lockout_duration_minutes").notNull().default(15),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const breakGlassSessionsTable = pgTable("break_glass_sessions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  lastActiveAt: timestamp("last_active_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
 });
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({
@@ -71,3 +85,4 @@ export const insertUserSchema = createInsertSchema(usersTable).omit({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof usersTable.$inferSelect;
 export type SecuritySettings = typeof securitySettingsTable.$inferSelect;
+export type BreakGlassSession = typeof breakGlassSessionsTable.$inferSelect;

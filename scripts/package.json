@@ -11,6 +11,7 @@
     "seed-demo": "tsx ./src/seed-demo.ts",
     "demo:video": "tsx ./src/generate-demo-video.ts",
     "import-doc-templates": "tsx ./src/import-doc-template-library.ts",
+    "create:system-admin": "tsx ./src/create-system-admin.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

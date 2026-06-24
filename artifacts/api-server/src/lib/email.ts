@@ -267,3 +267,39 @@ export async function sendTestEmail(opts: {
 
   logger.info({ toEmail }, "Test email sent");
 }
+
+export async function sendBreakGlassLoginAlert(opts: {
+  email: string;
+  name: string;
+  ipAddress: string;
+  userAgent: string;
+  timestamp: string;
+}): Promise<void> {
+  const { email, name, ipAddress, userAgent, timestamp } = opts;
+  const alertEmail = process.env.BREAK_GLASS_ALERT_EMAIL || email;
+  const dateStr = new Date(timestamp).toUTCString();
+
+  const html = emailShell(`
+    <h2 style="color:#b91c1c;margin-bottom:8px;">⚠️ Break-Glass Account Login Alert</h2>
+    <p style="color:#374151;margin-bottom:8px;">Hi ${escapeHtml(name)},</p>
+    <p style="color:#374151;margin-bottom:16px;">The Control HUB break-glass emergency account has been accessed. If this was not you, contact your security team immediately and revoke the session.</p>
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:12px 16px;margin-bottom:24px;">
+      <table style="width:100%;font-size:13px;color:#374151;">
+        <tr><td style="font-weight:600;padding:3px 0;width:100px;">Account</td><td>${escapeHtml(email)}</td></tr>
+        <tr><td style="font-weight:600;padding:3px 0;">Time</td><td>${escapeHtml(dateStr)}</td></tr>
+        <tr><td style="font-weight:600;padding:3px 0;">IP Address</td><td>${escapeHtml(ipAddress)}</td></tr>
+        <tr><td style="font-weight:600;padding:3px 0;">User Agent</td><td style="word-break:break-all;">${escapeHtml(userAgent.substring(0, 200))}</td></tr>
+      </table>
+    </div>
+    <p style="color:#6b7280;font-size:13px;">This session will automatically expire after 4 hours absolute or 15 minutes of inactivity. All actions taken by this account are recorded in the audit trail.</p>
+  `);
+
+  await sendEmail({
+    to: alertEmail,
+    subject: "⚠️ Control HUB — Break-Glass Account Login",
+    html,
+    text: `BREAK-GLASS LOGIN ALERT\n\nAccount: ${email}\nTime: ${dateStr}\nIP: ${ipAddress}\nUser Agent: ${userAgent}\n\nIf this was not authorized, contact your security team immediately.`,
+  });
+
+  logger.warn({ email, ipAddress }, "Break-glass login alert sent");
+}

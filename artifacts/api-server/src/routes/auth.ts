@@ -1,8 +1,8 @@
 import { Router } from "express";
 import bcrypt from 'bcryptjs';
-import { db, usersTable, auditLogsTable, organizationUsersTable, securitySettingsTable, passwordResetTokensTable } from "@workspace/db";
-import { eq, sql, and } from "drizzle-orm";
-import { signToken, requireAuth, requireRole } from "../lib/auth";
+import { db, usersTable, auditLogsTable, organizationUsersTable, securitySettingsTable, passwordResetTokensTable, breakGlassSessionsTable } from "@workspace/db";
+import { eq, sql, and, isNull } from "drizzle-orm";
+import { signToken, requireAuth, requireRole, hashJwtToken } from "../lib/auth";
 import {
   encryptSecret,
   decryptSecret,
@@ -17,7 +17,7 @@ import {
 import { signMfaStateToken, verifyMfaStateToken } from "../lib/mfa-jwt";
 import { randomUUID } from "crypto";
 import { logger } from "../lib/logger";
-import { sendPasswordResetEmail, getAppBaseUrl } from "../lib/email";
+import { sendPasswordResetEmail, getAppBaseUrl, sendBreakGlassLoginAlert } from "../lib/email";
 import {
   generateResetToken,
   hashResetToken,
@@ -152,7 +152,7 @@ router.post("/auth/login", async (req, res) => {
 
   const isDemo = user.email === "demo@controlhub.com";
 
-  if (!isDemo) {
+  if (!isDemo && !user.mfaExempt) {
     const settings = await getSecuritySettings();
     const mfaEnforced = checkMfaRequired(user.role, user.mfaRequired, settings.mfaEnforcementMode);
 
@@ -167,7 +167,8 @@ router.post("/auth/login", async (req, res) => {
     }
   }
 
-  await db.update(usersTable).set({ lastLoginAt: new Date() }).where(eq(usersTable.id, user.id));
+  const loginNow = new Date();
+  await db.update(usersTable).set({ lastLoginAt: loginNow }).where(eq(usersTable.id, user.id));
 
   await db.insert(auditLogsTable).values({
     id: randomUUID(),
@@ -179,10 +180,58 @@ router.post("/auth/login", async (req, res) => {
     entityLabel: user.email,
     ipAddress: req.ip,
     userAgent: req.headers["user-agent"],
-    timestamp: new Date(),
+    timestamp: loginNow,
   });
 
-  const token = signToken({ id: user.id, name: user.name, email: user.email, role: user.role });
+  const tokenExpiry = user.isBreakGlass ? "4h" : "24h";
+  const token = signToken({ id: user.id, name: user.name, email: user.email, role: user.role }, tokenExpiry);
+
+  if (user.isBreakGlass) {
+    await db
+      .update(breakGlassSessionsTable)
+      .set({ revokedAt: loginNow })
+      .where(and(
+        eq(breakGlassSessionsTable.userId, user.id),
+        isNull(breakGlassSessionsTable.revokedAt),
+      ));
+
+    await db.insert(breakGlassSessionsTable).values({
+      id: randomUUID(),
+      userId: user.id,
+      tokenHash: hashJwtToken(token),
+      ipAddress: req.ip ?? null,
+      userAgent: req.headers["user-agent"] ?? null,
+      createdAt: loginNow,
+      lastActiveAt: loginNow,
+      expiresAt: new Date(loginNow.getTime() + 4 * 60 * 60 * 1000),
+    });
+
+    await db.insert(auditLogsTable).values({
+      id: randomUUID(),
+      userId: user.id,
+      userName: user.name,
+      action: "break_glass_login" as any,
+      entityType: "user",
+      entityId: user.id,
+      entityLabel: user.email,
+      ipAddress: req.ip,
+      userAgent: req.headers["user-agent"],
+      newValue: { ipAddress: req.ip, userAgent: req.headers["user-agent"] },
+      timestamp: loginNow,
+    });
+
+    sendBreakGlassLoginAlert({
+      email: user.email,
+      name: user.name,
+      ipAddress: req.ip ?? "unknown",
+      userAgent: req.headers["user-agent"] ?? "unknown",
+      timestamp: loginNow.toISOString(),
+    }).catch((err) => logger.warn({ err }, "Failed to send break-glass login alert"));
+
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role }, isBreakGlass: true });
+    return;
+  }
+
   res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
 });
 

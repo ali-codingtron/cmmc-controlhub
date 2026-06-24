@@ -82,6 +82,7 @@ import {
   X,
   Loader2,
   ShieldCheck,
+  ShieldAlert,
   ChevronsUpDown,
   Mail,
   MailCheck,
@@ -1576,11 +1577,16 @@ export default function Users() {
                     className={cn(!u.isActive && !isInvited(u) && "opacity-50")}
                   >
                     <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         {u.role === "admin" && (
                           <ShieldCheck className="h-3.5 w-3.5 text-blue-500 shrink-0" />
                         )}
                         {u.name}
+                        {(u as any).isBreakGlass && (
+                          <Badge variant="outline" className="border-red-500 text-red-700 gap-1 text-xs bg-red-50 shrink-0">
+                            <ShieldAlert className="h-3 w-3" /> Break-Glass
+                          </Badge>
+                        )}
                         {u.id === me?.id && (
                           <Badge variant="secondary" className="text-[10px] px-1 py-0">
                             You
@@ -1657,7 +1663,12 @@ export default function Users() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            {isInvited(u) ? (
+                            {(u as any).isBreakGlass ? (
+                              <DropdownMenuItem disabled className="text-xs text-muted-foreground gap-2">
+                                <ShieldAlert className="h-4 w-4 text-red-500" />
+                                Break-glass account — protected
+                              </DropdownMenuItem>
+                            ) : isInvited(u) ? (
                               <>
                                 <DropdownMenuItem
                                   onClick={() => handleResendInvite(u)}

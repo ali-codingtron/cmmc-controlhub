@@ -1,9 +1,11 @@
 import jwt from "jsonwebtoken";
 import { Request, Response, NextFunction } from "express";
-import { db, usersTable } from "@workspace/db";
+import { db, usersTable, breakGlassSessionsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { createHash } from "crypto";
 
 const JWT_SECRET = process.env.SESSION_SECRET ?? "cmmc-dev-secret-change-in-prod";
+const BREAK_GLASS_IDLE_MINUTES = 15;
 
 export interface AuthUser {
   id: string;
@@ -12,8 +14,8 @@ export interface AuthUser {
   role: string;
 }
 
-export function signToken(user: AuthUser): string {
-  return jwt.sign(user, JWT_SECRET, { expiresIn: "24h" });
+export function signToken(user: AuthUser, expiresIn: string = "24h"): string {
+  return jwt.sign(user, JWT_SECRET, { expiresIn });
 }
 
 export function verifyToken(token: string): AuthUser | null {
@@ -24,11 +26,16 @@ export function verifyToken(token: string): AuthUser | null {
   }
 }
 
+export function hashJwtToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
 declare global {
   namespace Express {
     interface Request {
       authUser?: AuthUser;
       orgId?: string;
+      isBreakGlass?: boolean;
     }
   }
 }
@@ -54,6 +61,40 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     res.status(401).json({ error: "User not found or inactive" });
     return;
   }
+
+  if (dbUser[0].isBreakGlass) {
+    const tokenHash = hashJwtToken(token);
+    const [session] = await db
+      .select()
+      .from(breakGlassSessionsTable)
+      .where(eq(breakGlassSessionsTable.tokenHash, tokenHash))
+      .limit(1);
+
+    if (!session || session.revokedAt) {
+      res.status(401).json({ error: "Break-glass session has been revoked" });
+      return;
+    }
+
+    const now = new Date();
+    if (session.expiresAt < now) {
+      res.status(401).json({ error: "Break-glass session has expired" });
+      return;
+    }
+
+    const idleLimit = new Date(session.lastActiveAt.getTime() + BREAK_GLASS_IDLE_MINUTES * 60 * 1000);
+    if (now > idleLimit) {
+      res.status(401).json({ error: "Break-glass session timed out due to inactivity" });
+      return;
+    }
+
+    db.update(breakGlassSessionsTable)
+      .set({ lastActiveAt: now })
+      .where(eq(breakGlassSessionsTable.id, session.id))
+      .catch(() => {});
+
+    req.isBreakGlass = true;
+  }
+
   req.authUser = user;
   next();
 }

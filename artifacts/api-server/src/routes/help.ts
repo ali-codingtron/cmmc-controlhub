@@ -40,11 +40,12 @@ router.get("/help/articles", requireAuth, async (req, res) => {
 
   const conditions: ReturnType<typeof eq>[] = [];
 
-  if (status) {
+  if (status && status !== "all") {
     conditions.push(eq(helpArticlesTable.status, status as "published" | "draft" | "archived"));
-  } else {
+  } else if (!status) {
     conditions.push(eq(helpArticlesTable.status, "published"));
   }
+  // status=all → no status filter (admin view)
 
   if (mod) {
     conditions.push(eq(helpArticlesTable.module, mod));
