@@ -1,11 +1,10 @@
-import { randomUUID, randomBytes } from "crypto";
+import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { db, usersTable, auditLogsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 
-const BREAK_GLASS_EMAIL = process.env.CONTROL_HUB_SYSADMIN_EMAIL ?? "sysadmin@controlhub.com";
+const BREAK_GLASS_EMAIL = (process.env.CONTROL_HUB_SYSADMIN_EMAIL ?? "sysadmin@controlhub.com").toLowerCase();
 const BREAK_GLASS_NAME = "System Administrator (Break-Glass)";
-const INITIAL_PASSWORD_ENV = process.env.CONTROL_HUB_SYSADMIN_INITIAL_PASSWORD;
 const IS_ROTATE = process.argv.includes("--rotate-password");
 
 async function main() {
@@ -17,16 +16,27 @@ async function main() {
     process.stdout.write("Mode: --rotate-password (force credential rotation)\n\n");
   }
 
+  // Password MUST be provided via env var — no generation, no plaintext output
+  const rawPassword = process.env.CONTROL_HUB_SYSADMIN_INITIAL_PASSWORD;
+  if (!rawPassword) {
+    process.stderr.write(
+      "[ERROR] CONTROL_HUB_SYSADMIN_INITIAL_PASSWORD environment variable is required.\n" +
+      "        Generate a strong password out-of-band and set the variable before running:\n\n" +
+      "          export CONTROL_HUB_SYSADMIN_INITIAL_PASSWORD='<your-secure-password>'\n" +
+      "          pnpm run create:system-admin\n\n" +
+      "        Store the password in a hardware-backed secrets manager or physical safe.\n"
+    );
+    process.exit(1);
+  }
+
+  const passwordHash = await bcrypt.hash(rawPassword, 14);
+  const now = new Date();
+
   const [existing] = await db
     .select({ id: usersTable.id, email: usersTable.email, isActive: usersTable.isActive })
     .from(usersTable)
     .where(eq(usersTable.email, BREAK_GLASS_EMAIL))
     .limit(1);
-
-  const rawPassword = INITIAL_PASSWORD_ENV ?? randomBytes(18).toString("base64url");
-  const passwordHash = await bcrypt.hash(rawPassword, 14);
-  const now = new Date();
-  const isCreate = !existing;
 
   if (existing && !IS_ROTATE) {
     process.stdout.write(`ℹ️  Account already exists: ${BREAK_GLASS_EMAIL}\n`);
@@ -47,9 +57,16 @@ async function main() {
       updatedAt: now,
     }).where(eq(usersTable.id, existing.id));
 
-    await db.execute(
-      sql`UPDATE users SET is_break_glass = true, mfa_exempt = true WHERE id = ${existing.id}`
-    );
+    // Set break-glass attributes including SSO/auth constraints
+    await db.execute(sql`
+      UPDATE users
+      SET is_break_glass = true,
+          mfa_exempt     = true,
+          sso_disabled   = true,
+          auth_provider  = 'local',
+          global_role    = 'GLOBAL_ADMIN'
+      WHERE id = ${existing.id}
+    `);
 
     await db.insert(auditLogsTable).values({
       id: randomUUID(),
@@ -78,9 +95,16 @@ async function main() {
       updatedAt: now,
     });
 
-    await db.execute(
-      sql`UPDATE users SET is_break_glass = true, mfa_exempt = true WHERE id = ${id}`
-    );
+    // Set break-glass attributes including SSO/auth constraints
+    await db.execute(sql`
+      UPDATE users
+      SET is_break_glass = true,
+          mfa_exempt     = true,
+          sso_disabled   = true,
+          auth_provider  = 'local',
+          global_role    = 'GLOBAL_ADMIN'
+      WHERE id = ${id}
+    `);
 
     await db.insert(auditLogsTable).values({
       id: randomUUID(),
@@ -97,37 +121,20 @@ async function main() {
     process.stdout.write(`✅ Break-glass account created: ${BREAK_GLASS_EMAIL}\n`);
   }
 
-  process.stdout.write("\n");
-
-  if (INITIAL_PASSWORD_ENV) {
-    process.stdout.write("Password: set from CONTROL_HUB_SYSADMIN_INITIAL_PASSWORD (not echoed)\n");
-  } else {
-    // Write the generated password to STDERR only — not captured by stdout log aggregators
-    process.stderr.write("\n");
-    process.stderr.write("┌─────────────────────────────────────────────────────────┐\n");
-    process.stderr.write("│  ⚠️  GENERATED PASSWORD — WRITE THIS DOWN NOW            │\n");
-    process.stderr.write("│     It will NOT be shown again after this run.          │\n");
-    process.stderr.write("└─────────────────────────────────────────────────────────┘\n");
-    process.stderr.write(`\n  Email:    ${BREAK_GLASS_EMAIL}\n`);
-    process.stderr.write(`  Password: ${rawPassword}\n\n`);
-    process.stdout.write("Password: (written to stderr — check terminal output)\n");
-  }
-
   process.stdout.write("\nSecurity requirements:\n");
-  process.stdout.write("  • Store credentials in a hardware-backed secrets manager or physical safe\n");
+  process.stdout.write(`  • Account: ${BREAK_GLASS_EMAIL}\n`);
+  process.stdout.write("  • Password: provided by CONTROL_HUB_SYSADMIN_INITIAL_PASSWORD (not echoed)\n");
   process.stdout.write("  • This account bypasses MFA — treat with maximum care\n");
+  process.stdout.write("  • SSO is disabled; auth_provider is locked to 'local'\n");
   process.stdout.write("  • Sessions expire after 4h absolute / 15m idle\n");
-  process.stdout.write("  • An email alert fires on every login and on ≥3 failed attempts\n");
-  process.stdout.write("  • Set BREAK_GLASS_ALERT_EMAIL to send alerts to a separate address\n");
+  process.stdout.write("  • An email alert fires to info@carmetechnology.com on every login\n");
+  process.stdout.write("  • Alert destination overridable via BREAK_GLASS_ALERT_EMAIL\n");
   process.stdout.write("  • All access is recorded in the audit trail\n");
   process.stdout.write("  • Never use this account for routine administration\n");
 
-  if (isCreate) {
-    process.stdout.write("\nTo rotate credentials later:\n");
-    process.stdout.write("  CONTROL_HUB_SYSADMIN_NEW_PASSWORD=<pw> pnpm run create:system-admin -- --rotate-password\n");
-  }
-
-  process.stdout.write("\n");
+  process.stdout.write("\nTo rotate credentials:\n");
+  process.stdout.write("  CONTROL_HUB_SYSADMIN_INITIAL_PASSWORD='<new-pw>' \\\n");
+  process.stdout.write("    pnpm run create:system-admin -- --rotate-password\n\n");
 
   await db.$client.end();
   process.exit(0);

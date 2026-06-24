@@ -193,6 +193,22 @@ async function seedSecuritySettings() {
   }).onConflictDoNothing();
 }
 
+async function migrateBreakGlassColumns() {
+  // Adds break-glass user columns if they don't exist (idempotent via IF NOT EXISTS)
+  const migrations = [
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS sso_disabled boolean NOT NULL DEFAULT false`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider varchar(50) NOT NULL DEFAULT 'local'`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS global_role varchar(50)`,
+  ];
+  for (const stmt of migrations) {
+    try {
+      await db.execute(sql.raw(stmt));
+    } catch (_e) {
+      // Column already exists — safe to ignore
+    }
+  }
+}
+
 async function migrateAuditEnum() {
   const missingValues = [
     "viewed", "deactivated", "activated", "password_reset", "org_access_changed",
@@ -205,6 +221,7 @@ async function migrateAuditEnum() {
     "user_invited", "invitation_resent", "invitation_cancelled", "invitation_accepted",
     "break_glass_login", "break_glass_account_created", "break_glass_password_rotated",
     "break_glass_session_revoked", "break_glass_account_locked",
+    "break_glass_login_success", "break_glass_login_failed", "break_glass_settings_changed",
   ];
   for (const val of missingValues) {
     try {
@@ -271,6 +288,7 @@ async function seedHelpContent() {
 
 export async function runStartupSeed() {
   try {
+    await migrateBreakGlassColumns();
     await migrateAuditEnum();
     await seedDomainControls();
     await seedInitialAdmin();

@@ -1,4 +1,4 @@
-import { pgTable, text, boolean, timestamp, integer, pgEnum, json } from "drizzle-orm/pg-core";
+import { pgTable, text, boolean, timestamp, integer, pgEnum, json, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -52,6 +52,9 @@ export const usersTable = pgTable("users", {
   lockedUntil: timestamp("locked_until"),
   isBreakGlass: boolean("is_break_glass").notNull().default(false),
   mfaExempt: boolean("mfa_exempt").notNull().default(false),
+  ssoDisabled: boolean("sso_disabled").notNull().default(false),
+  authProvider: varchar("auth_provider", { length: 50 }).notNull().default("local"),
+  globalRole: varchar("global_role", { length: 50 }),
 });
 
 export const securitySettingsTable = pgTable("security_settings", {

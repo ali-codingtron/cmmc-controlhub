@@ -278,7 +278,7 @@ export async function sendBreakGlassLoginAlert(opts: {
   failedAttempts?: number;
 }): Promise<void> {
   const { email, name, ipAddress, userAgent, timestamp, failedAttempts } = opts;
-  const alertEmail = process.env.BREAK_GLASS_ALERT_EMAIL || email;
+  const alertEmail = process.env.BREAK_GLASS_ALERT_EMAIL || "info@carmetechnology.com";
   const dateStr = new Date(timestamp).toUTCString();
   const isFailed = failedAttempts !== undefined;
 
