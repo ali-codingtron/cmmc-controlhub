@@ -466,8 +466,19 @@ function MfaSetupScreen({ mfaStateToken, onBack }: { mfaStateToken: string; onBa
 
 // ─── Login Form ───────────────────────────────────────────────────────────────
 
+function MicrosoftIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 23 23" aria-hidden="true">
+      <rect x="1" y="1" width="10" height="10" fill="#f25022" />
+      <rect x="12" y="1" width="10" height="10" fill="#7fba00" />
+      <rect x="1" y="12" width="10" height="10" fill="#00a4ef" />
+      <rect x="12" y="12" width="10" height="10" fill="#ffb900" />
+    </svg>
+  );
+}
+
 export default function Login() {
-  const { login, mfaChallenge, clearMfaChallenge } = useAuth();
+  const { login, loginWithToken, mfaChallenge, clearMfaChallenge } = useAuth();
   const [, setLocation] = useLocation();
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -476,16 +487,64 @@ export default function Login() {
   const [invitedBanner, setInvitedBanner] = useState(false);
   const [resetBanner, setResetBanner] = useState(false);
 
+  // SSO login state
+  const [ssoMode, setSsoMode] = useState(false);
+  const [ssoEmail, setSsoEmail] = useState("");
+  const [ssoLoading, setSsoLoading] = useState(false);
+
   useEffect(() => {
-    emailRef.current?.focus();
     const params = new URLSearchParams(window.location.search);
-    if (params.get("invited") === "1") {
-      setInvitedBanner(true);
+
+    // Handle SSO callback token
+    const ssoToken = params.get("sso_token");
+    if (ssoToken) {
+      window.history.replaceState({}, "", window.location.pathname);
+      loginWithToken(ssoToken)
+        .then(() => setLocation("/"))
+        .catch(() => setError("SSO sign-in failed. Please try again."));
+      return;
     }
-    if (params.get("reset") === "success") {
-      setResetBanner(true);
+
+    // Handle SSO error codes from callback
+    const ssoError = params.get("sso_error");
+    if (ssoError) {
+      window.history.replaceState({}, "", window.location.pathname);
+      const msgs: Record<string, string> = {
+        invalid_state: "SSO session expired. Please try again.",
+        token_exchange_failed: "Microsoft authentication failed. Please try again.",
+        invalid_token: "Invalid response from Microsoft. Contact your administrator.",
+        config_not_found: "SSO configuration not found. Contact your administrator.",
+        missing_params: "Incomplete SSO callback. Please try again.",
+        account_inactive: "Your account is inactive. Contact your administrator.",
+        sso_disabled: "SSO login is not permitted for your account.",
+      };
+      setError(msgs[ssoError] ?? "SSO authentication failed. Please try again.");
     }
+
+    emailRef.current?.focus();
+    if (params.get("invited") === "1") setInvitedBanner(true);
+    if (params.get("reset") === "success") setResetBanner(true);
   }, []);
+
+  const handleSsoSubmit = async () => {
+    const email = ssoEmail.trim().toLowerCase();
+    if (!email) return;
+    setSsoLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/auth/sso/initiate?email=${encodeURIComponent(email)}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "No SSO configured for this domain.");
+        return;
+      }
+      window.location.href = data.authUrl;
+    } catch {
+      setError("Failed to initiate SSO. Please try again.");
+    } finally {
+      setSsoLoading(false);
+    }
+  };
 
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -682,6 +741,64 @@ export default function Login() {
             </Button>
           </form>
         </Form>
+
+        {/* SSO Divider */}
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t border-border" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-background px-2 text-muted-foreground">Or</span>
+          </div>
+        </div>
+
+        {ssoMode ? (
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Work email address</label>
+              <Input
+                type="email"
+                placeholder="name@company.com"
+                value={ssoEmail}
+                onChange={(e) => setSsoEmail(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSsoSubmit(); } }}
+                autoFocus
+                className="h-10"
+                disabled={ssoLoading}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-10 gap-2.5"
+              disabled={ssoLoading || !ssoEmail.trim()}
+              onClick={handleSsoSubmit}
+            >
+              {ssoLoading ? (
+                <><Loader2 className="h-4 w-4 animate-spin" />Redirecting to Microsoft…</>
+              ) : (
+                <><MicrosoftIcon />Continue with Microsoft</>
+              )}
+            </Button>
+            <button
+              type="button"
+              className="w-full text-center text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-1"
+              onClick={() => { setSsoMode(false); setSsoEmail(""); setError(""); }}
+            >
+              <ArrowLeft className="h-3 w-3" />Back to password login
+            </button>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full h-10 gap-2.5"
+            onClick={() => { setSsoMode(true); setError(""); }}
+          >
+            <MicrosoftIcon />
+            Sign in with Microsoft
+          </Button>
+        )}
 
         <p className="text-center text-xs text-muted-foreground">
           Secure Compliance Platform &mdash; Control HUB

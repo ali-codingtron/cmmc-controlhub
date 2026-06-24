@@ -1,7 +1,16 @@
 import { Router } from "express";
 import bcrypt from 'bcryptjs';
-import { db, usersTable, auditLogsTable, organizationUsersTable, securitySettingsTable, passwordResetTokensTable, breakGlassSessionsTable } from "@workspace/db";
+import { db, usersTable, auditLogsTable, organizationUsersTable, securitySettingsTable, passwordResetTokensTable, breakGlassSessionsTable, ssoConfigsTable } from "@workspace/db";
 import { eq, sql, and, isNull } from "drizzle-orm";
+import {
+  generatePkce,
+  generateState,
+  storeOauthState,
+  consumeOauthState,
+  buildAuthorizationUrl,
+  exchangeCodeForToken,
+  parseIdToken,
+} from "../lib/sso";
 import { signToken, requireAuth, requireRole, hashJwtToken } from "../lib/auth";
 import {
   encryptSecret,
@@ -1308,6 +1317,211 @@ router.post("/auth/reset-password", async (req, res) => {
   ]);
 
   res.json({ success: true });
+});
+
+// ─── SSO: Entra ID OAuth2/PKCE ────────────────────────────────────────────────
+
+// GET /api/auth/sso/initiate?email=<email>
+// Looks up the SSO config for the email's domain and returns the Microsoft
+// authorization URL. No authentication required (user is signing in).
+router.get("/auth/sso/initiate", async (req, res) => {
+  const rawEmail = (req.query.email as string | undefined)?.toLowerCase().trim();
+  if (!rawEmail) {
+    res.status(400).json({ error: "email query parameter is required" });
+    return;
+  }
+
+  const atIdx = rawEmail.indexOf("@");
+  if (atIdx < 1) {
+    res.status(400).json({ error: "Invalid email address" });
+    return;
+  }
+  const domain = rawEmail.slice(atIdx + 1);
+
+  const [cfg] = await db
+    .select()
+    .from(ssoConfigsTable)
+    .where(and(eq(ssoConfigsTable.emailDomain, domain), eq(ssoConfigsTable.enabled, true)))
+    .limit(1);
+
+  if (!cfg) {
+    res.status(404).json({ error: "No SSO configured for this email domain. Contact your administrator." });
+    return;
+  }
+
+  const { codeVerifier, codeChallenge } = generatePkce();
+  const state = generateState();
+  storeOauthState(state, codeVerifier, cfg.organizationId, cfg.id);
+
+  const callbackUrl = `${getAppBaseUrl()}/api/auth/sso/callback`;
+  const authUrl = buildAuthorizationUrl(cfg.tenantId, cfg.clientId, callbackUrl, state, codeChallenge);
+
+  res.json({ authUrl, provider: cfg.provider });
+});
+
+// GET /api/auth/sso/callback?code=<code>&state=<state>
+// Microsoft redirects here after authentication. Exchanges the code for tokens,
+// extracts user info, creates or links the Control HUB user, issues a JWT,
+// and redirects the browser back to the frontend with ?sso_token=<jwt>.
+router.get("/auth/sso/callback", async (req, res) => {
+  const { code, state, error: msError } = req.query as Record<string, string>;
+  const frontendBase = getAppBaseUrl();
+
+  if (msError) {
+    logger.warn({ msError }, "Microsoft SSO error returned in callback");
+    res.redirect(`${frontendBase}/login?sso_error=${encodeURIComponent(msError)}`);
+    return;
+  }
+
+  if (!code || !state) {
+    res.redirect(`${frontendBase}/login?sso_error=missing_params`);
+    return;
+  }
+
+  const stateData = consumeOauthState(state);
+  if (!stateData) {
+    res.redirect(`${frontendBase}/login?sso_error=invalid_state`);
+    return;
+  }
+
+  const [cfg] = await db
+    .select()
+    .from(ssoConfigsTable)
+    .where(eq(ssoConfigsTable.id, stateData.configId))
+    .limit(1);
+  if (!cfg || !cfg.enabled) {
+    res.redirect(`${frontendBase}/login?sso_error=config_not_found`);
+    return;
+  }
+
+  const callbackUrl = `${getAppBaseUrl()}/api/auth/sso/callback`;
+
+  let idToken: string;
+  try {
+    const clientSecret = decryptSecret(cfg.clientSecretEnc);
+    const tokens = await exchangeCodeForToken(
+      cfg.tenantId,
+      cfg.clientId,
+      clientSecret,
+      code,
+      callbackUrl,
+      stateData.codeVerifier
+    );
+    idToken = tokens.id_token;
+  } catch (e) {
+    logger.error({ err: e }, "SSO token exchange failed");
+    res.redirect(`${frontendBase}/login?sso_error=token_exchange_failed`);
+    return;
+  }
+
+  let userInfo: { email: string; name: string; sub: string };
+  try {
+    userInfo = parseIdToken(idToken);
+  } catch (e) {
+    logger.error({ err: e }, "SSO id_token parse failed");
+    res.redirect(`${frontendBase}/login?sso_error=invalid_token`);
+    return;
+  }
+
+  // Find or create the Control HUB user
+  let [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, userInfo.email))
+    .limit(1);
+
+  const now = new Date();
+  const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? req.ip ?? "unknown";
+  const ua = req.headers["user-agent"] ?? "unknown";
+
+  if (user) {
+    // Existing user — check they are active and SSO not disabled
+    if (!user.isActive) {
+      res.redirect(`${frontendBase}/login?sso_error=account_inactive`);
+      return;
+    }
+    if ((user as any).ssoDisabled) {
+      res.redirect(`${frontendBase}/login?sso_error=sso_disabled`);
+      return;
+    }
+    // Update last login
+    await db
+      .update(usersTable)
+      .set({ lastLoginAt: now, updatedAt: now })
+      .where(eq(usersTable.id, user.id));
+  } else {
+    // New user — create and add to org
+    const newId = randomUUID();
+    [user] = await db
+      .insert(usersTable)
+      .values({
+        id: newId,
+        name: userInfo.name,
+        email: userInfo.email,
+        passwordHash: null,
+        role: "it_contributor",
+        isActive: true,
+        status: "active",
+        lastLoginAt: now,
+        createdAt: now,
+        updatedAt: now,
+      } as any)
+      .returning();
+
+    // Add to org
+    await db
+      .insert(organizationUsersTable)
+      .values({
+        userId: newId,
+        organizationId: cfg.organizationId,
+        role: "member",
+        joinedAt: now,
+      } as any)
+      .onConflictDoNothing();
+  }
+
+  // Ensure org membership exists
+  const [membership] = await db
+    .select({ userId: organizationUsersTable.userId })
+    .from(organizationUsersTable)
+    .where(
+      and(
+        eq(organizationUsersTable.userId, user.id),
+        eq(organizationUsersTable.organizationId, cfg.organizationId)
+      )
+    )
+    .limit(1);
+
+  if (!membership) {
+    await db
+      .insert(organizationUsersTable)
+      .values({
+        userId: user.id,
+        organizationId: cfg.organizationId,
+        role: "member",
+        joinedAt: now,
+      } as any)
+      .onConflictDoNothing();
+  }
+
+  // Audit log
+  await db.insert(auditLogsTable).values({
+    id: randomUUID(),
+    userId: user.id,
+    userName: user.name,
+    action: "sso_login" as any,
+    entityType: "user",
+    entityId: user.id,
+    entityLabel: user.email,
+    newValue: { provider: cfg.provider, orgId: cfg.organizationId },
+    ipAddress: ip,
+    userAgent: ua,
+    timestamp: now,
+    organizationId: cfg.organizationId,
+  });
+
+  const jwtToken = signToken({ id: user.id, name: user.name, email: user.email, role: user.role });
+  res.redirect(`${frontendBase}/login?sso_token=${encodeURIComponent(jwtToken)}`);
 });
 
 export default router;

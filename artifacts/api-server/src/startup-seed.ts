@@ -193,6 +193,30 @@ async function seedSecuritySettings() {
   }).onConflictDoNothing();
 }
 
+async function migrateSsoTable() {
+  const stmts = [
+    `CREATE TABLE IF NOT EXISTS sso_configs (
+      id text PRIMARY KEY,
+      organization_id text NOT NULL,
+      provider varchar(50) NOT NULL DEFAULT 'entra_id',
+      client_id text NOT NULL,
+      tenant_id text NOT NULL,
+      client_secret_enc text NOT NULL,
+      email_domain text,
+      enabled boolean NOT NULL DEFAULT true,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`,
+  ];
+  for (const stmt of stmts) {
+    try {
+      await db.execute(sql.raw(stmt));
+    } catch (_e) {
+      // Already exists — safe to ignore
+    }
+  }
+}
+
 async function migrateBreakGlassColumns() {
   // Idempotent: adds break-glass columns and session table if they don't already exist
   const migrations = [
@@ -237,6 +261,7 @@ async function migrateAuditEnum() {
     "break_glass_login", "break_glass_account_created", "break_glass_password_rotated",
     "break_glass_session_revoked", "break_glass_account_locked",
     "break_glass_login_success", "break_glass_login_failed", "break_glass_settings_changed",
+    "sso_login",
   ];
   for (const val of missingValues) {
     try {
@@ -303,6 +328,7 @@ async function seedHelpContent() {
 
 export async function runStartupSeed() {
   try {
+    await migrateSsoTable();
     await migrateBreakGlassColumns();
     await migrateAuditEnum();
     await seedDomainControls();
