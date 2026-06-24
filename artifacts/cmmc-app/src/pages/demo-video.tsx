@@ -6,6 +6,9 @@ import carmetechLogo from "@assets/Carme_Tech_Logo_Official_1779981155506.png";
 
 const CONSULTATION_HREF = "mailto:info@carmetechnology.com?subject=Control%20HUB%20Consultation%20Request";
 
+// Max allowed drift (seconds) before audio is hard-snapped to video position
+const SYNC_THRESHOLD = 0.3;
+
 export default function DemoVideo() {
   const [, navigate] = useLocation();
   const [isLoading, setIsLoading] = useState(false);
@@ -13,6 +16,7 @@ export default function DemoVideo() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const syncingRef = useRef(false);
 
+  // Unused but kept for potential external callers
   const syncAudioToVideo = useCallback(() => {
     const v = videoRef.current;
     const a = audioRef.current;
@@ -27,20 +31,58 @@ export default function DemoVideo() {
     const a = audioRef.current;
     if (!v || !a) return;
 
-    const onPlay = () => {
+    // Mirror video mute state to the audio element on mount so the
+    // voiceover starts muted if the user had previously muted the player.
+    a.muted = v.muted;
+
+    const onPlay = async () => {
+      // Snap audio to exact video position before starting playback
       a.currentTime = v.currentTime;
-      a.play().catch(() => {});
+      a.playbackRate = v.playbackRate;
+      try { await a.play(); } catch { /* autoplay policy — ignore */ }
     };
-    const onPause = () => a.pause();
-    const onSeeked = () => syncAudioToVideo();
+
+    const onPause = () => {
+      a.pause();
+      // Correct any accumulated drift while paused so the next play starts clean
+      a.currentTime = v.currentTime;
+    };
+
+    const onSeeked = () => {
+      if (syncingRef.current) return;
+      syncingRef.current = true;
+      a.currentTime = v.currentTime;
+      syncingRef.current = false;
+    };
+
     const onRateChange = () => { a.playbackRate = v.playbackRate; };
     const onVolumeChange = () => { a.muted = v.muted; };
+
+    // Continuous drift correction: fires ~4× per second while playing.
+    // If audio has drifted more than SYNC_THRESHOLD seconds from video,
+    // hard-snap it back so the two tracks stay together over the full runtime.
+    const onTimeUpdate = () => {
+      if (syncingRef.current || v.paused) return;
+      const drift = Math.abs(v.currentTime - a.currentTime);
+      if (drift > SYNC_THRESHOLD) {
+        syncingRef.current = true;
+        a.currentTime = v.currentTime;
+        syncingRef.current = false;
+      }
+    };
+
+    const onEnded = () => {
+      a.pause();
+      a.currentTime = 0;
+    };
 
     v.addEventListener("play", onPlay);
     v.addEventListener("pause", onPause);
     v.addEventListener("seeked", onSeeked);
     v.addEventListener("ratechange", onRateChange);
     v.addEventListener("volumechange", onVolumeChange);
+    v.addEventListener("timeupdate", onTimeUpdate);
+    v.addEventListener("ended", onEnded);
 
     return () => {
       v.removeEventListener("play", onPlay);
@@ -48,6 +90,8 @@ export default function DemoVideo() {
       v.removeEventListener("seeked", onSeeked);
       v.removeEventListener("ratechange", onRateChange);
       v.removeEventListener("volumechange", onVolumeChange);
+      v.removeEventListener("timeupdate", onTimeUpdate);
+      v.removeEventListener("ended", onEnded);
     };
   }, [syncAudioToVideo]);
 
