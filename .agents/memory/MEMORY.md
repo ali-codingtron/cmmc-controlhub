@@ -4,3 +4,4 @@
 - [TOTP MFA implementation](totp-mfa.md) — Full MFA flow: otplib v13 functional API, encrypted secrets, state tokens, lockout, enforcement policy, Security Center.
 - [Help Center module](help-center.md) — 14 categories, 22 articles, 23 FAQ items; custom MarkdownContent renderer; admin editor; seeded via seedHelpContent() at startup.
 - [Break-glass account](break-glass.md) — sysadmin@controlhub.com; is_break_glass + mfa_exempt columns; break_glass_sessions table; 4h JWT; single-session revoke; idle 15m/absolute 4h enforcement in requireAuth.
+- [Role guides generator](role-guides-generator.md) — 4 role PDF guides; run ONE at a time (120s timeout); seeding pattern for Internal Company; all control tabs captured per guide.

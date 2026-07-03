@@ -11,22 +11,22 @@ title = "VTCCORP.US Control HUB — Assessor User Guide (2.22 MB)"
 id = "Xl69uXmwMxnm5hNN6jtuE"
 uri = "file://generated-guides/Control_HUB_Admin_Guide.pdf"
 type = "pdf"
-title = "Global Administrator Guide (0.68 MB)"
+title = "Control HUB — Global Administrator Guide (0.97 MB)"
 
 [[outputs]]
 id = "enFhrpe-hQ8gV2a-8CAAn"
 uri = "file://generated-guides/Control_HUB_Compliance_Manager_Guide.pdf"
 type = "pdf"
-title = "Compliance Manager Guide (0.67 MB)"
+title = "Control HUB — Compliance Manager Guide (0.87 MB)"
 
 [[outputs]]
 id = "Kq2IKJgeGDWuXvDEtG-i7"
 uri = "file://generated-guides/Control_HUB_Reviewer_Guide.pdf"
 type = "pdf"
-title = "Reviewer Guide (0.60 MB)"
+title = "Control HUB — Reviewer Guide (1.10 MB)"
 
 [[outputs]]
 id = "8xBH1ePxNW3JgmfmKZWcA"
 uri = "file://generated-guides/Control_HUB_Assessor_Guide.pdf"
 type = "pdf"
-title = "Assessor Guide (0.65 MB)"
+title = "Control HUB — Assessor Guide (1.00 MB)"
