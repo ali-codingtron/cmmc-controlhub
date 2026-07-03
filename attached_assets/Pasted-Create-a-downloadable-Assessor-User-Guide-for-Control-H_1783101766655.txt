@@ -1,0 +1,560 @@
+Create a downloadable Assessor User Guide for Control HUB specifically for the Assessor Read-Only role and the production VTCCORP.US organization.
+
+Purpose:
+We are preparing for an audit and I need to provide the assessor with clear instructions on how to use Control HUB during the review.
+
+The guide must explain:
+- how the assessor logs in
+- what the assessor can view
+- what the assessor cannot change
+- how to navigate VTCCORP.US
+- how to review controls
+- how to find evidence
+- how to preview/download evidence
+- how to review SSP mappings
+- how to review monitoring records
+- how to review POA&M items
+- how to use reports
+- how to ask for help if they cannot find something
+
+The guide must include screenshots from the actual app experience.
+
+Important:
+This guide is specifically for the Assessor role, not Admin, Compliance Manager, or IT Contributor.
+
+The guide must not include admin-only instructions like:
+- adding users
+- editing controls
+- uploading evidence
+- changing statuses
+- deleting evidence
+- running tenant scans
+- changing settings
+- connecting Microsoft tenants
+
+The assessor role is read-only.
+
+1. Add Downloadable Assessor Guide
+
+Add a button in the app:
+
+Help & User Guide > Assessor Guide
+
+Button:
+Download Assessor User Guide
+
+Also add this under Reports or Help:
+
+Reports > Assessor User Guide
+
+Output formats:
+- PDF required
+- DOCX preferred if possible
+
+File name:
+VTCCORP.US_Control_HUB_Assessor_User_Guide.pdf
+
+Optional DOCX:
+VTCCORP.US_Control_HUB_Assessor_User_Guide.docx
+
+2. Generate Guide for VTCCORP.US
+
+The guide should be organization-specific.
+
+For now, generate the guide for:
+
+Organization:
+VTCCORP.US
+
+Role:
+Assessor Read-Only
+
+The content should reference:
+- VTCCORP.US Compliance Dashboard
+- VTCCORP.US Controls Library
+- VTCCORP.US Evidence Repository
+- VTCCORP.US Documentation
+- VTCCORP.US SSP
+- VTCCORP.US Monitoring Tracker
+- VTCCORP.US POA&M
+- VTCCORP.US Reports
+
+3. Use Assessor View / Assessor Permissions
+
+Screenshots and instructions must reflect what the assessor actually sees.
+
+Use an Assessor Read-Only session when capturing screenshots.
+
+Do not include screenshots showing:
+- Admin navigation
+- user management
+- settings
+- security center
+- add/edit/delete buttons
+- bulk upload
+- save buttons
+- status dropdowns
+- tenant connection screens
+- internal-only administrative workflows
+
+If the Assessor role currently sees anything editable, that is a bug and should be fixed before generating the guide.
+
+4. Screenshot Capture
+
+Add an automated screenshot capture process using Playwright or equivalent.
+
+Capture screenshots from the Assessor Read-Only perspective for VTCCORP.US.
+
+Screenshots to include:
+
+A. Login Page
+- Control HUB login screen
+- where the assessor enters credentials
+
+B. Dashboard
+- VTCCORP.US Compliance Dashboard
+- readiness score
+- controls
+- evidence health
+- monitoring
+- POA&M health
+- domain readiness
+- recent activity
+
+C. Organization Selector
+- show that VTCCORP.US is selected
+- if the assessor only has one organization, explain that only VTCCORP.US will be visible
+
+D. Controls Library
+- controls list
+- filters/search
+- control ID, title, domain, level, status, evidence count
+
+E. Control Detail — Implementation Tab
+- control header
+- implementation status
+- implementation narrative
+- read-only behavior
+
+F. Control Detail — Evidence Tab
+- linked evidence table
+- view/preview/download icons
+- evidence statuses
+
+G. Evidence Detail Page
+- evidence metadata
+- uploaded file card
+- file preview area
+- linked controls
+- ownership
+- download button
+
+H. Evidence Repository
+- search/filter bar
+- evidence table
+- type/status/domain/control filters
+
+I. Documentation / All Documents
+- document list
+- linked controls
+- document status
+- source
+
+J. SSP Overview
+- SSP metadata
+- version/date/status
+- mapped controls summary
+
+K. SSP Control Mapping
+- mapped controls
+- implementation narratives
+- status from control section
+
+L. Monitoring Tracker
+- monitoring items
+- frequency
+- last completed
+- next due
+- status
+- notes
+
+M. POA&M
+- POA&M register
+- status
+- risk level
+- linked control
+- owner
+- target date
+
+N. Reports
+- available reports
+- how to open/download reports
+
+O. Help & User Guide
+- where the assessor can get help
+
+Screenshot requirements:
+- use clean browser viewport
+- hide browser address bar if possible
+- capture only the application area
+- use readable resolution
+- crop out unnecessary whitespace
+- do not capture developer tools
+- do not capture secrets or admin-only data
+
+5. Guide Structure
+
+The PDF/DOCX should use this structure:
+
+Cover Page:
+- Control HUB logo
+- Carme Technology logo if available
+- Title:
+  Control HUB Assessor User Guide
+- Subtitle:
+  VTCCORP.US CMMC Assessment Review
+- Version
+- Date generated
+- Confidential / Authorized Assessor Use Only
+
+Section 1: Purpose of This Guide
+Explain:
+“This guide provides instructions for assessors reviewing VTCCORP.US within Control HUB. The Assessor role is read-only and is intended to help reviewers locate controls, evidence, documents, SSP narratives, monitoring records, POA&M items, and reports.”
+
+Section 2: Assessor Access Overview
+Explain:
+- Assessor has read-only access
+- Assessor can view approved/assessor-ready evidence
+- Assessor can preview/download evidence if allowed
+- Assessor cannot change system records
+
+Section 3: What the Assessor Can Do
+List:
+- view dashboard
+- view controls
+- view implementation narratives
+- view evidence metadata
+- preview evidence files
+- download evidence files
+- view documents
+- view SSP mappings
+- view monitoring tracker
+- view POA&M items
+- view reports
+
+Section 4: What the Assessor Cannot Do
+List:
+- cannot add/edit/delete evidence
+- cannot upload files
+- cannot change statuses
+- cannot edit controls
+- cannot edit SSP
+- cannot edit monitoring tracker
+- cannot create POA&M
+- cannot create users
+- cannot access settings
+- cannot connect Microsoft tenants
+- cannot run scans
+
+Section 5: Logging In
+Include screenshot of login page.
+Explain:
+- enter assigned username/email
+- enter password
+- complete MFA if required
+- contact administrator if login fails
+
+Section 6: Selecting VTCCORP.US
+Include screenshot of sidebar organization selector.
+Explain:
+- active organization appears in top-left sidebar
+- assessor should confirm VTCCORP.US is selected
+- only assigned organizations are visible
+
+Section 7: Dashboard Overview
+Include dashboard screenshot.
+Explain:
+- overall readiness
+- controls status
+- evidence health
+- monitoring status
+- POA&M health
+- domain readiness
+- recent activity
+- recommended actions
+
+Section 8: Reviewing Controls
+Include controls library screenshot.
+Explain:
+- search by control ID
+- filter by domain/status/level
+- click control ID to open control detail
+
+Section 9: Reviewing a Control
+Include control detail screenshot.
+Explain each tab:
+- Implementation
+- Evidence
+- Monitoring
+- POA&M
+- SSP
+
+Explain:
+- implementation narrative shows how VTCCORP.US implements the control
+- evidence tab shows supporting artifacts
+- SSP tab shows SSP mapping/narrative
+- POA&M tab shows remediation items if any
+
+Section 10: Reviewing Evidence
+Include evidence tab and evidence detail screenshots.
+Explain:
+- evidence title
+- evidence type
+- status
+- linked controls
+- collection date
+- owner
+- preview button
+- download button
+
+Explain evidence statuses:
+- Draft
+- Pending Review
+- Approved
+- Active
+- Assessor Ready
+- Stale
+- Archived
+
+For assessor:
+Approved / Active / Assessor Ready are the primary review statuses.
+
+Section 11: Previewing and Downloading Evidence
+Include screenshot of preview panel.
+Explain:
+- click eye/view icon to preview
+- click download icon to download
+- supported preview types include images, PDFs, text, and supported Office files if available
+- if preview is unavailable, use download
+
+Section 12: Evidence Repository
+Include Evidence Repository screenshot.
+Explain:
+- global list of evidence for VTCCORP.US
+- use filters to narrow by type, status, domain, level, control, owner
+- search by title, filename, control ID, tags, or summary
+
+Section 13: Documentation
+Include All Documents screenshot.
+Explain:
+- policies, procedures, logs, reports, records
+- linked controls
+- document status
+- source: uploaded document, uploaded evidence, or generated document
+
+Section 14: SSP Review
+Include SSP Overview and SSP Control Mapping screenshots.
+Explain:
+- SSP Overview shows the System Security Plan metadata
+- SSP Control Mapping shows each control’s implementation narrative
+- statuses match the Controls section
+- use search to find a control
+
+Section 15: Monitoring Tracker
+Include Monitoring Tracker screenshot.
+Explain:
+- recurring operational monitoring activities
+- frequency
+- last completed
+- next due
+- status
+- notes
+- Current means completed for the current cycle
+
+Section 16: POA&M Review
+Include POA&M screenshot.
+Explain:
+- POA&M items track gaps/remediation
+- review risk level, status, owner, target date, linked control
+- closed items should show as closed
+
+Section 17: Reports
+Include Reports screenshot.
+Explain:
+- available reports
+- how to open/download PDF reports
+- suggested reports for assessor review:
+  - Executive Readiness
+  - Domain Readiness
+  - Evidence Inventory
+  - POA&M Report
+  - Monitoring Tracker Report
+  - SSP Summary
+  - Audit Readiness
+
+Section 18: Recommended Assessor Workflow
+Provide step-by-step review path:
+
+1. Log in
+2. Confirm VTCCORP.US is selected
+3. Review Dashboard
+4. Open Controls
+5. Search for the control being reviewed
+6. Review Implementation narrative
+7. Review Evidence tab
+8. Open/preview/download evidence
+9. Review SSP mapping
+10. Review Monitoring or POA&M if applicable
+11. Use Reports for summary views
+12. Contact Control HUB administrator if something appears missing
+
+Section 19: Troubleshooting
+Include:
+- cannot log in
+- cannot see VTCCORP.US
+- evidence preview does not load
+- download does not work
+- cannot find a control
+- report does not download
+- access appears too broad or too limited
+
+Section 20: Contact / Support
+Include:
+For assistance, contact:
+info@carmetechnology.com
+
+6. Formatting Requirements
+
+The guide must look professional.
+
+Use:
+- Control HUB branding
+- Carme Technology branding if logo exists
+- clear headings
+- numbered sections
+- screenshots with captions
+- tables where helpful
+- page numbers
+- footer:
+  Confidential — VTCCORP.US Control HUB Assessor Guide
+- clean margins
+- no browser URL
+- no scrollbars
+- no raw JSON
+- no developer-only messages
+
+7. PDF Export Requirements
+
+The PDF should:
+- render cleanly
+- include screenshots
+- avoid cutting off images
+- avoid splitting screenshots awkwardly
+- have consistent page breaks
+- have page numbers
+- be downloadable from the app
+
+8. DOCX Export Requirements
+
+If DOCX export is implemented:
+- use real Word formatting
+- headings
+- embedded screenshots
+- table of contents if possible
+- page breaks
+- header/footer
+
+9. Admin Regeneration
+
+Add an Admin-only button:
+
+Regenerate Assessor User Guide
+
+When clicked:
+- capture fresh screenshots from Assessor Read-Only perspective
+- generate updated PDF
+- save report record
+- update download link
+
+Also allow:
+- Download Latest Assessor Guide
+
+10. Report Storage
+
+Save generated guide as a report/document record:
+
+Type:
+Assessor User Guide
+
+Organization:
+VTCCORP.US
+
+Generated by:
+current admin
+
+Generated date:
+current timestamp
+
+File:
+PDF/DOCX
+
+It should appear in:
+Reports > Assessor User Guide
+and/or
+Help & User Guide > Assessor Guide
+
+11. Security
+
+Do not allow public users to download this guide.
+
+Only users with access to VTCCORP.US and appropriate role can download it.
+
+Assessor Read-Only can download the guide if assigned to VTCCORP.US.
+
+The guide must not contain:
+- passwords
+- secrets
+- API keys
+- Microsoft tenant secrets
+- admin-only pages
+- other organization data
+- demo data unless explicitly labeled
+
+12. Acceptance Tests
+
+Test A:
+Global Admin generates the VTCCORP.US Assessor User Guide.
+
+Test B:
+PDF downloads successfully.
+
+Test C:
+PDF includes screenshots of:
+- Dashboard
+- Controls
+- Control Detail
+- Evidence
+- Evidence Detail / Preview
+- Documentation
+- SSP
+- Monitoring Tracker
+- POA&M
+- Reports
+
+Test D:
+Guide content is written for Assessor Read-Only role.
+
+Test E:
+Guide does not show edit/add/delete/upload/admin instructions.
+
+Test F:
+Assessor user can download the guide but cannot modify anything.
+
+Test G:
+The screenshots match what the assessor sees in the app.
+
+Test H:
+No real secrets or unrelated organization data appear.
+
+Test I:
+Guide looks professional and can be sent to the assessor before the audit.

@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "LPXCMpyyD_PQxRbSe1UNk"
+uri = "file://generated-guides/VTCCORP.US_Control_HUB_Assessor_User_Guide.pdf"
+type = "pdf"
+title = "VTCCORP.US Control HUB Assessor User Guide"
