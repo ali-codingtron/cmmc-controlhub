@@ -1,0 +1,688 @@
+Fix and expand the VTCCORP.US Control HUB Assessor User Guide.
+
+The generated guide is a good start, but several screenshots are wrong or incomplete, and the Controls section is not detailed enough for an assessor.
+
+Important:
+Do NOT add this guide as a visible link inside the app.
+Do NOT add it to Reports, Help Center, or the UI.
+Continue generating it only as a file in the Replit file system:
+
+/generated-guides/VTCCORP.US_Control_HUB_Assessor_User_Guide.pdf
+
+Optional DOCX:
+/generated-guides/VTCCORP.US_Control_HUB_Assessor_User_Guide.docx
+
+The script should remain:
+pnpm generate:assessor-guide
+
+====================================================================
+1. FIX SCREENSHOT CAPTURE SOURCE
+====================================================================
+
+The current guide captured the wrong organization or empty demo-style pages.
+
+Problems observed:
+- The “Selecting VTCCORP.US” screenshot shows Internal Company instead of VTCCORP.US.
+- The Dashboard screenshot shows Internal Company instead of VTCCORP.US.
+- The Controls Library screenshot shows controls as Not Started with 0 evidence, which does not reflect the production VTCCORP.US organization.
+- The Control Detail screenshot shows “Control not found.”
+- The Evidence Repository screenshot shows “No evidence found.”
+- The Evidence Detail section contains placeholder text instead of an actual screenshot.
+- The Assessor View screenshot is empty and may not reflect the current app workflow.
+
+Fix:
+The screenshot generator must log in as an actual Assessor Read-Only user assigned to the production VTCCORP.US organization.
+
+Before taking screenshots:
+- confirm user role = Assessor Read-Only
+- confirm active organization = VTCCORP.US
+- confirm organization ID matches VTCCORP.US
+- confirm the dashboard title says “VTCCORP.US Compliance Dashboard”
+- confirm controls/evidence/documents are loaded before capturing
+
+Do not capture screenshots if the page is still loading or empty.
+
+====================================================================
+2. ADD SCREENSHOT VALIDATION
+====================================================================
+
+Before inserting screenshots into the guide, validate them.
+
+Reject and retry screenshots if the page contains any of the following:
+- “Control not found”
+- “No evidence found”
+- “No documents found”
+- “Internal Company”
+- “CarmeTechnology Demo”
+- “Demo Mode”
+- “Not Started” for all controls
+- “0 / 0”
+- “Screenshot:”
+- blank content area
+- loading spinner
+- error banner
+- access denied
+
+For each screenshot, the generator should wait until the expected content is present.
+
+Examples:
+- Dashboard screenshot must contain “VTCCORP.US Compliance Dashboard”
+- Controls screenshot must contain real VTCCORP.US controls and evidence counts
+- Control Detail screenshot must contain a real control ID and tabs
+- Evidence Repository screenshot must contain at least one evidence record
+- Evidence Detail screenshot must contain metadata, linked controls, and preview/download area
+
+If validation fails, print a clear error and do not generate the guide.
+
+====================================================================
+3. USE SPECIFIC KNOWN GOOD VTCCORP.US CONTROLS
+====================================================================
+
+For the Controls section, do not randomly click a control.
+
+Use known populated controls for screenshots.
+
+Preferred examples:
+- AC.L1-3.1.1 — Authorized Access Control
+- AC.L1-3.1.2 — Transaction and Function Control
+- AC.L1-3.1.20 — External Connections
+- SI.L2-3.14.7 if evidence exists
+- Any control with:
+  - status Implemented
+  - implementation narrative present
+  - evidence count greater than 0
+  - SSP narrative present
+
+Add a helper function:
+getBestControlForAssessorGuide()
+
+Selection criteria:
+1. organization = VTCCORP.US
+2. status = Implemented
+3. implementation narrative is not blank
+4. evidence count > 0
+5. SSP narrative exists
+6. preferably has monitoring or POA&M linkage if available
+
+Do not capture a control that returns “Control not found.”
+
+====================================================================
+4. EXPAND CONTROLS SECTION SIGNIFICANTLY
+====================================================================
+
+The current guide only briefly describes the Controls Library and Control Detail page. I need this section to be much more detailed because the assessor will spend most of their time reviewing controls.
+
+Replace Section 8 and Section 9 with a deeper Controls Guide.
+
+New Section 8:
+Reviewing the Controls Library
+
+Include:
+- what the Controls Library is
+- how to search by control ID
+- how to filter by domain
+- how to filter by level
+- how to filter by status
+- how to interpret evidence counts
+- how to open a control
+- how to know whether a control has supporting evidence
+
+Screenshot required:
+- Controls Library showing VTCCORP.US, real statuses, and real evidence counts
+
+Controls Library table explanation:
+- Control ID
+- Title
+- Domain
+- Level
+- Status
+- Evidence Count
+- Document Coverage if visible
+- Monitoring/POA&M indicators if visible
+
+Add assessor guidance:
+“The Controls Library is the fastest way to locate a specific CMMC practice. Assessors should search by exact control ID when reviewing a selected requirement.”
+
+====================================================================
+5. EXPAND CONTROL DETAIL SECTION
+====================================================================
+
+Create a detailed section called:
+
+Reviewing a Control Package
+
+Explain that each control page acts as a control-level assessment package.
+
+For the selected control, include screenshots and explanations for every visible tab:
+
+- Implementation
+- Configure, if visible to assessor
+- Evidence
+- Monitoring
+- POA&Ms
+- SSP
+- Readiness or Audit Notes, if available
+
+Do not mention tabs that are not visible to the Assessor role.
+
+For each tab, explain:
+- what the tab shows
+- why it matters to the assessment
+- what the assessor should review
+- what a missing/blank section may indicate
+
+====================================================================
+6. IMPLEMENTATION TAB DETAIL
+====================================================================
+
+Add a subsection:
+
+Implementation Tab
+
+Include screenshot of a real VTCCORP.US control with:
+- control ID
+- title
+- domain
+- implementation status
+- control description
+- implementation guidance
+- organization implementation narrative
+
+Explain:
+
+The Implementation tab contains the organization-specific implementation narrative. This is the written explanation of how VTCCORP.US implements the control in its environment.
+
+Explain fields:
+- Control Description: what the CMMC requirement addresses
+- Implementation Guidance: internal guidance for how the control is implemented or reviewed
+- Implementation Status: current organization-specific status
+- Implementation Narrative: VTCCORP.US’s written statement of how the control is implemented
+- Save button should not be visible or usable for assessor role
+
+Add assessor review guidance:
+- verify the narrative is present
+- verify it is specific to VTCCORP.US
+- verify it references actual systems/processes
+- compare the narrative to linked evidence
+- note any narrative that is generic, missing, or inconsistent with evidence
+
+Add example language:
+“A complete narrative should describe the systems, process owners, frequency, and evidence sources used to support the control.”
+
+====================================================================
+7. CONFIGURE TAB DETAIL
+====================================================================
+
+If the Configure tab is visible to Assessor Read-Only users, add a section:
+
+Configure Tab
+
+Explain:
+The Configure tab provides step-by-step implementation guidance. It is not evidence by itself, but it helps explain the intended configuration process and expected evidence.
+
+Include screenshot showing:
+- implementation approach
+- systems/portals used
+- step-by-step configuration instructions
+- evidence to capture
+- required documents
+- test/validation steps
+- closeout checklist
+
+Assessor guidance:
+- use this tab to understand how the control was expected to be configured
+- compare completed configuration steps to evidence
+- identify gaps where configuration steps exist but evidence is missing
+- assessor cannot mark steps complete or edit configuration steps
+
+If the Configure tab is NOT visible to the assessor role, do not include this section.
+
+====================================================================
+8. EVIDENCE TAB DETAIL
+====================================================================
+
+Add a subsection:
+
+Evidence Tab
+
+Include screenshot of the Control Detail > Evidence tab for a real populated VTCCORP.US control.
+
+The screenshot should show:
+- evidence table
+- evidence title
+- type
+- status
+- owner
+- collected date
+- file column
+- view/download actions
+
+Explain:
+- evidence items linked here support the selected control
+- evidence may also support other controls
+- status indicates lifecycle/readiness
+- Approved, Active, and Assessor Ready are the primary assessor review statuses
+- Draft/Pending may be visible but may not represent final approved evidence
+- Stale or Archived evidence should be treated as historical or requiring clarification
+
+Add assessor workflow:
+1. Open the control.
+2. Select Evidence tab.
+3. Review all linked evidence records.
+4. Prioritize Approved / Active / Assessor Ready evidence.
+5. Open evidence detail.
+6. Preview or download the file.
+7. Confirm the evidence supports the implementation narrative.
+
+====================================================================
+9. EVIDENCE DETAIL SCREENSHOT
+====================================================================
+
+The current guide has a placeholder:
+[Screenshot: Evidence Detail Page]
+
+Replace it with a real screenshot.
+
+Use a populated VTCCORP.US evidence item.
+
+Screenshot must show:
+- title
+- evidence type
+- status
+- description
+- collection date
+- expiration/review date
+- assessor summary
+- internal notes if visible to assessor
+- uploaded file panel
+- preview/download buttons
+- file preview
+- linked controls
+- ownership
+
+If the assessor should not see internal notes, hide that field and explain that internal notes are not visible.
+
+====================================================================
+10. MONITORING TAB DETAIL
+====================================================================
+
+Under the control detail section, add:
+
+Monitoring Tab
+
+Explain:
+The Monitoring tab shows recurring operational reviews linked to the control.
+
+Include screenshot if the selected control has monitoring items.
+
+Explain fields:
+- frequency
+- task
+- last completed
+- next due
+- status
+- notes
+- linked evidence if visible
+
+Explain statuses:
+- Current: completed for the current review cycle
+- Open: not yet completed or needs action
+- In Progress: being worked
+- Overdue: derived from next due date and status
+
+Assessor guidance:
+- verify monitoring is current where the control requires recurring review
+- review notes and linked evidence where available
+- identify overdue items as possible sustainment gaps
+
+====================================================================
+11. POA&M TAB DETAIL
+====================================================================
+
+Add:
+
+POA&M Tab
+
+Explain:
+The POA&M tab shows remediation items linked to the control.
+
+Include screenshot if the selected control has POA&M items; otherwise include the main POA&M Register screenshot.
+
+Explain:
+- POA&M number
+- weakness/gap
+- risk level
+- owner
+- scheduled completion
+- status
+- linked control
+- required evidence
+
+Assessor guidance:
+- review open POA&Ms for impact on readiness
+- verify closed POA&Ms have closure evidence
+- note high-risk or overdue remediation items
+
+Use “Plan of Action and Milestones” on first reference, then POA&M.
+
+====================================================================
+12. SSP TAB DETAIL
+====================================================================
+
+Add:
+
+SSP Tab
+
+Include screenshot of a real control’s SSP tab.
+
+Explain:
+- SSP narrative
+- source SSP
+- source version/date
+- mapping to the control
+- status aligned to the control status
+
+Assessor guidance:
+- compare SSP narrative to implementation narrative
+- confirm SSP text aligns with actual evidence
+- flag controls where SSP narrative is missing, generic, or inconsistent
+
+Also include SSP Control Mapping screenshot from the SSP module.
+
+====================================================================
+13. READINESS / AUDIT NOTES SECTION
+====================================================================
+
+If the app has a Readiness or Audit Notes tab visible to assessors, add a section.
+
+Explain:
+- readiness indicators
+- missing items
+- assessor-facing notes
+- internal notes if visible/not visible
+
+If this tab is not visible, do not include it.
+
+====================================================================
+14. REMOVE OR FIX ASSESSOR VIEW REFERENCES
+====================================================================
+
+The current guide references “Assessor View,” but the screenshot is empty and the current app may not use a dedicated Assessor View anymore.
+
+Do one of the following:
+
+Option A:
+If Assessor View exists and is useful:
+- capture a populated Assessor View screenshot for VTCCORP.US
+- explain exactly how to use it
+
+Option B:
+If Assessor View is not part of the current workflow:
+- remove all references to Assessor View
+- do not instruct assessors to click Assessor View
+- use Controls Library and Reports as the primary assessor workflow
+
+Do not include an empty Assessor View screenshot.
+
+====================================================================
+15. FIX ORGANIZATION SCREENSHOTS
+====================================================================
+
+Replace all screenshots showing Internal Company with VTCCORP.US.
+
+The guide is specifically for VTCCORP.US. No screenshot should show:
+- Internal Company
+- CarmeTechnology
+- demo organizations
+- test organizations
+
+Acceptance:
+Search generated PDF text and screenshots for “Internal Company.”
+It should not appear.
+
+====================================================================
+16. FIX EVIDENCE REPOSITORY SCREENSHOT
+====================================================================
+
+The current Evidence Repository screenshot shows no evidence found.
+
+Replace it with a populated VTCCORP.US evidence repository screenshot.
+
+Before capturing:
+- clear filters
+- ensure Show Archived is off unless needed
+- verify evidence count > 0
+- wait for evidence rows to render
+
+Screenshot should show:
+- several evidence records
+- type/status/domain/level/control/owner filters
+- linked controls
+- approved statuses
+
+====================================================================
+17. FIX DOCUMENTATION SCREENSHOT
+====================================================================
+
+The current Documentation screenshot appears too sparse and may not reflect VTCCORP.US production documents.
+
+Replace with a populated All Documents screenshot for VTCCORP.US.
+
+Before capturing:
+- select VTCCORP.US
+- clear filters
+- ensure document count > 0
+- show policies/procedures/logs if available
+
+Screenshot should show:
+- document title
+- type
+- status
+- linked controls
+- security domain
+- level
+- owner
+- source
+
+====================================================================
+18. ADD A CONTROL REVIEW EXAMPLE
+====================================================================
+
+Add a new section:
+
+Example: Reviewing AC.L1-3.1.1
+
+Use AC.L1-3.1.1 or another populated VTCCORP.US control.
+
+Walk the assessor through:
+1. Search for AC.L1-3.1.1.
+2. Open the control.
+3. Review the implementation narrative.
+4. Review linked evidence.
+5. Open one evidence item.
+6. Preview or download the evidence.
+7. Review SSP tab.
+8. Check monitoring/POA&M tabs if present.
+9. Record any questions outside the app.
+
+This should be the most detailed practical walkthrough in the guide.
+
+====================================================================
+19. ADD “WHAT TO LOOK FOR” CHECKLISTS
+====================================================================
+
+For each major area, add assessor checklists.
+
+Control review checklist:
+- Control status is visible
+- Implementation narrative exists
+- Narrative is specific to VTCCORP.US
+- Evidence exists and is approved/current
+- Evidence date is reasonable
+- Evidence directly supports the control
+- SSP narrative aligns with implementation
+- Monitoring is current if applicable
+- POA&M is reviewed if present
+
+Evidence review checklist:
+- Evidence is linked to correct control
+- Evidence title is descriptive
+- Evidence type is appropriate
+- Evidence status is Approved / Active / Assessor Ready
+- Collection date is present
+- File can be previewed or downloaded
+- Evidence content supports the stated control
+
+SSP review checklist:
+- SSP narrative exists
+- SSP narrative matches implementation
+- SSP is not generic
+- SSP references actual systems/processes
+- SSP is aligned with evidence
+
+POA&M checklist:
+- Open items are visible
+- Risk level is defined
+- Owner is assigned
+- Target date is present
+- Closure evidence exists for closed items
+
+====================================================================
+20. IMPROVE SCREENSHOT SIZE AND CROPPING
+====================================================================
+
+Some screenshots are too small to read.
+
+Capture screenshots with:
+- wider viewport, preferably 1440x1000 or 1600x1000
+- crop to main app content when needed
+- avoid full-page screenshots that make text unreadable
+- include sidebar only where it helps navigation
+- use zoomed/cropped screenshots for important areas
+
+For Controls detail, use multiple focused screenshots:
+- header and tabs
+- implementation narrative
+- evidence tab
+- SSP tab
+- monitoring/POA&M if applicable
+
+Do not use one tiny full-page screenshot when a focused screenshot would be clearer.
+
+====================================================================
+21. UPDATE TABLE OF CONTENTS
+====================================================================
+
+Update TOC to include expanded controls subsections.
+
+Suggested sections:
+1. Purpose
+2. Assessor Access Overview
+3. What the Assessor Can Do
+4. What the Assessor Cannot Do
+5. Logging In
+6. Selecting VTCCORP.US
+7. Dashboard Overview
+8. Controls Library
+9. Control Package Review
+   9.1 Implementation Tab
+   9.2 Configure Tab
+   9.3 Evidence Tab
+   9.4 Monitoring Tab
+   9.5 POA&M Tab
+   9.6 SSP Tab
+10. Example Control Review Walkthrough
+11. Evidence Repository
+12. Documentation
+13. SSP Review
+14. Monitoring Tracker
+15. POA&M Register
+16. Reports
+17. Recommended Assessor Workflow
+18. Troubleshooting
+19. Contact & Support
+
+====================================================================
+22. FIX TERMS AND CURRENT APP NAMING
+====================================================================
+
+Use current app terminology.
+
+Use:
+- Monitoring Tracker
+not Tasks
+
+Use:
+- Documentation
+not Documents if sidebar says Documentation
+
+Use:
+- Plan of Action and Milestones (POA&M)
+on first reference
+
+Do not mention pages that no longer exist.
+
+Do not mention the assessor can generate/regenerate reports if that is not allowed.
+
+Do not include admin-only features.
+
+====================================================================
+23. FILE OUTPUT ONLY
+====================================================================
+
+Keep output behavior the same:
+
+Generate only to:
+/generated-guides/VTCCORP.US_Control_HUB_Assessor_User_Guide.pdf
+
+Optional:
+/generated-guides/VTCCORP.US_Control_HUB_Assessor_User_Guide.docx
+
+Do not expose in the app UI.
+
+Do not add a download link.
+
+Do not create a Report record.
+
+I will download it from the Replit file tree.
+
+====================================================================
+24. ACCEPTANCE TESTS
+====================================================================
+
+Test A:
+Run:
+pnpm generate:assessor-guide
+
+Test B:
+Generated guide contains no screenshots of Internal Company, demo orgs, or test orgs.
+
+Test C:
+Generated guide has no “Control not found” screenshot.
+
+Test D:
+Generated guide has no placeholder text like:
+[Screenshot: Evidence Detail Page]
+or
+[Screenshot: Control Detail — Evidence Tab]
+
+Test E:
+Evidence Repository screenshot shows actual VTCCORP.US evidence records.
+
+Test F:
+Controls Library screenshot shows actual VTCCORP.US statuses/evidence counts.
+
+Test G:
+Control Detail screenshots show a real populated VTCCORP.US control.
+
+Test H:
+Controls section explains Implementation, Configure, Evidence, Monitoring, POA&M, and SSP tabs in detail.
+
+Test I:
+Guide includes a step-by-step example control review walkthrough.
+
+Test J:
+Guide remains written for Assessor Read-Only users and does not include admin/edit/upload instructions.
+
+Test K:
+PDF formatting remains professional with screenshots readable and not cut off.

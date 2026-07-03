@@ -17,11 +17,13 @@
   },
   "dependencies": {
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/pg": "^8.18.0",
     "@workspace/db": "workspace:*",
     "adm-zip": "^0.5.17",
     "bcryptjs": "^2.4.3",
     "drizzle-orm": "catalog:",
     "jsonwebtoken": "^9.0.3",
+    "pg": "^8.20.0",
     "playwright": "^1.60.0"
   },
   "devDependencies": {
