@@ -7,7 +7,8 @@
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
-    "generate:assessor-guide": "pnpm --filter @workspace/scripts run generate:assessor-guide"
+    "generate:assessor-guide": "pnpm --filter @workspace/scripts run generate:assessor-guide",
+    "generate:role-guides": "pnpm --filter @workspace/scripts run generate:role-guides"
   },
   "private": true,
   "devDependencies": {
