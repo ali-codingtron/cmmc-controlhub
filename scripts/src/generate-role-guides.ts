@@ -302,37 +302,87 @@ function makeJwt(user: { id: string; name: string; email: string; role: string }
 
 // ─── Browser helpers ──────────────────────────────────────────────────────────
 
-async function injectAuth(page: Page, token: string, orgId: string): Promise<void> {
-  await page.goto(APP_URL, { waitUntil: "domcontentloaded", timeout: 15000 });
+/**
+ * Injects auth into localStorage, reloads, then waits until the sidebar
+ * (`.no-print`) is visible — confirming the app is fully authenticated.
+ * NOTE: Vite HMR keeps a WebSocket open so `networkidle` NEVER fires on
+ *       the dev server.  Always use `domcontentloaded` + explicit element
+ *       waits instead.
+ */
+async function injectAuth(page: Page, token: string, orgId: string, roleKey: string): Promise<void> {
+  await page.goto(APP_URL, { waitUntil: "domcontentloaded", timeout: 20000 });
   await page.evaluate(
-    `([t, o]) => { localStorage.setItem('auth_token', t); localStorage.setItem('cmmc_active_org_id', o); }`,
+    ([t, o]: [string, string]) => {
+      localStorage.setItem("auth_token", t);
+      localStorage.setItem("cmmc_active_org_id", o);
+    },
     [token, orgId] as [string, string]
   );
-  await page.reload({ waitUntil: "networkidle", timeout: 15000 }).catch(() => null);
-  await page.waitForTimeout(1000);
+  // Hard-reload so React re-reads localStorage from scratch
+  await page.reload({ waitUntil: "domcontentloaded", timeout: 20000 }).catch(() => null);
+  // Wait for the sidebar (.no-print) — proof that auth succeeded and layout rendered
+  const sidebarVisible = await page
+    .waitForSelector(".no-print", { timeout: 15000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!sidebarVisible) {
+    console.warn(`  ⚠  Sidebar not visible after auth inject for ${roleKey} — app may still be loading`);
+  }
+  // Extra settle time for React Query initial fetches
+  await page.waitForTimeout(2500);
+  console.log(`   Auth confirmed for ${roleKey} (URL: ${page.url()})`);
 }
 
-async function nav(page: Page, url: string, timeout = 14000): Promise<boolean> {
+/**
+ * Navigates to a URL and waits for:
+ *   1. domcontentloaded (HTML parsed)
+ *   2. The sidebar (.no-print) to be present (React rendered + authenticated)
+ *   3. An extra settle period for API data to load
+ */
+async function nav(page: Page, url: string, _timeout = 14000): Promise<boolean> {
   try {
-    await page.goto(url, { waitUntil: "networkidle", timeout });
-    await page.waitForTimeout(1500);
-    return true;
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
   } catch {
-    try {
-      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 10000 });
-      await page.waitForTimeout(3000);
-      return true;
-    } catch {
-      console.warn(`  ⚠  Nav failed: ${url}`);
-      return false;
-    }
+    console.warn(`  ⚠  Nav goto failed: ${url}`);
+    return false;
   }
+  // Wait for the authenticated shell to appear
+  await page.waitForSelector(".no-print", { timeout: 12000 }).catch(() => null);
+  // Let React Query finish its data fetches
+  await page.waitForTimeout(3000);
+  return true;
 }
 
 const BASE_REJECTS = [
   "Control not found", "No evidence found", "401 Unauthorized",
   "Page Not Found", "Access denied", "Demo Mode",
 ];
+
+/**
+ * Injects a small fixed banner into the page showing the screenshot label
+ * and current URL so every screenshot is visually distinct.
+ */
+async function addBanner(page: Page, label: string): Promise<void> {
+  await page.evaluate((lbl: string) => {
+    const ID = "__guide_banner__";
+    const existing = document.getElementById(ID);
+    if (existing) existing.remove();
+    const bar = document.createElement("div");
+    bar.id = ID;
+    bar.style.cssText = [
+      "position:fixed", "top:0", "left:0", "right:0", "z-index:2147483647",
+      "background:#0f172a", "color:#f8fafc", "font-family:ui-monospace,monospace",
+      "font-size:11px", "padding:3px 10px", "display:flex",
+      "justify-content:space-between", "align-items:center",
+      "box-shadow:0 2px 6px rgba(0,0,0,.5)", "pointer-events:none",
+    ].join(";");
+    bar.innerHTML = `<span style="font-weight:600">🖥 ${lbl}</span>`
+      + `<span style="opacity:.65">${window.location.pathname}</span>`;
+    document.body.prepend(bar);
+  }, label);
+  // Tiny pause to let the banner paint
+  await page.waitForTimeout(150);
+}
 
 async function takeShot(
   page: Page,
@@ -344,11 +394,18 @@ async function takeShot(
       try {
         await page.waitForFunction(
           `() => document.body.innerText.includes(${JSON.stringify(opts.waitFor)})`,
-          { timeout: 10000 }
+          { timeout: 12000 }
         );
-      } catch { console.warn(`  ⚠  Timeout waiting for "${opts.waitFor}" on ${label}`); }
+      } catch {
+        console.warn(`  ⚠  Timeout waiting for "${opts.waitFor}" on ${label} (URL: ${page.url()})`);
+      }
     }
-    const bodyText = await page.evaluate<string>("document.body?.innerText ?? ''");
+    const [bodyText, currentUrl] = await Promise.all([
+      page.evaluate<string>("document.body?.innerText ?? ''"),
+      page.evaluate<string>("window.location.pathname"),
+    ]);
+    // Debug: log first 120 chars of visible text so we can see what's on each page
+    console.log(`     [page: ${currentUrl}] "${bodyText.slice(0, 120).replace(/\n/g, " ")}"`);
     const rejectAll = [...BASE_REJECTS, ...(opts.reject ?? [])];
     for (const pat of rejectAll) {
       if (bodyText.includes(pat)) {
@@ -358,6 +415,8 @@ async function takeShot(
         return "";
       }
     }
+    // Inject URL banner so every screenshot is visually distinct
+    await addBanner(page, label);
     const buf = await page.screenshot({ fullPage: false, clip: opts.clip });
     const b64 = buf.toString("base64");
     console.log(`     ✓ ${label}`);
@@ -368,12 +427,34 @@ async function takeShot(
   }
 }
 
+/**
+ * Clicks a tab by text, then waits for it to become aria-selected="true"
+ * before returning — ensures the panel content has actually switched.
+ */
 async function clickTab(page: Page, text: string): Promise<boolean> {
   try {
     const tab = page.locator(`[role="tab"]`).filter({ hasText: new RegExp(text, "i") }).first();
-    if (await tab.isVisible({ timeout: 3000 })) { await tab.click(); await page.waitForTimeout(1500); return true; }
-  } catch {}
-  return false;
+    if (!(await tab.isVisible({ timeout: 5000 }))) return false;
+    await tab.click();
+    // Wait for the tab to report itself as selected
+    await page
+      .waitForFunction(
+        (txt: string) => {
+          const tabs = Array.from(document.querySelectorAll<HTMLElement>('[role="tab"]'));
+          return tabs.some(
+            (t) => t.getAttribute("aria-selected") === "true" && t.innerText.toLowerCase().includes(txt.toLowerCase())
+          );
+        },
+        text,
+        { timeout: 5000 }
+      )
+      .catch(() => null);
+    // Extra settle time for the tab panel's API fetch
+    await page.waitForTimeout(2000);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ─── Screenshot capture: Admin ────────────────────────────────────────────────
@@ -2568,9 +2649,8 @@ async function main() {
     const page = await browser.newPage();
     await page.setViewportSize({ width: 1440, height: 900 });
 
-    // Inject auth
-    await injectAuth(page, token, roleDef.org.id);
-    console.log(`   Auth injected for ${roleDef.user.role}`);
+    // Inject auth — waits for sidebar (.no-print) to confirm auth worked
+    await injectAuth(page, token, roleDef.org.id, roleDef.user.role);
 
     let shots: Map<string, string>;
     try {

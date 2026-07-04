@@ -19,12 +19,26 @@ Generates 4 role-specific PDF user guides: Admin, Compliance Manager, Reviewer, 
 - **Screenshots per role**: Admin 13, Compliance 12, Reviewer 10, Assessor 14. All control tabs captured (Implementation, Configure, Evidence, Monitoring, POA&M, SSP).
 - **Run one at a time**: Each guide takes ~80-90s. Running 2 at once exceeds the 120s shell timeout.
 
-## Output sizes (v2)
+## Critical: networkidle never fires on Vite dev server
 
-- Admin: ~0.97 MB, 20 sections, 13 screenshots
-- Compliance Manager: ~0.87 MB, 18 sections, 12 screenshots
-- Reviewer: ~1.1 MB, 16 sections, 10 screenshots
-- Assessor: ~1.0 MB, 18 sections, 14 screenshots (matches VTCCORP guide depth)
+`waitUntil: "networkidle"` permanently blocks on the Vite dev server because HMR keeps
+a WebSocket connection open. Always use `domcontentloaded` + `.waitForSelector(".no-print")`
+(sidebar) as proof that auth succeeded and layout rendered. This was the root cause of
+all screenshots looking identical (pages captured before React finished rendering).
+
+## Output sizes (after screenshot fix)
+
+- Admin: ~2.5 MB, 20 sections, 13 screenshots
+- Compliance Manager: ~1.8 MB, 18 sections, 12 screenshots
+- Reviewer: ~1.6 MB, 16 sections, 10 screenshots
+- Assessor: ~2.1 MB, 18 sections, 14 screenshots
+
+## Screenshot helpers (v2 fixed)
+
+- `injectAuth()`: domcontentloaded + .no-print selector wait + 2.5s settle
+- `nav()`: domcontentloaded + .no-print selector wait + 3s settle
+- `addBanner(page, label)`: injects fixed dark banner with label + URL path on every screenshot
+- `clickTab()`: waits for `aria-selected="true"` after click before returning
 
 ## GUIDE_ONLY_ROLES keys
 
