@@ -1,0 +1,399 @@
+Add a C3PAO Evidence Export Package feature for VTCCORP.US.
+
+Purpose:
+VTCCORP.US is preparing for a C3PAO audit. The C3PAO may require us to upload all evidence and documentation into their own repository instead of reviewing it directly inside Control HUB.
+
+I need Control HUB to generate a complete export package containing all audit-ready documentation, evidence, SSP data, monitoring records, POA&M items, and reports in a clean folder structure that can be uploaded to the C3PAO’s system.
+
+This should be organization-specific.
+
+Initial organization:
+VTCCORP.US
+
+1. Add Export Package Feature
+
+Add an admin-only feature called:
+
+C3PAO Export Package
+
+Location:
+Reports > C3PAO Export Package
+
+or Admin utility:
+Admin > Export Package
+
+The package should generate a ZIP file.
+
+File name:
+VTCCORP.US_C3PAO_Evidence_Package_YYYY-MM-DD.zip
+
+2. Export Scope Options
+
+Before generating, allow options:
+
+Organization:
+- VTCCORP.US
+
+CMMC Level:
+- L2
+
+Include:
+- Approved evidence
+- Assessor Ready evidence
+- Active documents
+- SSP
+- POA&M
+- Monitoring tracker
+- Reports
+- Control implementation narratives
+- Evidence inventory spreadsheet
+- Document inventory spreadsheet
+- Control-to-evidence mapping spreadsheet
+
+Optional checkboxes:
+- Include Draft evidence
+- Include Pending Review evidence
+- Include Archived evidence
+- Include internal notes
+- Include metadata JSON files
+- Include file hash manifest
+
+Default:
+Include only Approved, Active, and Assessor Ready items.
+
+3. Recommended Folder Structure
+
+Generate the ZIP using this folder structure:
+
+VTCCORP.US_C3PAO_Evidence_Package/
+│
+├── 00_README/
+│   ├── README.pdf
+│   ├── Package_Index.xlsx
+│   └── Export_Summary.pdf
+│
+├── 01_Assessment_Overview/
+│   ├── VTCCORP.US_Executive_Readiness_Report.pdf
+│   ├── VTCCORP.US_Domain_Readiness_Report.pdf
+│   ├── VTCCORP.US_Audit_Readiness_Report.pdf
+│   └── VTCCORP.US_Scope_Summary.pdf
+│
+├── 02_SSP/
+│   ├── VTCCORP.US_System_Security_Plan.pdf
+│   ├── VTCCORP.US_System_Security_Plan.docx
+│   └── SSP_Control_Mapping.xlsx
+│
+├── 03_Control_Packages/
+│   ├── AC/
+│   │   ├── AC.L1-3.1.1/
+│   │   │   ├── Control_Summary.pdf
+│   │   │   ├── Implementation_Narrative.txt
+│   │   │   ├── Evidence/
+│   │   │   ├── Documents/
+│   │   │   ├── Monitoring/
+│   │   │   └── POAM/
+│   │   └── AC.L1-3.1.2/
+│   ├── AU/
+│   ├── CM/
+│   ├── IA/
+│   ├── IR/
+│   ├── MA/
+│   ├── MP/
+│   ├── PE/
+│   ├── PS/
+│   ├── RA/
+│   ├── CA/
+│   ├── SC/
+│   └── SI/
+│
+├── 04_All_Evidence/
+│   ├── Evidence_Inventory.xlsx
+│   └── files/
+│
+├── 05_All_Documents/
+│   ├── Document_Inventory.xlsx
+│   └── files/
+│
+├── 06_Monitoring/
+│   ├── Monitoring_Tracker_Report.pdf
+│   ├── Monitoring_Tracker.xlsx
+│   └── Monitoring_Evidence/
+│
+├── 07_POAM/
+│   ├── POAM_Report.pdf
+│   ├── POAM_Register.xlsx
+│   └── POAM_Evidence/
+│
+├── 08_Reports/
+│   ├── Executive_Readiness_Report.pdf
+│   ├── Domain_Readiness_Report.pdf
+│   ├── Gap_Analysis_Report.pdf
+│   ├── Evidence_Inventory_Report.pdf
+│   ├── Control_Status_Report.pdf
+│   └── Monitoring_Report.pdf
+│
+└── 09_Manifests/
+    ├── Control_to_Evidence_Map.xlsx
+    ├── Control_to_Document_Map.xlsx
+    ├── File_Hash_Manifest.xlsx
+    ├── Export_Audit_Log.xlsx
+    └── Package_Metadata.json
+
+4. Control Package Contents
+
+For each CMMC control folder, include:
+
+- Control_Summary.pdf
+- Implementation_Narrative.txt
+- SSP_Narrative.txt
+- linked evidence files
+- linked policy/procedure documents
+- linked monitoring records
+- linked POA&M items if any
+
+Control_Summary.pdf should show:
+- control ID
+- control title
+- domain
+- level
+- implementation status
+- implementation narrative
+- SSP narrative
+- evidence list
+- document list
+- monitoring items
+- POA&M status
+- assessor notes if available
+
+5. Evidence File Naming
+
+When exporting evidence files, rename copies using a clean audit-friendly naming format.
+
+Format:
+CONTROLID_EVIDENCETYPE_TITLE_DATE_ORIGINALFILENAME
+
+Example:
+AC.L1-3.1.1_Screenshot_User_Access_Review_2026-06-23_R-01_All_Users.png
+
+Rules:
+- do not change original file in the app
+- only rename the exported copy
+- remove unsafe characters
+- keep original extension
+- avoid duplicate filenames by appending _01, _02, etc.
+
+6. Documents
+
+Include all approved/active documents linked to controls.
+
+Documents should include:
+- policies
+- procedures
+- logs
+- review records
+- approval records
+- generated documents
+- uploaded documents
+- document-like evidence
+
+Do not include internal-only drafts unless selected.
+
+7. Inventory Spreadsheets
+
+Generate Excel files with the package.
+
+Evidence_Inventory.xlsx columns:
+- Evidence ID
+- Title
+- File Name
+- Exported File Name
+- Evidence Type
+- Status
+- Linked Controls
+- Domain
+- Level
+- Owner
+- Collection Date
+- Review/Expiration Date
+- Source
+- File Path in ZIP
+- SHA-256 Hash if available
+
+Document_Inventory.xlsx columns:
+- Document ID
+- Title
+- Document Type
+- Status
+- Linked Controls
+- Domain
+- Level
+- Owner
+- Effective Date
+- Next Review Date
+- Source
+- File Path in ZIP
+
+Control_to_Evidence_Map.xlsx columns:
+- Control ID
+- Control Title
+- Domain
+- Level
+- Control Status
+- Evidence Title
+- Evidence Type
+- Evidence Status
+- Evidence File Path
+- Collection Date
+- Owner
+
+Control_to_Document_Map.xlsx columns:
+- Control ID
+- Control Title
+- Required Document Type
+- Document Title
+- Document Status
+- Document File Path
+- Next Review Date
+
+8. README File
+
+Generate a README.pdf explaining:
+
+- package purpose
+- organization
+- export date
+- CMMC level
+- package contents
+- folder structure
+- how to navigate control folders
+- how evidence is mapped
+- who generated the package
+- confidentiality statement
+
+Include disclaimer:
+“This export package is provided to support C3PAO assessment review. Control HUB remains the source system for metadata, mappings, and audit history as of the export date.”
+
+9. Hash Manifest
+
+Generate SHA-256 hashes for every exported file.
+
+File_Hash_Manifest.xlsx should include:
+- exported path
+- original filename
+- file size
+- SHA-256 hash
+- export timestamp
+
+10. Export Audit Log
+
+Create an export audit log showing:
+- who generated the package
+- when generated
+- organization
+- included statuses
+- number of controls
+- number of evidence files
+- number of documents
+- number of reports
+- number of POA&M items
+- any missing files
+- any skipped records
+
+11. Missing Files Handling
+
+If an evidence record exists but the file is missing from storage:
+- do not fail the entire export
+- include it in Export_Issues.xlsx
+- mark as “metadata exists, file missing”
+- include evidence title, linked controls, and original file path/storage key
+- show warning after export
+
+12. Export Summary
+
+After package generation, show:
+- total controls exported
+- evidence files exported
+- documents exported
+- reports exported
+- POA&M items exported
+- monitoring records exported
+- missing files
+- skipped records
+- package size
+- file path
+
+13. File Output
+
+For production, save generated package to private storage or a server-side generated exports folder.
+
+For now, also allow admin to download the ZIP.
+
+If I want it only in Replit files later, support output path:
+
+/generated-exports/VTCCORP.US_C3PAO_Evidence_Package_YYYY-MM-DD.zip
+
+14. Security
+
+Only Global Admin or Organization Admin should generate this package.
+
+Assessor Read-Only cannot generate export packages unless explicitly allowed.
+
+Do not expose export package publicly.
+
+Do not include:
+- secrets
+- API keys
+- passwords
+- Microsoft client secrets
+- unrelated organizations
+- demo data
+- internal notes unless selected
+
+15. Optional C3PAO Repository Mapping
+
+Add a future configuration option:
+
+C3PAO Repository Format
+
+Options:
+- Control-based folder structure
+- Domain-based folder structure
+- Flat upload with manifest
+- Custom mapping template
+
+This will help if the C3PAO gives us a required folder format or spreadsheet.
+
+16. Acceptance Tests
+
+Test A:
+Generate VTCCORP.US C3PAO Export Package.
+
+Test B:
+ZIP contains all 110 CMMC L2 controls organized by domain/control.
+
+Test C:
+Each control folder contains implementation narrative, SSP narrative, evidence, documents, monitoring, and POA&M where applicable.
+
+Test D:
+Evidence files open correctly from the ZIP.
+
+Test E:
+Evidence_Inventory.xlsx correctly maps evidence to controls.
+
+Test F:
+Control_to_Evidence_Map.xlsx shows every control and linked evidence.
+
+Test G:
+No other organization data appears in the package.
+
+Test H:
+Missing files are reported in Export_Issues.xlsx.
+
+Test I:
+File_Hash_Manifest.xlsx includes SHA-256 hashes.
+
+Test J:
+README.pdf clearly explains package structure.
+
+Test K:
+The ZIP can be uploaded manually to a C3PAO portal.

@@ -22,6 +22,7 @@ import preAssessmentRouter from "./pre-assessment";
 import docTemplateLibraryRouter from "./doc-template-library";
 import invitationsRouter from "./invitations";
 import helpRouter from "./help";
+import exportRouter from "./export";
 
 const router: IRouter = Router();
 
@@ -48,5 +49,6 @@ router.use("/pre-assessment", preAssessmentRouter);
 router.use(docTemplateLibraryRouter);
 router.use(invitationsRouter);
 router.use(helpRouter);
+router.use(exportRouter);
 
 export default router;

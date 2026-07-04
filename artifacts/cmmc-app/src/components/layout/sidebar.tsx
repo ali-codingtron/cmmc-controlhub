@@ -64,6 +64,7 @@ const reportsItems = [
   { href: "/reports/domain", label: "Domain Readiness" },
   { href: "/reports/audit", label: "Audit Readiness" },
   { href: "/reports/ssp", label: "SSP Summary" },
+  { href: "/reports/export", label: "C3PAO Export Package" },
 ];
 
 function NavLink({ href, icon: Icon, label }: { href: string; icon: React.ComponentType<{ className?: string }>; label: string }) {
