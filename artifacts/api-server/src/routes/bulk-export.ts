@@ -317,7 +317,8 @@ async function fetchFile(fileKey: string | null): Promise<Buffer | null> {
   if (!fileKey) return null;
   try {
     if (fileKey.startsWith("/objects/")) {
-      const [buf] = await objectStorageService.getObjectEntityFile(fileKey).download();
+      const file = await objectStorageService.getObjectEntityFile(fileKey);
+      const [buf] = await file.download();
       return buf as Buffer;
     }
     return null;
