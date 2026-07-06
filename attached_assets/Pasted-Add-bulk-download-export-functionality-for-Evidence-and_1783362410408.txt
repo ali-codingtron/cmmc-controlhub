@@ -1,0 +1,573 @@
+Add bulk download/export functionality for Evidence and Documents.
+
+Goal:
+Users should be able to download multiple evidence files and documents at once from Control HUB. This is needed for C3PAO review, customer exports, internal audit packages, and offline review.
+
+This should work from:
+- Evidence Repository
+- Documentation > All Documents
+- Control Detail > Evidence tab
+- Control Detail > Documents/Documentation section if applicable
+- Reports / Export area if useful
+
+Important:
+All roles that have permission to view/download evidence or documents should be able to use bulk download, including Assessor Read-Only. However, the download must respect the role’s existing organization and object-level permissions.
+
+Do not allow any user to bulk download records they cannot normally view/download one at a time.
+
+1. Add Bulk Download Button
+
+On Evidence Repository, add:
+
+Bulk Download
+
+On Documentation > All Documents, add:
+
+Bulk Download
+
+On Control Detail > Evidence tab, add:
+
+Download Selected
+
+The button should support:
+- selected rows
+- all filtered results
+- download by control
+- download by security domain
+- download by status
+- download by evidence/document type
+
+2. Add Selection Checkboxes
+
+Add checkboxes to:
+- Evidence Repository table
+- All Documents table
+- Control Evidence table
+
+Add:
+- select all visible
+- select all matching current filters
+- clear selection
+
+When one or more items are selected, show a bulk action bar:
+
+Selected: X items
+Actions:
+- Download ZIP
+- Export Inventory
+- Clear Selection
+
+3. Bulk Download Wizard
+
+When user clicks Bulk Download, open a modal/wizard.
+
+Step 1: Choose Export Scope
+
+Options:
+- Selected items only
+- All currently filtered items
+- All evidence for selected security domain
+- All documents for selected security domain
+- All evidence/documents for selected control
+- All approved/active/assessor-ready items for organization
+
+Step 2: Choose Content
+
+Checkboxes:
+- Evidence files
+- Documents
+- Metadata manifest
+- Control mapping manifest
+- File hash manifest
+
+Default:
+- include files
+- include metadata manifest
+- include control mapping manifest
+
+Step 3: Choose Filters
+
+Filters:
+- Security Domain
+- CMMC Level
+- Control ID
+- Status
+- Evidence Type
+- Document Type
+- Owner
+- Uploaded/Collected Date Range
+- Expiration/Review Status
+
+Security Domain dropdown must include:
+- AC — Access Control
+- AT — Awareness and Training
+- AU — Audit and Accountability
+- CM — Configuration Management
+- IA — Identification and Authentication
+- IR — Incident Response
+- MA — Maintenance
+- MP — Media Protection
+- PE — Physical Protection
+- PS — Personnel Security
+- RA — Risk Assessment
+- CA — Security Assessment
+- SC — System and Communications Protection
+- SI — System and Information Integrity
+
+Step 4: Choose ZIP Structure
+
+Options:
+
+A. Flat ZIP with Manifest
+Best for uploading into another system.
+
+B. Folder by Security Domain
+Best for CMMC review.
+
+C. Folder by Control
+Best for C3PAO control-by-control review.
+
+D. Folder by Type
+Best for separating policies, procedures, screenshots, logs, and reports.
+
+Default:
+Folder by Security Domain > Control ID
+
+4. Recommended ZIP Structure
+
+For domain-based export, use:
+
+VTCCORP.US_Bulk_Download_YYYY-MM-DD/
+│
+├── 00_Manifest/
+│   ├── Export_Summary.pdf
+│   ├── File_Index.xlsx
+│   ├── Control_Mapping.xlsx
+│   └── File_Hash_Manifest.xlsx
+│
+├── AC_Access_Control/
+│   ├── AC.L1-3.1.1/
+│   ├── AC.L1-3.1.2/
+│   └── AC.L2-3.1.3/
+│
+├── AU_Audit_and_Accountability/
+├── CM_Configuration_Management/
+├── IA_Identification_and_Authentication/
+└── etc.
+
+For flat import format, use:
+
+VTCCORP.US_Bulk_Download_YYYY-MM-DD/
+│
+├── 00_Manifest/
+│   ├── File_Index.xlsx
+│   ├── Control_Mapping.xlsx
+│   └── File_Hash_Manifest.xlsx
+│
+└── Files/
+    ├── AC.L1-3.1.1__Report__User_Access_Review__2026-07-06.xlsx
+    ├── IA.L2-3.5.3__Screenshot__MFA_Policy__2026-07-06.png
+    └── AU.L2-3.3.5__Log__Audit_Log_Review__2026-07-06.pdf
+
+5. File Naming Convention
+
+When exporting, rename the copied files in the ZIP using linked controls.
+
+Do not rename the original file in Control HUB.
+
+Export filename format:
+
+CONTROLID__TYPE__SHORT_TITLE__DATE.ext
+
+Example:
+AC.L1-3.1.1__Report__User_Access_Review__2026-07-06.xlsx
+
+For multiple linked controls, use:
+
+PRIMARYCONTROL_PLUS_#_CONTROLS__TYPE__SHORT_TITLE__DATE.ext
+
+Example:
+AC.L1-3.1.1_PLUS_4_CONTROLS__Policy__Access_Control_Policy__2026-07-06.docx
+
+The full linked control list must appear in the manifest.
+
+Rules:
+- keep filenames under 120 characters
+- keep full path under 200 characters where possible
+- preserve the original extension
+- remove unsafe characters
+- replace spaces with underscores
+- if duplicate filename exists, append _01, _02, etc.
+- include original filename in the manifest
+
+6. Linked Controls in ZIP
+
+Every exported file should clearly show linked controls in at least two ways:
+
+A. Filename includes primary linked control.
+B. Manifest includes all linked controls.
+
+If exporting by control folder:
+- if one evidence item supports multiple controls, either:
+  - copy it into each linked control folder, or
+  - store it once and include a shortcut/reference text file
+
+Preferred:
+For review packages, copy into each linked control folder.
+For import packages, store once and use manifest mapping.
+
+7. File Index Manifest
+
+Create:
+
+File_Index.xlsx
+
+Columns:
+- Exported File Name
+- Original File Name
+- Title
+- Record Type
+- Evidence/Document Type
+- Status
+- Linked Controls
+- Primary Control
+- Security Domain
+- CMMC Level
+- Owner
+- Uploaded Date
+- Collection Date
+- Review/Expiration Date
+- Source Module
+- File Path in ZIP
+- File Size
+- SHA-256 Hash
+- Notes
+
+Record Type values:
+- Evidence
+- Document
+- Document-Like Evidence
+- Report
+- SSP
+- POA&M
+- Monitoring
+
+Do not generate CSV. Use XLSX.
+
+8. Control Mapping Manifest
+
+Create:
+
+Control_Mapping.xlsx
+
+Columns:
+- Control ID
+- Control Title
+- Domain
+- Level
+- Artifact Title
+- Artifact Type
+- Artifact Status
+- Exported File Name
+- ZIP Path
+- Owner
+- Collection Date
+- Source
+
+This lets a C3PAO or external reviewer filter by control and find every supporting file.
+
+9. File Hash Manifest
+
+Create:
+
+File_Hash_Manifest.xlsx
+
+Columns:
+- ZIP Path
+- Exported File Name
+- Original File Name
+- File Size
+- SHA-256 Hash
+- Export Timestamp
+
+Generate hashes for every exported file.
+
+10. Export Summary PDF
+
+Create:
+
+Export_Summary.pdf
+
+Include:
+- organization name
+- export date
+- generated by
+- selected scope
+- selected filters
+- number of evidence files
+- number of documents
+- number of security domains included
+- number of controls included
+- statuses included
+- any skipped/missing files
+- confidentiality statement
+
+11. Permission Rules
+
+Bulk download must respect permissions.
+
+All roles may bulk download only items they are allowed to view/download.
+
+Role behavior:
+- Global Admin: can download all organization data
+- Organization Admin: can download all data for assigned organization
+- Compliance Manager: can download all data for assigned organization
+- IT Contributor: can download evidence/documents they are allowed to view
+- Reviewer: can download reviewable evidence/documents
+- Executive Viewer: can download reports and approved documents if allowed
+- Assessor Read-Only: can bulk download approved/active/assessor-ready evidence and documents for assigned organization
+- Demo Viewer: can only download demo/sample files if demo downloads are enabled
+
+Assessor Read-Only should not be able to bulk download Draft or internal-only artifacts unless explicitly allowed.
+
+12. Status Inclusion Rules
+
+Default for assessor/export users:
+Include:
+- Approved
+- Active
+- Assessor Ready
+
+Exclude by default:
+- Draft
+- Pending Review
+- Archived
+- Stale
+
+Admins can optionally include:
+- Draft
+- Pending Review
+- Archived
+- Stale
+
+But the ZIP summary should clearly state which statuses were included.
+
+13. Missing File Handling
+
+If metadata exists but file is missing from storage:
+- do not fail the whole export
+- add item to Export_Issues.xlsx
+- show warning after export
+
+Export_Issues.xlsx columns:
+- Record ID
+- Title
+- Linked Controls
+- Original Filename
+- Issue
+- Recommended Action
+
+Issues:
+- file missing from storage
+- unsupported file type
+- permission denied
+- duplicate filename renamed
+- filename shortened
+- no linked control
+- no security domain
+
+14. Background Job for Large Exports
+
+Large exports may include hundreds or thousands of files.
+
+Do not block the UI indefinitely.
+
+Add export job workflow:
+- user starts bulk download
+- job status shows:
+  - queued
+  - collecting records
+  - preparing files
+  - generating manifests
+  - creating ZIP
+  - complete
+  - failed
+- show progress percentage
+- allow user to download ZIP when complete
+
+Store export job records:
+- job ID
+- organization ID
+- requested by
+- scope
+- filters
+- status
+- created at
+- completed at
+- ZIP path/storage key
+- file count
+- error count
+
+15. Export History
+
+Add optional export history page for admins:
+
+Reports > Export History
+
+Columns:
+- Date
+- Requested By
+- Scope
+- Filters
+- File Count
+- Package Size
+- Status
+- Download
+
+For Assessor Read-Only, either hide export history or show only their own completed export jobs if allowed.
+
+16. User Experience
+
+On Evidence Repository:
+- user filters by Security Domain = Access Control
+- clicks Bulk Download
+- selects All filtered items
+- chooses Folder by Control
+- clicks Generate ZIP
+- system creates:
+  VTCCORP.US_Evidence_AC_Access_Control_YYYY-MM-DD.zip
+
+On Documentation > All Documents:
+- user filters Type = Policy
+- clicks Bulk Download
+- system creates:
+  VTCCORP.US_Documents_Policies_YYYY-MM-DD.zip
+
+On Control Detail:
+- user opens AC.L1-3.1.1
+- clicks Download All Evidence for This Control
+- system creates:
+  VTCCORP.US_AC.L1-3.1.1_Evidence_Package_YYYY-MM-DD.zip
+
+17. Add Quick Download Options
+
+Add quick actions:
+
+Evidence Repository:
+- Download All Filtered Evidence
+- Download by Security Domain
+- Download by Control
+- Download Approved Evidence Only
+
+All Documents:
+- Download All Filtered Documents
+- Download by Security Domain
+- Download by Document Type
+- Download Active Documents Only
+
+Control Detail:
+- Download All Evidence for This Control
+- Download All Documents for This Control
+- Download Full Control Package
+
+18. Full Control Package Option
+
+On Control Detail, add:
+
+Download Control Package
+
+This should include:
+- implementation narrative
+- SSP narrative
+- linked evidence
+- linked documents
+- monitoring records
+- POA&M items
+- Control_Summary.pdf
+- manifest
+
+File name:
+VTCCORP.US_AC.L1-3.1.1_Control_Package_YYYY-MM-DD.zip
+
+19. Audit Logging
+
+Log all bulk downloads.
+
+Audit log fields:
+- user
+- role
+- organization
+- export scope
+- filters
+- number of files
+- number of documents
+- number of evidence records
+- package name
+- timestamp
+- IP address
+- success/failure
+
+Log:
+- bulk download started
+- bulk download completed
+- bulk download failed
+- file skipped
+- permission denied
+
+20. Security
+
+Do not create public ZIP links.
+
+ZIP downloads must require authentication and authorization.
+
+ZIP files should expire or be cleaned up after a set retention period.
+
+Suggested:
+- keep generated ZIPs for 7 days
+- allow admin to delete export packages
+- do not expose storage paths publicly
+- use signed temporary URLs if object storage is used
+
+21. Acceptance Tests
+
+Test A:
+Assessor Read-Only selects several approved evidence items and bulk downloads them.
+ZIP is generated successfully.
+
+Test B:
+Assessor cannot download Draft or internal-only files unless allowed.
+
+Test C:
+Admin filters Evidence Repository by Access Control domain and downloads all filtered evidence.
+ZIP contains only AC evidence and manifests.
+
+Test D:
+Admin filters All Documents by Policy and downloads.
+ZIP contains policy documents and Document manifest.
+
+Test E:
+File names include linked control ID or primary linked control.
+
+Test F:
+For evidence linked to multiple controls, manifest lists all linked controls.
+
+Test G:
+Download by Security Domain works for AC, AU, IA, CM, SC, SI, etc.
+
+Test H:
+Control Detail > Download Control Package creates a ZIP for that one control.
+
+Test I:
+File_Index.xlsx and Control_Mapping.xlsx are included and accurate.
+
+Test J:
+File_Hash_Manifest.xlsx includes SHA-256 hashes for every file.
+
+Test K:
+Export_Issues.xlsx is created if files are missing or skipped.
+
+Test L:
+Bulk download does not expose records from another organization.
+
+Test M:
+All bulk download activity is audit logged.

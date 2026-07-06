@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -23,10 +24,11 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Link } from "wouter";
-import { FilePlus, FileText, UploadCloud, Loader2, X } from "lucide-react";
+import { FilePlus, FileText, UploadCloud, Loader2, X, Package } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useOrg } from "@/context/OrgContext";
 import { cn } from "@/lib/utils";
+import { BulkDownloadWizard } from "@/components/bulk-export/BulkDownloadWizard";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -288,6 +290,7 @@ function AddDocumentDialog({ open, onClose, onSaved }: { open: boolean; onClose:
 
 export default function DocumentsList() {
   const qc = useQueryClient();
+  const { activeOrg } = useOrg();
   const [search, setSearch] = useState("");
   const [type, setType] = useState("all");
   const [status, setStatus] = useState("all");
@@ -295,6 +298,19 @@ export default function DocumentsList() {
   const [sourceType, setSourceType] = useState("all");
   const [showAdd, setShowAdd] = useState(false);
   const isAssessor = useIsAssessor();
+
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showWizard, setShowWizard] = useState(false);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const { data: docs, isLoading } = useGetAllDocuments({
     type: type !== "all" ? type : undefined,
@@ -308,21 +324,31 @@ export default function DocumentsList() {
     (docs ?? []).flatMap((d) => d.domains.map((dom) => dom.name))
   )].sort();
 
+  const allDocs = docs ?? [];
+  const allSelected = allDocs.length > 0 && allDocs.every((d) => selectedIds.has(d.id));
+  const someSelected = allDocs.some((d) => selectedIds.has(d.id)) && !allSelected;
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">All Documents</h1>
           <p className="text-muted-foreground mt-1">
-            {docs?.length ?? 0} item{(docs?.length ?? 0) !== 1 ? "s" : ""} — uploaded documents and evidence
+            {allDocs.length} item{allDocs.length !== 1 ? "s" : ""} — uploaded documents and evidence
           </p>
         </div>
-        {!isAssessor && (
-          <Button onClick={() => setShowAdd(true)}>
-            <FilePlus className="h-4 w-4 mr-2" />
-            Add Document
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowWizard(true)}>
+            <Package className="h-4 w-4 mr-2" />
+            Bulk Download
           </Button>
-        )}
+          {!isAssessor && (
+            <Button onClick={() => setShowAdd(true)}>
+              <FilePlus className="h-4 w-4 mr-2" />
+              Add Document
+            </Button>
+          )}
+        </div>
       </div>
 
       <Card>
@@ -381,11 +407,33 @@ export default function DocumentsList() {
             </Select>
           </div>
 
+          {/* Bulk action bar */}
+          {selectedIds.size > 0 && (
+            <div className="mb-4 px-3 py-2.5 rounded-lg border bg-primary/5 flex items-center gap-3">
+              <span className="text-sm font-medium text-primary">
+                {selectedIds.size} item{selectedIds.size !== 1 ? "s" : ""} selected
+              </span>
+              <Button size="sm" variant="default" onClick={() => setShowWizard(true)}>
+                <Package className="h-3.5 w-3.5 mr-1.5" />
+                Download ZIP
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-muted-foreground"
+                onClick={() => setSelectedIds(new Set())}
+              >
+                <X className="h-3.5 w-3.5 mr-1" />
+                Clear Selection
+              </Button>
+            </div>
+          )}
+
           {isLoading ? (
             <div className="space-y-3">
               {[...Array(5)].map((_, i) => <div key={i} className="h-12 animate-pulse bg-muted rounded" />)}
             </div>
-          ) : !docs?.length ? (
+          ) : !allDocs.length ? (
             <div className="text-center py-14 text-muted-foreground">
               <FileText className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p className="font-medium">No documents found</p>
@@ -401,6 +449,17 @@ export default function DocumentsList() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[40px] pl-2">
+                    <Checkbox
+                      checked={allSelected}
+                      data-state={someSelected ? "indeterminate" : allSelected ? "checked" : "unchecked"}
+                      onCheckedChange={(v) => {
+                        if (v) setSelectedIds(new Set(allDocs.map((d) => d.id)));
+                        else setSelectedIds(new Set());
+                      }}
+                      aria-label="Select all"
+                    />
+                  </TableHead>
                   <TableHead>Title</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Status</TableHead>
@@ -413,13 +472,26 @@ export default function DocumentsList() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {docs.map((doc) => {
+                {allDocs.map((doc) => {
                   const isAlert = doc.status === "expired" || doc.status === "needs_update";
                   const href = doc.sourceType === "evidence"
                     ? `/evidence/${doc.id}`
                     : `/documents/${doc.id}`;
                   return (
-                    <TableRow key={doc.id} className={isAlert ? "bg-red-50 dark:bg-red-950/20" : ""}>
+                    <TableRow
+                      key={doc.id}
+                      className={cn(
+                        isAlert ? "bg-red-50 dark:bg-red-950/20" : "",
+                        selectedIds.has(doc.id) && "bg-primary/5"
+                      )}
+                    >
+                      <TableCell className="pl-2">
+                        <Checkbox
+                          checked={selectedIds.has(doc.id)}
+                          onCheckedChange={() => toggleSelect(doc.id)}
+                          aria-label={`Select ${doc.title}`}
+                        />
+                      </TableCell>
                       <TableCell className="font-medium max-w-xs">
                         <Link href={href} className="text-primary hover:underline flex items-center gap-1.5">
                           {doc.sourceType === "evidence"
@@ -499,6 +571,19 @@ export default function DocumentsList() {
         open={showAdd}
         onClose={() => setShowAdd(false)}
         onSaved={() => qc.invalidateQueries({ queryKey: getGetAllDocumentsQueryKey() })}
+      />
+
+      {/* Bulk Download Wizard */}
+      <BulkDownloadWizard
+        open={showWizard}
+        onClose={() => setShowWizard(false)}
+        orgId={activeOrg?.id ?? ""}
+        orgName={activeOrg?.name ?? "Organization"}
+        filteredEvidenceIds={allDocs.filter((d) => d.sourceType === "evidence").map((d) => d.id)}
+        filteredDocumentIds={allDocs.filter((d) => d.sourceType !== "evidence").map((d) => d.id)}
+        selectedEvidenceIds={[...selectedIds].filter((id) => allDocs.find((d) => d.id === id && d.sourceType === "evidence"))}
+        selectedDocumentIds={[...selectedIds].filter((id) => allDocs.find((d) => d.id === id && d.sourceType !== "evidence"))}
+        context="documents"
       />
     </div>
   );

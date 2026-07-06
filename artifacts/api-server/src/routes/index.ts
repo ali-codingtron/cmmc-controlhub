@@ -23,6 +23,7 @@ import docTemplateLibraryRouter from "./doc-template-library";
 import invitationsRouter from "./invitations";
 import helpRouter from "./help";
 import exportRouter from "./export";
+import bulkExportRouter from "./bulk-export";
 
 const router: IRouter = Router();
 
@@ -50,5 +51,6 @@ router.use(docTemplateLibraryRouter);
 router.use(invitationsRouter);
 router.use(helpRouter);
 router.use(exportRouter);
+router.use(bulkExportRouter);
 
 export default router;
