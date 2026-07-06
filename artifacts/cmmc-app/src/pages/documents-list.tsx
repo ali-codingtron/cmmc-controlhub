@@ -580,10 +580,10 @@ export default function DocumentsList() {
         orgId={activeOrg?.id ?? ""}
         orgName={activeOrg?.name ?? "Organization"}
         filteredEvidenceIds={allDocs.filter((d) => d.sourceType === "evidence").map((d) => d.id)}
-        filteredDocumentIds={allDocs.filter((d) => d.sourceType !== "evidence").map((d) => d.id)}
+        filteredDocumentIds={allDocs.filter((d) => d.sourceType === "document").map((d) => d.id)}
         selectedEvidenceIds={[...selectedIds].filter((id) => allDocs.find((d) => d.id === id && d.sourceType === "evidence"))}
-        selectedDocumentIds={[...selectedIds].filter((id) => allDocs.find((d) => d.id === id && d.sourceType !== "evidence"))}
-        context="documents"
+        selectedDocumentIds={[...selectedIds].filter((id) => allDocs.find((d) => d.id === id && d.sourceType === "document"))}
+        context="both"
       />
     </div>
   );

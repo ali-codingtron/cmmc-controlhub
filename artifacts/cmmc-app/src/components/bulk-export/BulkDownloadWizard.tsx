@@ -457,8 +457,8 @@ export function BulkDownloadWizard({
             ["Organization", orgName],
             ["Scope", scopeDescription[scope]],
             ["ZIP Structure", structureLabel],
-            ["Evidence Items", includeEvidence ? String(exportEvidenceIds.length || "all eligible") : "Not included"],
-            ["Documents", includeDocs ? String(exportDocumentIds.length || "all eligible") : "Not included"],
+            ["Evidence Items", includeEvidence ? (scope === "allApproved" ? "all eligible" : `${exportEvidenceIds.length} items`) : "Not included"],
+            ["Documents", includeDocs ? (scope === "allApproved" ? "all eligible" : `${exportDocumentIds.length} items`) : "Not included"],
             ["Manifests", [includeManifest && "File_Index", includeControlMapping && "Control_Mapping", includeHashManifest && "Hash_Manifest"].filter(Boolean).join(", ") || "Export_Issues + Summary only"],
           ].map(([label, value]) => (
             <div key={label} className="flex justify-between px-4 py-2.5">
