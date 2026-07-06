@@ -355,7 +355,7 @@ router.post(
   requireOrg,
   async (req, res) => {
     const orgId = req.orgId!;
-    const user = req.user!;
+    const user = req.authUser!;
 
     const {
       evidenceIds = [],
