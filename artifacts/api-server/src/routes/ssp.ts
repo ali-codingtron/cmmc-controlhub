@@ -1,30 +1,85 @@
 import { Router } from "express";
 import multer from "multer";
 import path from "path";
-import { createReadStream, mkdirSync } from "fs";
-import { unlink } from "fs/promises";
+import { unlink, readFile } from "fs/promises";
+import { createReadStream } from "fs";
 import { db, sspDocumentsTable, sspSectionsTable, sspControlMappingsTable, controlsTable, controlAssessmentsTable, evidenceControlLinksTable, evidenceItemsTable } from "@workspace/db";
 import { eq, and, desc, count, isNotNull, isNull, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 import { randomUUID } from "crypto";
-import { readFile } from "fs/promises";
 import { parseSSPDocument } from "../lib/ssp-parser";
 import { generateSSPDocx } from "../lib/ssp-export";
+import { objectStorageClient, ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 
-const SSP_UPLOADS_DIR = path.resolve(__dirname, "..", "uploads", "ssp");
-mkdirSync(SSP_UPLOADS_DIR, { recursive: true });
+const objectStorageService = new ObjectStorageService();
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, SSP_UPLOADS_DIR),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${randomUUID()}${ext}`);
-  },
-});
+// ── GCS upload helper ─────────────────────────────────────────────────────────
+async function uploadBufferToGCS(
+  buffer: Buffer,
+  mimeType: string,
+  ext: string,
+  originalFilename: string
+): Promise<string> {
+  const privateDir = objectStorageService.getPrivateObjectDir();
+  const normalised = privateDir.startsWith("/") ? privateDir : `/${privateDir}`;
+  const parts = normalised.split("/").filter(Boolean);
+  const bucketName = parts[0];
+  const prefix = parts.slice(1).join("/");
 
+  const objectId = randomUUID();
+  const objectName = prefix
+    ? `${prefix}/ssp/${objectId}${ext}`
+    : `ssp/${objectId}${ext}`;
+
+  await objectStorageClient
+    .bucket(bucketName)
+    .file(objectName)
+    .save(buffer, {
+      contentType: mimeType,
+      metadata: {
+        contentDisposition: `attachment; filename="${encodeURIComponent(originalFilename)}"`,
+      },
+    });
+
+  return `/objects/ssp/${objectId}${ext}`;
+}
+
+// ── GCS delete helper ─────────────────────────────────────────────────────────
+async function deleteFromGCS(fileKey: string): Promise<void> {
+  try {
+    const file = await objectStorageService.getObjectEntityFile(fileKey);
+    await file.delete();
+  } catch {
+    // Best effort — ignore missing objects
+  }
+}
+
+// ── Read file buffer from GCS or local disk (backward compat) ─────────────────
+// Old records stored bare filenames (e.g. "a9dae38f-....docx") from local disk.
+// New records store "/objects/ssp/<uuid>.ext" from GCS.
+async function readSSPFileBuffer(fileKey: string): Promise<Buffer | null> {
+  if (fileKey.startsWith("/objects/")) {
+    try {
+      const file = await objectStorageService.getObjectEntityFile(fileKey);
+      const [buf] = await file.download();
+      return buf;
+    } catch {
+      return null;
+    }
+  }
+  // Legacy local-disk fallback (dev only; will not exist in production)
+  const localPath = path.resolve(__dirname, "..", "uploads", "ssp", fileKey);
+  try {
+    return await readFile(localPath);
+  } catch {
+    return null;
+  }
+}
+
+// multer buffers in memory — file is uploaded to GCS in the route handler
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
@@ -65,7 +120,6 @@ router.get("/ssp/control-mapping", requireAuth, requireOrg, async (req, res) => 
 
   if (!mapping) return res.json(null);
 
-  // Get actual control status from controlAssessmentsTable (single source of truth)
   const controlStatus = mapping.controlDbId
     ? await db
         .select({ status: controlAssessmentsTable.status })
@@ -78,7 +132,6 @@ router.get("/ssp/control-mapping", requireAuth, requireOrg, async (req, res) => 
         .then(r => r[0]?.status ?? null)
     : null;
 
-  // Check if evidence is linked to this control
   const hasEvidence = mapping.controlDbId
     ? await db
         .select({ id: evidenceControlLinksTable.evidenceId })
@@ -164,7 +217,19 @@ router.post("/ssp", requireAuth, requireOrg, upload.single("file"), async (req, 
   if (!title?.trim()) return res.status(400).json({ error: "title is required" });
 
   const id = randomUUID();
-  const file = (req as any).file as Express.Multer.File | undefined;
+  const multerFile = (req as any).file as Express.Multer.File | undefined;
+
+  // Upload file to GCS if provided
+  let fileKey: string | null = null;
+  if (multerFile) {
+    const ext = path.extname(multerFile.originalname);
+    const mimeType = multerFile.mimetype || "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    try {
+      fileKey = await uploadBufferToGCS(multerFile.buffer, mimeType, ext, multerFile.originalname);
+    } catch {
+      return res.status(500).json({ error: "File upload to storage failed" });
+    }
+  }
 
   const [existingPrimary] = await db
     .select({ id: sspDocumentsTable.id })
@@ -193,8 +258,8 @@ router.post("/ssp", requireAuth, requireOrg, upload.single("file"), async (req, 
       status: (status as any) || "draft",
       notes: notes?.trim() || null,
       nextReviewDate: nextReviewDate?.trim() || null,
-      originalFileName: file?.originalname ?? null,
-      fileKey: file?.filename ?? null,
+      originalFileName: multerFile?.originalname ?? null,
+      fileKey,
       isPrimary,
     })
     .returning();
@@ -244,15 +309,14 @@ router.post("/ssp/:id/parse", requireAuth, requireOrg, async (req, res) => {
   if (!doc) return res.status(404).json({ error: "Not found" });
   if (!doc.fileKey) return res.status(400).json({ error: "No file uploaded for this SSP" });
 
-  const filePath = path.join(SSP_UPLOADS_DIR, doc.fileKey);
-  const buffer = await readFile(filePath);
+  const buffer = await readSSPFileBuffer(doc.fileKey);
+  if (!buffer) return res.status(404).json({ error: "SSP file not found in storage. Please re-upload the file." });
+
   const { sections, controlMappings } = await parseSSPDocument(buffer);
 
-  // Wipe old extracted data
   await db.delete(sspSectionsTable).where(eq(sspSectionsTable.sspDocumentId, id));
   await db.delete(sspControlMappingsTable).where(eq(sspControlMappingsTable.sspDocumentId, id));
 
-  // Insert sections
   if (sections.length > 0) {
     await db.insert(sspSectionsTable).values(
       sections.map((s) => ({
@@ -268,14 +332,12 @@ router.post("/ssp/:id/parse", requireAuth, requireOrg, async (req, res) => {
     );
   }
 
-  // Resolve controlDbId from controls table; only insert mappings for valid CMMC control IDs
   const allControls = await db
     .select({ id: controlsTable.id, controlId: controlsTable.controlId })
     .from(controlsTable);
 
   const controlMap = new Map(allControls.map((c) => [c.controlId, c.id]));
 
-  // Deduplicate by controlRef and filter to only valid CMMC controls that exist in the library
   const seenRefs = new Set<string>();
   const validMappings = controlMappings.filter((m) => {
     if (!controlMap.has(m.controlRef)) return false;
@@ -347,10 +409,39 @@ router.get("/ssp/:id/download", requireAuth, requireOrg, async (req, res) => {
     .limit(1);
   if (!doc || !doc.fileKey) return res.status(404).json({ error: "File not found" });
 
-  const filePath = path.join(SSP_UPLOADS_DIR, doc.fileKey);
-  res.setHeader("Content-Disposition", `attachment; filename="${doc.originalFileName ?? doc.fileKey}"`);
+  const filename = doc.originalFileName ?? doc.fileKey;
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-  createReadStream(filePath).pipe(res as any);
+
+  if (doc.fileKey.startsWith("/objects/")) {
+    // GCS path — stream from object storage
+    try {
+      const file = await objectStorageService.getObjectEntityFile(doc.fileKey);
+      const nodeStream = file.createReadStream();
+      nodeStream.on("error", (err) => {
+        if (!res.headersSent) res.status(500).json({ error: "Storage read error" });
+        else res.destroy();
+      });
+      nodeStream.pipe(res as any);
+    } catch (err) {
+      if (err instanceof ObjectNotFoundError) {
+        return res.status(404).json({ error: "File no longer exists in storage. Please re-upload the SSP document." });
+      }
+      return res.status(500).json({ error: "Failed to retrieve file" });
+    }
+  } else {
+    // Legacy local-disk fallback (dev records only — file will not exist in production)
+    const localPath = path.resolve(__dirname, "..", "uploads", "ssp", doc.fileKey);
+    const stream = createReadStream(localPath);
+    stream.on("error", () => {
+      if (!res.headersSent) {
+        res.status(404).json({ error: "File not found in storage. Please re-upload the SSP document." });
+      } else {
+        res.destroy();
+      }
+    });
+    stream.pipe(res as any);
+  }
 });
 
 // ── Export updated DOCX ───────────────────────────────────────────────────────
@@ -444,8 +535,13 @@ router.delete("/ssp/:id", requireAuth, requireOrg, async (req, res) => {
   if (!doc) return res.status(404).json({ error: "Not found" });
 
   if (doc.fileKey) {
-    const filePath = path.join(SSP_UPLOADS_DIR, doc.fileKey);
-    await unlink(filePath).catch(() => {});
+    if (doc.fileKey.startsWith("/objects/")) {
+      await deleteFromGCS(doc.fileKey);
+    } else {
+      // Legacy local disk
+      const localPath = path.resolve(__dirname, "..", "uploads", "ssp", doc.fileKey);
+      await unlink(localPath).catch(() => {});
+    }
   }
 
   await db.delete(sspDocumentsTable).where(eq(sspDocumentsTable.id, id));
@@ -512,7 +608,6 @@ router.get("/ssp/:id/control-mappings", requireAuth, requireOrg, async (req, res
     .limit(1);
   if (!doc) return res.status(404).json({ error: "Not found" });
 
-  // Fetch mappings with actual control status (single source of truth)
   let mappings = await db
     .select({
       id: sspControlMappingsTable.id,
@@ -535,7 +630,6 @@ router.get("/ssp/:id/control-mappings", requireAuth, requireOrg, async (req, res
     .where(eq(sspControlMappingsTable.sspDocumentId, id))
     .orderBy(sspControlMappingsTable.controlRef);
 
-  // Get set of control UUIDs that have at least one evidence item linked (for this org)
   const evidenceLinked = await db
     .selectDistinct({ controlId: evidenceControlLinksTable.controlId })
     .from(evidenceControlLinksTable)
@@ -580,15 +674,16 @@ router.patch("/ssp/:id/control-mappings/:mappingId", requireAuth, requireOrg, as
     .limit(1);
   if (!doc) return res.status(404).json({ error: "Not found" });
 
-  const updates: Record<string, any> = { updatedAt: new Date(), isEdited: true };
+  const updates: Record<string, any> = { updatedAt: new Date() };
   if ("implementationNarrative" in req.body) updates.implementationNarrative = req.body.implementationNarrative;
   if ("policyReference" in req.body) updates.policyReference = req.body.policyReference;
-  if ("sourceSection" in req.body) updates.sourceSection = req.body.sourceSection;
+  if ("sspStatus" in req.body) updates.sspStatus = req.body.sspStatus;
+  updates.isEdited = true;
 
   const [updated] = await db
     .update(sspControlMappingsTable)
     .set(updates)
-    .where(eq(sspControlMappingsTable.id, mappingId))
+    .where(and(eq(sspControlMappingsTable.id, mappingId), eq(sspControlMappingsTable.sspDocumentId, id)))
     .returning();
 
   res.json(updated);
