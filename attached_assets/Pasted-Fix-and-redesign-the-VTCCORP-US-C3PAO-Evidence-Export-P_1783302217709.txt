@@ -1,0 +1,697 @@
+Fix and redesign the VTCCORP.US C3PAO Evidence Export Package.
+
+I reviewed the generated ZIP:
+
+VTCCORP.US_C3PAO_Evidence_Package_2026-07-06.zip
+
+The package is close, but it is not C3PAO-friendly enough yet and it is missing important document content.
+
+Current issues:
+1. Package metadata shows documents = 0.
+2. 05_All_Documents only contains Document_Inventory.xlsx, and the inventory is empty.
+3. Control folders do not contain Documents folders.
+4. Policies/procedures that are uploaded as evidence are not being included in the Documents section.
+5. 04_All_Evidence does not include all 1,061 evidence files.
+6. Domain folders use names like ACCE, SYST, IDEN, CONF instead of CMMC domain codes AC, SC, IA, CM, etc.
+7. Some exported filenames are too long and truncated.
+8. Monitoring_Tracker.xlsx has blank task/title values.
+9. The package structure is not ideal for a C3PAO that may need to manually import evidence into their own repository.
+
+Goal:
+Create a cleaner, assessor-friendly and import-friendly C3PAO export package that includes all documentation, evidence, mappings, SSP, monitoring, POA&M, and reports in a format that is easy for a C3PAO to review or upload into their own system.
+
+This export is for:
+
+Organization:
+VTCCORP.US
+
+CMMC Level:
+L2
+
+====================================================================
+1. FIX DOCUMENT EXPORT
+====================================================================
+
+The export must include documents.
+
+Documents should include records from all of these sources:
+
+A. Documentation module
+- generated documents
+- uploaded documents
+- active documents
+- approved documents
+- policies
+- procedures
+- logs
+- records
+- reports
+
+B. Document-like evidence
+Evidence records with these types should also be treated as documents for export:
+- Policy
+- Procedure
+- Log
+- Report
+- Approval Record
+- Access Review
+- Training Record
+- Risk Record
+- Incident Record
+- Backup Verification
+- Vulnerability Scan
+- Configuration Export
+- System Inventory
+- Asset Inventory
+- POA&M Export
+- SSP-related document
+
+Important:
+Do not remove these from evidence.
+But also include them in the Documents section and document manifests.
+
+The package should no longer show:
+
+documents: 0
+
+unless there are truly no documents.
+
+Expected:
+There should be a populated 05_Document_Library folder and a populated Document_Inventory.xlsx.
+
+====================================================================
+2. CREATE TWO EXPORT VIEWS INSIDE THE ZIP
+====================================================================
+
+Create both formats in the same ZIP:
+
+A. C3PAO_Review_Package
+This is for humans to browse.
+
+B. C3PAO_Import_Package
+This is for uploading/importing into a C3PAO repository.
+
+Recommended ZIP structure:
+
+VTCCORP.US_C3PAO_Evidence_Package_YYYY-MM-DD/
+│
+├── 00_START_HERE/
+│   ├── README.pdf
+│   ├── Export_Summary.pdf
+│   ├── Package_Index.xlsx
+│   └── C3PAO_Upload_Instructions.pdf
+│
+├── 01_C3PAO_Review_Package/
+│   ├── 01_Assessment_Overview/
+│   ├── 02_SSP/
+│   ├── 03_Control_Packages/
+│   ├── 04_Document_Library/
+│   ├── 05_Evidence_Library/
+│   ├── 06_Monitoring/
+│   ├── 07_POAM/
+│   └── 08_Reports/
+│
+├── 02_C3PAO_Import_Package/
+│   ├── import_manifest.xlsx
+│   ├── control_to_evidence_map.xlsx
+│   ├── control_to_document_map.xlsx
+│   ├── evidence_files/
+│   ├── document_files/
+│   ├── ssp_files/
+│   ├── poam_files/
+│   └── monitoring_files/
+│
+└── 99_Manifests/
+    ├── Evidence_Inventory.xlsx
+    ├── Document_Inventory.xlsx
+    ├── Control_to_Evidence_Map.xlsx
+    ├── Control_to_Document_Map.xlsx
+    ├── Control_Package_Index.xlsx
+    ├── File_Hash_Manifest.xlsx
+    ├── Export_Issues.xlsx
+    └── Package_Metadata.json
+
+====================================================================
+3. USE STANDARD CMMC DOMAIN FOLDER NAMES
+====================================================================
+
+Do not use truncated folder names like:
+
+ACCE
+SYST
+IDEN
+CONF
+AUDI
+MEDI
+
+Use standard CMMC domain codes:
+
+AC — Access Control
+AT — Awareness and Training
+AU — Audit and Accountability
+CM — Configuration Management
+IA — Identification and Authentication
+IR — Incident Response
+MA — Maintenance
+MP — Media Protection
+PE — Physical Protection
+PS — Personnel Security
+RA — Risk Assessment
+CA — Security Assessment
+SC — System and Communications Protection
+SI — System and Information Integrity
+
+Control folder format:
+
+03_Control_Packages/
+├── AC/
+│   ├── AC.L1-3.1.1__Authorized_Access_Control/
+│   ├── AC.L1-3.1.2__Transaction_and_Function_Control/
+│
+├── AU/
+├── CM/
+├── IA/
+etc.
+
+====================================================================
+4. IMPROVE CONTROL PACKAGE FOLDERS
+====================================================================
+
+Each control folder should contain:
+
+Control_Summary.pdf
+Implementation_Narrative.txt
+SSP_Narrative.txt
+
+Evidence/
+Documents/
+Monitoring/
+POAM/
+
+Example:
+
+AC.L1-3.1.1__Authorized_Access_Control/
+├── Control_Summary.pdf
+├── Implementation_Narrative.txt
+├── SSP_Narrative.txt
+├── Evidence/
+├── Documents/
+├── Monitoring/
+└── POAM/
+
+If there are no documents, monitoring records, or POA&M items for a control:
+- include a small README.txt in that subfolder saying:
+  “No linked records for this category as of export date.”
+
+Do not omit the subfolders entirely.
+
+====================================================================
+5. FIX CONTROL SUMMARY PDF
+====================================================================
+
+Each Control_Summary.pdf should be useful to a C3PAO.
+
+It should include:
+- control ID
+- control title
+- domain
+- level
+- status
+- implementation narrative
+- SSP narrative
+- linked evidence list
+- linked document list
+- monitoring records
+- POA&M items
+- file paths in ZIP
+- export date
+
+Add a clear note:
+“Files listed below are included in this control folder and also indexed in the master manifests.”
+
+====================================================================
+6. FIX DOCUMENT LIBRARY
+====================================================================
+
+Create:
+
+01_C3PAO_Review_Package/04_Document_Library/
+
+Folder structure:
+
+04_Document_Library/
+├── Policies/
+├── Procedures/
+├── Logs_and_Review_Records/
+├── Risk_and_POAM/
+├── SSP_and_Scope/
+├── Training_and_Personnel/
+├── Incident_Response/
+├── Configuration_and_Baselines/
+├── Generated_Documents/
+└── Other_Documents/
+
+All document-like files should be copied here once.
+
+Document_Inventory.xlsx must include:
+- Document ID
+- Title
+- Document Type
+- Status
+- Source
+- Linked Controls
+- Domain
+- Level
+- Owner
+- Effective Date
+- Next Review Date
+- Original Filename
+- Exported Filename
+- File Path in ZIP
+- SHA-256 Hash
+- Notes
+
+Document source values:
+- Generated Document
+- Uploaded Document
+- Document-Like Evidence
+- SSP Export
+- Report Export
+
+====================================================================
+7. FIX EVIDENCE LIBRARY
+====================================================================
+
+Create:
+
+01_C3PAO_Review_Package/05_Evidence_Library/
+
+This should contain all unique evidence files, not just a few files.
+
+Folder structure:
+
+05_Evidence_Library/
+├── Screenshots/
+├── Logs/
+├── Configuration_Exports/
+├── Reports/
+├── Access_Reviews/
+├── Audit_Reviews/
+├── Vulnerability_and_Patch/
+├── Device_and_Endpoint/
+├── Backup_and_Recovery/
+├── Network_and_Firewall/
+├── Training/
+└── Other_Evidence/
+
+Evidence_Inventory.xlsx must show all evidence records and link to the exported file.
+
+If evidence is linked to multiple controls, store the file once in the Evidence Library and map it to multiple controls in the manifest.
+
+====================================================================
+8. CREATE C3PAO IMPORT PACKAGE
+====================================================================
+
+Create:
+
+02_C3PAO_Import_Package/
+
+This folder should be optimized for upload into a C3PAO repository.
+
+Use a flat or minimally nested structure.
+
+Suggested:
+
+02_C3PAO_Import_Package/
+├── import_manifest.xlsx
+├── evidence_files/
+├── document_files/
+├── ssp_files/
+├── poam_files/
+└── monitoring_files/
+
+The import_manifest.xlsx should be the C3PAO upload guide.
+
+Columns:
+- Record Type
+- Control ID
+- Control Title
+- Domain
+- Level
+- Artifact Title
+- Artifact Type
+- Artifact Status
+- Original Filename
+- Exported Filename
+- Folder Path
+- Full ZIP Path
+- Source Module
+- Owner
+- Collection Date
+- Review Date
+- Notes
+- Suggested C3PAO Upload Category
+
+Record Type values:
+- Evidence
+- Document
+- SSP
+- POA&M
+- Monitoring
+- Report
+
+Suggested C3PAO Upload Category values:
+- Policy
+- Procedure
+- Screenshot
+- Log
+- Report
+- Export
+- Review Record
+- SSP
+- POA&M
+- Monitoring Record
+- Other
+
+This import package should allow the C3PAO to sort/filter by control ID and upload artifacts into their system.
+
+====================================================================
+9. AVOID DUPLICATION PROBLEMS
+====================================================================
+
+The review package may copy evidence into each control folder for easy browsing.
+
+The import package should store each unique file once and use manifests to show all control mappings.
+
+Add metadata to indicate:
+- file copied to multiple control folders: yes/no
+- canonical file path
+- duplicate copy path if applicable
+
+====================================================================
+10. FIX FILENAMES AND PATH LENGTH
+====================================================================
+
+Current filenames are too long and sometimes truncated.
+
+Use clean, short, consistent filenames.
+
+Suggested format:
+
+CONTROLID__TYPE__SHORT_TITLE__YYYY-MM-DD.ext
+
+Examples:
+AC.L1-3.1.1__Screenshot__All_Users__2026-05-05.png
+IA.L2-3.5.3__Policy__MFA_Conditional_Access__2026-05-05.png
+AU.L2-3.3.5__Log__Audit_Log_Review__2026-06-23.pdf
+CA.L2-3.12.2__POAM__POAM_Register__2026-07-06.xlsx
+
+Rules:
+- Replace dots in folder names only if needed, but keep control ID readable.
+- Remove unsafe characters.
+- Keep filenames under 120 characters.
+- Keep full path under 200 characters where possible.
+- Avoid unnecessary repeated title/date/original filename.
+- Preserve original extension.
+- If duplicate filename exists, append _01, _02.
+
+Add original filename to manifests so nothing is lost.
+
+====================================================================
+11. FIX ALL EVIDENCE COUNT CONSISTENCY
+====================================================================
+
+Package counts must match actual package content.
+
+If metadata says:
+evidence = 1061
+
+Then:
+Evidence_Inventory.xlsx should contain 1061 rows excluding header.
+Evidence Library should include all unique exported evidence files.
+Control_to_Evidence_Map.xlsx should map all evidence/control relationships.
+
+If some evidence files are not included because of status filters, the metadata must clearly say:
+- total evidence in system
+- included evidence
+- excluded draft evidence
+- excluded pending evidence
+- excluded archived evidence
+
+====================================================================
+12. FIX DOCUMENT COUNT CONSISTENCY
+====================================================================
+
+Package counts must correctly show:
+- total documents in system
+- generated documents included
+- uploaded documents included
+- document-like evidence included
+- excluded documents
+
+Do not show documents = 0 if policies/procedures exist as evidence or generated documents.
+
+====================================================================
+13. FIX MONITORING EXPORT
+====================================================================
+
+Monitoring_Tracker.xlsx currently has blank title/task values.
+
+Fix the monitoring export to include:
+
+- Task
+- Frequency
+- Control ID
+- Description
+- Last Completed
+- Next Due
+- Status
+- Notes
+- Operating Procedure
+- Test Procedure
+- Evidence to Retain
+- Linked Evidence
+- Linked POA&M
+
+No blank task titles should appear.
+
+Also add monitoring records into each control folder where applicable:
+
+Control_Folder/Monitoring/Monitoring_Record.pdf
+Control_Folder/Monitoring/Monitoring_Evidence/
+
+====================================================================
+14. FIX POA&M EXPORT
+====================================================================
+
+POA&M export should include:
+- POA&M number
+- title
+- weakness
+- linked control
+- risk level
+- status
+- owner
+- scheduled completion
+- actual completion
+- remediation plan
+- required evidence
+- closure evidence
+- notes
+
+If POA&M items are closed, include them and clearly show status = Closed.
+
+Add POA&M items into control folders if linked.
+
+If POA&M items have no linked control, include them in:
+07_POAM/Unmapped_POAM/
+
+and list them in Export_Issues.xlsx as:
+“POA&M has no linked control.”
+
+====================================================================
+15. ADD BETTER README AND C3PAO INSTRUCTIONS
+====================================================================
+
+Create:
+
+00_START_HERE/README.pdf
+00_START_HERE/C3PAO_Upload_Instructions.pdf
+
+README should explain:
+- package purpose
+- export date
+- organization
+- CMMC level
+- included statuses
+- how to navigate the package
+- difference between Review Package and Import Package
+- where to find manifests
+- where to find documents
+- where to find control-specific evidence
+- who generated the package
+
+C3PAO_Upload_Instructions.pdf should explain:
+- use import_manifest.xlsx as upload guide
+- sort/filter by Control ID
+- upload files from evidence_files and document_files
+- use Control_to_Evidence_Map for verification
+- use Control_to_Document_Map for policy/procedure mapping
+- use File_Hash_Manifest for integrity verification
+
+====================================================================
+16. ADD EXPORT ISSUES REPORT
+====================================================================
+
+Create:
+
+99_Manifests/Export_Issues.xlsx
+
+Include all warnings:
+- missing source file
+- evidence without linked control
+- document without linked control
+- POA&M without linked control
+- monitoring task without control
+- duplicate filename renamed
+- long filename shortened
+- unsupported file type
+- excluded by status filter
+- document-like evidence exported as document
+
+The export should not silently skip anything.
+
+====================================================================
+17. UPDATE PACKAGE METADATA
+====================================================================
+
+Package_Metadata.json should include:
+
+- organization
+- organization ID
+- export date/time
+- generated by
+- CMMC level
+- export type
+- included statuses
+- total controls
+- controls exported
+- evidence total in app
+- evidence included
+- unique evidence files included
+- documents total in app
+- documents included
+- document-like evidence included
+- POA&M included
+- monitoring records included
+- reports included
+- missing files
+- export issues count
+- hash manifest included yes/no
+
+====================================================================
+18. ADD EXPORT MODES
+====================================================================
+
+Add export mode options:
+
+Mode 1:
+C3PAO Review Package
+- control folders with copied evidence/documents
+
+Mode 2:
+C3PAO Import Package
+- flat folder with manifests
+
+Mode 3:
+Combined Package
+- includes both review and import formats
+
+Default:
+Combined Package
+
+====================================================================
+19. ADD EXPORT PREVIEW BEFORE ZIP
+====================================================================
+
+Before generating the ZIP, show a preview summary:
+
+- controls to export
+- evidence to include
+- documents to include
+- document-like evidence to include
+- reports to include
+- monitoring records
+- POA&M records
+- estimated package size
+- any warnings
+
+If documents = 0, show a warning:
+“No documents found. Check whether policies/procedures are stored as evidence and include document-like evidence.”
+
+Do not let the user accidentally generate a package missing documents without warning.
+
+====================================================================
+20. ACCEPTANCE TESTS
+====================================================================
+
+Test A:
+Generate VTCCORP.US combined C3PAO package.
+
+Test B:
+Package includes:
+00_START_HERE
+01_C3PAO_Review_Package
+02_C3PAO_Import_Package
+99_Manifests
+
+Test C:
+Documents are included.
+Document_Inventory.xlsx has rows.
+05/04_Document_Library contains actual document files.
+
+Test D:
+Document-like evidence such as policies and procedures appears in both:
+- Evidence inventory
+- Document inventory
+
+Test E:
+Domain folders use CMMC codes:
+AC, AT, AU, CM, IA, IR, MA, MP, PE, PS, RA, CA, SC, SI
+
+Test F:
+Each control folder includes:
+Control_Summary.pdf
+Implementation_Narrative.txt
+SSP_Narrative.txt
+Evidence/
+Documents/
+Monitoring/
+POAM/
+
+Test G:
+04/05 Evidence Library includes all unique evidence files included in the export.
+
+Test H:
+C3PAO Import Package has import_manifest.xlsx and flat files.
+
+Test I:
+Monitoring_Tracker.xlsx has no blank task names.
+
+Test J:
+POA&M export includes linked control where available and flags unmapped items.
+
+Test K:
+Filenames are readable and not overly long.
+
+Test L:
+File_Hash_Manifest.xlsx includes every exported file.
+
+Test M:
+Export_Issues.xlsx exists and lists warnings.
+
+Test N:
+Package_Metadata.json counts match actual inventory row counts.
+
+Test O:
+ZIP can be handed to a C3PAO and reviewed/imported without needing Control HUB access.

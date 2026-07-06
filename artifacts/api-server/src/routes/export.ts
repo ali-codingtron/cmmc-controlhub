@@ -25,7 +25,79 @@ import { ObjectStorageService } from "../lib/objectStorage";
 const router = Router();
 const objectStorageService = new ObjectStorageService();
 
-// ── Helper: PDF builder ────────────────────────────────────────────────────────
+// ── CMMC domain name → standard 2-letter code ─────────────────────────────────
+const CMMC_DOMAIN_CODES: Record<string, string> = {
+  "Access Control": "AC",
+  "Awareness and Training": "AT",
+  "Audit and Accountability": "AU",
+  "Configuration Management": "CM",
+  "Identification and Authentication": "IA",
+  "Incident Response": "IR",
+  "Maintenance": "MA",
+  "Media Protection": "MP",
+  "Personnel Security": "PS",
+  "Physical Protection": "PE",
+  "Risk Assessment": "RA",
+  "Security Assessment": "CA",
+  "System and Communications Protection": "SC",
+  "System and Information Integrity": "SI",
+};
+
+function domainCode(domainName: string): string {
+  return CMMC_DOMAIN_CODES[domainName] ?? (domainName.replace(/[^A-Z]/g, "").slice(0, 2) || "XX");
+}
+
+// ── Evidence types that should ALSO appear in the Document Library ─────────────
+const DOC_LIKE_EVIDENCE_TYPES = new Set([
+  "policy", "procedure", "report", "log", "approval_record", "access_review",
+  "training_record", "risk_record", "incident_record", "backup_verification",
+  "scan_report", "configuration_export", "system_inventory", "asset_inventory",
+  "supplier_review", "network_diagram",
+]);
+
+function evidenceToDocLibFolder(evType: string): string {
+  switch (evType) {
+    case "policy": return "Policies";
+    case "procedure": return "Procedures";
+    case "log": case "approval_record": case "access_review": return "Logs_and_Review_Records";
+    case "risk_record": return "Risk_and_POAM";
+    case "training_record": return "Training_and_Personnel";
+    case "incident_record": return "Incident_Response";
+    case "configuration_export": case "system_inventory": case "asset_inventory": return "Configuration_and_Baselines";
+    default: return "Other_Documents";
+  }
+}
+
+function docTypeToLibFolder(docType: string | null | undefined): string {
+  const t = (docType ?? "").toLowerCase();
+  if (t === "policy") return "Policies";
+  if (t === "procedure") return "Procedures";
+  if (t === "log" || t === "register" || t === "checklist") return "Logs_and_Review_Records";
+  if (t === "risk_record") return "Risk_and_POAM";
+  if (t.includes("training")) return "Training_and_Personnel";
+  if (t.includes("incident")) return "Incident_Response";
+  if (t === "system_inventory" || t === "asset_inventory" || t === "vulnerability_scan") return "Configuration_and_Baselines";
+  if (t === "narrative" || t === "form" || t === "plan") return "Generated_Documents";
+  return "Other_Documents";
+}
+
+function evidenceToLibFolder(evType: string): string {
+  switch (evType) {
+    case "screenshot": return "Screenshots";
+    case "log": return "Logs";
+    case "configuration_export": return "Configuration_Exports";
+    case "report": case "scan_report": return "Reports";
+    case "access_review": case "approval_record": return "Access_Reviews";
+    case "training_record": return "Training";
+    case "backup_verification": return "Backup_and_Recovery";
+    case "system_inventory": case "asset_inventory": return "Device_and_Endpoint";
+    case "risk_record": case "incident_record": return "Reports";
+    case "policy": case "procedure": return "Other_Evidence";
+    default: return "Other_Evidence";
+  }
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
 async function buildPdf(fn: (doc: PDFKit.PDFDocument) => void): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 50, size: "LETTER" });
@@ -38,28 +110,23 @@ async function buildPdf(fn: (doc: PDFKit.PDFDocument) => void): Promise<Buffer> 
   });
 }
 
-// ── Helper: XLSX builder ───────────────────────────────────────────────────────
-function buildXlsx(
-  headers: string[],
-  rows: (string | number | null | undefined)[][]
-): Buffer {
+function buildXlsx(headers: string[], rows: (string | number | null | undefined)[][]): Buffer {
   const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet([
-    headers,
-    ...rows.map((r) => r.map((v) => v ?? "")),
-  ]);
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows.map((r) => r.map((v) => v ?? ""))]);
   ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length + 2, 18) }));
   XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
   return Buffer.from(XLSX.write(wb, { type: "buffer", bookType: "xlsx" }));
 }
 
-// ── Helper: safe filename characters ──────────────────────────────────────────
-function safeFilename(str: string, maxLen = 40): string {
-  return (str ?? "")
-    .replace(/[^\w\-_.]/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_|_$/g, "")
-    .slice(0, maxLen) || "file";
+function sha256hex(buf: Buffer): string {
+  return crypto.createHash("sha256").update(buf).digest("hex");
+}
+
+function fmtD(d: Date | string | null | undefined): string {
+  if (!d) return "—";
+  try {
+    return new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+  } catch { return String(d); }
 }
 
 function fileExt(fileName: string | null | undefined): string {
@@ -68,54 +135,54 @@ function fileExt(fileName: string | null | undefined): string {
   return parts.length > 1 ? "." + parts.pop()!.toLowerCase() : "";
 }
 
-function evidenceExportFilename(
-  controlId: string,
-  evidenceType: string,
-  title: string,
-  collectedAt: Date | null | undefined,
-  originalFileName: string | null | undefined
-): string {
+function safeSeg(str: string, maxLen = 30): string {
+  return (str ?? "")
+    .replace(/[^\w\-_.() ]/g, "_")
+    .replace(/\s+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "")
+    .slice(0, maxLen) || "file";
+}
+
+// Short filename for evidence/document files in the ZIP
+// Format: TYPE__TITLE__DATE__ID8.ext (max ~100 chars)
+function evidenceFilename(evType: string, title: string, collectedAt: Date | string | null | undefined, id: string, originalFileName: string | null | undefined): string {
   const ext = fileExt(originalFileName);
-  const base = originalFileName ? originalFileName.replace(/\.[^.]+$/, "") : "file";
-  const dateStr = collectedAt
-    ? new Date(collectedAt).toISOString().slice(0, 10)
-    : "unknown";
-  const cleanControl = (controlId ?? "CTRL").replace(/\./g, "-");
-  const cleanType = (evidenceType ?? "evidence").replace(/_/g, "-");
-  const cleanTitle = safeFilename(title, 25);
-  const cleanBase = safeFilename(base, 20);
-  return `${cleanControl}_${cleanType}_${cleanTitle}_${dateStr}_${cleanBase}${ext}`;
+  const type = safeSeg(evType.replace(/_/g, "-"), 20);
+  const t = safeSeg(title, 28);
+  const date = collectedAt ? new Date(collectedAt).toISOString().slice(0, 10) : "unknown";
+  const uid = id.replace(/-/g, "").slice(0, 8);
+  return `${type}__${t}__${date}__${uid}${ext}`;
 }
 
-// ── Helper: SHA-256 ────────────────────────────────────────────────────────────
-function sha256hex(buf: Buffer): string {
-  return crypto.createHash("sha256").update(buf).digest("hex");
+// Filename for evidence in a control folder (no uid needed — already in unique folder)
+function ctrlEvidenceFilename(evType: string, title: string, collectedAt: Date | string | null | undefined, originalFileName: string | null | undefined): string {
+  const ext = fileExt(originalFileName);
+  const type = safeSeg(evType.replace(/_/g, "-"), 20);
+  const t = safeSeg(title, 35);
+  const date = collectedAt ? new Date(collectedAt).toISOString().slice(0, 10) : "unknown";
+  return `${type}__${t}__${date}${ext}`;
 }
 
-// ── Helper: format date ────────────────────────────────────────────────────────
-function fmtD(d: Date | string | null | undefined): string {
-  if (!d) return "—";
-  try {
-    return new Date(d).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  } catch {
-    return String(d);
-  }
+function docFilename(docType: string | null | undefined, title: string, id: string, originalFileName: string | null | undefined): string {
+  const ext = fileExt(originalFileName) || ".docx";
+  const type = safeSeg((docType ?? "doc").replace(/_/g, "-"), 20);
+  const t = safeSeg(title, 30);
+  const uid = id.replace(/-/g, "").slice(0, 8);
+  return `${type}__${t}__${uid}${ext}`;
 }
 
-// ── Helper: fetch file from GCS ────────────────────────────────────────────────
+function ctrlFolderName(ctrl: { controlId: string; title: string }): string {
+  return `${ctrl.controlId}__${safeSeg(ctrl.title, 35)}`;
+}
+
 async function fetchGcsFile(fileKey: string): Promise<Buffer | null> {
   try {
     if (!fileKey.startsWith("/objects/")) return null;
     const file = await objectStorageService.getObjectEntityFile(fileKey);
     const [downloaded] = await file.download();
     return downloaded as Buffer;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 // ── POST /api/export/c3pao-package ────────────────────────────────────────────
@@ -148,86 +215,45 @@ router.post(
     if (evidenceStatuses.length === 0) evidenceStatuses.push("approved");
 
     try {
-      // ── 1. Query all data ──────────────────────────────────────────────────
+      // ── 1. Query all data ────────────────────────────────────────────────────
       const [
-        org,
-        domains,
-        controls,
-        assessments,
-        evidence,
-        evidenceLinks,
-        documents,
-        docLinks,
-        monitoring,
-        poams,
-        sspMappings,
+        org, domains, controls, assessments, evidence, evidenceLinks,
+        documents, docLinks, monitoring, poams, sspMappings,
       ] = await Promise.all([
-        db
-          .select()
-          .from(organizationsTable)
-          .where(eq(organizationsTable.id, orgId))
-          .limit(1)
-          .then((r) => r[0]),
-        db.select().from(domainsTable).orderBy(domainsTable.name),
+        db.select().from(organizationsTable).where(eq(organizationsTable.id, orgId)).limit(1).then((r) => r[0]),
+        db.select().from(domainsTable).orderBy(domainsTable.sortOrder),
         db.select().from(controlsTable).orderBy(controlsTable.sortOrder),
-        db
-          .select()
-          .from(controlAssessmentsTable)
-          .where(eq(controlAssessmentsTable.organizationId, orgId)),
-        db
-          .select()
-          .from(evidenceItemsTable)
-          .where(
-            and(
-              eq(evidenceItemsTable.organizationId, orgId),
-              isNull(evidenceItemsTable.deletedAt),
-              inArray(
-                evidenceItemsTable.status,
-                evidenceStatuses as [string, ...string[]]
-              )
-            )
-          ),
+        db.select().from(controlAssessmentsTable).where(eq(controlAssessmentsTable.organizationId, orgId)),
+        db.select().from(evidenceItemsTable).where(
+          and(eq(evidenceItemsTable.organizationId, orgId), isNull(evidenceItemsTable.deletedAt),
+            inArray(evidenceItemsTable.status, evidenceStatuses as [string, ...string[]]))
+        ),
         db.select().from(evidenceControlLinksTable),
-        db
-          .select()
-          .from(documentsTable)
-          .where(
-            and(
-              eq(documentsTable.organizationId, orgId),
-              inArray(documentsTable.status, [
-                "active",
-                "approved",
-                "assessor_ready",
-                "pending_review",
-                "draft",
-              ] as [string, ...string[]])
-            )
-          ),
+        db.select().from(documentsTable).where(
+          and(
+            eq(documentsTable.organizationId, orgId),
+            isNull(documentsTable.deletedAt),
+            inArray(documentsTable.status, ["active", "approved", "assessor_ready", "pending_review", "draft"] as [string, ...string[]])
+          )
+        ),
         db.select().from(documentControlMapsTable),
-        db
-          .select()
-          .from(monitoringItemsTable)
-          .where(eq(monitoringItemsTable.organizationId, orgId)),
-        db
-          .select()
-          .from(poamsTable)
-          .where(eq(poamsTable.organizationId, orgId)),
-        db
-          .select()
-          .from(sspControlMappingsTable)
-          .where(eq(sspControlMappingsTable.organizationId, orgId)),
+        db.select().from(monitoringItemsTable).where(eq(monitoringItemsTable.organizationId, orgId)).orderBy(monitoringItemsTable.sortOrder),
+        db.select().from(poamsTable).where(eq(poamsTable.organizationId, orgId)),
+        db.select().from(sspControlMappingsTable).where(eq(sspControlMappingsTable.organizationId, orgId)),
       ]);
 
-      if (!org) {
-        return res.status(404).json({ error: "Organization not found" });
-      }
+      if (!org) return res.status(404).json({ error: "Organization not found" });
 
       const exportDate = new Date().toISOString().slice(0, 10);
-      const orgName = safeFilename(org.name ?? "org", 30);
+      const exportTimestamp = new Date().toISOString();
+      const orgName = safeSeg(org.name ?? "org", 40);
       const pkgName = `${orgName}_C3PAO_Evidence_Package_${exportDate}`;
       const root = `${pkgName}/`;
+      const rev = `${root}01_C3PAO_Review_Package/`;
+      const imp = `${root}02_C3PAO_Import_Package/`;
+      const man = `${root}99_Manifests/`;
 
-      // ── Lookup maps ────────────────────────────────────────────────────────
+      // ── Lookup maps ──────────────────────────────────────────────────────────
       const domainMap = new Map(domains.map((d) => [d.id, d]));
       const controlMap = new Map(controls.map((c) => [c.id, c]));
       const assessmentMap = new Map(assessments.map((a) => [a.controlId, a]));
@@ -235,11 +261,9 @@ router.post(
       const evidenceToControls = new Map<string, string[]>();
       const controlToEvidence = new Map<string, string[]>();
       for (const lnk of evidenceLinks) {
-        if (!evidenceToControls.has(lnk.evidenceId))
-          evidenceToControls.set(lnk.evidenceId, []);
+        if (!evidenceToControls.has(lnk.evidenceId)) evidenceToControls.set(lnk.evidenceId, []);
         evidenceToControls.get(lnk.evidenceId)!.push(lnk.controlId);
-        if (!controlToEvidence.has(lnk.controlId))
-          controlToEvidence.set(lnk.controlId, []);
+        if (!controlToEvidence.has(lnk.controlId)) controlToEvidence.set(lnk.controlId, []);
         controlToEvidence.get(lnk.controlId)!.push(lnk.evidenceId);
       }
       const evidenceMap = new Map(evidence.map((e) => [e.id, e]));
@@ -247,38 +271,43 @@ router.post(
       const docToControls = new Map<string, string[]>();
       const controlToDocs = new Map<string, string[]>();
       for (const lnk of docLinks) {
-        if (!docToControls.has(lnk.documentId))
-          docToControls.set(lnk.documentId, []);
+        if (!docToControls.has(lnk.documentId)) docToControls.set(lnk.documentId, []);
         docToControls.get(lnk.documentId)!.push(lnk.controlId);
-        if (!controlToDocs.has(lnk.controlId))
-          controlToDocs.set(lnk.controlId, []);
+        if (!controlToDocs.has(lnk.controlId)) controlToDocs.set(lnk.controlId, []);
         controlToDocs.get(lnk.controlId)!.push(lnk.documentId);
       }
       const docMap = new Map(documents.map((d) => [d.id, d]));
 
       const controlToPoams = new Map<string, typeof poams>();
+      const unmappedPoams: typeof poams = [];
       for (const p of poams) {
         if (p.linkedControlId) {
-          if (!controlToPoams.has(p.linkedControlId))
-            controlToPoams.set(p.linkedControlId, []);
+          if (!controlToPoams.has(p.linkedControlId)) controlToPoams.set(p.linkedControlId, []);
           controlToPoams.get(p.linkedControlId)!.push(p);
+        } else {
+          unmappedPoams.push(p);
         }
       }
 
-      const sspMap = new Map(
-        sspMappings.map((s) => [s.controlDbId ?? s.controlRef, s])
-      );
+      // Monitoring by controlRef (monitoring.controlRef matches control.controlId)
+      const controlRefToMonitoring = new Map<string, typeof monitoring>();
+      for (const m of monitoring) {
+        if (!controlRefToMonitoring.has(m.controlRef)) controlRefToMonitoring.set(m.controlRef, []);
+        controlRefToMonitoring.get(m.controlRef)!.push(m);
+      }
 
-      // Group controls by domain
+      const sspMap = new Map(sspMappings.map((s) => [s.controlDbId ?? s.controlRef, s]));
+
       const controlsByDomain = new Map<string, typeof controls>();
       for (const c of controls) {
-        if (!controlsByDomain.has(c.domainId))
-          controlsByDomain.set(c.domainId, []);
+        if (!controlsByDomain.has(c.domainId)) controlsByDomain.set(c.domainId, []);
         controlsByDomain.get(c.domainId)!.push(c);
       }
 
-      // ── 2. Pre-fetch ALL GCS files in parallel (batches of 10) ────────────
-      // This prevents sequential 90-second downloads and avoids proxy timeout.
+      // Evidence that is "document-like" (also goes in Document Library)
+      const docLikeEvidence = evidence.filter((e) => DOC_LIKE_EVIDENCE_TYPES.has(e.evidenceType));
+
+      // ── 2. Pre-fetch ALL GCS files in parallel batches ──────────────────────
       const gcsCache = new Map<string, Buffer | null>();
       const uniqueFileKeys = [
         ...new Set([
@@ -290,11 +319,7 @@ router.post(
       const GCS_BATCH = 10;
       for (let i = 0; i < uniqueFileKeys.length; i += GCS_BATCH) {
         const batch = uniqueFileKeys.slice(i, i + GCS_BATCH);
-        await Promise.all(
-          batch.map(async (fk) => {
-            gcsCache.set(fk, await fetchGcsFile(fk));
-          })
-        );
+        await Promise.all(batch.map(async (fk) => { gcsCache.set(fk, await fetchGcsFile(fk)); }));
       }
 
       function cachedFile(fileKey: string | null | undefined): Buffer | null {
@@ -302,8 +327,7 @@ router.post(
         return gcsCache.get(fileKey) ?? null;
       }
 
-      // ── 3. Send headers immediately, then stream the archive ──────────────
-      // Headers sent now so the proxy/browser sees a live response during generation.
+      // ── 3. Send headers immediately → proxy sees live response ──────────────
       const zipName = `${pkgName}.zip`;
       res.setHeader("Content-Type", "application/zip");
       res.setHeader("Content-Disposition", `attachment; filename="${zipName}"`);
@@ -311,1065 +335,950 @@ router.post(
 
       const arc = archiver("zip", { zlib: { level: 6 } });
       arc.pipe(res);
-
-      // Abort archive if client disconnects mid-download
-      res.on("close", () => {
-        if (!res.writableEnded) arc.abort();
-      });
-
+      res.on("close", () => { if (!res.writableEnded) arc.abort(); });
       arc.on("error", (err: Error) => {
         req.log.error({ err }, "Archive stream error during C3PAO export");
         if (!res.writableEnded) res.end();
       });
 
-      // ── Tracking state ─────────────────────────────────────────────────────
+      // ── Tracking state ───────────────────────────────────────────────────────
       const hashManifestRows: (string | number | null | undefined)[][] = [];
-      const missingFiles: {
-        title: string;
-        fileKey: string | null;
-        zipPath: string;
-      }[] = [];
+      const exportIssues: { category: string; item: string; detail: string; recommendation: string }[] = [];
+      // Canonical ZIP paths: evidence ID → path in 05_Evidence_Library
+      const evLibPaths = new Map<string, string>();
+      // Canonical ZIP paths: evidence ID → path in 02_Import evidence_files
+      const evImportPaths = new Map<string, string>();
+      // Canonical ZIP paths: document ID → path in 04_Document_Library
+      const docLibPaths = new Map<string, string>();
+      // Track used filenames per folder to avoid collisions
+      const usedNamesInFolder = new Map<string, Set<string>>();
 
-      const usedFilenames = new Set<string>();
-      function uniquePath(preferred: string): string {
-        if (!usedFilenames.has(preferred)) {
-          usedFilenames.add(preferred);
-          return preferred;
-        }
+      function uniqueNameInFolder(folder: string, preferred: string): string {
+        if (!usedNamesInFolder.has(folder)) usedNamesInFolder.set(folder, new Set());
+        const used = usedNamesInFolder.get(folder)!;
+        if (!used.has(preferred)) { used.add(preferred); return preferred; }
         const lastDot = preferred.lastIndexOf(".");
         const base = lastDot >= 0 ? preferred.slice(0, lastDot) : preferred;
         const ext = lastDot >= 0 ? preferred.slice(lastDot) : "";
         let i = 1;
-        while (usedFilenames.has(`${base}_${String(i).padStart(2, "0")}${ext}`))
-          i++;
+        while (used.has(`${base}_${String(i).padStart(2, "0")}${ext}`)) i++;
         const unique = `${base}_${String(i).padStart(2, "0")}${ext}`;
-        usedFilenames.add(unique);
+        if (i > 1) exportIssues.push({ category: "Duplicate Filename", item: preferred, detail: `Renamed to ${unique} in ${folder}`, recommendation: "No action needed" });
+        used.add(unique);
         return unique;
       }
-
-      const evidenceZipPaths = new Map<string, string>();
-      const docZipPaths = new Map<string, string>();
 
       function addEntry(zipPath: string, buf: Buffer): void {
         arc.append(buf, { name: zipPath });
         if (includeHashManifest) {
-          hashManifestRows.push([
-            zipPath,
-            zipPath.split("/").pop() ?? "",
-            buf.length,
-            sha256hex(buf),
-            new Date().toISOString(),
-          ]);
+          hashManifestRows.push([zipPath, zipPath.split("/").pop() ?? "", buf.length, sha256hex(buf), exportTimestamp]);
         }
       }
 
-      // ── 4. Build archive content ───────────────────────────────────────────
-      // (same sections as before, but GCS reads use the cache — no more awaits)
-
-      // ── 00_README ─────────────────────────────────────────────────────────
-      const statusCounts = {
-        implemented: 0,
-        in_progress: 0,
-        not_started: 0,
-        not_applicable: 0,
-        planned: 0,
-      };
+      // ── Status summary for overview PDFs ─────────────────────────────────────
+      const statusCounts = { implemented: 0, in_progress: 0, not_started: 0, not_applicable: 0, planned: 0 };
       for (const a of assessments) {
-        if (a.status in statusCounts)
-          (statusCounts as Record<string, number>)[a.status]++;
+        if (a.status in statusCounts) (statusCounts as Record<string, number>)[a.status]++;
         else statusCounts.not_started++;
       }
       statusCounts.not_started += controls.length - assessments.length;
 
-      const readmePdf = await buildPdf((doc) => {
-        doc
-          .fontSize(22)
-          .font("Helvetica-Bold")
-          .text("C3PAO Evidence Export Package", { align: "center" });
-        doc.moveDown(0.5);
-        doc
-          .fontSize(14)
-          .font("Helvetica")
-          .text(org.name, { align: "center" });
-        doc.text(`Export Date: ${exportDate}`, { align: "center" });
-        doc.moveDown(2);
-
-        const meta = [
-          ["Organization", org.name],
-          ["Export Date", exportDate],
-          ["CMMC Target Level", "Level 2"],
-          ["Total Controls", String(controls.length)],
-          ["Evidence Items Included", String(evidence.length)],
-          ["Documents Included", String(documents.length)],
-          ["POA&M Items", String(poams.length)],
-          ["Monitoring Items", String(monitoring.length)],
-        ];
-        for (const [k, v] of meta) {
-          doc
-            .font("Helvetica-Bold")
-            .text(`${k}: `, { continued: true })
-            .font("Helvetica")
-            .text(v);
-        }
-
-        doc.moveDown(2);
-        doc.fontSize(12).font("Helvetica-Bold").text("Package Contents");
-        doc.moveDown(0.5);
-        doc.fontSize(10).font("Helvetica");
-        const folders = [
-          "00_README — This README, metadata, and package index",
-          "01_Assessment_Overview — Executive readiness and domain reports",
-          "02_SSP — System Security Plan narrative and control mapping",
-          "03_Control_Packages — Per-control packages organised by domain",
-          "04_All_Evidence — Consolidated evidence files and inventory spreadsheet",
-          "05_All_Documents — Policy/procedure documents and inventory",
-          "06_Monitoring — Operational monitoring tracker records",
-          "07_POAM — Plan of Action & Milestones register",
-          "08_Reports — Comprehensive compliance reports including gap analysis",
-          "09_Manifests — File hash manifest, audit log, and cross-reference maps",
-        ];
-        for (const f of folders) {
-          doc.text(`  • ${f}`);
-        }
-
-        doc.moveDown(2);
-        doc
-          .fontSize(9)
-          .font("Helvetica-Oblique")
-          .text(
-            "This export package is prepared to support C3PAO assessment review under CMMC Level 2. " +
-              "Control HUB remains the authoritative source for metadata, mappings, and audit history. " +
-              "This document contains confidential information. Handle in accordance with your organisation's data handling policy."
-          );
-      });
-      addEntry(`${root}00_README/README.pdf`, readmePdf);
-
-      if (includeMetadataJson) {
-        const meta = {
-          package: pkgName,
-          organization: org.name,
-          organizationId: org.id,
-          exportDate,
-          cmmcLevel: "L2",
-          generatedBy: {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-          },
-          options: {
-            includeApproved,
-            includeAssessorReady,
-            includeDraft,
-            includePendingReview,
-            includeArchived,
-            includeInternalNotes,
-          },
-          counts: {
-            controls: controls.length,
-            evidence: evidence.length,
-            documents: documents.length,
-            poams: poams.length,
-            monitoring: monitoring.length,
-          },
-        };
-        addEntry(
-          `${root}00_README/Package_Metadata.json`,
-          Buffer.from(JSON.stringify(meta, null, 2))
-        );
-      }
-
-      // ── 01_Assessment_Overview ────────────────────────────────────────────
       const total = controls.length;
       const impl = statusCounts.implemented;
       const pct = total > 0 ? Math.round((impl / total) * 100) : 0;
 
-      const execPdf = await buildPdf((doc) => {
-        doc
-          .fontSize(20)
-          .font("Helvetica-Bold")
-          .text("Executive Readiness Report", { align: "center" });
-        doc
-          .fontSize(12)
-          .font("Helvetica")
-          .text(org.name, { align: "center" });
+      // ════════════════════════════════════════════════════════════════════════
+      // SECTION 0: 00_START_HERE
+      // ════════════════════════════════════════════════════════════════════════
+      const readmePdf = await buildPdf((doc) => {
+        doc.fontSize(22).font("Helvetica-Bold").text("C3PAO Evidence Export Package", { align: "center" });
+        doc.fontSize(14).font("Helvetica").text(org.name, { align: "center" });
         doc.text(`Export Date: ${exportDate}`, { align: "center" });
         doc.moveDown(2);
 
-        doc
-          .fontSize(14)
-          .font("Helvetica-Bold")
-          .text("Control Implementation Summary");
-        doc.moveDown(0.5);
-        doc.fontSize(11).font("Helvetica");
-        doc.text(
-          `Overall Readiness: ${pct}% (${impl} of ${total} controls implemented)`
-        );
-        doc.moveDown(0.5);
-        const sCounts = [
-          ["Implemented", statusCounts.implemented],
-          ["In Progress", statusCounts.in_progress],
-          ["Planned", statusCounts.planned],
-          ["Not Started", statusCounts.not_started],
-          ["Not Applicable", statusCounts.not_applicable],
+        for (const [k, v] of [
+          ["Organization", org.name], ["Export Date", exportDate],
+          ["CMMC Target Level", "Level 2"], ["Total Controls", String(controls.length)],
+          ["Overall Readiness", `${pct}% (${impl} of ${total} implemented)`],
+          ["Evidence Items Included", String(evidence.length)],
+          ["Documents Included", String(documents.length + docLikeEvidence.length)],
+          ["POA&M Items", String(poams.length)], ["Monitoring Items", String(monitoring.length)],
+          ["Generated By", `${user.name} (${user.email})`],
+        ] as [string, string][]) {
+          doc.font("Helvetica-Bold").text(`${k}: `, { continued: true }).font("Helvetica").text(v);
+        }
+
+        doc.moveDown(2);
+        doc.fontSize(12).font("Helvetica-Bold").text("Package Structure");
+        doc.moveDown(0.5).fontSize(10).font("Helvetica");
+        const structure = [
+          "00_START_HERE/  — This README, upload instructions, package index",
+          "01_C3PAO_Review_Package/  — Human-readable browse format",
+          "  01_Assessment_Overview/  — Executive and domain readiness reports",
+          "  02_SSP/  — System Security Plan narrative and control mapping",
+          "  03_Control_Packages/  — Per-control folders by domain (AC/, AT/, AU/, ...)",
+          "    [CTRL_ID]__[Title]/Control_Summary.pdf, Evidence/, Documents/, Monitoring/, POAM/",
+          "  04_Document_Library/  — All policies, procedures, and documentation",
+          "  05_Evidence_Library/  — All unique evidence files by category",
+          "  06_Monitoring/  — Operational monitoring tracker",
+          "  07_POAM/  — Plan of Action & Milestones register",
+          "  08_Reports/  — Gap analysis and compliance reports",
+          "02_C3PAO_Import_Package/  — Upload-optimized flat structure with manifests",
+          "  import_manifest.xlsx  — Master upload guide (sort by Control ID)",
+          "  evidence_files/  — All unique evidence files (flat)",
+          "  document_files/  — All unique document files (flat)",
+          "  ssp_files/ / poam_files/ / monitoring_files/",
+          "99_Manifests/  — Cross-reference maps, hash manifest, issues log",
         ];
-        for (const [label, count] of sCounts) {
+        for (const s of structure) doc.text(s);
+
+        doc.moveDown(2).fontSize(9).font("Helvetica-Oblique").text(
+          "This export package is prepared to support C3PAO assessment review under CMMC Level 2. " +
+          "Control HUB remains the authoritative source for metadata, mappings, and audit history. " +
+          "Handle in accordance with your organisation's data handling policy."
+        );
+      });
+      addEntry(`${root}00_START_HERE/README.pdf`, readmePdf);
+
+      const uploadInstrPdf = await buildPdf((doc) => {
+        doc.fontSize(20).font("Helvetica-Bold").text("C3PAO Upload Instructions", { align: "center" });
+        doc.fontSize(12).font("Helvetica").text(org.name, { align: "center" });
+        doc.text(`Export Date: ${exportDate}`, { align: "center" });
+        doc.moveDown(2);
+
+        doc.fontSize(13).font("Helvetica-Bold").text("How to Use This Package");
+        doc.moveDown(0.5).fontSize(10).font("Helvetica");
+        const steps = [
+          "1. Open 02_C3PAO_Import_Package/import_manifest.xlsx — this is your master upload guide.",
+          "2. Sort or filter by Control ID to find all evidence and documents for a specific control.",
+          "3. Upload files from evidence_files/ and document_files/ into your assessment platform.",
+          "4. Use 99_Manifests/Control_to_Evidence_Map.xlsx to verify all evidence is mapped correctly.",
+          "5. Use 99_Manifests/Control_to_Document_Map.xlsx to verify policy/procedure coverage.",
+          "6. Use 99_Manifests/File_Hash_Manifest.xlsx to verify file integrity (SHA-256).",
+          "7. Use 99_Manifests/Export_Issues.xlsx to review any warnings or missing files.",
+          "8. For human review, navigate 01_C3PAO_Review_Package/03_Control_Packages/ by domain folder.",
+        ];
+        for (const s of steps) { doc.text(s); doc.moveDown(0.3); }
+
+        doc.moveDown(1).fontSize(13).font("Helvetica-Bold").text("Domain Folder Codes (03_Control_Packages/)");
+        doc.moveDown(0.5).fontSize(9).font("Helvetica");
+        const codes = [
+          "AC — Access Control", "AT — Awareness and Training", "AU — Audit and Accountability",
+          "CM — Configuration Management", "IA — Identification and Authentication", "IR — Incident Response",
+          "MA — Maintenance", "MP — Media Protection", "PE — Physical Protection",
+          "PS — Personnel Security", "RA — Risk Assessment", "CA — Security Assessment",
+          "SC — System and Communications Protection", "SI — System and Information Integrity",
+        ];
+        for (const c of codes) doc.text(`  ${c}`);
+
+        doc.moveDown(2).fontSize(9).font("Helvetica-Oblique").text("Generated by Control HUB — Confidential");
+      });
+      addEntry(`${root}00_START_HERE/C3PAO_Upload_Instructions.pdf`, uploadInstrPdf);
+
+      addEntry(`${root}00_START_HERE/Package_Index.xlsx`, buildXlsx(
+        ["Folder", "Description", "Key Files"],
+        [
+          ["00_START_HERE/", "Navigation and instructions", "README.pdf, C3PAO_Upload_Instructions.pdf"],
+          ["01_C3PAO_Review_Package/01_Assessment_Overview/", "Executive and domain readiness reports", "Executive_Readiness_Report.pdf, Domain_Readiness_Report.pdf"],
+          ["01_C3PAO_Review_Package/02_SSP/", "System Security Plan", "System_Security_Plan.pdf, SSP_Control_Mapping.xlsx"],
+          ["01_C3PAO_Review_Package/03_Control_Packages/", "Per-control evidence packages (by domain code)", "Control_Summary.pdf, Evidence/, Documents/, Monitoring/, POAM/"],
+          ["01_C3PAO_Review_Package/04_Document_Library/", "All policies, procedures, and documents", "Policies/, Procedures/, Document_Inventory.xlsx"],
+          ["01_C3PAO_Review_Package/05_Evidence_Library/", "All unique evidence files by category", "Screenshots/, Logs/, Evidence_Inventory.xlsx"],
+          ["01_C3PAO_Review_Package/06_Monitoring/", "Operational monitoring tracker", "Monitoring_Tracker.xlsx"],
+          ["01_C3PAO_Review_Package/07_POAM/", "Plan of Action & Milestones", "POAM_Register.xlsx, POAM_Report.pdf"],
+          ["01_C3PAO_Review_Package/08_Reports/", "Gap analysis and compliance reports", "Gap_Analysis_Report.pdf"],
+          ["02_C3PAO_Import_Package/", "Upload-optimized flat structure", "import_manifest.xlsx, evidence_files/, document_files/"],
+          ["99_Manifests/", "Cross-reference maps and hash manifest", "Control_to_Evidence_Map.xlsx, File_Hash_Manifest.xlsx, Export_Issues.xlsx"],
+        ]
+      ));
+
+      // ════════════════════════════════════════════════════════════════════════
+      // SECTION 1: 01_Assessment_Overview
+      // ════════════════════════════════════════════════════════════════════════
+      const execPdf = await buildPdf((doc) => {
+        doc.fontSize(20).font("Helvetica-Bold").text("Executive Readiness Report", { align: "center" });
+        doc.fontSize(12).font("Helvetica").text(org.name, { align: "center" });
+        doc.text(`Export Date: ${exportDate}`, { align: "center" });
+        doc.moveDown(2);
+
+        doc.fontSize(14).font("Helvetica-Bold").text("Control Implementation Summary");
+        doc.moveDown(0.5).fontSize(11).font("Helvetica");
+        doc.text(`Overall Readiness: ${pct}% (${impl} of ${total} controls implemented)`);
+        doc.moveDown(0.5);
+        for (const [label, count] of [
+          ["Implemented", statusCounts.implemented], ["In Progress", statusCounts.in_progress],
+          ["Planned", statusCounts.planned], ["Not Started", statusCounts.not_started],
+          ["Not Applicable", statusCounts.not_applicable],
+        ] as [string, number][]) {
           doc.text(`  ${label}: ${count}`);
         }
 
-        doc.moveDown(1.5);
-        doc.fontSize(14).font("Helvetica-Bold").text("Evidence Summary");
-        doc.moveDown(0.5);
-        doc.fontSize(11).font("Helvetica");
+        doc.moveDown(1.5).fontSize(14).font("Helvetica-Bold").text("Evidence Summary");
+        doc.moveDown(0.5).fontSize(11).font("Helvetica");
         doc.text(`Total Evidence Items: ${evidence.length}`);
         const byStatus = new Map<string, number>();
-        for (const e of evidence) {
-          byStatus.set(e.status, (byStatus.get(e.status) ?? 0) + 1);
-        }
-        for (const [status, cnt] of byStatus) {
-          doc.text(`  ${status.replace(/_/g, " ")}: ${cnt}`);
-        }
+        for (const e of evidence) byStatus.set(e.status, (byStatus.get(e.status) ?? 0) + 1);
+        for (const [status, cnt] of byStatus) doc.text(`  ${status.replace(/_/g, " ")}: ${cnt}`);
 
-        doc.moveDown(1.5);
-        doc
-          .fontSize(14)
-          .font("Helvetica-Bold")
-          .text("Domain Readiness Breakdown");
-        doc.moveDown(0.5);
-        doc.fontSize(10).font("Helvetica");
+        doc.moveDown(1.5).fontSize(14).font("Helvetica-Bold").text("Domain Readiness Breakdown");
+        doc.moveDown(0.5).fontSize(10).font("Helvetica");
         for (const [domainId, domainControls] of controlsByDomain) {
           const domain = domainMap.get(domainId);
           if (!domain) continue;
-          const domImpl = domainControls.filter(
-            (c) => assessmentMap.get(c.id)?.status === "implemented"
-          ).length;
-          const domPct =
-            domainControls.length > 0
-              ? Math.round((domImpl / domainControls.length) * 100)
-              : 0;
-          doc.text(
-            `${domain.name} (${domain.abbreviation ?? ""}): ${domPct}% — ${domImpl}/${domainControls.length}`
-          );
+          const code = domainCode(domain.name);
+          const domImpl = domainControls.filter((c) => assessmentMap.get(c.id)?.status === "implemented").length;
+          const domPct = domainControls.length > 0 ? Math.round((domImpl / domainControls.length) * 100) : 0;
+          doc.text(`${code} — ${domain.name}: ${domPct}% (${domImpl}/${domainControls.length})`);
         }
-
-        doc.moveDown(2);
-        doc
-          .fontSize(9)
-          .font("Helvetica-Oblique")
-          .text("Generated by Control HUB — Confidential");
+        doc.moveDown(2).fontSize(9).font("Helvetica-Oblique").text("Generated by Control HUB — Confidential");
       });
-      addEntry(
-        `${root}01_Assessment_Overview/${orgName}_Executive_Readiness_Report.pdf`,
-        execPdf
-      );
+      addEntry(`${rev}01_Assessment_Overview/${orgName}_Executive_Readiness_Report.pdf`, execPdf);
 
       const domainPdf = await buildPdf((doc) => {
-        doc
-          .fontSize(20)
-          .font("Helvetica-Bold")
-          .text("Domain Readiness Report", { align: "center" });
-        doc
-          .fontSize(12)
-          .font("Helvetica")
-          .text(org.name, { align: "center" });
+        doc.fontSize(20).font("Helvetica-Bold").text("Domain Readiness Report", { align: "center" });
+        doc.fontSize(12).font("Helvetica").text(org.name, { align: "center" });
         doc.text(`Export Date: ${exportDate}`, { align: "center" });
         doc.moveDown(2);
 
         for (const [domainId, domainControls] of controlsByDomain) {
           const domain = domainMap.get(domainId);
           if (!domain) continue;
-          doc
-            .fontSize(13)
-            .font("Helvetica-Bold")
-            .text(`${domain.name} (${domain.abbreviation ?? ""})`);
-          doc.moveDown(0.3);
-          doc.fontSize(9).font("Helvetica");
+          const code = domainCode(domain.name);
+          doc.fontSize(13).font("Helvetica-Bold").text(`${code} — ${domain.name}`);
+          doc.moveDown(0.3).fontSize(9).font("Helvetica");
           for (const ctrl of domainControls) {
             const assessment = assessmentMap.get(ctrl.id);
             const evCount = (controlToEvidence.get(ctrl.id) ?? []).length;
             const status = assessment?.status ?? "not_started";
-            doc.text(
-              `  ${ctrl.controlId}: ${ctrl.title} — ${status.replace(/_/g, " ")} (${evCount} evidence)`
-            );
+            doc.text(`  ${ctrl.controlId}: ${ctrl.title} — ${status.replace(/_/g, " ")} (${evCount} evidence)`);
           }
           doc.moveDown(1);
         }
-        doc
-          .fontSize(9)
-          .font("Helvetica-Oblique")
-          .text("Generated by Control HUB — Confidential");
+        doc.fontSize(9).font("Helvetica-Oblique").text("Generated by Control HUB — Confidential");
       });
-      addEntry(
-        `${root}01_Assessment_Overview/${orgName}_Domain_Readiness_Report.pdf`,
-        domainPdf
-      );
+      addEntry(`${rev}01_Assessment_Overview/${orgName}_Domain_Readiness_Report.pdf`, domainPdf);
 
-      // ── 02_SSP ────────────────────────────────────────────────────────────
+      // ════════════════════════════════════════════════════════════════════════
+      // SECTION 2: 02_SSP
+      // ════════════════════════════════════════════════════════════════════════
       const sspPdf = await buildPdf((doc) => {
-        doc
-          .fontSize(20)
-          .font("Helvetica-Bold")
-          .text("System Security Plan", { align: "center" });
-        doc
-          .fontSize(12)
-          .font("Helvetica")
-          .text(org.name, { align: "center" });
+        doc.fontSize(20).font("Helvetica-Bold").text("System Security Plan", { align: "center" });
+        doc.fontSize(12).font("Helvetica").text(org.name, { align: "center" });
         doc.text(`Export Date: ${exportDate}`, { align: "center" });
         doc.moveDown(2);
+
+        doc.fontSize(11).font("Helvetica").text(
+          `This System Security Plan summarises implementation narratives for all ${controls.length} CMMC Level 2 controls ` +
+          `for ${org.name}. Controls with no recorded narrative are omitted.`
+        );
+        doc.moveDown(1.5);
 
         for (const ctrl of controls) {
           const mapping = sspMap.get(ctrl.id) ?? sspMap.get(ctrl.controlId);
           const assessment = assessmentMap.get(ctrl.id);
-          const narrative =
-            mapping?.implementationNarrative ||
-            assessment?.implementationNarrative ||
-            "";
+          const narrative = mapping?.implementationNarrative || assessment?.implementationNarrative || "";
           if (!narrative) continue;
-
-          doc
-            .fontSize(11)
-            .font("Helvetica-Bold")
-            .text(`${ctrl.controlId} — ${ctrl.title}`);
-          doc.moveDown(0.2);
-          doc.fontSize(9).font("Helvetica").text(narrative);
+          doc.fontSize(11).font("Helvetica-Bold").text(`${ctrl.controlId} — ${ctrl.title}`);
+          doc.moveDown(0.2).fontSize(9).font("Helvetica").text(narrative);
           doc.moveDown(1);
         }
-        doc
-          .fontSize(9)
-          .font("Helvetica-Oblique")
-          .text("Generated by Control HUB — Confidential");
+        doc.fontSize(9).font("Helvetica-Oblique").text("Generated by Control HUB — Confidential");
       });
-      addEntry(`${root}02_SSP/${orgName}_System_Security_Plan.pdf`, sspPdf);
+      addEntry(`${rev}02_SSP/${orgName}_System_Security_Plan.pdf`, sspPdf);
 
-      addEntry(
-        `${root}02_SSP/SSP_Control_Mapping.xlsx`,
-        buildXlsx(
-          [
-            "Control ID",
-            "Control Title",
-            "Domain",
-            "Level",
-            "Status",
-            "SSP Narrative",
-            "Policy Reference",
-            "SSP Status",
-          ],
-          controls.map((ctrl) => {
-            const domain = domainMap.get(ctrl.domainId);
-            const assessment = assessmentMap.get(ctrl.id);
-            const mapping =
-              sspMap.get(ctrl.id) ?? sspMap.get(ctrl.controlId);
-            return [
-              ctrl.controlId,
-              ctrl.title,
-              domain?.name ?? "",
-              ctrl.level,
-              assessment?.status?.replace(/_/g, " ") ?? "not started",
-              mapping?.implementationNarrative ??
-                assessment?.implementationNarrative ??
-                "",
-              mapping?.policyReference ?? "",
-              mapping?.sspStatus ?? "",
-            ];
-          })
-        )
-      );
+      addEntry(`${rev}02_SSP/SSP_Control_Mapping.xlsx`, buildXlsx(
+        ["Control ID", "Control Title", "Domain", "Domain Code", "Level", "Control Status", "SSP Narrative", "Policy Reference", "SSP Status"],
+        controls.map((ctrl) => {
+          const domain = domainMap.get(ctrl.domainId);
+          const assessment = assessmentMap.get(ctrl.id);
+          const mapping = sspMap.get(ctrl.id) ?? sspMap.get(ctrl.controlId);
+          return [
+            ctrl.controlId, ctrl.title, domain?.name ?? "", domain ? domainCode(domain.name) : "",
+            ctrl.level, assessment?.status?.replace(/_/g, " ") ?? "not started",
+            mapping?.implementationNarrative ?? assessment?.implementationNarrative ?? "",
+            mapping?.policyReference ?? "", mapping?.sspStatus ?? "",
+          ];
+        })
+      ));
 
-      // ── 03_Control_Packages ───────────────────────────────────────────────
+      // ════════════════════════════════════════════════════════════════════════
+      // SECTION 3: 03_Control_Packages  (one folder per control, by domain code)
+      // ════════════════════════════════════════════════════════════════════════
       for (const [domainId, domainControls] of controlsByDomain) {
         const domain = domainMap.get(domainId);
         if (!domain) continue;
-        const domAbbrev =
-          domain.abbreviation ?? domain.name.slice(0, 4).toUpperCase();
+        const code = domainCode(domain.name);
 
         for (const ctrl of domainControls) {
           const assessment = assessmentMap.get(ctrl.id);
           const mapping = sspMap.get(ctrl.id) ?? sspMap.get(ctrl.controlId);
-          const ctrlEvidence = (controlToEvidence.get(ctrl.id) ?? [])
-            .map((id) => evidenceMap.get(id))
-            .filter(Boolean) as typeof evidence;
-          const ctrlDocs = (controlToDocs.get(ctrl.id) ?? [])
-            .map((id) => docMap.get(id))
-            .filter(Boolean) as typeof documents;
+          const ctrlEvidence = (controlToEvidence.get(ctrl.id) ?? []).map((id) => evidenceMap.get(id)).filter(Boolean) as typeof evidence;
+          const ctrlDocs = (controlToDocs.get(ctrl.id) ?? []).map((id) => docMap.get(id)).filter(Boolean) as typeof documents;
           const ctrlPoams = controlToPoams.get(ctrl.id) ?? [];
-          const ctrlPath = `${root}03_Control_Packages/${domAbbrev}/${ctrl.controlId}/`;
+          const ctrlMonitoring = controlRefToMonitoring.get(ctrl.controlId) ?? [];
+          const ctrlFolder = `${rev}03_Control_Packages/${code}/${ctrlFolderName(ctrl)}/`;
 
-          const implNarrative =
-            assessment?.implementationNarrative ??
-            "(No implementation narrative recorded)";
-          const sspNarrative =
-            mapping?.implementationNarrative ??
-            assessment?.implementationNarrative ??
-            "(No SSP narrative recorded)";
+          const implNarrative = assessment?.implementationNarrative ?? "(No implementation narrative recorded)";
+          const sspNarrative = mapping?.implementationNarrative ?? assessment?.implementationNarrative ?? "(No SSP narrative recorded)";
 
-          addEntry(
-            `${ctrlPath}Implementation_Narrative.txt`,
-            Buffer.from(implNarrative, "utf8")
-          );
-          addEntry(
-            `${ctrlPath}SSP_Narrative.txt`,
-            Buffer.from(sspNarrative, "utf8")
-          );
+          addEntry(`${ctrlFolder}Implementation_Narrative.txt`, Buffer.from(implNarrative, "utf8"));
+          addEntry(`${ctrlFolder}SSP_Narrative.txt`, Buffer.from(sspNarrative, "utf8"));
 
+          // Control_Summary.pdf — comprehensive
           const summaryPdf = await buildPdf((doc) => {
-            doc
-              .fontSize(16)
-              .font("Helvetica-Bold")
-              .text(`Control Package: ${ctrl.controlId}`);
+            doc.fontSize(16).font("Helvetica-Bold").text(`Control Package: ${ctrl.controlId}`);
             doc.fontSize(12).font("Helvetica").text(ctrl.title);
-            doc.moveDown(0.5);
-            doc.fontSize(10);
-            doc.text(`Domain: ${domain.name} (${domAbbrev})`);
+            doc.moveDown(0.5).fontSize(10);
+            doc.text(`Domain: ${domain.name} (${code})`);
             doc.text(`Level: ${ctrl.level}`);
-            doc.text(
-              `Status: ${assessment?.status?.replace(/_/g, " ") ?? "not started"}`
-            );
-            if (assessment?.isNotApplicable)
-              doc.text(`Not Applicable: Yes — ${assessment.naJustification ?? ""}`);
+            doc.text(`Status: ${assessment?.status?.replace(/_/g, " ") ?? "not started"}`);
+            if (ctrl.nistRef) doc.text(`NIST SP 800-171 Ref: ${ctrl.nistRef}`);
             doc.text(`Last Assessed: ${fmtD(assessment?.lastAssessedAt)}`);
-            if (ctrl.nistRef)
-              doc.text(`NIST SP 800-171 Ref: ${ctrl.nistRef}`);
+            doc.text(`Export Date: ${exportDate}`);
+            if (assessment?.isNotApplicable) doc.text(`Not Applicable: Yes — ${assessment.naJustification ?? ""}`);
 
-            doc.moveDown(1);
-            doc.font("Helvetica-Bold").text("Control Description:");
-            doc.font("Helvetica").text(ctrl.description ?? "");
-            doc.moveDown(1);
+            doc.moveDown(1).font("Helvetica-Bold").text("Control Description:");
+            doc.font("Helvetica").fontSize(9).text(ctrl.description ?? "(none)");
 
-            doc
-              .font("Helvetica-Bold")
-              .text("Implementation Narrative:");
-            doc.font("Helvetica").text(implNarrative);
-            doc.moveDown(1);
+            doc.moveDown(1).font("Helvetica-Bold").fontSize(10).text("Implementation Narrative:");
+            doc.font("Helvetica").fontSize(9).text(implNarrative);
+
+            doc.moveDown(1).font("Helvetica-Bold").fontSize(10).text("SSP Narrative:");
+            doc.font("Helvetica").fontSize(9).text(sspNarrative);
 
             if (assessment?.assessorNotes) {
-              doc.font("Helvetica-Bold").text("Assessor Notes:");
-              doc.font("Helvetica").text(assessment.assessorNotes);
-              doc.moveDown(1);
+              doc.moveDown(1).font("Helvetica-Bold").fontSize(10).text("Assessor Notes:");
+              doc.font("Helvetica").fontSize(9).text(assessment.assessorNotes);
             }
 
-            if (includeInternalNotes && assessment?.assessorNotes) {
-              doc.font("Helvetica-Bold").text("Internal Notes:");
-              doc
-                .font("Helvetica")
-                .text(assessment.assessorNotes ?? "(none)");
-              doc.moveDown(1);
-            }
-
-            doc
-              .font("Helvetica-Bold")
-              .text(`Evidence (${ctrlEvidence.length} items):`);
-            doc.font("Helvetica");
+            doc.moveDown(1).font("Helvetica-Bold").fontSize(10).text(`Linked Evidence (${ctrlEvidence.length} items):`);
+            doc.font("Helvetica").fontSize(9);
             if (ctrlEvidence.length === 0) {
               doc.text("  No evidence linked to this control.");
             } else {
               for (const e of ctrlEvidence) {
-                doc.text(
-                  `  • ${e.title} [${e.evidenceType}] — ${e.status.replace(/_/g, " ")} — collected ${fmtD(e.collectedAt)}`
-                );
+                doc.text(`  • ${e.title} [${e.evidenceType.replace(/_/g, " ")}] — ${e.status.replace(/_/g, " ")} — collected ${fmtD(e.collectedAt)}`);
+                doc.text(`    File: Evidence/${ctrlEvidenceFilename(e.evidenceType, e.title, e.collectedAt, e.fileName)}`);
               }
             }
-            doc.moveDown(1);
 
-            doc
-              .font("Helvetica-Bold")
-              .text(`Linked Documents (${ctrlDocs.length}):`);
-            doc.font("Helvetica");
+            doc.moveDown(1).font("Helvetica-Bold").fontSize(10).text(`Linked Documents (${ctrlDocs.length}):`);
+            doc.font("Helvetica").fontSize(9);
             if (ctrlDocs.length === 0) {
               doc.text("  No documents linked to this control.");
             } else {
               for (const d of ctrlDocs) {
-                doc.text(
-                  `  • ${d.title} [${d.docType ?? "—"}] — ${d.status}`
-                );
+                doc.text(`  • ${d.title} [${d.docType ?? "—"}] — ${d.status}`);
               }
             }
-            doc.moveDown(1);
 
-            doc
-              .font("Helvetica-Bold")
-              .text(`Open POA&M Items (${ctrlPoams.length}):`);
-            doc.font("Helvetica");
+            doc.moveDown(1).font("Helvetica-Bold").fontSize(10).text(`Monitoring Records (${ctrlMonitoring.length}):`);
+            doc.font("Helvetica").fontSize(9);
+            if (ctrlMonitoring.length === 0) {
+              doc.text("  No monitoring records for this control.");
+            } else {
+              for (const m of ctrlMonitoring) {
+                doc.text(`  • ${m.task} [${m.frequency}] — ${m.status} — next due: ${fmtD(m.nextDue)}`);
+              }
+            }
+
+            doc.moveDown(1).font("Helvetica-Bold").fontSize(10).text(`POA&M Items (${ctrlPoams.length}):`);
+            doc.font("Helvetica").fontSize(9);
             if (ctrlPoams.length === 0) {
-              doc.text("  No open POA&M items.");
+              doc.text("  No POA&M items for this control.");
             } else {
               for (const p of ctrlPoams) {
-                doc.text(
-                  `  • ${p.poamNumber ?? p.id.slice(0, 8)}: ${p.title} — ${p.status} — ${p.riskLevel} risk — due ${fmtD(p.scheduledCompletionDate)}`
-                );
+                doc.text(`  • ${p.poamNumber ?? p.id.slice(0, 8)}: ${p.title} — ${p.status} — ${p.riskLevel} risk — due ${fmtD(p.scheduledCompletionDate)}`);
               }
             }
-          });
-          addEntry(`${ctrlPath}Control_Summary.pdf`, summaryPdf);
 
-          // Evidence files under 03_Control_Packages (use cache — no await)
-          for (const ev of ctrlEvidence) {
-            if (!ev.fileKey) continue;
-            const exportName = evidenceExportFilename(
-              ctrl.controlId,
-              ev.evidenceType,
-              ev.title,
-              ev.collectedAt,
-              ev.fileName
+            doc.moveDown(2).fontSize(8).font("Helvetica-Oblique").text(
+              "Files listed in Evidence/ and Documents/ are included in this control folder and indexed in 99_Manifests/. " +
+              "Generated by Control HUB — Confidential"
             );
-            const evPath = uniquePath(
-              `${ctrlPath}Evidence/${exportName}`
-            );
-            if (!evidenceZipPaths.has(ev.id)) {
+          });
+          addEntry(`${ctrlFolder}Control_Summary.pdf`, summaryPdf);
+
+          // Evidence/ subfolder
+          if (ctrlEvidence.length === 0) {
+            addEntry(`${ctrlFolder}Evidence/README.txt`, Buffer.from(`No evidence linked to control ${ctrl.controlId} as of export date ${exportDate}.`, "utf8"));
+          } else {
+            const evidenceIndexLines: string[] = [`Evidence files for ${ctrl.controlId} — ${ctrl.title}`, `Exported: ${exportDate}`, ""];
+            for (const ev of ctrlEvidence) {
               const buf = cachedFile(ev.fileKey);
+              const fname = uniqueNameInFolder(`${ctrlFolder}Evidence`, ctrlEvidenceFilename(ev.evidenceType, ev.title, ev.collectedAt, ev.fileName));
               if (buf) {
-                evidenceZipPaths.set(ev.id, evPath);
-                addEntry(evPath, buf);
+                addEntry(`${ctrlFolder}Evidence/${fname}`, buf);
+                evidenceIndexLines.push(`${fname}  —  ${ev.title} [${ev.evidenceType}] ${ev.status}`);
               } else {
-                missingFiles.push({
-                  title: ev.title,
-                  fileKey: ev.fileKey,
-                  zipPath: evPath,
-                });
+                evidenceIndexLines.push(`MISSING: ${fname}  —  ${ev.title} (file not found in storage)`);
+                if (ev.fileKey) {
+                  exportIssues.push({ category: "Missing File", item: ev.title, detail: `fileKey: ${ev.fileKey}`, recommendation: "Re-upload evidence file" });
+                }
               }
             }
+            addEntry(`${ctrlFolder}Evidence/Evidence_Index.txt`, Buffer.from(evidenceIndexLines.join("\n"), "utf8"));
           }
 
-          // Document files under 03_Control_Packages (use cache — no await)
-          for (const d of ctrlDocs) {
-            if (!d.fileKey) continue;
-            const docExportName =
-              safeFilename(d.title, 40) + fileExt(d.fileName);
-            const docPath = uniquePath(
-              `${ctrlPath}Documents/${docExportName}`
-            );
-            if (!docZipPaths.has(d.id)) {
+          // Documents/ subfolder
+          if (ctrlDocs.length === 0) {
+            addEntry(`${ctrlFolder}Documents/README.txt`, Buffer.from(`No documents linked to control ${ctrl.controlId} as of export date ${exportDate}.`, "utf8"));
+          } else {
+            for (const d of ctrlDocs) {
+              if (!d.fileKey) continue;
               const buf = cachedFile(d.fileKey);
-              if (buf) {
-                docZipPaths.set(d.id, docPath);
-                addEntry(docPath, buf);
-              } else {
-                missingFiles.push({
-                  title: d.title,
-                  fileKey: d.fileKey,
-                  zipPath: docPath,
-                });
-              }
+              const fname = uniqueNameInFolder(`${ctrlFolder}Documents`, docFilename(d.docType, d.title, d.id, d.fileName));
+              if (buf) addEntry(`${ctrlFolder}Documents/${fname}`, buf);
             }
+          }
+
+          // Monitoring/ subfolder
+          if (ctrlMonitoring.length === 0) {
+            addEntry(`${ctrlFolder}Monitoring/README.txt`, Buffer.from(`No monitoring records linked to control ${ctrl.controlId} as of export date ${exportDate}.`, "utf8"));
+          } else {
+            const lines = [`Monitoring Records for ${ctrl.controlId}`, `Exported: ${exportDate}`, ""];
+            for (const m of ctrlMonitoring) {
+              lines.push(`Task: ${m.task}`);
+              lines.push(`Frequency: ${m.frequency}`);
+              lines.push(`Status: ${m.status}`);
+              lines.push(`Last Completed: ${fmtD(m.lastCompleted)}`);
+              lines.push(`Next Due: ${fmtD(m.nextDue)}`);
+              if (m.description) lines.push(`Description: ${m.description}`);
+              if (m.operatingProcedure) lines.push(`Operating Procedure: ${m.operatingProcedure}`);
+              if (m.testProcedure) lines.push(`Test Procedure: ${m.testProcedure}`);
+              if (m.evidenceToRetain) lines.push(`Evidence to Retain: ${m.evidenceToRetain}`);
+              if (m.notes) lines.push(`Notes: ${m.notes}`);
+              lines.push("");
+            }
+            addEntry(`${ctrlFolder}Monitoring/Monitoring_Records.txt`, Buffer.from(lines.join("\n"), "utf8"));
+          }
+
+          // POAM/ subfolder
+          if (ctrlPoams.length === 0) {
+            addEntry(`${ctrlFolder}POAM/README.txt`, Buffer.from(`No POA&M items linked to control ${ctrl.controlId} as of export date ${exportDate}.`, "utf8"));
+          } else {
+            const lines = [`POA&M Items for ${ctrl.controlId}`, `Exported: ${exportDate}`, ""];
+            for (const p of ctrlPoams) {
+              lines.push(`POAM Number: ${p.poamNumber ?? "—"}`);
+              lines.push(`Title: ${p.title}`);
+              lines.push(`Status: ${p.status}`);
+              lines.push(`Risk Level: ${p.riskLevel}`);
+              lines.push(`Scheduled Completion: ${fmtD(p.scheduledCompletionDate)}`);
+              if (p.deficiencyDescription) lines.push(`Deficiency: ${p.deficiencyDescription}`);
+              if (p.remediationPlan) lines.push(`Remediation Plan: ${p.remediationPlan}`);
+              lines.push("");
+            }
+            addEntry(`${ctrlFolder}POAM/POAM_Items.txt`, Buffer.from(lines.join("\n"), "utf8"));
           }
         }
       }
 
-      // ── 04_All_Evidence ───────────────────────────────────────────────────
-      for (const ev of evidence) {
-        if (!ev.fileKey || evidenceZipPaths.has(ev.id)) continue;
-        const exportName = evidenceExportFilename(
-          "ALL",
-          ev.evidenceType,
-          ev.title,
-          ev.collectedAt,
-          ev.fileName
-        );
-        const evPath = uniquePath(
-          `${root}04_All_Evidence/files/${exportName}`
-        );
-        const buf = cachedFile(ev.fileKey);
-        if (buf) {
-          evidenceZipPaths.set(ev.id, evPath);
-          addEntry(evPath, buf);
-        } else {
-          missingFiles.push({
-            title: ev.title,
-            fileKey: ev.fileKey,
-            zipPath: evPath,
-          });
-        }
-      }
+      // ════════════════════════════════════════════════════════════════════════
+      // SECTION 4: 04_Document_Library
+      // Sources: (A) documentsTable, (B) doc-like evidence
+      // ════════════════════════════════════════════════════════════════════════
+      const docLibBase = `${rev}04_Document_Library/`;
 
-      addEntry(
-        `${root}04_All_Evidence/Evidence_Inventory.xlsx`,
-        buildXlsx(
-          [
-            "Evidence ID",
-            "Title",
-            "Original File Name",
-            "Evidence Type",
-            "Status",
-            "Linked Controls",
-            "Collection Date",
-            "Expiration Date",
-            "Assessor Summary",
-            ...(includeInternalNotes ? ["Internal Notes"] : []),
-            "File Path in ZIP",
-            "SHA-256 (Source)",
-          ],
-          evidence.map((ev) => {
-            const controlIds = (evidenceToControls.get(ev.id) ?? [])
-              .map((cid) => controlMap.get(cid)?.controlId ?? cid)
-              .join("; ");
-            return [
-              ev.id,
-              ev.title,
-              ev.fileName ?? "—",
-              ev.evidenceType.replace(/_/g, " "),
-              ev.status.replace(/_/g, " "),
-              controlIds,
-              fmtD(ev.collectedAt),
-              fmtD(ev.expiresAt),
-              ev.assessorSummary ?? "",
-              ...(includeInternalNotes ? [ev.internalNotes ?? ""] : []),
-              evidenceZipPaths.get(ev.id) ?? "—",
-              ev.fileHash ?? "—",
-            ];
-          })
-        )
-      );
-
-      // ── 05_All_Documents ──────────────────────────────────────────────────
+      // (A) Documents from documentsTable
       for (const d of documents) {
-        if (!d.fileKey || docZipPaths.has(d.id)) continue;
-        const docExportName =
-          safeFilename(d.title, 40) + fileExt(d.fileName);
-        const docPath = uniquePath(
-          `${root}05_All_Documents/files/${docExportName}`
-        );
+        const subfolder = docTypeToLibFolder(d.docType);
+        if (!d.fileKey) {
+          // No file — still track in inventory but note missing
+          if (d.docType) {
+            exportIssues.push({ category: "Document Without File", item: d.title, detail: `Type: ${d.docType}, Status: ${d.status}`, recommendation: "Upload file to document record" });
+          }
+          continue;
+        }
         const buf = cachedFile(d.fileKey);
+        const fname = uniqueNameInFolder(`${docLibBase}${subfolder}`, docFilename(d.docType, d.title, d.id, d.fileName));
+        const zipPath = `${docLibBase}${subfolder}/${fname}`;
         if (buf) {
-          docZipPaths.set(d.id, docPath);
-          addEntry(docPath, buf);
+          docLibPaths.set(d.id, zipPath);
+          addEntry(zipPath, buf);
         } else {
-          missingFiles.push({
-            title: d.title,
-            fileKey: d.fileKey,
-            zipPath: docPath,
-          });
+          exportIssues.push({ category: "Missing File", item: d.title, detail: `fileKey: ${d.fileKey}`, recommendation: "Re-upload document file" });
         }
       }
 
-      addEntry(
-        `${root}05_All_Documents/Document_Inventory.xlsx`,
-        buildXlsx(
-          [
-            "Document ID",
-            "Title",
-            "Document Type",
-            "Status",
-            "Linked Controls",
-            "Effective Date",
-            "Next Review Date",
-            "File Path in ZIP",
-          ],
-          documents.map((d) => {
-            const controlIds = (docToControls.get(d.id) ?? [])
-              .map((cid) => controlMap.get(cid)?.controlId ?? cid)
-              .join("; ");
-            return [
-              d.id,
-              d.title,
-              d.docType ?? "—",
-              d.status,
-              controlIds,
-              fmtD(d.effectiveDate),
-              fmtD(d.nextReviewDate),
-              docZipPaths.get(d.id) ?? "—",
-            ];
-          })
-        )
-      );
+      // (B) Doc-like evidence (also placed in Document Library)
+      const docLikeEvidenceLibPaths = new Map<string, string>(); // ev.id → doc lib path
+      for (const ev of docLikeEvidence) {
+        if (!ev.fileKey) continue;
+        const buf = cachedFile(ev.fileKey);
+        const subfolder = evidenceToDocLibFolder(ev.evidenceType);
+        const fname = uniqueNameInFolder(`${docLibBase}${subfolder}`, evidenceFilename(ev.evidenceType, ev.title, ev.collectedAt, ev.id, ev.fileName));
+        const zipPath = `${docLibBase}${subfolder}/${fname}`;
+        if (buf) {
+          docLikeEvidenceLibPaths.set(ev.id, zipPath);
+          addEntry(zipPath, buf);
+        }
+      }
 
-      // ── 06_Monitoring ─────────────────────────────────────────────────────
-      addEntry(
-        `${root}06_Monitoring/Monitoring_Tracker.xlsx`,
-        buildXlsx(
-          [
-            "Title",
-            "Frequency",
-            "Status",
-            "Last Completed",
-            "Next Due",
-            "Notes",
-          ],
-          monitoring.map((m) => [
-            m.title,
-            m.frequency,
-            m.status,
-            fmtD(m.lastCompleted),
-            fmtD(m.nextDue),
-            (m as Record<string, unknown>).notes as string ?? "",
-          ])
-        )
-      );
+      // Document_Inventory.xlsx (all sources combined)
+      const docInvRows: (string | number | null | undefined)[][] = [];
+      for (const d of documents) {
+        const linkedCids = docToControls.get(d.id) ?? [];
+        const ctrlIds = linkedCids.map((cid) => controlMap.get(cid)?.controlId ?? cid).join("; ");
+        const firstLinkedCtrl = linkedCids.length > 0 ? controlMap.get(linkedCids[0]) : null;
+        const firstLinkedDom = firstLinkedCtrl ? domainMap.get(firstLinkedCtrl.domainId) : null;
+        const domain = firstLinkedDom ? `${domainCode(firstLinkedDom.name)} — ${firstLinkedDom.name}` : "—";
+        const level = firstLinkedCtrl?.level ?? "—";
+        docInvRows.push([
+          d.id, d.title, d.docType ?? "—", d.status, "Uploaded Document",
+          ctrlIds, domain, level, d.ownerId ?? "", fmtD(d.effectiveDate),
+          fmtD(d.nextReviewDate), d.fileName ?? "—",
+          docLibPaths.get(d.id) ? (docLibPaths.get(d.id)!.split("/").pop() ?? "—") : "—",
+          docLibPaths.get(d.id) ?? (d.fileKey ? "missing from storage" : "no file"),
+          "", "",
+        ]);
+      }
+      for (const ev of docLikeEvidence) {
+        const ctrlIds = (evidenceToControls.get(ev.id) ?? []).map((cid) => controlMap.get(cid)?.controlId ?? cid).join("; ");
+        const domain = (() => {
+          const cids = evidenceToControls.get(ev.id) ?? [];
+          if (cids.length === 0) return "—";
+          const ctrl = controlMap.get(cids[0]);
+          if (!ctrl) return "—";
+          const dom = domainMap.get(ctrl.domainId);
+          return dom ? `${domainCode(dom.name)} — ${dom.name}` : "—";
+        })();
+        docInvRows.push([
+          ev.id, ev.title, ev.evidenceType.replace(/_/g, " "), ev.status, "Document-Like Evidence",
+          ctrlIds, domain, "—", ev.ownerId ?? "", fmtD(ev.collectedAt),
+          fmtD(ev.expiresAt), ev.fileName ?? "—",
+          docLikeEvidenceLibPaths.get(ev.id) ? (docLikeEvidenceLibPaths.get(ev.id)!.split("/").pop() ?? "—") : "—",
+          docLikeEvidenceLibPaths.get(ev.id) ?? (ev.fileKey ? "missing from storage" : "no file"),
+          "", "Also included in Evidence Library",
+        ]);
+      }
+      // Note any missing-file warnings
+      if (docInvRows.length === 0) {
+        exportIssues.push({ category: "Empty Document Library", item: "Document Library", detail: "No documents or document-like evidence found", recommendation: "Upload policies/procedures as evidence or documents" });
+      }
+
+      addEntry(`${docLibBase}Document_Inventory.xlsx`, buildXlsx(
+        ["Document ID", "Title", "Document Type", "Status", "Source", "Linked Controls", "Domain", "Level", "Owner", "Effective Date", "Next Review Date", "Original Filename", "Exported Filename", "File Path in ZIP", "SHA-256", "Notes"],
+        docInvRows
+      ));
+
+      // ════════════════════════════════════════════════════════════════════════
+      // SECTION 5: 05_Evidence_Library  — ALL unique evidence files, by category
+      // ════════════════════════════════════════════════════════════════════════
+      const evLibBase = `${rev}05_Evidence_Library/`;
+
+      for (const ev of evidence) {
+        if (!ev.fileKey) {
+          exportIssues.push({ category: "Evidence Without File", item: ev.title, detail: `Type: ${ev.evidenceType}, Status: ${ev.status}`, recommendation: "Evidence has no attached file" });
+          continue;
+        }
+        const buf = cachedFile(ev.fileKey);
+        const subfolder = evidenceToLibFolder(ev.evidenceType);
+        const fname = uniqueNameInFolder(`${evLibBase}${subfolder}`, evidenceFilename(ev.evidenceType, ev.title, ev.collectedAt, ev.id, ev.fileName));
+        const zipPath = `${evLibBase}${subfolder}/${fname}`;
+        if (buf) {
+          evLibPaths.set(ev.id, zipPath);
+          addEntry(zipPath, buf);
+        } else {
+          exportIssues.push({ category: "Missing File", item: ev.title, detail: `fileKey: ${ev.fileKey}`, recommendation: "File missing from GCS storage" });
+        }
+        // Check if evidence has no linked controls
+        if ((evidenceToControls.get(ev.id) ?? []).length === 0) {
+          exportIssues.push({ category: "Unlinked Evidence", item: ev.title, detail: `Evidence ID: ${ev.id}`, recommendation: "Link this evidence to at least one control" });
+        }
+      }
+
+      // Evidence_Inventory.xlsx
+      addEntry(`${evLibBase}Evidence_Inventory.xlsx`, buildXlsx(
+        ["Evidence ID", "Title", "Evidence Type", "Status", "Linked Controls", "Collection Date", "Expiration Date", "Owner", "Assessor Summary", ...(includeInternalNotes ? ["Internal Notes"] : []), "Original Filename", "File Path in ZIP", "Is Document-Like"],
+        evidence.map((ev) => {
+          const ctrlIds = (evidenceToControls.get(ev.id) ?? []).map((cid) => controlMap.get(cid)?.controlId ?? cid).join("; ");
+          return [
+            ev.id, ev.title, ev.evidenceType.replace(/_/g, " "), ev.status.replace(/_/g, " "),
+            ctrlIds, fmtD(ev.collectedAt), fmtD(ev.expiresAt), ev.ownerId ?? "—",
+            ev.assessorSummary ?? "",
+            ...(includeInternalNotes ? [ev.internalNotes ?? ""] : []),
+            ev.fileName ?? "—", evLibPaths.get(ev.id) ?? (ev.fileKey ? "missing from storage" : "no file"),
+            DOC_LIKE_EVIDENCE_TYPES.has(ev.evidenceType) ? "Yes" : "No",
+          ];
+        })
+      ));
+
+      // ════════════════════════════════════════════════════════════════════════
+      // SECTION 6: 06_Monitoring
+      // ════════════════════════════════════════════════════════════════════════
+      addEntry(`${rev}06_Monitoring/Monitoring_Tracker.xlsx`, buildXlsx(
+        ["Task", "Control Ref", "Frequency", "Status", "Description", "Last Completed", "Next Due", "Operating Procedure", "Test Procedure", "Evidence to Retain", "Notes", "Validation Status", "Review Date"],
+        monitoring.map((m) => [
+          m.task,           // ← fixed: was m.title (field doesn't exist)
+          m.controlRef,
+          m.frequency,
+          m.status,
+          m.description,
+          fmtD(m.lastCompleted),
+          fmtD(m.nextDue),
+          m.operatingProcedure ?? "",
+          m.testProcedure ?? "",
+          m.evidenceToRetain ?? "",
+          m.notes ?? "",
+          m.validationStatus ?? "",
+          fmtD(m.reviewDate),
+        ])
+      ));
 
       const monPdf = await buildPdf((doc) => {
-        doc
-          .fontSize(18)
-          .font("Helvetica-Bold")
-          .text("Monitoring Tracker Report", { align: "center" });
-        doc
-          .fontSize(11)
-          .font("Helvetica")
-          .text(org.name, { align: "center" });
+        doc.fontSize(18).font("Helvetica-Bold").text("Monitoring Tracker Report", { align: "center" });
+        doc.fontSize(11).font("Helvetica").text(org.name, { align: "center" });
         doc.text(`Export Date: ${exportDate}`, { align: "center" });
         doc.moveDown(2);
 
-        const overdue = monitoring.filter((m) => m.status === "overdue").length;
-        const complete = monitoring.filter((m) => m.status === "complete").length;
-        doc.text(
-          `Total: ${monitoring.length}  |  Complete: ${complete}  |  Overdue: ${overdue}`
-        );
+        const overdue = monitoring.filter((m) => m.status === "escalated" || m.status === "failed_validation").length;
+        const current = monitoring.filter((m) => m.status === "current").length;
+        doc.text(`Total: ${monitoring.length}  |  Current: ${current}  |  Escalated/Failed: ${overdue}`);
         doc.moveDown(1);
+
         for (const m of monitoring) {
-          doc.font("Helvetica-Bold").fontSize(10).text(m.title);
-          doc
-            .font("Helvetica")
-            .fontSize(9)
-            .text(
-              `  Frequency: ${m.frequency}  |  Status: ${m.status}  |  Last: ${fmtD(m.lastCompleted)}  |  Next: ${fmtD(m.nextDue)}`
-            );
+          doc.font("Helvetica-Bold").fontSize(10).text(m.task);
+          doc.font("Helvetica").fontSize(9).text(
+            `  Control: ${m.controlRef}  |  Frequency: ${m.frequency}  |  Status: ${m.status}  |  Last: ${fmtD(m.lastCompleted)}  |  Next: ${fmtD(m.nextDue)}`
+          );
+          if (m.description) doc.fontSize(8).text(`  ${m.description}`);
           doc.moveDown(0.5);
         }
-        doc
-          .fontSize(9)
-          .font("Helvetica-Oblique")
-          .text("Generated by Control HUB — Confidential");
+        doc.fontSize(9).font("Helvetica-Oblique").text("Generated by Control HUB — Confidential");
       });
-      addEntry(`${root}06_Monitoring/Monitoring_Tracker_Report.pdf`, monPdf);
+      addEntry(`${rev}06_Monitoring/Monitoring_Tracker_Report.pdf`, monPdf);
 
-      // ── 07_POAM ───────────────────────────────────────────────────────────
-      addEntry(
-        `${root}07_POAM/POAM_Register.xlsx`,
-        buildXlsx(
-          [
-            "POAM Number",
-            "Title",
-            "Deficiency Description",
-            "Status",
-            "Risk Level",
-            "Linked Control",
-            "Scheduled Completion",
-            "Completed Date",
-            "Remediation Plan",
-            "Resources Required",
-          ],
-          poams.map((p) => {
-            const ctrl = p.linkedControlId
-              ? controlMap.get(p.linkedControlId)
-              : null;
-            return [
-              p.poamNumber ?? "—",
-              p.title,
-              p.deficiencyDescription,
-              p.status,
-              p.riskLevel,
-              ctrl?.controlId ?? "—",
-              fmtD(p.scheduledCompletionDate),
-              fmtD(p.completedDate),
-              p.remediationPlan ?? "",
-              p.resourcesRequired ?? "",
-            ];
-          })
-        )
+      // ════════════════════════════════════════════════════════════════════════
+      // SECTION 7: 07_POAM
+      // ════════════════════════════════════════════════════════════════════════
+      const poamXlsx = buildXlsx(
+        ["POAM Number", "Title", "Deficiency Description", "Status", "Risk Level", "Linked Control", "Domain", "Scheduled Completion", "Completed Date", "Remediation Plan", "Resources Required", "Notes"],
+        poams.map((p) => {
+          const linkedCtrl = p.linkedControlId ? controlMap.get(p.linkedControlId) : null;
+          const domain = linkedCtrl ? domainMap.get(linkedCtrl.domainId) : null;
+          return [
+            p.poamNumber ?? "—", p.title, p.deficiencyDescription, p.status, p.riskLevel,
+            linkedCtrl?.controlId ?? "—",
+            domain ? `${domainCode(domain.name)} — ${domain.name}` : "—",
+            fmtD(p.scheduledCompletionDate), fmtD(p.completedDate),
+            p.remediationPlan ?? "", p.resourcesRequired ?? "", "",
+          ];
+        })
       );
+      addEntry(`${rev}07_POAM/POAM_Register.xlsx`, poamXlsx);
+
+      // Unmapped POA&Ms
+      if (unmappedPoams.length > 0) {
+        addEntry(`${rev}07_POAM/Unmapped_POAM/README.txt`, Buffer.from(
+          `${unmappedPoams.length} POA&M item(s) have no linked control.\n\nItems:\n${unmappedPoams.map((p) => `- ${p.poamNumber ?? p.id.slice(0, 8)}: ${p.title}`).join("\n")}`,
+          "utf8"
+        ));
+        for (const p of unmappedPoams) {
+          exportIssues.push({ category: "Unmapped POA&M", item: `${p.poamNumber ?? p.id.slice(0, 8)}: ${p.title}`, detail: "No linked control", recommendation: "Link this POA&M to a CMMC control" });
+        }
+      }
 
       const poamPdf = await buildPdf((doc) => {
-        doc
-          .fontSize(18)
-          .font("Helvetica-Bold")
-          .text("Plan of Action & Milestones (POA&M) Report", {
-            align: "center",
-          });
-        doc
-          .fontSize(11)
-          .font("Helvetica")
-          .text(org.name, { align: "center" });
+        doc.fontSize(18).font("Helvetica-Bold").text("Plan of Action & Milestones (POA&M) Report", { align: "center" });
+        doc.fontSize(11).font("Helvetica").text(org.name, { align: "center" });
         doc.text(`Export Date: ${exportDate}`, { align: "center" });
         doc.moveDown(2);
 
-        const openPoams = poams.filter(
-          (p) => p.status === "open" || p.status === "in_progress"
-        ).length;
-        doc.text(
-          `Total POA&M Items: ${poams.length}  |  Open/In Progress: ${openPoams}`
-        );
+        const openPoams = poams.filter((p) => p.status === "open" || p.status === "in_progress").length;
+        doc.text(`Total POA&M Items: ${poams.length}  |  Open/In Progress: ${openPoams}  |  Unmapped: ${unmappedPoams.length}`);
         doc.moveDown(1);
 
         for (const p of poams) {
-          const ctrl = p.linkedControlId
-            ? controlMap.get(p.linkedControlId)
-            : null;
-          doc
-            .font("Helvetica-Bold")
-            .fontSize(11)
-            .text(`${p.poamNumber ?? "POAM"}: ${p.title}`);
+          const linkedCtrl = p.linkedControlId ? controlMap.get(p.linkedControlId) : null;
+          doc.font("Helvetica-Bold").fontSize(11).text(`${p.poamNumber ?? "POAM"}: ${p.title}`);
           doc.font("Helvetica").fontSize(9);
-          doc.text(
-            `  Control: ${ctrl?.controlId ?? "—"}  |  Status: ${p.status}  |  Risk: ${p.riskLevel}`
-          );
-          doc.text(
-            `  Scheduled Completion: ${fmtD(p.scheduledCompletionDate)}`
-          );
+          doc.text(`  Control: ${linkedCtrl?.controlId ?? "UNMAPPED"}  |  Status: ${p.status}  |  Risk: ${p.riskLevel}`);
+          doc.text(`  Scheduled Completion: ${fmtD(p.scheduledCompletionDate)}`);
           doc.moveDown(0.3);
           doc.text(`  Deficiency: ${p.deficiencyDescription}`);
-          if (p.remediationPlan) {
-            doc.text(`  Remediation: ${p.remediationPlan}`);
-          }
+          if (p.remediationPlan) doc.text(`  Remediation: ${p.remediationPlan}`);
           doc.moveDown(0.8);
         }
-        doc
-          .fontSize(9)
-          .font("Helvetica-Oblique")
-          .text("Generated by Control HUB — Confidential");
+        doc.fontSize(9).font("Helvetica-Oblique").text("Generated by Control HUB — Confidential");
       });
-      addEntry(`${root}07_POAM/POAM_Report.pdf`, poamPdf);
+      addEntry(`${rev}07_POAM/POAM_Report.pdf`, poamPdf);
 
-      // ── 08_Reports ────────────────────────────────────────────────────────
-      addEntry(
-        `${root}08_Reports/Executive_Readiness_Report.pdf`,
-        execPdf
-      );
-      addEntry(
-        `${root}08_Reports/Domain_Readiness_Report.pdf`,
-        domainPdf
-      );
+      // ════════════════════════════════════════════════════════════════════════
+      // SECTION 8: 08_Reports
+      // ════════════════════════════════════════════════════════════════════════
+      addEntry(`${rev}08_Reports/Executive_Readiness_Report.pdf`, execPdf);
+      addEntry(`${rev}08_Reports/Domain_Readiness_Report.pdf`, domainPdf);
 
       const gapPdf = await buildPdf((doc) => {
-        doc
-          .fontSize(18)
-          .font("Helvetica-Bold")
-          .text("Gap Analysis Report", { align: "center" });
-        doc
-          .fontSize(11)
-          .font("Helvetica")
-          .text(org.name, { align: "center" });
+        doc.fontSize(18).font("Helvetica-Bold").text("Gap Analysis Report", { align: "center" });
+        doc.fontSize(11).font("Helvetica").text(org.name, { align: "center" });
         doc.text(`Export Date: ${exportDate}`, { align: "center" });
         doc.moveDown(2);
 
         const gaps = controls.filter((c) => {
           const a = assessmentMap.get(c.id);
-          return (
-            (!a || a.status === "not_started") &&
-            (controlToEvidence.get(c.id) ?? []).length === 0
-          );
+          return (!a || a.status === "not_started") && (controlToEvidence.get(c.id) ?? []).length === 0;
         });
-        doc.text(
-          `Controls with no evidence and not assessed: ${gaps.length} of ${controls.length}`
-        );
+        doc.text(`Controls with no evidence and not assessed: ${gaps.length} of ${controls.length}`);
         doc.moveDown(1);
 
         for (const c of gaps) {
           const domain = domainMap.get(c.domainId);
-          doc
-            .font("Helvetica-Bold")
-            .fontSize(10)
-            .text(`${c.controlId}: ${c.title}`);
-          doc
-            .font("Helvetica")
-            .fontSize(9)
-            .text(`  Domain: ${domain?.name ?? "—"}  |  Level: ${c.level}`);
+          doc.font("Helvetica-Bold").fontSize(10).text(`${c.controlId}: ${c.title}`);
+          doc.font("Helvetica").fontSize(9).text(`  Domain: ${domain ? `${domainCode(domain.name)} — ${domain.name}` : "—"}  |  Level: ${c.level}`);
           doc.moveDown(0.5);
         }
-        doc
-          .fontSize(9)
-          .font("Helvetica-Oblique")
-          .text("Generated by Control HUB — Confidential");
+        doc.fontSize(9).font("Helvetica-Oblique").text("Generated by Control HUB — Confidential");
       });
-      addEntry(`${root}08_Reports/Gap_Analysis_Report.pdf`, gapPdf);
+      addEntry(`${rev}08_Reports/Gap_Analysis_Report.pdf`, gapPdf);
 
-      // ── 09_Manifests ──────────────────────────────────────────────────────
-      const ctrlEvRows: (string | number)[][] = [];
-      for (const ctrl of controls) {
-        const domain = domainMap.get(ctrl.domainId);
-        const assessment = assessmentMap.get(ctrl.id);
-        const ctrlEvidence = (controlToEvidence.get(ctrl.id) ?? [])
-          .map((id) => evidenceMap.get(id))
-          .filter(Boolean) as typeof evidence;
+      // ════════════════════════════════════════════════════════════════════════
+      // SECTION 9: 02_C3PAO_Import_Package  — flat files + master manifest
+      // Each unique GCS file stored ONCE; manifests show all control mappings
+      // ════════════════════════════════════════════════════════════════════════
+      const importManifestRows: (string | number | null | undefined)[][] = [];
+
+      // Import evidence_files/ (unique by evidence ID — one per evidence item)
+      for (const ev of evidence) {
+        if (!ev.fileKey) continue;
+        const buf = cachedFile(ev.fileKey);
+        const fname = evidenceFilename(ev.evidenceType, ev.title, ev.collectedAt, ev.id, ev.fileName);
+        const zipPath = `${imp}evidence_files/${fname}`;
+        if (buf) {
+          evImportPaths.set(ev.id, zipPath);
+          addEntry(zipPath, buf);
+        }
+        const ctrlIds = (evidenceToControls.get(ev.id) ?? []).map((cid) => controlMap.get(cid)?.controlId ?? cid).join("; ");
+        const linkedCtrlId = (evidenceToControls.get(ev.id) ?? [])[0];
+        const linkedCtrl = linkedCtrlId ? controlMap.get(linkedCtrlId) : null;
+        const domain = linkedCtrl ? domainMap.get(linkedCtrl.domainId) : null;
+        importManifestRows.push([
+          "Evidence", ctrlIds, linkedCtrl?.title ?? "—",
+          domain ? domainCode(domain.name) : "—", linkedCtrl?.level ?? "—",
+          ev.title, ev.evidenceType.replace(/_/g, " "), ev.status.replace(/_/g, " "),
+          ev.fileName ?? "—", fname,
+          buf ? `evidence_files/${fname}` : "MISSING",
+          `${imp}evidence_files/${fname}`,
+          "Evidence", ev.ownerId ?? "", fmtD(ev.collectedAt), fmtD(ev.expiresAt), "", suggestC3paoCategory(ev.evidenceType),
+        ]);
+      }
+
+      // Import document_files/ (unique by document ID)
+      for (const d of documents) {
+        if (!d.fileKey) continue;
+        const buf = cachedFile(d.fileKey);
+        const fname = docFilename(d.docType, d.title, d.id, d.fileName);
+        const zipPath = `${imp}document_files/${fname}`;
+        if (buf) addEntry(zipPath, buf);
+        const ctrlIds = (docToControls.get(d.id) ?? []).map((cid) => controlMap.get(cid)?.controlId ?? cid).join("; ");
+        const linkedCtrlId = (docToControls.get(d.id) ?? [])[0];
+        const linkedCtrl = linkedCtrlId ? controlMap.get(linkedCtrlId) : null;
+        const domain = linkedCtrl ? domainMap.get(linkedCtrl.domainId) : null;
+        importManifestRows.push([
+          "Document", ctrlIds, linkedCtrl?.title ?? "—",
+          domain ? domainCode(domain.name) : "—", linkedCtrl?.level ?? "—",
+          d.title, d.docType ?? "—", d.status,
+          d.fileName ?? "—", fname,
+          buf ? `document_files/${fname}` : "MISSING",
+          `${imp}document_files/${fname}`,
+          "Documentation", d.ownerId ?? "", fmtD(d.effectiveDate), fmtD(d.nextReviewDate), "", suggestC3paoDocCategory(d.docType),
+        ]);
+      }
+
+      // Import ssp_files/
+      addEntry(`${imp}ssp_files/SSP_Control_Mapping.xlsx`, buildXlsx(
+        ["Control ID", "Control Title", "Domain", "Level", "Status", "SSP Narrative", "Policy Reference"],
+        controls.map((c) => {
+          const domain = domainMap.get(c.domainId);
+          const assessment = assessmentMap.get(c.id);
+          const mapping = sspMap.get(c.id) ?? sspMap.get(c.controlId);
+          return [c.controlId, c.title, domain ? domainCode(domain.name) : "", c.level,
+            assessment?.status?.replace(/_/g, " ") ?? "not started",
+            mapping?.implementationNarrative ?? assessment?.implementationNarrative ?? "",
+            mapping?.policyReference ?? ""];
+        })
+      ));
+      importManifestRows.push(["SSP", "All Controls", "System Security Plan", "—", "L2", "SSP Control Mapping", "SSP Export", "active", "—", "SSP_Control_Mapping.xlsx", "ssp_files/SSP_Control_Mapping.xlsx", `${imp}ssp_files/SSP_Control_Mapping.xlsx`, "SSP", "", exportDate, "", "", "SSP"]);
+
+      // Import poam_files/
+      addEntry(`${imp}poam_files/POAM_Register.xlsx`, poamXlsx);
+      importManifestRows.push(["POA&M", "Various", "POA&M Register", "—", "L2", "POAM Register", "POA&M", "active", "—", "POAM_Register.xlsx", "poam_files/POAM_Register.xlsx", `${imp}poam_files/POAM_Register.xlsx`, "POA&M", "", exportDate, "", "", "POA&M"]);
+
+      // Import monitoring_files/
+      addEntry(`${imp}monitoring_files/Monitoring_Tracker.xlsx`, buildXlsx(
+        ["Task", "Control Ref", "Frequency", "Status", "Last Completed", "Next Due", "Description"],
+        monitoring.map((m) => [m.task, m.controlRef, m.frequency, m.status, fmtD(m.lastCompleted), fmtD(m.nextDue), m.description])
+      ));
+      importManifestRows.push(["Monitoring", "Various", "Monitoring Tracker", "—", "L2", "Monitoring Tracker", "Monitoring", "active", "—", "Monitoring_Tracker.xlsx", "monitoring_files/Monitoring_Tracker.xlsx", `${imp}monitoring_files/Monitoring_Tracker.xlsx`, "Monitoring", "", exportDate, "", "", "Monitoring Record"]);
+
+      // import_manifest.xlsx — master upload guide
+      addEntry(`${imp}import_manifest.xlsx`, buildXlsx(
+        ["Record Type", "Control ID", "Control Title", "Domain", "Level", "Artifact Title", "Artifact Type", "Artifact Status", "Original Filename", "Exported Filename", "Folder Path", "Full ZIP Path", "Source Module", "Owner", "Collection Date", "Review Date", "Notes", "Suggested C3PAO Upload Category"],
+        importManifestRows
+      ));
+
+      // ════════════════════════════════════════════════════════════════════════
+      // SECTION 10: 99_Manifests
+      // ════════════════════════════════════════════════════════════════════════
+
+      // Control_to_Evidence_Map.xlsx
+      const ctrlEvRows: (string | number | null | undefined)[][] = [];
+      for (const c of controls) {
+        const domain = domainMap.get(c.domainId);
+        const assessment = assessmentMap.get(c.id);
+        const ctrlEvidence = (controlToEvidence.get(c.id) ?? []).map((id) => evidenceMap.get(id)).filter(Boolean) as typeof evidence;
         if (ctrlEvidence.length === 0) {
-          ctrlEvRows.push([
-            ctrl.controlId,
-            ctrl.title,
-            domain?.name ?? "",
-            ctrl.level,
-            assessment?.status ?? "not_started",
-            "—",
-            "—",
-            "—",
-            "—",
-            "—",
-          ]);
+          ctrlEvRows.push([c.controlId, c.title, domain ? `${domainCode(domain.name)} — ${domain.name}` : "—", c.level, assessment?.status?.replace(/_/g, " ") ?? "not started", "—", "—", "—", "—", "—", "—"]);
         } else {
           for (const ev of ctrlEvidence) {
-            ctrlEvRows.push([
-              ctrl.controlId,
-              ctrl.title,
-              domain?.name ?? "",
-              ctrl.level,
+            ctrlEvRows.push([c.controlId, c.title, domain ? `${domainCode(domain.name)} — ${domain.name}` : "—", c.level,
               assessment?.status?.replace(/_/g, " ") ?? "not started",
-              ev.title,
-              ev.evidenceType.replace(/_/g, " "),
-              ev.status.replace(/_/g, " "),
-              evidenceZipPaths.get(ev.id) ?? "—",
-              fmtD(ev.collectedAt),
-            ]);
+              ev.title, ev.evidenceType.replace(/_/g, " "), ev.status.replace(/_/g, " "),
+              fmtD(ev.collectedAt), evLibPaths.get(ev.id) ?? "no file",
+              evImportPaths.get(ev.id) ?? "no file"]);
           }
         }
       }
-      addEntry(
-        `${root}09_Manifests/Control_to_Evidence_Map.xlsx`,
-        buildXlsx(
-          [
-            "Control ID",
-            "Control Title",
-            "Domain",
-            "Level",
-            "Control Status",
-            "Evidence Title",
-            "Evidence Type",
-            "Evidence Status",
-            "Evidence File Path",
-            "Collection Date",
-          ],
-          ctrlEvRows
-        )
-      );
+      addEntry(`${man}Control_to_Evidence_Map.xlsx`, buildXlsx(
+        ["Control ID", "Control Title", "Domain", "Level", "Control Status", "Evidence Title", "Evidence Type", "Evidence Status", "Collection Date", "Evidence Library Path", "Import Package Path"],
+        ctrlEvRows
+      ));
 
-      const ctrlDocRows: (string | number)[][] = [];
-      for (const ctrl of controls) {
-        const ctrlDocs = (controlToDocs.get(ctrl.id) ?? [])
-          .map((id) => docMap.get(id))
-          .filter(Boolean) as typeof documents;
+      // Control_to_Document_Map.xlsx
+      const ctrlDocRows: (string | number | null | undefined)[][] = [];
+      for (const c of controls) {
+        const domain = domainMap.get(c.domainId);
+        const ctrlDocs = (controlToDocs.get(c.id) ?? []).map((id) => docMap.get(id)).filter(Boolean) as typeof documents;
         if (ctrlDocs.length === 0) {
-          ctrlDocRows.push([ctrl.controlId, ctrl.title, "—", "—", "—", "—", "—"]);
+          ctrlDocRows.push([c.controlId, c.title, domain ? domainCode(domain.name) : "—", c.level, "—", "—", "—", "—"]);
         } else {
           for (const d of ctrlDocs) {
-            ctrlDocRows.push([
-              ctrl.controlId,
-              ctrl.title,
-              d.docType ?? "—",
-              d.title,
-              d.status,
-              docZipPaths.get(d.id) ?? "—",
-              fmtD(d.nextReviewDate),
-            ]);
+            ctrlDocRows.push([c.controlId, c.title, domain ? domainCode(domain.name) : "—", c.level,
+              d.title, d.docType ?? "—", d.status, docLibPaths.get(d.id) ?? "no file"]);
           }
         }
       }
-      addEntry(
-        `${root}09_Manifests/Control_to_Document_Map.xlsx`,
-        buildXlsx(
-          [
-            "Control ID",
-            "Control Title",
-            "Document Type",
-            "Document Title",
-            "Document Status",
-            "Document File Path",
-            "Next Review Date",
-          ],
-          ctrlDocRows
-        )
-      );
+      addEntry(`${man}Control_to_Document_Map.xlsx`, buildXlsx(
+        ["Control ID", "Control Title", "Domain Code", "Level", "Document Title", "Document Type", "Document Status", "Document Library Path"],
+        ctrlDocRows
+      ));
 
-      addEntry(
-        `${root}09_Manifests/Export_Audit_Log.xlsx`,
-        buildXlsx(
-          ["Field", "Value"],
-          [
-            ["Generated By", `${user.name} (${user.email})`],
-            ["Role", user.role],
-            ["Organization", org.name],
-            ["Organization ID", org.id],
-            ["Export Date", exportDate],
-            ["Export Timestamp", new Date().toISOString()],
-            ["CMMC Level", "L2"],
-            ["Include Approved Evidence", String(includeApproved)],
-            ["Include Assessor Ready Evidence", String(includeAssessorReady)],
-            ["Include Draft Evidence", String(includeDraft)],
-            ["Include Pending Review Evidence", String(includePendingReview)],
-            ["Include Archived Evidence", String(includeArchived)],
-            ["Include Internal Notes", String(includeInternalNotes)],
-            ["Total Controls", controls.length],
-            ["Evidence Items Included", evidence.length],
-            ["Documents Included", documents.length],
-            ["POA&M Items", poams.length],
-            ["Monitoring Items", monitoring.length],
-            ["Files Missing from Storage", missingFiles.length],
-          ]
-        )
-      );
+      // Export_Issues.xlsx — always created
+      addEntry(`${man}Export_Issues.xlsx`, buildXlsx(
+        ["Category", "Item", "Detail", "Recommendation"],
+        exportIssues.length > 0
+          ? exportIssues.map((i) => [i.category, i.item, i.detail, i.recommendation])
+          : [["No Issues", "Export completed with no warnings", "", ""]]
+      ));
 
-      if (missingFiles.length > 0) {
-        addEntry(
-          `${root}09_Manifests/Export_Issues.xlsx`,
-          buildXlsx(
-            ["Title", "File Key", "Intended ZIP Path", "Note"],
-            missingFiles.map((f) => [
-              f.title,
-              f.fileKey ?? "—",
-              f.zipPath,
-              "File metadata exists but content could not be retrieved from storage",
-            ])
-          )
-        );
+      // Export_Audit_Log.xlsx
+      addEntry(`${man}Export_Audit_Log.xlsx`, buildXlsx(
+        ["Field", "Value"],
+        [
+          ["Generated By", `${user.name} (${user.email})`],
+          ["Role", user.role], ["Organization", org.name], ["Organization ID", org.id],
+          ["Export Date", exportDate], ["Export Timestamp", exportTimestamp], ["CMMC Level", "L2"],
+          ["Include Approved Evidence", String(includeApproved)],
+          ["Include Assessor Ready Evidence", String(includeAssessorReady)],
+          ["Include Draft Evidence", String(includeDraft)],
+          ["Include Pending Review Evidence", String(includePendingReview)],
+          ["Include Archived Evidence", String(includeArchived)],
+          ["Include Internal Notes", String(includeInternalNotes)],
+          ["Total Controls", controls.length], ["Evidence Items Included", evidence.length],
+          ["Evidence Without Files", evidence.filter((e) => !e.fileKey).length],
+          ["Documents (documentsTable)", documents.length],
+          ["Document-Like Evidence", docLikeEvidence.length],
+          ["Total Document Library Entries", documents.length + docLikeEvidence.length],
+          ["POA&M Items", poams.length], ["Unmapped POA&M Items", unmappedPoams.length],
+          ["Monitoring Items", monitoring.length], ["Export Issues", exportIssues.length],
+          ["GCS Files Pre-Fetched", uniqueFileKeys.length],
+        ]
+      ));
+
+      // Package_Metadata.json — comprehensive
+      if (includeMetadataJson) {
+        const metaJson = {
+          package: pkgName, organization: org.name, organizationId: org.id,
+          exportDate, exportTimestamp, cmmcLevel: "L2",
+          generatedBy: { id: user.id, name: user.name, email: user.email, role: user.role },
+          options: { includeApproved, includeAssessorReady, includeDraft, includePendingReview, includeArchived, includeInternalNotes },
+          counts: {
+            controls: controls.length, controlsImplemented: statusCounts.implemented,
+            overallReadinessPct: pct,
+            evidenceTotalIncluded: evidence.length,
+            evidenceWithFiles: evidence.filter((e) => !!e.fileKey).length,
+            evidenceWithoutFiles: evidence.filter((e) => !e.fileKey).length,
+            documentsFromDocumentModule: documents.length,
+            documentLikeEvidenceIncluded: docLikeEvidence.length,
+            totalDocumentLibraryEntries: documents.length + docLikeEvidence.length,
+            poams: poams.length, unmappedPoams: unmappedPoams.length,
+            monitoring: monitoring.length, exportIssues: exportIssues.length,
+          },
+          structure: {
+            reviewPackage: "01_C3PAO_Review_Package/",
+            importPackage: "02_C3PAO_Import_Package/",
+            manifests: "99_Manifests/",
+          },
+        };
+        addEntry(`${man}Package_Metadata.json`, Buffer.from(JSON.stringify(metaJson, null, 2)));
       }
 
-      // Hash manifest goes last — depends on all other entries being added
+      // File_Hash_Manifest — goes last (includes all prior entries)
       if (includeHashManifest && hashManifestRows.length > 0) {
         arc.append(
-          buildXlsx(
-            [
-              "File Path in ZIP",
-              "Original Filename",
-              "File Size (bytes)",
-              "SHA-256 Hash",
-              "Export Timestamp",
-            ],
-            hashManifestRows as (string | number | null | undefined)[][]
-          ),
-          { name: `${root}09_Manifests/File_Hash_Manifest.xlsx` }
+          buildXlsx(["File Path in ZIP", "Filename", "File Size (bytes)", "SHA-256 Hash", "Export Timestamp"], hashManifestRows as (string | number | null | undefined)[][]),
+          { name: `${man}File_Hash_Manifest.xlsx` }
         );
       }
 
-      if (includeMetadataJson) {
-        arc.append(
-          Buffer.from(
-            JSON.stringify(
-              {
-                package: pkgName,
-                organization: org.name,
-                exportDate,
-                cmmcLevel: "L2",
-                counts: {
-                  controls: controls.length,
-                  evidence: evidence.length,
-                  documents: documents.length,
-                  poams: poams.length,
-                  monitoring: monitoring.length,
-                },
-                missingFiles: missingFiles.length,
-              },
-              null,
-              2
-            )
-          ),
-          { name: `${root}09_Manifests/Package_Metadata.json` }
-        );
-      }
-
-      // ── 5. Finalise the archive and wait for it to flush ──────────────────
+      // ── Finalise ─────────────────────────────────────────────────────────────
       await arc.finalize();
 
-      req.log.info(
-        {
-          org: org.name,
-          files: hashManifestRows.length,
-          missingFiles: missingFiles.length,
-          gcsFilesLoaded: uniqueFileKeys.length,
-        },
-        "C3PAO export package generated"
-      );
+      req.log.info({
+        org: org.name, files: hashManifestRows.length,
+        evidence: evidence.length, documents: documents.length,
+        docLikeEvidence: docLikeEvidence.length,
+        exportIssues: exportIssues.length,
+        gcsFilesLoaded: uniqueFileKeys.length,
+      }, "C3PAO export package generated");
+
     } catch (err) {
       req.log.error({ err }, "Failed to generate C3PAO export package");
-      if (!res.headersSent) {
-        res.status(500).json({ error: "Failed to generate export package" });
-      } else if (!res.writableEnded) {
-        res.end();
-      }
+      if (!res.headersSent) res.status(500).json({ error: "Failed to generate export package" });
+      else if (!res.writableEnded) res.end();
     }
   }
 );
+
+// ── Helpers for import manifest category suggestions ──────────────────────────
+function suggestC3paoCategory(evidenceType: string): string {
+  switch (evidenceType) {
+    case "screenshot": return "Screenshot";
+    case "log": return "Log";
+    case "policy": return "Policy";
+    case "procedure": return "Procedure";
+    case "report": case "scan_report": return "Report";
+    case "access_review": case "approval_record": return "Review Record";
+    case "training_record": return "Training Record";
+    case "configuration_export": case "system_inventory": case "asset_inventory": return "Export";
+    case "backup_verification": return "Backup Verification";
+    case "incident_record": return "Incident Record";
+    case "risk_record": return "Risk Record";
+    default: return "Other";
+  }
+}
+
+function suggestC3paoDocCategory(docType: string | null | undefined): string {
+  switch (docType) {
+    case "policy": return "Policy";
+    case "procedure": return "Procedure";
+    case "log": case "register": case "checklist": return "Log";
+    case "narrative": case "plan": return "SSP";
+    case "report": return "Report";
+    case "training_record": return "Training Record";
+    case "vulnerability_scan": return "Report";
+    default: return "Other";
+  }
+}
 
 export default router;
