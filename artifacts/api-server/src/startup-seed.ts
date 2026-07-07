@@ -444,6 +444,69 @@ async function seedHelpContent() {
   logger.info("Help center content seeded.");
 }
 
+/**
+ * One-time idempotent fix: add missing control links for VTCCORP.US evidence items.
+ * These items were uploaded without control assignments and showed as UNLINKED in bulk exports.
+ * Each INSERT uses WHERE NOT EXISTS so this is safe to run on every startup.
+ *
+ * Mapping source:
+ *   - Items titled "3.13.4_*" / "3_13_4_*" / "VTC Shared Resource Policy" → SC.L2-3.13.4
+ *   - R-12 CUI SharePoint items → same controls as their already-linked sibling records
+ */
+async function fixVtccorpControlLinks() {
+  // [evidenceId, controlId]  — all UUIDs verified against the production DB
+  const pairs: [string, string][] = [
+    // ── 3.13.4 items (6 unlinked copies) ───────────────────────── SC.L2-3.13.4
+    ["fe108e9f-bbf9-4a23-a841-8c0726d9c8bb", "163e825e-104e-4e80-899f-025db4f9aa6c"], // 3.13.4 Narrative
+    ["5d6deb93-f324-4c29-941a-9d76e0b18a95", "163e825e-104e-4e80-899f-025db4f9aa6c"], // 3.13.4_Configuration
+    ["1ed3eebb-d32d-4951-878f-35ba569c7386", "163e825e-104e-4e80-899f-025db4f9aa6c"], // 3.13.4_Initial_Review_Record
+    ["205af62b-4f78-465f-99ac-72461d754995", "163e825e-104e-4e80-899f-025db4f9aa6c"], // 3.13.4_Policy
+    ["fc19dd4a-8bb6-4b32-a89f-1656fce37982", "163e825e-104e-4e80-899f-025db4f9aa6c"], // 3.13.4_Procedure
+    ["7ccb71fa-9b11-48f6-8baf-49a427f5c658", "163e825e-104e-4e80-899f-025db4f9aa6c"], // 3_13_4_Closeout_Packet
+    // ── VTC Shared Resource Policy ─────────────────────────────── SC.L2-3.13.4
+    ["021747d0-b609-459b-bcba-6e266b83824b", "163e825e-104e-4e80-899f-025db4f9aa6c"],
+    // ── R-12 CUI SharePoint Site Access Requests ─── CM.L2-3.4.2, SC.L2-3.13.4
+    ["ecabc74e-65ac-449a-ab46-fceb1143b671", "c9202143-0a83-4de2-8884-8c469e7ccb35"],
+    ["ecabc74e-65ac-449a-ab46-fceb1143b671", "163e825e-104e-4e80-899f-025db4f9aa6c"],
+    // ── R-12 CUI SharePoint Site Overview ── CM.L2-3.4.2, SC.L2-3.13.4, SC.L2-3.13.8
+    ["7a43c0da-7de6-4754-a350-f55534e4bc7f", "c9202143-0a83-4de2-8884-8c469e7ccb35"],
+    ["7a43c0da-7de6-4754-a350-f55534e4bc7f", "163e825e-104e-4e80-899f-025db4f9aa6c"],
+    ["7a43c0da-7de6-4754-a350-f55534e4bc7f", "ba80b66c-23d2-4fb3-ad2c-ff55a56b3d91"],
+    // ── R-12 CUI SharePoint Site Permissions ── AC.L2-3.1.5, CM.L2-3.4.2, SC.L2-3.13.4
+    ["8c08abdf-1ba0-4a7d-86be-0bcfcbd29269", "b1c780d1-1759-4926-bf1e-f17bc958a348"],
+    ["8c08abdf-1ba0-4a7d-86be-0bcfcbd29269", "c9202143-0a83-4de2-8884-8c469e7ccb35"],
+    ["8c08abdf-1ba0-4a7d-86be-0bcfcbd29269", "163e825e-104e-4e80-899f-025db4f9aa6c"],
+    // ── R-12 CUI SharePoint Site Sharing Restricted ── CM.L2-3.4.2, CM.L2-3.4.7, SC.L2-3.13.4
+    ["f4e6eb1b-1664-4ed8-9ccd-0a2e82b27fa9", "c9202143-0a83-4de2-8884-8c469e7ccb35"],
+    ["f4e6eb1b-1664-4ed8-9ccd-0a2e82b27fa9", "11015949-0336-47fc-b864-fa9b9828df6b"],
+    ["f4e6eb1b-1664-4ed8-9ccd-0a2e82b27fa9", "163e825e-104e-4e80-899f-025db4f9aa6c"],
+    // ── R-12 Tenant Sharing Policy ── AC.L2-3.1.3, CM.L2-3.4.2, SC.L2-3.13.4
+    ["ea180ac4-2bfc-4912-a769-a8bb6bf7da9d", "947bbd32-7a0a-4ae8-857f-1949a094f159"],
+    ["ea180ac4-2bfc-4912-a769-a8bb6bf7da9d", "c9202143-0a83-4de2-8884-8c469e7ccb35"],
+    ["ea180ac4-2bfc-4912-a769-a8bb6bf7da9d", "163e825e-104e-4e80-899f-025db4f9aa6c"],
+  ];
+
+  let inserted = 0;
+  for (const [evidenceId, controlId] of pairs) {
+    try {
+      await db.execute(sql.raw(`
+        INSERT INTO evidence_control_links (id, evidence_id, control_id, linked_at)
+        SELECT gen_random_uuid(), '${evidenceId}', '${controlId}', now()
+        WHERE NOT EXISTS (
+          SELECT 1 FROM evidence_control_links
+          WHERE evidence_id = '${evidenceId}' AND control_id = '${controlId}'
+        )
+      `));
+      inserted++;
+    } catch (_e) {
+      // Evidence row may not exist in this environment — safe to skip
+    }
+  }
+  if (inserted > 0) {
+    logger.info({ inserted }, "Fixed VTCCORP.US unlinked evidence control links");
+  }
+}
+
 export async function runStartupSeed() {
   try {
     await migrateSsoTable();
@@ -462,6 +525,7 @@ export async function runStartupSeed() {
     await seedDemoOrg();
     await seedSecuritySettings();
     await seedHelpContent();
+    await fixVtccorpControlLinks();
   } catch (err) {
     logger.error({ err }, "Startup seed failed — app will continue but may lack reference data");
   }
