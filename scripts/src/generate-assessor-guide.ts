@@ -707,7 +707,9 @@ function buildGuideHtml(shots: Map<string, string>, ctx: OrgContext): string {
   <div class="toc-entry sub"><span>9.6 SSP Tab</span><span class="toc-pn">11</span></div>
   <div class="toc-entry main"><span>10 — Example: Reviewing ${ctx.bestControlId}</span><span class="toc-pn">12</span></div>
   <div class="toc-entry main"><span>11 — Evidence Repository</span><span class="toc-pn">13</span></div>
-  <div class="toc-entry main"><span>12 — Documentation</span><span class="toc-pn">13</span></div>
+  <div class="toc-entry sub"><span>11.1 Bulk Download Evidence Package</span><span class="toc-pn">13</span></div>
+  <div class="toc-entry main"><span>12 — Documentation</span><span class="toc-pn">14</span></div>
+  <div class="toc-entry sub"><span>12.1 Bulk Download Document Package</span><span class="toc-pn">14</span></div>
   <div class="toc-entry main"><span>13 — Monitoring Tracker</span><span class="toc-pn">14</span></div>
   <div class="toc-entry main"><span>14 — Plan of Action and Milestones Register</span><span class="toc-pn">14</span></div>
   <div class="toc-entry main"><span>15 — Reports</span><span class="toc-pn">15</span></div>
@@ -751,6 +753,7 @@ function buildGuideHtml(shots: Map<string, string>, ctx: OrgContext): string {
     <li>Review the <strong>Configure tab</strong> — implementation guidance steps</li>
     <li>View linked <strong>Evidence</strong> per control — status, type, collection date, owner</li>
     <li><strong>Preview and download evidence files</strong> — PDFs, images, text, Office documents</li>
+    <li>Use <strong>Bulk Download</strong> — export a structured ZIP package of evidence and/or documents for offline C3PAO review (approved, active, and assessor-ready items)</li>
     <li>Access the <strong>Evidence Repository</strong> — global searchable evidence list</li>
     <li>Access <strong>Documentation</strong> — policies, procedures, logs, records</li>
     <li>Review <strong>SSP narratives</strong> per control — System Security Plan mappings</li>
@@ -1050,6 +1053,39 @@ function buildGuideHtml(shots: Map<string, string>, ctx: OrgContext): string {
     "Collection dates are recent (verify expiration for time-bound evidence)",
     "Evidence is linked to specific controls (not unlinked floating records)",
   ])}
+
+  <div class="subsection-title">Bulk Download Evidence Package</div>
+  <p>The <strong>Bulk Download</strong> button in the Evidence Repository toolbar lets assessors export a structured ZIP package containing evidence files and a control-mapping manifest — designed for offline C3PAO review and uploading to assessment tools.</p>
+  ${imgTag(s("bulk_download_wizard"), "Bulk Download Wizard — Scope Step", "Figure 11.2 — The Bulk Download wizard (Step 1: Scope). Choose which evidence items to include before selecting structure and content options.")}
+  <p>Clicking <strong>Bulk Download</strong> opens a 5-step wizard:</p>
+  <ol class="step-list">
+    <li><div class="step-num">1</div><div class="step-content"><span class="step-title">Scope</span>Choose what to include: <em>Selected Items</em> (rows you have checked), <em>Approved / Active / Assessor Ready</em> (recommended for assessment), <em>Current Filter Results</em>, or <em>Entire Organization</em>.</div></li>
+    <li><div class="step-num">2</div><div class="step-content"><span class="step-title">Content</span>Choose whether to include Evidence files, Documents, or both. Select which status levels to include (Approved, Active, Assessor Ready are pre-selected by default). Optionally include items not linked to any control.</div></li>
+    <li><div class="step-num">3</div><div class="step-content"><span class="step-title">Structure</span>Select the ZIP folder layout that best suits your review workflow.</div></li>
+    <li><div class="step-num">4</div><div class="step-content"><span class="step-title">Review</span>Confirm the settings before generating.</div></li>
+    <li><div class="step-num">5</div><div class="step-content"><span class="step-title">Generate</span>The server assembles the ZIP and the browser downloads it automatically. The filename follows the pattern: <strong>VTCCORPUS_Bulk_Download_YYYY-MM-DD.zip</strong></div></li>
+  </ol>
+  <div class="sub2-title">ZIP Structure Options</div>
+  <table>
+    <thead><tr><th>Structure</th><th>Folder Layout</th><th>Best For</th></tr></thead>
+    <tbody>
+      <tr><td><strong>By Domain › Control ID</strong> <span class="badge b-blue">Recommended</span></td><td>AC_Access_Control/<br/>&nbsp;&nbsp;AC.L1-3.1.1/<br/>&nbsp;&nbsp;&nbsp;&nbsp;files…</td><td>Manual CMMC review — browse by domain then control</td></tr>
+      <tr><td><strong>By Control ID</strong></td><td>AC.L1-3.1.1/<br/>&nbsp;&nbsp;files…</td><td>C3PAO control-by-control upload to assessment portal</td></tr>
+      <tr><td><strong>By File Type</strong></td><td>Policies/<br/>Screenshots/<br/>Logs/…</td><td>Evidence cleanup and audit prep</td></tr>
+      <tr><td><strong>Flat ZIP with Manifest</strong> <span class="badge b-purple">C3PAO Upload</span></td><td>Files/<br/>&nbsp;&nbsp;all files…<br/>00_Manifest/<br/>&nbsp;&nbsp;File_Index.xlsx<br/>&nbsp;&nbsp;Control_Mapping.xlsx</td><td>Uploading to an assessment management system</td></tr>
+    </tbody>
+  </table>
+  <div class="info-box tip"><div class="ib-title">💡 Assessor Tip — Recommended Scope</div><p>For most assessments, choose <strong>Approved / Active / Assessor Ready</strong> as the scope and <strong>By Domain › Control ID</strong> as the structure. The resulting ZIP mirrors the CMMC domain hierarchy and includes a control-mapping manifest, making it easy to verify evidence coverage domain by domain.</p></div>
+  <div class="info-box"><div class="ib-title">ℹ Manifest Files</div><p>When <em>Include Manifest</em> is enabled, the ZIP contains an <strong>File_Index.xlsx</strong> listing every file with its title, type, status, control links, and collection date. When <em>Include Control Mapping</em> is enabled, a <strong>Control_Mapping.xlsx</strong> cross-references every control with its evidence files — useful for gap analysis during assessment.</p></div>
+  <div class="info-box warn"><div class="ib-title">⚠ Assessor Scope</div><p>Assessors can only bulk download items they are permitted to view individually — Approved, Active, and Assessor-Ready evidence and documents for ${VTCCORP_ORG_NAME}. Draft or internal-only artifacts are excluded automatically.</p></div>
+  ${checklist("Bulk Download Checklist", [
+    "Use Approved / Active / Assessor Ready scope for the primary assessment package",
+    "Select By Domain › Control ID structure for easiest manual review",
+    "Enable Include Manifest and Include Control Mapping for cross-reference spreadsheets",
+    "Verify ZIP filename includes the correct organization name and today's date",
+    "Confirm the ZIP contains the expected domain and control folders after download",
+    "Use the Control_Mapping.xlsx to identify controls with zero evidence files",
+  ])}
 </div>
 
 <!-- §12 -->
@@ -1067,6 +1103,11 @@ function buildGuideHtml(shots: Map<string, string>, ctx: OrgContext): string {
       <tr><td><strong>Report</strong></td><td>Generated compliance reports and assessments.</td></tr>
     </tbody>
   </table>
+
+  <div class="subsection-title">Bulk Download Document Package</div>
+  <p>The <strong>Bulk Download</strong> button on the All Documents page works identically to the Evidence Repository bulk download. Assessors can export a ZIP of all active policies, procedures, and records — organized by CMMC domain or control — for offline review.</p>
+  <p>When downloading from the Documents page, set <em>Content</em> to <strong>Documents only</strong> to get a clean package of formal compliance documents without evidence attachments. To export a combined evidence + document package in a single ZIP, open the Evidence Repository and include both content types in Step 2 of the wizard.</p>
+  <div class="info-box tip"><div class="ib-title">💡 Policy & Procedure Review</div><p>Use the <em>By Domain › Control ID</em> structure when bulk downloading documents. Each CMMC domain folder will contain the policies and procedures that ${VTCCORP_ORG_NAME} has linked to those controls, making it straightforward to verify policy coverage across all 14 domains.</p></div>
 </div>
 
 <!-- §13 -->
@@ -1150,10 +1191,11 @@ function buildGuideHtml(shots: Map<string, string>, ctx: OrgContext): string {
     <li><div class="step-num">4</div><div class="step-content"><span class="step-title">Open the Controls Library</span>Click Controls. Use domain and status filters to systematically review each CMMC domain. See Section 8.</div></li>
     <li><div class="step-num">5</div><div class="step-content"><span class="step-title">For each in-scope control: open the Control Package</span>Click the control ID. Review Implementation → Configure → Evidence → SSP → Monitoring → POA&amp;M tabs. See Section 9.</div></li>
     <li><div class="step-num">6</div><div class="step-content"><span class="step-title">Open and review evidence</span>Click each evidence item. Preview or download the file. Confirm it supports the implementation narrative. See Sections 9.3 and 11.</div></li>
-    <li><div class="step-num">7</div><div class="step-content"><span class="step-title">Review Monitoring Tracker</span>Click Monitoring Tracker. Note any Overdue activities as potential gaps. See Section 13.</div></li>
-    <li><div class="step-num">8</div><div class="step-content"><span class="step-title">Review POA&amp;M Register</span>Click POA&amp;M. Note open items, high-risk items, and past-due targets. See Section 14.</div></li>
-    <li><div class="step-num">9</div><div class="step-content"><span class="step-title">Request any missing reports</span>Contact the administrator if additional report formats are needed. See Section 15.</div></li>
-    <li><div class="step-num">10</div><div class="step-content"><span class="step-title">Contact support if needed</span>For access issues, missing data, or additional information, see Section 18.</div></li>
+    <li><div class="step-num">7</div><div class="step-content"><span class="step-title">Bulk download the evidence package</span>From the Evidence Repository, click <strong>Bulk Download</strong>. Select <em>Approved / Active / Assessor Ready</em> scope, enable both Evidence and Documents, choose <em>By Domain › Control ID</em> structure, and enable Include Manifest and Include Control Mapping. Download the ZIP for offline review. See Section 11.1.</div></li>
+    <li><div class="step-num">8</div><div class="step-content"><span class="step-title">Review Monitoring Tracker</span>Click Monitoring Tracker. Note any Overdue activities as potential gaps. See Section 13.</div></li>
+    <li><div class="step-num">9</div><div class="step-content"><span class="step-title">Review POA&amp;M Register</span>Click POA&amp;M. Note open items, high-risk items, and past-due targets. See Section 14.</div></li>
+    <li><div class="step-num">10</div><div class="step-content"><span class="step-title">Request any missing reports</span>Contact the administrator if additional report formats are needed. See Section 15.</div></li>
+    <li><div class="step-num">11</div><div class="step-content"><span class="step-title">Contact support if needed</span>For access issues, missing data, or additional information, see Section 18.</div></li>
   </ol>
 </div>
 
@@ -1172,6 +1214,10 @@ function buildGuideHtml(shots: Map<string, string>, ctx: OrgContext): string {
       <tr><td><strong>Evidence repository empty</strong></td><td>Filter active or different org selected.</td><td>Clear all filters. Confirm ${VTCCORP_ORG_NAME} is active.</td></tr>
       <tr><td><strong>Session expired</strong></td><td>JWT tokens expire after 24 hours.</td><td>Log in again with your assessor credentials.</td></tr>
       <tr><td><strong>Access too broad</strong></td><td>Wrong role assigned to account.</td><td>Contact administrator to verify role is set to Assessor.</td></tr>
+      <tr><td><strong>Bulk Download button not visible</strong></td><td>Browser width too narrow or toolbar collapsed.</td><td>Widen the browser window. The button appears in the Evidence Repository and All Documents toolbars.</td></tr>
+      <tr><td><strong>Bulk Download ZIP is empty</strong></td><td>No evidence matched the selected scope and status filters.</td><td>Switch scope to <em>Approved / Active / Assessor Ready</em>. Verify evidence exists in the repository.</td></tr>
+      <tr><td><strong>Bulk Download fails or times out</strong></td><td>Large export or server timeout on very large organizations.</td><td>Reduce the scope (use a domain filter first, then download filtered results). Contact administrator if the issue persists.</td></tr>
+      <tr><td><strong>Control_Mapping.xlsx shows no files for a control</strong></td><td>Evidence exists but is not linked to that control.</td><td>Check the Evidence tab on the Control Package — evidence may exist but be unlinked. Note this as a potential gap.</td></tr>
     </tbody>
   </table>
 </div>
@@ -1349,6 +1395,28 @@ async function main() {
         rejectText: ["Internal Company", "No evidence found"],
       }));
       console.log(`     ${shots.get("evidence") ? "✓" : "⚠"} evidence`);
+
+      // ── Bulk Download wizard ──────────────────────────────────────────
+      console.log("  → Bulk Download wizard");
+      try {
+        const bulkBtn = page.getByRole("button", { name: /bulk download/i });
+        if (await bulkBtn.isVisible({ timeout: 3000 })) {
+          await bulkBtn.click();
+          await page.waitForTimeout(1500);
+          shots.set("bulk_download_wizard", await takeValidatedScreenshot(page, "bulk_download_wizard", {
+            waitForText: "Scope",
+            rejectText: ["Internal Company"],
+          }));
+          console.log(`     ${shots.get("bulk_download_wizard") ? "✓" : "⚠"} bulk_download_wizard`);
+          // Close wizard (press Escape) before continuing
+          await page.keyboard.press("Escape");
+          await page.waitForTimeout(500);
+        } else {
+          console.log("     ⚠  Bulk Download button not found — skipping");
+        }
+      } catch (e) {
+        console.log("     ⚠  Bulk Download wizard screenshot failed — skipping");
+      }
     }
 
     // ── Evidence detail ────────────────────────────────────────────────
