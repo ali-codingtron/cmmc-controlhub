@@ -1,0 +1,281 @@
+====================================================================
+27. EXPAND THE IMPLEMENTATION STEPS
+====================================================================
+
+The current "Steps" section is still too high level.
+
+Every roadmap action should contain implementation guidance that is detailed enough for a reasonably experienced Microsoft 365 / IT administrator to follow without needing external documentation.
+
+Each implementation step should be written like a professional implementation guide.
+
+Every step should include the following sections:
+
+----------------------------------------------------------
+Step Title
+----------------------------------------------------------
+
+Purpose
+Explain:
+- Why this step is required.
+- Which CMMC requirements it supports.
+- What will happen after completing it.
+
+Estimated Time
+Examples:
+15 minutes
+1 hour
+4 hours
+
+Skill Level
+- Beginner
+- Intermediate
+- Advanced
+
+Systems Used
+Examples:
+- Microsoft Entra Admin Center
+- Microsoft Intune
+- Microsoft Defender
+- Exchange Admin Center
+- Purview
+- SharePoint Admin Center
+- Windows Workstation
+- Firewall
+- Local Group Policy
+
+Prerequisites
+Examples:
+- Global Administrator role
+- Intune licensing
+- Device enrolled
+- Defender onboarded
+
+----------------------------------------------------------
+Detailed Step-by-Step Instructions
+----------------------------------------------------------
+
+Write every click.
+
+Example:
+
+1. Open https://entra.microsoft.com
+
+2. Navigate to:
+
+Identity
+→ Devices
+→ Compliance Policies
+
+3. Select:
+
+Create Policy
+
+4. Choose:
+
+Windows 11
+
+5. Configure the following settings:
+
+Require BitLocker = Enabled
+
+Require Firewall = Enabled
+
+Require Antivirus = Enabled
+
+Minimum OS Version = ...
+
+6. Click Review and Save.
+
+Do not summarize these steps.
+
+Provide the exact navigation path wherever possible.
+
+----------------------------------------------------------
+Expected Result
+----------------------------------------------------------
+
+Describe exactly what the administrator should see.
+
+Examples:
+
+- Policy appears in the Compliance Policies list.
+- Status shows Successfully Assigned.
+- Device reports Compliant.
+- Defender portal shows Healthy.
+
+----------------------------------------------------------
+Evidence to Capture
+----------------------------------------------------------
+
+Explain exactly what screenshots, reports, exports, logs, or documentation should be collected.
+
+For each evidence item include:
+
+Evidence Type
+
+Suggested Filename
+
+What must be visible in the screenshot/report
+
+Where to save it in Control HUB
+
+Which controls it supports
+
+Example:
+
+Evidence:
+Screenshot
+
+Suggested filename:
+R-05_Conditional_Access_Policy.png
+
+Must show:
+Policy name
+Assignments
+Grant controls
+Status Enabled
+
+Linked controls:
+AC.L2-3.1.12
+IA.L2-3.5.3
+IA.L2-3.5.2
+
+----------------------------------------------------------
+Required Documentation
+----------------------------------------------------------
+
+Show what documents should be linked.
+
+Examples:
+
+Policy
+
+Procedure
+
+Checklist
+
+Approval Record
+
+Review Log
+
+Asset Inventory
+
+Risk Register
+
+Provide document template names where available.
+
+----------------------------------------------------------
+Validation
+----------------------------------------------------------
+
+Describe exactly how to verify the step worked.
+
+Examples:
+
+Attempt login from a non-compliant device.
+
+Expected:
+Access blocked.
+
+Run:
+
+Get-ConditionalAccessPolicy
+
+Expected:
+Policy returned.
+
+Verify Intune reports:
+
+Compliant = Yes
+
+----------------------------------------------------------
+Common Mistakes
+----------------------------------------------------------
+
+Explain common implementation errors.
+
+Example:
+
+Policy created but never assigned.
+
+BitLocker policy assigned to wrong group.
+
+Conditional Access excluded administrators.
+
+----------------------------------------------------------
+Troubleshooting
+----------------------------------------------------------
+
+Provide common fixes.
+
+Examples:
+
+Device never becomes compliant.
+
+BitLocker not reporting.
+
+Defender onboarding failed.
+
+Policy assignment conflict.
+
+----------------------------------------------------------
+Related Controls
+----------------------------------------------------------
+
+List every control impacted.
+
+Examples:
+
+AC.L2-3.1.12
+
+IA.L2-3.5.3
+
+CM.L2-3.4.1
+
+SI.L2-3.14.1
+
+----------------------------------------------------------
+Completion Checklist
+----------------------------------------------------------
+
+Checklist should include:
+
+☐ Configuration completed
+
+☐ Evidence uploaded
+
+☐ Required documents linked
+
+☐ Validation completed
+
+☐ Monitoring updated
+
+☐ Related controls reviewed
+
+☐ Ready for review
+
+====================================================================
+28. MAKE THIS THE BEST IMPLEMENTATION GUIDE AVAILABLE
+====================================================================
+
+One of the primary selling points of Control HUB should be the quality of its implementation guidance.
+
+Do not write generic summaries.
+
+Write implementation guidance that is comparable to a professional implementation runbook.
+
+Assume the user wants to configure CMMC controls without needing to search Microsoft Learn or Google for every step.
+
+Where appropriate:
+
+- include PowerShell commands
+- include Microsoft Graph commands
+- include portal navigation
+- include best practices
+- include recommended settings
+- include expected outputs
+- include evidence capture instructions
+- include validation procedures
+- include rollback considerations if applicable
+
+The goal is for Control HUB to become the organization's primary implementation guide—not just a tracking application.

@@ -60,7 +60,17 @@ import {
   AlertCircle,
   User,
   ArrowRight,
+  Eye,
+  EyeOff,
+  Package,
+  HelpCircle,
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 function makeHeaders(orgId: string) {
@@ -311,6 +321,285 @@ function MultiLineText({ text }: { text: string }) {
   );
 }
 
+function InfoTip({ text }: { text: string }) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help shrink-0 inline" />
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs text-xs">{text}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+const STAGE_CONFIG = [
+  { label: "Understand", description: "Read the overview and purpose" },
+  { label: "Perform Steps", description: "Complete implementation steps" },
+  { label: "Upload Evidence", description: "Collect and upload evidence" },
+  { label: "Validate", description: "Run validation and testing" },
+  { label: "Review & Complete", description: "Mark complete or request review" },
+];
+
+function StageTracker({
+  status,
+  checklistCompleted,
+  checklistTotal,
+  evidenceCount,
+}: {
+  status: string;
+  checklistCompleted: number;
+  checklistTotal: number;
+  evidenceCount: number;
+}) {
+  let currentStage = 0;
+  if (status === "complete" || status === "ready_for_review") {
+    currentStage = 5;
+  } else if (status === "blocked") {
+    currentStage = 1;
+  } else if (checklistTotal > 0 && checklistCompleted === checklistTotal) {
+    currentStage = evidenceCount > 0 ? 3 : 4;
+  } else if (checklistCompleted > 0) {
+    currentStage = 2;
+  } else if (status === "in_progress") {
+    currentStage = 1;
+  } else {
+    currentStage = 0;
+  }
+
+  return (
+    <div className="flex items-start gap-0 overflow-x-auto">
+      {STAGE_CONFIG.map((stage, i) => {
+        const done = i < currentStage;
+        const active = i === currentStage;
+        return (
+          <div key={i} className="flex items-start flex-1 min-w-0">
+            <div className="flex flex-col items-center min-w-0 flex-1">
+              <div className="flex items-center w-full">
+                {i > 0 && (
+                  <div
+                    className={cn(
+                      "h-0.5 flex-1",
+                      done || active ? "bg-primary" : "bg-border"
+                    )}
+                  />
+                )}
+                <div
+                  className={cn(
+                    "shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-bold transition-colors",
+                    done
+                      ? "bg-primary border-primary text-primary-foreground"
+                      : active
+                      ? "border-primary text-primary bg-primary/10"
+                      : "border-border text-muted-foreground bg-background"
+                  )}
+                >
+                  {done ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
+                </div>
+                {i < STAGE_CONFIG.length - 1 && (
+                  <div
+                    className={cn(
+                      "h-0.5 flex-1",
+                      done ? "bg-primary" : "bg-border"
+                    )}
+                  />
+                )}
+              </div>
+              <div className="text-center mt-1.5 px-1">
+                <div
+                  className={cn(
+                    "text-[11px] font-semibold leading-tight",
+                    active
+                      ? "text-primary"
+                      : done
+                      ? "text-foreground/70"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  {stage.label}
+                </div>
+                {active && (
+                  <div className="text-[10px] text-muted-foreground mt-0.5 hidden sm:block">
+                    {stage.description}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function WhatYouWillProduce({
+  evidenceItems,
+  documents,
+  controlsCount,
+}: {
+  evidenceItems: Array<{ id: string; title: string; evidenceType: string }>;
+  documents: Array<{ id: string; title: string; docType: string }>;
+  controlsCount: number;
+}) {
+  if (evidenceItems.length === 0 && documents.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border bg-card overflow-hidden">
+      <div className="p-4 border-b bg-muted/20 flex items-center gap-2">
+        <Package className="h-4 w-4 text-primary" />
+        <h3 className="font-semibold text-sm">What You Will Produce</h3>
+        <span className="text-xs text-muted-foreground">
+          — outputs from completing this action
+        </span>
+      </div>
+      <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+        {evidenceItems.length > 0 && (
+          <div>
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+              <Camera className="h-3.5 w-3.5" />
+              Evidence Files ({evidenceItems.length})
+            </div>
+            <ul className="space-y-1.5">
+              {evidenceItems.map((ev) => (
+                <li key={ev.id} className="flex items-start gap-2 text-xs">
+                  <span className="shrink-0 mt-0.5 text-emerald-400">•</span>
+                  <span className="text-foreground/80">{ev.title}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {documents.length > 0 && (
+          <div>
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+              <FileText className="h-3.5 w-3.5" />
+              Documents ({documents.length})
+            </div>
+            <ul className="space-y-1.5">
+              {documents.map((doc) => (
+                <li key={doc.id} className="flex items-start gap-2 text-xs">
+                  <span className="shrink-0 mt-0.5 text-blue-400">•</span>
+                  <span className="text-foreground/80">{doc.title}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <div>
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+            <ShieldCheck className="h-3.5 w-3.5" />
+            Controls Supported
+          </div>
+          <p className="text-xs text-foreground/80">
+            Completing this action contributes evidence and documentation to{" "}
+            <strong>{controlsCount}</strong> CMMC L2 control
+            {controlsCount !== 1 ? "s" : ""}.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NextStepBanner({
+  status,
+  checklistCompleted,
+  checklistTotal,
+  evidenceCount,
+  onTabChange,
+}: {
+  status: string;
+  checklistCompleted: number;
+  checklistTotal: number;
+  evidenceCount: number;
+  onTabChange: (tab: string) => void;
+}) {
+  if (status === "complete") return null;
+
+  let message = "";
+  let buttonLabel = "";
+  let targetTab = "";
+  let variant: "default" | "warning" | "info" = "info";
+
+  if (status === "blocked") {
+    message =
+      "This action is blocked. Resolve the blocker and update the status to continue.";
+    buttonLabel = "";
+    targetTab = "";
+    variant = "warning";
+  } else if (status === "not_started") {
+    message =
+      "Start by reading the Overview and understanding the purpose of this action.";
+    buttonLabel = "Read Overview";
+    targetTab = "overview";
+    variant = "info";
+  } else if (checklistTotal > 0 && checklistCompleted < checklistTotal) {
+    message = `Complete your implementation steps (${checklistCompleted} of ${checklistTotal} done).`;
+    buttonLabel = "Go to Steps";
+    targetTab = "procedure";
+    variant = "info";
+  } else if (evidenceCount > 0 && (status === "in_progress" || status === "evidence_needed")) {
+    message = `Upload the required evidence files (${evidenceCount} item${evidenceCount !== 1 ? "s" : ""} needed).`;
+    buttonLabel = "View Evidence";
+    targetTab = "evidence";
+    variant = "warning";
+  } else if (status === "ready_for_review") {
+    message = "This action is ready for review. A reviewer needs to approve it.";
+    buttonLabel = "";
+    targetTab = "";
+    variant = "info";
+  } else {
+    message =
+      "All steps appear complete. Update the status to Ready for Review or mark it complete.";
+    buttonLabel = "";
+    targetTab = "";
+    variant = "info";
+  }
+
+  const borderColor =
+    variant === "warning"
+      ? "border-yellow-500/30 bg-yellow-500/5"
+      : "border-blue-500/30 bg-blue-500/5";
+  const textColor =
+    variant === "warning" ? "text-yellow-300" : "text-blue-300";
+
+  return (
+    <div
+      className={cn(
+        "rounded-lg border p-3 flex items-center justify-between gap-3",
+        borderColor
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <ArrowRight
+          className={cn("h-4 w-4 shrink-0", textColor)}
+        />
+        <div className="text-xs">
+          <span className={cn("font-semibold", textColor)}>Next Step: </span>
+          <span className="text-muted-foreground">{message}</span>
+        </div>
+      </div>
+      {buttonLabel && targetTab && (
+        <Button
+          size="sm"
+          variant="outline"
+          className={cn(
+            "shrink-0 h-7 text-xs gap-1.5",
+            variant === "warning"
+              ? "border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/10"
+              : "border-blue-500/30 text-blue-300 hover:bg-blue-500/10"
+          )}
+          onClick={() => onTabChange(targetTab)}
+        >
+          {buttonLabel}
+          <ChevronRight className="h-3 w-3" />
+        </Button>
+      )}
+    </div>
+  );
+}
+
 interface StepEditState {
   title: string;
   purpose: string;
@@ -480,6 +769,7 @@ function ProcedureStepCard({
   onProgressUpdate: (stepId: string, status: string, notes: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [simpleView, setSimpleView] = useState(true);
   const [statusLocal, setStatusLocal] = useState(step.progress?.status ?? "not_started");
   const [notesLocal, setNotesLocal] = useState(step.progress?.notes ?? "");
 
@@ -582,9 +872,26 @@ function ProcedureStepCard({
       {/* Expanded body */}
       {expanded && (
         <div className="border-t border-border px-4 pb-5 pt-4 space-y-5">
-          {/* Admin controls */}
-          {canEdit && (
-            <div className="flex items-center justify-end gap-2">
+          {/* Simple / Advanced toggle + admin controls */}
+          <div className="flex items-center justify-between gap-2">
+            <button
+              onClick={() => setSimpleView((v) => !v)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors rounded border border-border px-2 py-1 bg-muted/20"
+            >
+              {simpleView ? (
+                <>
+                  <Eye className="h-3 w-3" />
+                  Simple View
+                </>
+              ) : (
+                <>
+                  <EyeOff className="h-3 w-3" />
+                  Advanced Details
+                </>
+              )}
+            </button>
+            {canEdit && (
+            <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
                 size="sm"
@@ -605,6 +912,7 @@ function ProcedureStepCard({
               </Button>
             </div>
           )}
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {/* Left column */}
@@ -615,14 +923,14 @@ function ProcedureStepCard({
                 </DetailSection>
               )}
 
-              {step.systemPortal && (
+              {!simpleView && step.systemPortal && (
                 <DetailSection icon={Cpu} label="System / Portal">
                   {step.systemPortal}
                 </DetailSection>
               )}
 
-              {step.navigationPath && (
-                <DetailSection icon={Navigation} label="Navigation">
+              {!simpleView && step.navigationPath && (
+                <DetailSection icon={Navigation} label="Where to Go">
                   <div className="font-mono text-xs bg-muted/40 border rounded px-3 py-2 whitespace-pre-line text-muted-foreground leading-relaxed">
                     {step.navigationPath}
                   </div>
@@ -630,12 +938,12 @@ function ProcedureStepCard({
               )}
 
               {step.instructions && (
-                <DetailSection icon={ClipboardList} label="Instructions">
+                <DetailSection icon={ClipboardList} label="What to Do">
                   <MultiLineText text={step.instructions} />
                 </DetailSection>
               )}
 
-              {step.recommendedSettings && (
+              {!simpleView && step.recommendedSettings && (
                 <DetailSection icon={CheckCircle2} label="Recommended Settings">
                   <div className="font-mono text-xs bg-muted/40 border rounded px-3 py-2 whitespace-pre-line text-muted-foreground">
                     {step.recommendedSettings}
@@ -668,7 +976,7 @@ function ProcedureStepCard({
                 </DetailSection>
               )}
 
-              {step.relatedControls.length > 0 && (
+              {!simpleView && step.relatedControls.length > 0 && (
                 <DetailSection icon={ShieldCheck} label="Related Controls">
                   <div className="flex flex-wrap gap-1.5">
                     {step.relatedControls.map((ctrl) => (
@@ -682,13 +990,13 @@ function ProcedureStepCard({
                 </DetailSection>
               )}
 
-              {step.ownerRole && (
+              {!simpleView && step.ownerRole && (
                 <DetailSection icon={User} label="Owner Role">
                   {step.ownerRole}
                 </DetailSection>
               )}
 
-              {step.ifThisFails && (
+              {!simpleView && step.ifThisFails && (
                 <DetailSection icon={AlertCircle} label="If This Fails">
                   <div className="rounded border border-yellow-500/20 bg-yellow-500/5 px-3 py-2 text-yellow-200">
                     {step.ifThisFails}
@@ -1069,6 +1377,7 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
   const [localResult, setLocalResult] = useState<string | null>(null);
   const [localNotes, setLocalNotes] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
+  const [activeTab, setActiveTab] = useState("overview");
 
   const canEdit =
     user?.role === "admin" || user?.role === "compliance_manager";
@@ -1271,31 +1580,53 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-4">
+      {/* Stage progress tracker */}
+      <div className="rounded-lg border bg-card p-4">
+        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+          Where You Are
+        </div>
+        <StageTracker
+          status={currentStatus}
+          checklistCompleted={completedChecklist}
+          checklistTotal={action.checklistItems.length}
+          evidenceCount={action.evidenceItems.length}
+        />
+      </div>
+
+      {/* Next Step banner */}
+      <NextStepBanner
+        status={currentStatus}
+        checklistCompleted={completedChecklist}
+        checklistTotal={action.checklistItems.length}
+        evidenceCount={action.evidenceItems.length}
+        onTabChange={setActiveTab}
+      />
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="overview" className="gap-1.5">
             <Lightbulb className="h-3.5 w-3.5" />
             Overview
           </TabsTrigger>
-          <TabsTrigger value="controls" className="gap-1.5">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            Controls ({action.controls.length})
-          </TabsTrigger>
           <TabsTrigger value="procedure" className="gap-1.5">
             <ListOrdered className="h-3.5 w-3.5" />
-            Procedure
-          </TabsTrigger>
-          <TabsTrigger value="test" className="gap-1.5">
-            <TestTube className="h-3.5 w-3.5" />
-            Test Procedure
+            Steps
           </TabsTrigger>
           <TabsTrigger value="evidence" className="gap-1.5">
             <FolderSearch className="h-3.5 w-3.5" />
-            Evidence ({action.evidenceItems.length})
+            Evidence to Collect ({action.evidenceItems.length})
           </TabsTrigger>
           <TabsTrigger value="documents" className="gap-1.5">
             <FileText className="h-3.5 w-3.5" />
-            Documents ({action.documents.length})
+            Documents Needed ({action.documents.length})
+          </TabsTrigger>
+          <TabsTrigger value="test" className="gap-1.5">
+            <TestTube className="h-3.5 w-3.5" />
+            Validation
+          </TabsTrigger>
+          <TabsTrigger value="controls" className="gap-1.5">
+            <ShieldCheck className="h-3.5 w-3.5" />
+            Controls Supported ({action.controls.length})
           </TabsTrigger>
           <TabsTrigger value="checklist" className="gap-1.5">
             <CheckSquare className="h-3.5 w-3.5" />
@@ -1344,6 +1675,13 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
               </div>
             ))}
           </div>
+
+          {/* What you will produce */}
+          <WhatYouWillProduce
+            evidenceItems={action.evidenceItems}
+            documents={action.documents}
+            controlsCount={action.controls.length}
+          />
         </TabsContent>
 
         {/* B. Controls */}

@@ -1,0 +1,742 @@
+Improve the Implementation Roadmap UX so it is easier for regular users to understand and follow.
+
+I attached a video showing the current Implementation Roadmap workflow. The section is functional, but it feels confusing for a normal user. It looks more like a technical data list than a guided action plan.
+
+Goal:
+Make the Implementation Roadmap feel like a guided CMMC implementation workplan.
+
+The user should immediately understand:
+- what action to do first
+- why that action matters
+- what controls it supports
+- what evidence/documents it will produce
+- what steps they need to complete
+- how progress is calculated
+- what “done” means
+- what to do next
+
+Do not remove existing functionality. Reorganize and improve the user experience.
+
+====================================================================
+1. RENAME AND REFRAME THE PAGE
+====================================================================
+
+Current:
+Implementation Roadmap
+
+Keep the name, but add a clearer subtitle:
+
+“Follow high-impact actions that build evidence and documentation across multiple CMMC controls.”
+
+Add a short explanation near the top:
+
+“Instead of working control-by-control, this roadmap groups related implementation work into actions that support multiple CMMC controls at once.”
+
+Add a small info tooltip for:
+- Impact Score
+- Controls Covered
+- Full Support
+- Partial Support
+- Evidence Needed
+- Ready for Review
+
+====================================================================
+2. ADD A “START HERE” PANEL
+====================================================================
+
+At the top of the roadmap page, add a prominent “Start Here” panel.
+
+This should show:
+
+- Recommended first action
+- Why it is first
+- Controls impacted
+- Estimated effort
+- Expected outputs
+- Start Action button
+
+Example:
+
+Start Here:
+Configure Endpoint Compliance and Device Management
+
+Why this is recommended:
+This action supports 12 controls across Configuration Management, Access Control, System and Information Integrity, and Identification and Authentication.
+
+Expected outputs:
+- device inventory
+- Intune compliance screenshots
+- security baseline evidence
+- antivirus status evidence
+- encryption evidence
+
+Button:
+Start This Action
+
+If a user already started an action, show:
+Continue Current Action
+
+If all actions are complete, show:
+Roadmap Complete
+
+====================================================================
+3. MAKE THE MAIN ACTION LIST MORE USER-FRIENDLY
+====================================================================
+
+The current action rows are too dense and rely too much on score numbers and small labels.
+
+Redesign each action row/card to show:
+
+- Action title
+- Plain-English purpose
+- Phase
+- Priority
+- Effort
+- Status
+- Progress percentage
+- Controls supported
+- Evidence required
+- Documents required
+- Checklist progress
+- Owner
+- Due date
+- Primary CTA button
+
+Example row:
+
+Configure MFA and Conditional Access Baseline
+Purpose: Enforce MFA and block weak authentication paths.
+Priority: Critical
+Effort: Medium
+Progress: 4 of 9 steps complete
+Controls Supported: 7
+Evidence Required: 5
+Documents Required: 2
+Button: Continue
+
+Replace the vague “Score 50” visual with:
+
+High Impact
+50 impact points
+
+Add tooltip:
+“Impact score is based on controls supported, evidence gaps addressed, documents produced, monitoring supported, and estimated effort.”
+
+====================================================================
+4. ADD VIEW MODES
+====================================================================
+
+Add view toggle:
+
+- Guided View
+- List View
+- Phase View
+
+Guided View:
+Best for regular users. Shows one recommended action at a time with Start/Continue.
+
+List View:
+Current-style list, improved.
+
+Phase View:
+Shows phases as columns/cards:
+1. Foundation
+2. Identity & Access
+3. Endpoint & System
+4. Logging & Monitoring
+5. Risk & Remediation
+6. Audit Preparation
+
+Each phase should show:
+- actions in phase
+- percent complete
+- next action
+- blockers
+
+Default view:
+Guided View for normal users.
+List View for admins if preferred.
+
+====================================================================
+5. IMPROVE PHASE CARDS
+====================================================================
+
+Current phase cards are helpful but too small and not actionable.
+
+Make phase cards clickable.
+
+Each phase card should show:
+- phase name
+- why the phase matters
+- actions complete / total
+- controls impacted
+- current status
+- next action
+
+Example:
+
+Phase 2 — Identity & Access
+Why it matters: Establishes user authorization, MFA, privileged access, and account review evidence.
+Actions: 1 of 3 complete
+Next: Configure MFA and Conditional Access Baseline
+
+Clicking a phase filters the action list to that phase.
+
+====================================================================
+6. REWORK ACTION DETAIL PAGE
+====================================================================
+
+The action detail page currently has too much empty space at the top and the progress box feels disconnected from the action.
+
+Redesign action detail layout:
+
+Top header:
+- Action title
+- phase
+- category
+- priority
+- effort
+- impact score
+- status
+- owner
+- due date
+
+Below header, add a horizontal progress tracker:
+
+1. Understand
+2. Perform Steps
+3. Upload Evidence
+4. Validate
+5. Review & Complete
+
+Show current stage.
+
+Main content should be two-column:
+
+Left column:
+- action content
+- procedures
+- evidence
+- documents
+- checklist
+
+Right column, sticky:
+- progress card
+- next required step
+- owner
+- due date
+- status
+- result
+- blockers
+- save progress button
+
+The right progress card should stay visible while scrolling.
+
+====================================================================
+7. MAKE THE DETAIL TABS MORE LOGICAL
+====================================================================
+
+Current tabs:
+Overview, Controls, Procedure, Test Procedure, Evidence, Documents, Checklist
+
+These are good, but the order and naming should be more user-friendly.
+
+Use:
+
+Overview
+Steps
+Evidence to Collect
+Documents Needed
+Validation
+Controls Supported
+Checklist
+
+Reason:
+Normal users think in terms of steps and outputs, not “procedure” vs “test procedure.”
+
+Map old tabs:
+- Procedure → Steps
+- Test Procedure → Validation
+- Evidence → Evidence to Collect
+- Documents → Documents Needed
+- Controls → Controls Supported
+
+Keep backend data the same if needed, but change the UX labels.
+
+====================================================================
+8. ADD A “WHAT YOU WILL PRODUCE” SECTION
+====================================================================
+
+On every roadmap action detail page, add a section near the top:
+
+What You Will Produce
+
+Show cards:
+- Evidence files
+- Documents
+- Monitoring records
+- POA&M items if needed
+- Controls supported
+
+Example for Endpoint Compliance:
+You will produce:
+- Device inventory export
+- Intune compliance policy screenshot
+- Security baseline assignment screenshot
+- Defender antivirus status report
+- BitLocker encryption report
+- Endpoint baseline approval record
+
+This helps users understand the deliverables before they start.
+
+====================================================================
+9. ADD “NEXT STEP” LOGIC
+====================================================================
+
+Every action detail page should clearly show the next thing the user needs to do.
+
+Examples:
+
+If no steps complete:
+Next Step:
+Confirm Endpoint Scope
+
+If steps are complete but evidence missing:
+Next Step:
+Upload required evidence for Step 3
+
+If evidence uploaded but validation not done:
+Next Step:
+Complete validation checklist
+
+If all complete:
+Next Step:
+Submit for review or mark complete
+
+Add a large CTA button:
+Do Next Step
+
+The button should scroll/open the relevant section.
+
+====================================================================
+10. MAKE STEP CARDS EASIER TO USE
+====================================================================
+
+The detailed procedure steps are valuable, but they are too dense for a normal user.
+
+Each step card should have:
+
+Collapsed view:
+- step number
+- step title
+- status
+- system/portal
+- evidence required
+- expand arrow
+
+Expanded view:
+Use clear sections:
+- Purpose
+- Where to go
+- What to do
+- Expected result
+- Evidence to capture
+- Suggested filename
+- If this fails
+- Step progress
+
+Make “Where to go” and “What to do” more prominent.
+
+Current detailed text is good, but visually it should be broken up better.
+
+11. Add a Simple / Advanced Toggle
+
+For each step, add:
+
+Simple View
+Advanced Details
+
+Simple View shows:
+- purpose
+- what to do
+- evidence to capture
+- mark progress
+
+Advanced Details shows:
+- exact navigation path
+- recommended settings
+- related controls
+- troubleshooting
+- owner role
+
+Default:
+Simple View
+
+This will make it much less overwhelming for regular users.
+
+====================================================================
+12. IMPROVE STEP PROGRESS CONTROLS
+====================================================================
+
+Current step progress buttons appear at the bottom of expanded step cards and are easy to miss.
+
+Make step progress more obvious.
+
+Use:
+- status dropdown or segmented control at top right of each step
+- Mark Complete button
+- Upload Evidence button
+- Add Note button
+
+Statuses:
+- Not Started
+- In Progress
+- Complete
+- Blocked
+- Not Applicable
+
+If user marks a step Blocked:
+- require blocker note
+- optionally create POA&M or remediation item
+
+If user marks Not Applicable:
+- require justification
+
+====================================================================
+13. AUTO-CALCULATE ACTION PROGRESS
+====================================================================
+
+Do not rely only on manual progress status.
+
+Action progress should be calculated from:
+
+- steps completed
+- required evidence uploaded
+- required documents present
+- validation completed
+- checklist complete
+- blockers open
+
+Example:
+Action Progress = 65%
+
+Show breakdown:
+- Steps: 7/10
+- Evidence: 4/6
+- Documents: 2/3
+- Validation: 0/1
+- Checklist: 8/11
+
+Manual status should still exist, but the app should show why something is or is not complete.
+
+====================================================================
+14. IMPROVE STATUS MEANINGS
+====================================================================
+
+Show status definitions somewhere on the page.
+
+Statuses:
+- Not Started: no work has begun
+- In Progress: work has started
+- Evidence Needed: steps may be complete but evidence is missing
+- Ready for Review: action appears complete and needs review
+- Complete: action completed and reviewed
+- Blocked: cannot continue due to issue
+
+Automatically suggest:
+- Evidence Needed when required evidence is missing
+- Ready for Review when all steps/evidence/checklist are complete
+- Blocked when a blocker exists
+
+====================================================================
+15. CONNECT ROADMAP TO EVIDENCE BETTER
+====================================================================
+
+When user clicks “Upload Evidence for This Step”:
+- auto-link to the roadmap action
+- auto-link to the step
+- auto-link to related controls
+- auto-fill evidence type
+- auto-suggest filename
+- auto-tag domain, level, phase, and action
+
+After upload:
+- show evidence attached to that step
+- update action progress
+- update related control evidence counts
+
+Evidence to Collect tab should show:
+- required evidence
+- uploaded evidence
+- missing evidence
+- status
+- upload/link button
+
+====================================================================
+16. CONNECT ROADMAP TO DOCUMENTS BETTER
+====================================================================
+
+Documents Needed tab should show:
+
+- required document
+- document type
+- linked controls
+- status
+- source
+- generate/upload/link button
+
+Statuses:
+- Missing
+- Draft
+- Pending Review
+- Approved
+- Active
+- Expired
+
+If a required document already exists in Documentation:
+- show it as linked
+- do not make the user upload it again
+
+====================================================================
+17. CONNECT ROADMAP TO CONTROLS BETTER
+====================================================================
+
+Controls Supported tab should be more useful.
+
+For each linked control, show:
+- control ID
+- title
+- domain
+- current status
+- support type
+  - Full Support
+  - Partial Support
+  - Evidence Only
+  - Document Only
+  - Monitoring Only
+- evidence coverage
+- document coverage
+- SSP narrative exists yes/no
+- POA&M count
+- link to control
+
+Add explanation:
+“This action supports these controls but does not automatically mark them implemented.”
+
+====================================================================
+18. ADD “DONE MEANS” BOX
+====================================================================
+
+Every action should have a box called:
+
+Done Means
+
+Example:
+This action is considered complete when:
+- all required steps are complete or marked not applicable
+- required evidence is uploaded and approved
+- required documents are linked
+- validation steps are complete
+- unresolved gaps are documented in POA&M
+- action is marked Ready for Review or Complete
+
+This is important because regular users do not know what complete means.
+
+====================================================================
+19. ADD USER ROLE-SPECIFIC EXPERIENCE
+====================================================================
+
+Admins may need edit buttons, but regular users do not.
+
+For normal users:
+- hide Edit Step
+- hide Delete Step
+- hide template-editing actions
+- show only:
+  - view instructions
+  - mark progress
+  - upload/link evidence
+  - add notes
+  - report blocker
+
+For Admins/Compliance Managers:
+- show edit/delete/customize controls if allowed
+
+For Assessor:
+- read-only view only
+
+This will reduce confusion.
+
+====================================================================
+20. ADD ROADMAP ONBOARDING
+====================================================================
+
+Add a short guided tour for the Implementation Roadmap.
+
+Button:
+How to Use This Roadmap
+
+Tour steps:
+1. Start with the recommended action
+2. Open the action detail
+3. Follow the steps
+4. Upload required evidence
+5. Complete validation
+6. Review linked controls
+7. Mark action ready for review
+
+This should be available from the Roadmap page.
+
+====================================================================
+21. ADD BETTER EMPTY / COMPLETE STATES
+====================================================================
+
+If all actions are Not Started:
+Show:
+“Start with the highest-impact action below.”
+
+If actions are in progress:
+Show:
+“You have X actions in progress. Continue your current action.”
+
+If all actions are complete:
+Show:
+“Implementation roadmap complete. Review evidence, monitoring, and reports.”
+
+====================================================================
+22. IMPROVE ROADMAP PROGRESS PAGE
+====================================================================
+
+Roadmap Progress page should show:
+
+- overall roadmap progress
+- progress by phase
+- action status breakdown
+- blocked actions
+- evidence gaps
+- document gaps
+- actions ready for review
+- next recommended action
+
+Use visual cards and phase progress bars.
+
+Do not show a mostly blank progress page.
+
+====================================================================
+23. IMPROVE COVERAGE MATRIX
+====================================================================
+
+Coverage Matrix should explain what the matrix means.
+
+Add legend:
+- Full Support
+- Partial Support
+- Evidence Only
+- Document Only
+- Monitoring Only
+- No Coverage
+
+Allow filters:
+- domain
+- control
+- action
+- support type
+- missing evidence
+- missing document
+
+Clicking a cell should open the action/control relationship.
+
+====================================================================
+24. IMPROVE COPY / LANGUAGE
+====================================================================
+
+Replace jargon-heavy phrases with plain-English helper text.
+
+Examples:
+
+Impact Score:
+“Higher score means this action supports more controls or closes more gaps.”
+
+Controls Covered:
+“Controls that receive evidence, documentation, or monitoring support from this action.”
+
+Full Support:
+“This action produces most of what the control needs.”
+
+Partial Support:
+“This action supports the control, but additional evidence or documentation is still needed.”
+
+Checklist:
+“Use this to confirm the action is complete before review.”
+
+====================================================================
+25. DEFAULT SORTING
+====================================================================
+
+Default sort should be:
+
+Recommended Order
+
+Not just impact score.
+
+Recommended order should consider:
+- phase order
+- priority
+- blockers
+- dependency
+- impact score
+- missing evidence
+- not started status
+
+Add sort options:
+- Recommended Order
+- Impact Score
+- Priority
+- Phase
+- Status
+- Effort
+- Controls Covered
+
+====================================================================
+26. ACCEPTANCE TESTS
+====================================================================
+
+Test A:
+Open Implementation Roadmap as a normal user.
+User immediately sees a Start Here / Recommended Next Action panel.
+
+Test B:
+Action list shows clear purpose, expected outputs, status, progress, owner, and CTA.
+
+Test C:
+Open an action.
+The page shows:
+- What You Will Produce
+- Next Step
+- Steps
+- Evidence to Collect
+- Documents Needed
+- Validation
+- Controls Supported
+- Checklist
+
+Test D:
+Procedure steps are easy to read and not overwhelming.
+
+Test E:
+Regular user does not see Edit Step or Delete Step unless they have admin permissions.
+
+Test F:
+Uploading evidence from a step links evidence to the action, step, and related controls.
+
+Test G:
+Action progress updates based on completed steps, evidence, documents, validation, and checklist.
+
+Test H:
+Roadmap Progress page shows useful progress, not empty/unclear information.
+
+Test I:
+Coverage Matrix has legend and explanation.
+
+Test J:
+The roadmap feels like a guided implementation plan rather than a confusing list.
