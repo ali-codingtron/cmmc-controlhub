@@ -495,6 +495,17 @@ router.post(
       ? ["approved", "active", "assessor_ready"]
       : (statusFilters.length > 0 ? statusFilters : undefined);
 
+    // "active" is a document-only status; the evidence_status Postgres enum does not include it.
+    // Passing it to an evidence query causes a runtime enum-cast error.
+    // Strip any document-only values before querying evidence_items.
+    const VALID_EVIDENCE_STATUSES = new Set([
+      "draft", "needs_classification", "pending_review", "approved",
+      "assessor_ready", "rejected", "stale", "superseded", "archived",
+    ]);
+    const effectiveEvidenceStatusFilters = effectiveStatusFilters
+      ? effectiveStatusFilters.filter((s) => VALID_EVIDENCE_STATUSES.has(s))
+      : undefined;
+
     if (!isServerSideScope && !evidenceIds.length && !documentIds.length) {
       res.status(400).json({ error: "No items selected" });
       return;
@@ -515,12 +526,12 @@ router.post(
 
     if (includeEvidence) {
       evidenceItems = isServerSideScope
-        ? await fetchEvidenceItemsForOrg(orgId, effectiveStatusFilters)
+        ? await fetchEvidenceItemsForOrg(orgId, effectiveEvidenceStatusFilters)
         : await fetchEvidenceItems(evidenceIds, orgId);
 
       // Apply status filter for non-server-side scopes
-      if (!isServerSideScope && effectiveStatusFilters?.length) {
-        evidenceItems = evidenceItems.filter((i) => effectiveStatusFilters.includes(i.status));
+      if (!isServerSideScope && effectiveEvidenceStatusFilters?.length) {
+        evidenceItems = evidenceItems.filter((i) => effectiveEvidenceStatusFilters.includes(i.status));
       }
 
       // Assessor restriction on per-ID fetch
