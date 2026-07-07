@@ -54,7 +54,6 @@ import ReportsAudit from "@/pages/reports-audit";
 import ReportsSsp from "@/pages/reports-ssp";
 import RoadmapActions from "@/pages/roadmap-actions";
 import RoadmapActionDetail from "@/pages/roadmap-action-detail";
-import RoadmapCoverage from "@/pages/roadmap-coverage";
 import RoadmapProgress from "@/pages/roadmap-progress";
 import PaHistory from "@/pages/pa-history";
 import PaRun from "@/pages/pa-run";
@@ -186,7 +185,6 @@ function AppRoutes() {
               <Route path="/roadmap">
                 {() => <RoadmapActions />}
               </Route>
-              <Route path="/roadmap/coverage" component={RoadmapCoverage} />
               <Route path="/roadmap/progress" component={RoadmapProgress} />
               <Route path="/roadmap/:id">
                 {(params: { id: string }) => <RoadmapActionDetail id={params.id} />}
