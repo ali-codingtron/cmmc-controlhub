@@ -1,0 +1,540 @@
+Fix and polish the Bulk Download feature.
+
+Current issues:
+1. The Bulk Download wizard works, but it does not look polished or user-friendly enough.
+2. When I bulk download all evidence, the ZIP creates files/folders labeled UNLINKED.
+3. This is wrong because the Evidence Repository UI shows the same evidence records have linked controls.
+4. The export logic is likely not using the same linked-control resolver as the Evidence Repository and All Documents pages.
+5. The ZIP output needs to be cleaner and more C3PAO-friendly.
+
+Do not simply hide the word UNLINKED. Fix the underlying linked-control mapping issue.
+
+====================================================================
+1. FIX LINKED CONTROL EXPORT BUG
+====================================================================
+
+The Evidence Repository and All Documents pages already show linked controls correctly.
+
+The Bulk Download export must use the same linked-control data source/resolver as those UI pages.
+
+Create a shared backend helper:
+
+resolveArtifactControlLinks(record)
+
+It should support all source types:
+
+- Evidence records
+- Uploaded documents
+- Generated documents
+- Document-like evidence
+- Reports
+- SSP exports
+- Monitoring evidence
+- POA&M evidence
+
+The resolver should return:
+
+- all linked controls
+- primary control
+- domain code
+- domain name
+- CMMC level
+- control title
+
+Do not rely only on a file record or attachment record.
+The file itself may not have the control link.
+The parent evidence/document record may have the link.
+
+2. Evidence Linked Control Logic
+
+For evidence records, linked controls should come from the same relationship table/API used by the Evidence Repository UI.
+
+If Evidence Repository shows:
+
+AC.L1-3.1.1
+
+then Bulk Download must also export the file as linked to:
+
+AC.L1-3.1.1
+
+The ZIP filename must not say UNLINKED.
+
+3. Document Linked Control Logic
+
+For All Documents, linked controls may come from different sources:
+
+- generated document control mappings
+- uploaded document control mappings
+- document-like evidence control mappings
+- source evidence record mappings
+
+If All Documents shows a linked control, Bulk Download must include that same linked control in:
+
+- exported filename
+- folder path
+- File_Index.xlsx
+- Control_Mapping.xlsx
+
+4. Fix Filename Generation
+
+Current bad example:
+
+UNLINKED__Policy__3.13.4_Policy__2026-05-05.txt
+
+Correct format:
+
+SC.L2-3.13.4__Policy__3.13.4_Policy__2026-05-05.txt
+
+or if multiple controls:
+
+SC.L2-3.13.4_PLUS_2_CONTROLS__Policy__3.13.4_Policy__2026-05-05.txt
+
+Filename rules:
+- use primary linked control if one exists
+- if multiple controls, use primary control plus count
+- never use UNLINKED unless the artifact truly has no control mapping
+- include all linked controls in the manifest
+- keep filenames under 120 characters
+- preserve original file extension
+- remove unsafe filename characters
+- append _01, _02 for duplicates
+
+5. Fix Folder Placement
+
+When ZIP structure is “By Security Domain”:
+
+If an artifact has linked controls:
+- place it under the correct domain/control folder
+
+Example:
+AC_Access_Control/
+  AC.L1-3.1.1/
+    AC.L1-3.1.1__Report__VTCCORPUS_All_Users__2026-07-06.csv
+
+If artifact has multiple linked controls:
+- place it under the primary control folder
+- include all linked controls in Control_Mapping.xlsx
+
+Optional:
+- allow “copy to every linked control folder” checkbox
+
+If artifact truly has no linked controls:
+- do not place it in normal domain folders
+- put it in:
+  00_Unmapped_Needs_Review/
+
+But only if the user chooses:
+Include unmapped items
+
+Default:
+Exclude unmapped items from C3PAO-style exports unless explicitly included.
+
+6. Production Data Diagnostic
+
+Add an admin-only diagnostic before generating bulk ZIP:
+
+“Check Export Mappings”
+
+For VTCCORP.US, compare:
+
+- number of evidence records in UI
+- number of evidence records with linked controls in UI
+- number of evidence records resolved with linked controls by export
+- number that would be exported as unmapped
+
+If UI says a record has linked controls but export resolver says unlinked, flag it as a bug.
+
+Show:
+- evidence ID
+- title
+- UI linked controls
+- export resolved controls
+- source table/path
+- fix status
+
+7. Production Backfill / Repair Tool
+
+Add admin-only tool:
+
+Admin > Data Maintenance > Repair Artifact Control Links
+
+For VTCCORP.US only initially.
+
+Dry run first.
+
+Dry run should show:
+- evidence records with missing export control mappings
+- documents with missing export control mappings
+- document-like evidence that should be mapped
+- records where control can be inferred from title/metadata
+- records where control cannot be inferred
+
+Repair rules:
+A. If Evidence Repository already shows linked controls:
+- use that relationship as source of truth
+- repair export mapping/resolver, not necessarily data
+
+B. If title contains a clear control reference:
+Examples:
+3.13.4
+AC.L1-3.1.1
+SI.L2-3.14.7
+- suggest mapping to matching control
+- require admin confirmation before writing
+
+C. If record has no control link and cannot be inferred:
+- mark as Unmapped / Needs Review
+- include in Export_Issues.xlsx
+
+Do not automatically guess mappings without confirmation.
+
+8. Improve Bulk Download Wizard UI
+
+The current wizard works but looks basic. Redesign it to feel more professional.
+
+Rename modal title from:
+
+Bulk Download
+
+To:
+
+Create Export Package
+
+Subtitle:
+Download evidence and documents with control mappings, manifests, and C3PAO-friendly structure.
+
+Use a larger modal or full-page drawer.
+
+Steps:
+1. Scope
+2. Content
+3. Structure
+4. Review
+5. Generate
+
+9. Step 1 — Scope
+
+Use clear cards instead of basic radio rows.
+
+Scope options:
+
+A. Selected Items
+“Download only the rows currently selected.”
+
+B. Current Filter Results
+“Download all items matching the current filters.”
+
+C. Approved / Active / Assessor Ready
+“Recommended for assessor review.”
+
+D. By Security Domain
+“Choose one or more CMMC domains.”
+
+E. By Control
+“Choose one or more controls.”
+
+F. Entire Organization
+“Export all permitted evidence/documents for this organization.”
+
+Each card should show:
+- item count
+- evidence count
+- document count
+- warning if very large
+
+10. Step 2 — Content
+
+Instead of only two checkboxes, show better content options:
+
+Include:
+- Evidence files
+- Documents
+- Document-like evidence
+- Metadata manifest
+- Control mapping manifest
+- File hash manifest
+- Export summary PDF
+- Export issues report
+
+Default:
+- Evidence files checked
+- Documents checked
+- File_Index.xlsx checked
+- Control_Mapping.xlsx checked
+- Export_Summary.pdf checked
+- Export_Issues.xlsx checked
+
+Optional:
+- File_Hash_Manifest.xlsx
+
+Add status filters:
+- Approved
+- Active
+- Assessor Ready
+- Pending Review
+- Draft
+- Archived
+- Stale
+
+Default for assessor/C3PAO exports:
+Approved, Active, Assessor Ready
+
+11. Step 3 — Structure
+
+Current options are okay but need clearer labels and previews.
+
+Structure options:
+
+A. By Security Domain > Control ID
+Best for CMMC review.
+
+Preview:
+AC_Access_Control/
+  AC.L1-3.1.1/
+    files...
+
+B. By Control ID
+Best for C3PAO control-by-control upload.
+
+Preview:
+AC.L1-3.1.1/
+  files...
+
+C. By File Type
+Best for evidence cleanup.
+
+Preview:
+Policies/
+Screenshots/
+Logs/
+Reports/
+
+D. Flat ZIP with Manifest
+Best for uploading to another system.
+
+Preview:
+Files/
+File_Index.xlsx
+Control_Mapping.xlsx
+
+Add recommended badge:
+Recommended for C3PAO: Flat ZIP with Manifest
+Recommended for manual review: By Security Domain > Control ID
+
+12. Step 4 — Review
+
+Before generating, show a clean review summary.
+
+Include:
+- organization
+- selected scope
+- evidence files
+- documents
+- document-like evidence
+- total files
+- controls included
+- domains included
+- unmapped items count
+- estimated ZIP size
+- selected structure
+- manifests included
+
+If unmapped items exist, show warning:
+
+“X items do not have linked controls. These will be excluded unless you choose Include Unmapped Items.”
+
+Buttons:
+- Back
+- Generate Package
+
+13. Step 5 — Generate
+
+Use a progress screen.
+
+Show stages:
+- Collecting records
+- Resolving linked controls
+- Preparing folder structure
+- Renaming exported copies
+- Generating manifests
+- Creating ZIP
+- Complete
+
+For large exports:
+- do not freeze the browser
+- use a background job if possible
+- show progress percentage
+- show “You may keep this window open while the package generates.”
+
+When complete:
+- Download ZIP button
+- View Export Summary
+- Copy package name
+
+14. Improve Visual Design
+
+Use:
+- cleaner spacing
+- better stepper
+- icons
+- status badges
+- professional modal width
+- summary cards
+- clearer warning boxes
+- better button hierarchy
+
+Avoid:
+- cramped modal
+- too much tiny text
+- disabled options without explanation
+- unclear “Documents not included”
+- generic labels
+
+15. Add Quick Actions
+
+Evidence Repository:
+- Bulk Download
+- Download All Filtered
+- Download by Domain
+
+All Documents:
+- Bulk Download
+- Download All Filtered
+- Download Active Documents
+
+Control Detail > Evidence:
+- Download Selected
+- Download All Evidence for This Control
+- Download Full Control Package
+
+16. Manifests Must Be Accurate
+
+File_Index.xlsx columns:
+- Exported File Name
+- Original File Name
+- Title
+- Record Type
+- Artifact Type
+- Status
+- Primary Control
+- All Linked Controls
+- Security Domain
+- Level
+- Owner
+- Uploaded Date
+- Collection Date
+- Review Date
+- Source Module
+- ZIP Path
+- SHA-256 Hash
+- Notes
+
+Control_Mapping.xlsx columns:
+- Control ID
+- Control Title
+- Domain
+- Level
+- Artifact Title
+- Artifact Type
+- Artifact Status
+- Exported File Name
+- ZIP Path
+- Owner
+- Collection Date
+- Source Module
+
+Export_Issues.xlsx columns:
+- Record ID
+- Title
+- Issue
+- Suggested Fix
+- Included in ZIP Yes/No
+
+Issues:
+- No linked control
+- Missing file
+- Duplicate filename renamed
+- Filename shortened
+- Permission denied
+- Excluded by status filter
+
+17. Permission Handling
+
+All roles that can normally download evidence/documents should be able to use bulk download.
+
+But bulk download must respect existing permissions.
+
+Assessor Read-Only:
+- can bulk download only records they can view/download individually
+- default statuses should be Approved, Active, Assessor Ready
+- cannot include Draft/internal-only files unless explicitly permitted
+
+Global Admin/Org Admin/Compliance Manager:
+- can include more statuses if selected
+
+18. Audit Logging
+
+Log every bulk download.
+
+Log:
+- user
+- role
+- organization
+- scope
+- selected filters
+- structure
+- file count
+- document count
+- evidence count
+- unmapped count
+- package name
+- timestamp
+- IP/user agent
+- success/failure
+
+19. Acceptance Tests
+
+Test A:
+Evidence Repository shows an item linked to AC.L1-3.1.1.
+Bulk download same item.
+Exported filename starts with AC.L1-3.1.1, not UNLINKED.
+
+Test B:
+Bulk download all filtered VTCCORP.US evidence.
+ZIP should not create UNLINKED files for records that show linked controls in the UI.
+
+Test C:
+If a record truly has no linked control, it appears in Export_Issues.xlsx and optionally in 00_Unmapped_Needs_Review only if Include Unmapped is selected.
+
+Test D:
+By Security Domain export creates folders:
+AC_Access_Control
+AU_Audit_and_Accountability
+CM_Configuration_Management
+IA_Identification_and_Authentication
+etc.
+
+Test E:
+File_Index.xlsx lists all linked controls for each file.
+
+Test F:
+Control_Mapping.xlsx allows a C3PAO to filter by control and find all files.
+
+Test G:
+All Documents bulk download includes documents and document-like evidence.
+
+Test H:
+Assessor Read-Only can bulk download approved evidence but cannot include draft/internal-only artifacts.
+
+Test I:
+Large export shows progress and does not freeze.
+
+Test J:
+No other organization data appears in the ZIP.
+
+20. Most Important Fix
+
+The UNLINKED issue is a production export resolver bug.
+
+Do not fix this by only changing the filename text.
+Fix the backend mapping logic so the export uses the same linked-control relationships that the Evidence Repository and All Documents UI already display.

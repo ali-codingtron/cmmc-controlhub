@@ -52,7 +52,6 @@ function domainFolderName(name: string): string {
   return `${code}_${safe}`;
 }
 
-// Type folder for "by type" structure
 function typeFolder(type: string, recordType: "Evidence" | "Document"): string {
   if (recordType === "Document") {
     const t = type.toLowerCase();
@@ -65,7 +64,6 @@ function typeFolder(type: string, recordType: "Evidence" | "Document"): string {
     if (t.includes("inventory") || t.includes("asset")) return "Inventories";
     return "Other_Documents";
   }
-  // Evidence
   switch (type) {
     case "policy": return "Policies";
     case "procedure": return "Procedures";
@@ -89,7 +87,6 @@ function formatTypeLabel(type: string): string {
   return type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// ── File naming ────────────────────────────────────────────────────────────────
 function sanitizePart(s: string, maxLen = 40): string {
   return s
     .replace(/[<>:"/\\|?*\x00-\x1f]/g, "")
@@ -104,16 +101,13 @@ function formatExportDate(d: Date | null | undefined): string {
   return new Date(d).toISOString().slice(0, 10);
 }
 
-function buildExportFilename(
-  item: BulkItem,
-  usedNames: Map<string, number>
-): string {
+function buildExportFilename(item: BulkItem, usedNames: Map<string, number>): string {
   const primary = item.linkedControls[0];
   const ctrlPart = primary
     ? item.linkedControls.length > 1
       ? `${primary.controlId}_PLUS_${item.linkedControls.length - 1}_CONTROLS`
       : primary.controlId
-    : "UNLINKED";
+    : "UNMAPPED";
   const typePart = sanitizePart(formatTypeLabel(item.type), 25);
   const titlePart = sanitizePart(item.title, 35);
   const datePart = formatExportDate(item.collectedAt ?? item.uploadedAt);
@@ -156,8 +150,71 @@ interface BulkItem {
   linkedControls: LinkedControl[];
 }
 
-// ── Assessor-visible statuses ─────────────────────────────────────────────────
-const ASSESSOR_STATUSES = new Set(["approved", "active", "assessor_ready"]);
+// ── Shared control-link resolver for evidence items ───────────────────────────
+async function resolveEvidenceLinks(evidenceIds: string[]): Promise<Map<string, LinkedControl[]>> {
+  if (!evidenceIds.length) return new Map();
+  const links = await db
+    .select({
+      evidenceId: evidenceControlLinksTable.evidenceId,
+      controlDbId: controlsTable.id,
+      controlId: controlsTable.controlId,
+      controlTitle: controlsTable.title,
+      level: controlsTable.level,
+      domainName: domainsTable.name,
+    })
+    .from(evidenceControlLinksTable)
+    .innerJoin(controlsTable, eq(controlsTable.id, evidenceControlLinksTable.controlId))
+    .leftJoin(domainsTable, eq(domainsTable.id, controlsTable.domainId))
+    .where(inArray(evidenceControlLinksTable.evidenceId, evidenceIds));
+
+  const map = new Map<string, LinkedControl[]>();
+  for (const l of links) {
+    const arr = map.get(l.evidenceId) ?? [];
+    arr.push({
+      id: l.controlDbId,
+      controlId: l.controlId,
+      controlTitle: l.controlTitle ?? "",
+      level: l.level ?? "",
+      domainName: l.domainName ?? "",
+      domainCode: domainCode(l.domainName ?? ""),
+    });
+    map.set(l.evidenceId, arr);
+  }
+  return map;
+}
+
+// ── Shared control-link resolver for document items ───────────────────────────
+async function resolveDocumentLinks(documentIds: string[]): Promise<Map<string, LinkedControl[]>> {
+  if (!documentIds.length) return new Map();
+  const links = await db
+    .select({
+      documentId: documentControlMapsTable.documentId,
+      controlDbId: controlsTable.id,
+      controlId: controlsTable.controlId,
+      controlTitle: controlsTable.title,
+      level: controlsTable.level,
+      domainName: domainsTable.name,
+    })
+    .from(documentControlMapsTable)
+    .innerJoin(controlsTable, eq(controlsTable.id, documentControlMapsTable.controlId))
+    .leftJoin(domainsTable, eq(domainsTable.id, controlsTable.domainId))
+    .where(inArray(documentControlMapsTable.documentId, documentIds));
+
+  const map = new Map<string, LinkedControl[]>();
+  for (const l of links) {
+    const arr = map.get(l.documentId) ?? [];
+    arr.push({
+      id: l.controlDbId,
+      controlId: l.controlId,
+      controlTitle: l.controlTitle ?? "",
+      level: l.level ?? "",
+      domainName: l.domainName ?? "",
+      domainCode: domainCode(l.domainName ?? ""),
+    });
+    map.set(l.documentId, arr);
+  }
+  return map;
+}
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
 async function fetchEvidenceItems(ids: string[], orgId: string): Promise<BulkItem[]> {
@@ -175,7 +232,6 @@ async function fetchEvidenceItems(ids: string[], orgId: string): Promise<BulkIte
       collectedAt: evidenceItemsTable.collectedAt,
       expiresAt: evidenceItemsTable.expiresAt,
       createdAt: evidenceItemsTable.createdAt,
-      organizationId: evidenceItemsTable.organizationId,
     })
     .from(evidenceItemsTable)
     .leftJoin(usersTable, eq(usersTable.id, evidenceItemsTable.ownerId))
@@ -187,29 +243,8 @@ async function fetchEvidenceItems(ids: string[], orgId: string): Promise<BulkIte
       )
     );
 
-  const eIds = items.map((i) => i.id);
-  if (!eIds.length) return [];
-
-  const links = await db
-    .select({
-      evidenceId: evidenceControlLinksTable.evidenceId,
-      controlDbId: controlsTable.id,
-      controlId: controlsTable.controlId,
-      controlTitle: controlsTable.title,
-      level: controlsTable.level,
-      domainName: domainsTable.name,
-    })
-    .from(evidenceControlLinksTable)
-    .innerJoin(controlsTable, eq(controlsTable.id, evidenceControlLinksTable.controlId))
-    .leftJoin(domainsTable, eq(domainsTable.id, controlsTable.domainId))
-    .where(inArray(evidenceControlLinksTable.evidenceId, eIds));
-
-  const linkMap = new Map<string, typeof links>();
-  for (const l of links) {
-    const arr = linkMap.get(l.evidenceId) ?? [];
-    arr.push(l);
-    linkMap.set(l.evidenceId, arr);
-  }
+  if (!items.length) return [];
+  const linkMap = await resolveEvidenceLinks(items.map((i) => i.id));
 
   return items.map((item) => ({
     id: item.id,
@@ -225,14 +260,56 @@ async function fetchEvidenceItems(ids: string[], orgId: string): Promise<BulkIte
     uploadedAt: item.createdAt,
     expiresAt: item.expiresAt,
     nextReviewDate: item.expiresAt,
-    linkedControls: (linkMap.get(item.id) ?? []).map((l) => ({
-      id: l.controlDbId,
-      controlId: l.controlId,
-      controlTitle: l.controlTitle ?? "",
-      level: l.level ?? "",
-      domainName: l.domainName ?? "",
-      domainCode: domainCode(l.domainName ?? ""),
-    })),
+    linkedControls: linkMap.get(item.id) ?? [],
+  }));
+}
+
+async function fetchEvidenceItemsForOrg(orgId: string, statusFilters?: string[]): Promise<BulkItem[]> {
+  const items = await db
+    .select({
+      id: evidenceItemsTable.id,
+      title: evidenceItemsTable.title,
+      evidenceType: evidenceItemsTable.evidenceType,
+      status: evidenceItemsTable.status,
+      fileName: evidenceItemsTable.fileName,
+      fileKey: evidenceItemsTable.fileKey,
+      ownerId: evidenceItemsTable.ownerId,
+      ownerName: usersTable.name,
+      collectedAt: evidenceItemsTable.collectedAt,
+      expiresAt: evidenceItemsTable.expiresAt,
+      createdAt: evidenceItemsTable.createdAt,
+    })
+    .from(evidenceItemsTable)
+    .leftJoin(usersTable, eq(usersTable.id, evidenceItemsTable.ownerId))
+    .where(
+      and(
+        eq(evidenceItemsTable.organizationId, orgId),
+        isNull(evidenceItemsTable.deletedAt),
+        eq(evidenceItemsTable.isCurrentVersion, true),
+        statusFilters?.length
+          ? inArray(evidenceItemsTable.status, statusFilters as any[])
+          : undefined
+      )
+    );
+
+  if (!items.length) return [];
+  const linkMap = await resolveEvidenceLinks(items.map((i) => i.id));
+
+  return items.map((item) => ({
+    id: item.id,
+    title: item.title,
+    recordType: "Evidence" as const,
+    type: item.evidenceType ?? "other",
+    status: item.status,
+    fileName: item.fileName,
+    fileKey: item.fileKey,
+    ownerName: item.ownerName,
+    ownerId: item.ownerId,
+    collectedAt: item.collectedAt,
+    uploadedAt: item.createdAt,
+    expiresAt: item.expiresAt,
+    nextReviewDate: item.expiresAt,
+    linkedControls: linkMap.get(item.id) ?? [],
   }));
 }
 
@@ -251,7 +328,6 @@ async function fetchDocumentItems(ids: string[], orgId: string): Promise<BulkIte
       effectiveDate: documentsTable.effectiveDate,
       nextReviewDate: documentsTable.nextReviewDate,
       createdAt: documentsTable.createdAt,
-      organizationId: documentsTable.organizationId,
     })
     .from(documentsTable)
     .leftJoin(usersTable, eq(usersTable.id, documentsTable.ownerId))
@@ -263,29 +339,8 @@ async function fetchDocumentItems(ids: string[], orgId: string): Promise<BulkIte
       )
     );
 
-  const dIds = items.map((i) => i.id);
-  if (!dIds.length) return [];
-
-  const links = await db
-    .select({
-      documentId: documentControlMapsTable.documentId,
-      controlDbId: controlsTable.id,
-      controlId: controlsTable.controlId,
-      controlTitle: controlsTable.title,
-      level: controlsTable.level,
-      domainName: domainsTable.name,
-    })
-    .from(documentControlMapsTable)
-    .innerJoin(controlsTable, eq(controlsTable.id, documentControlMapsTable.controlId))
-    .leftJoin(domainsTable, eq(domainsTable.id, controlsTable.domainId))
-    .where(inArray(documentControlMapsTable.documentId, dIds));
-
-  const linkMap = new Map<string, typeof links>();
-  for (const l of links) {
-    const arr = linkMap.get(l.documentId) ?? [];
-    arr.push(l);
-    linkMap.set(l.documentId, arr);
-  }
+  if (!items.length) return [];
+  const linkMap = await resolveDocumentLinks(items.map((i) => i.id));
 
   return items.map((item) => ({
     id: item.id,
@@ -301,18 +356,60 @@ async function fetchDocumentItems(ids: string[], orgId: string): Promise<BulkIte
     uploadedAt: item.createdAt,
     expiresAt: item.nextReviewDate,
     nextReviewDate: item.nextReviewDate,
-    linkedControls: (linkMap.get(item.id) ?? []).map((l) => ({
-      id: l.controlDbId,
-      controlId: l.controlId,
-      controlTitle: l.controlTitle ?? "",
-      level: l.level ?? "",
-      domainName: l.domainName ?? "",
-      domainCode: domainCode(l.domainName ?? ""),
-    })),
+    linkedControls: linkMap.get(item.id) ?? [],
   }));
 }
 
-// ── Fetch file from GCS or disk ───────────────────────────────────────────────
+async function fetchDocumentItemsForOrg(orgId: string, statusFilters?: string[]): Promise<BulkItem[]> {
+  const items = await db
+    .select({
+      id: documentsTable.id,
+      title: documentsTable.title,
+      docType: documentsTable.docType,
+      status: documentsTable.status,
+      fileName: documentsTable.fileName,
+      fileKey: documentsTable.fileKey,
+      ownerId: documentsTable.ownerId,
+      ownerName: usersTable.name,
+      effectiveDate: documentsTable.effectiveDate,
+      nextReviewDate: documentsTable.nextReviewDate,
+      createdAt: documentsTable.createdAt,
+    })
+    .from(documentsTable)
+    .leftJoin(usersTable, eq(usersTable.id, documentsTable.ownerId))
+    .where(
+      and(
+        eq(documentsTable.organizationId, orgId),
+        isNull(documentsTable.deletedAt),
+        eq(documentsTable.isCurrentVersion, true),
+        statusFilters?.length
+          ? inArray(documentsTable.status, statusFilters as any[])
+          : undefined
+      )
+    );
+
+  if (!items.length) return [];
+  const linkMap = await resolveDocumentLinks(items.map((i) => i.id));
+
+  return items.map((item) => ({
+    id: item.id,
+    title: item.title,
+    recordType: "Document" as const,
+    type: item.docType ?? "other",
+    status: item.status,
+    fileName: item.fileName,
+    fileKey: item.fileKey,
+    ownerName: item.ownerName,
+    ownerId: item.ownerId,
+    collectedAt: item.effectiveDate,
+    uploadedAt: item.createdAt,
+    expiresAt: item.nextReviewDate,
+    nextReviewDate: item.nextReviewDate,
+    linkedControls: linkMap.get(item.id) ?? [],
+  }));
+}
+
+// ── Fetch file from GCS ───────────────────────────────────────────────────────
 async function fetchFile(fileKey: string | null): Promise<Buffer | null> {
   if (!fileKey) return null;
   try {
@@ -349,6 +446,8 @@ async function buildPdf(fn: (doc: PDFKit.PDFDocument) => void): Promise<Buffer> 
   });
 }
 
+const ASSESSOR_STATUSES = new Set(["approved", "active", "assessor_ready"]);
+
 // ── POST /api/export/bulk-download ────────────────────────────────────────────
 router.post(
   "/export/bulk-download",
@@ -359,8 +458,13 @@ router.post(
     const user = req.authUser!;
 
     const {
+      scope: exportScope = "custom",
       evidenceIds = [],
       documentIds = [],
+      includeEvidence = true,
+      includeDocuments = true,
+      statusFilters = [],
+      includeUnmapped = false,
       structure = "byDomain",
       includeFiles = true,
       includeManifest = true,
@@ -368,8 +472,13 @@ router.post(
       includeHashManifest = false,
       exportDescription = "Bulk Download",
     } = req.body as {
+      scope?: "selected" | "filtered" | "allApproved" | "entireOrg" | "custom";
       evidenceIds?: string[];
       documentIds?: string[];
+      includeEvidence?: boolean;
+      includeDocuments?: boolean;
+      statusFilters?: string[];
+      includeUnmapped?: boolean;
       structure?: "flat" | "byDomain" | "byControl" | "byType";
       includeFiles?: boolean;
       includeManifest?: boolean;
@@ -378,7 +487,15 @@ router.post(
       exportDescription?: string;
     };
 
-    if (!evidenceIds.length && !documentIds.length) {
+    const isServerSideScope = exportScope === "allApproved" || exportScope === "entireOrg";
+    const isAssessor = user.role === "assessor";
+
+    // Assessors are always restricted to assessor-visible statuses
+    const effectiveStatusFilters: string[] | undefined = isAssessor
+      ? ["approved", "active", "assessor_ready"]
+      : (statusFilters.length > 0 ? statusFilters : undefined);
+
+    if (!isServerSideScope && !evidenceIds.length && !documentIds.length) {
       res.status(400).json({ error: "No items selected" });
       return;
     }
@@ -393,21 +510,42 @@ router.post(
     const orgSlug = orgName.replace(/[^\w]/g, "").toUpperCase().slice(0, 12) || "ORG";
 
     // Fetch items
-    let [evidenceItems, documentItems] = await Promise.all([
-      fetchEvidenceItems(evidenceIds, orgId),
-      fetchDocumentItems(documentIds, orgId),
-    ]);
+    let evidenceItems: BulkItem[] = [];
+    let documentItems: BulkItem[] = [];
 
-    // Assessor restriction: only approved/active/assessor_ready
-    const isAssessor = user.role === "assessor";
-    if (isAssessor) {
-      evidenceItems = evidenceItems.filter((i) => ASSESSOR_STATUSES.has(i.status));
-      documentItems = documentItems.filter((i) => ASSESSOR_STATUSES.has(i.status));
+    if (includeEvidence) {
+      evidenceItems = isServerSideScope
+        ? await fetchEvidenceItemsForOrg(orgId, effectiveStatusFilters)
+        : await fetchEvidenceItems(evidenceIds, orgId);
+
+      // Apply status filter for non-server-side scopes
+      if (!isServerSideScope && effectiveStatusFilters?.length) {
+        evidenceItems = evidenceItems.filter((i) => effectiveStatusFilters.includes(i.status));
+      }
+
+      // Assessor restriction on per-ID fetch
+      if (isAssessor) {
+        evidenceItems = evidenceItems.filter((i) => ASSESSOR_STATUSES.has(i.status));
+      }
+    }
+
+    if (includeDocuments) {
+      documentItems = isServerSideScope
+        ? await fetchDocumentItemsForOrg(orgId, effectiveStatusFilters)
+        : await fetchDocumentItems(documentIds, orgId);
+
+      if (!isServerSideScope && effectiveStatusFilters?.length) {
+        documentItems = documentItems.filter((i) => effectiveStatusFilters.includes(i.status));
+      }
+
+      if (isAssessor) {
+        documentItems = documentItems.filter((i) => ASSESSOR_STATUSES.has(i.status));
+      }
     }
 
     const allItems: BulkItem[] = [...evidenceItems, ...documentItems];
     if (!allItems.length) {
-      res.status(400).json({ error: "No accessible items found" });
+      res.status(400).json({ error: "No accessible items found for the selected scope and filters" });
       return;
     }
 
@@ -415,7 +553,6 @@ router.post(
     const exportDateStr = formatExportDate(exportDate);
     const zipRootName = `${orgSlug}_Bulk_Download_${exportDateStr}`;
 
-    // Set up streaming ZIP
     res.setHeader("Content-Type", "application/zip");
     res.setHeader(
       "Content-Disposition",
@@ -425,7 +562,6 @@ router.post(
     const archive = archiver("zip", { zlib: { level: 6 } });
     archive.pipe(res);
 
-    // ── Process items: download files, build manifest rows ──────────────────
     interface FileEntry {
       item: BulkItem;
       exportName: string;
@@ -437,29 +573,32 @@ router.post(
     }
 
     const fileEntries: FileEntry[] = [];
-    const issues: { id: string; title: string; controls: string; fileName: string; issue: string; action: string }[] = [];
+    const issues: { id: string; title: string; controls: string; fileName: string; issue: string; action: string; included: "Yes" | "No" }[] = [];
 
-    // Track used names per directory to handle duplicates
     const usedNamesByDir = new Map<string, Map<string, number>>();
     function getUsedNames(dir: string): Map<string, number> {
       if (!usedNamesByDir.has(dir)) usedNamesByDir.set(dir, new Map());
       return usedNamesByDir.get(dir)!;
     }
 
-    // Determine file paths based on structure
     function getFilePaths(item: BulkItem, exportName: string): string[] {
       const root = zipRootName;
-      const filesRoot = `${root}/Files`;
+      const unmappedDir = `${root}/00_Unmapped_Needs_Review`;
+
+      if (!item.linkedControls.length) {
+        return [`${unmappedDir}/${exportName}`];
+      }
+
       switch (structure) {
         case "flat":
-          return [`${filesRoot}/${exportName}`];
+          return [`${root}/Files/${exportName}`];
         case "byDomain": {
-          if (!item.linkedControls.length) return [`${root}/UNLINKED/${exportName}`];
-          const dirs = [...new Set(item.linkedControls.map((c) => `${root}/${domainFolderName(c.domainName)}/${c.controlId}`))];
+          const dirs = [...new Set(item.linkedControls.map((c) =>
+            `${root}/${domainFolderName(c.domainName)}/${c.controlId}`
+          ))];
           return dirs.map((d) => `${d}/${exportName}`);
         }
         case "byControl": {
-          if (!item.linkedControls.length) return [`${root}/UNLINKED/${exportName}`];
           const dirs = [...new Set(item.linkedControls.map((c) => `${root}/${c.controlId}`))];
           return dirs.map((d) => `${d}/${exportName}`);
         }
@@ -474,6 +613,20 @@ router.post(
     for (const item of allItems) {
       const linkedCtrlStr = item.linkedControls.map((c) => c.controlId).join("; ") || "—";
 
+      // Handle unmapped items
+      if (!item.linkedControls.length && !includeUnmapped) {
+        issues.push({
+          id: item.id,
+          title: item.title,
+          controls: "—",
+          fileName: item.fileName ?? "—",
+          issue: "No linked control — excluded from export",
+          action: "Link this item to a CMMC control, or enable Include Unmapped Items",
+          included: "No",
+        });
+        continue;
+      }
+
       if (!item.fileName) {
         issues.push({
           id: item.id,
@@ -482,22 +635,17 @@ router.post(
           fileName: "—",
           issue: "No file attached",
           action: "Check record and attach a file if applicable",
+          included: "No",
         });
         continue;
       }
 
       if (!includeFiles) {
-        // Manifest-only: record entry without downloading
         const exportName = buildExportFilename(item, getUsedNames("_global"));
         const paths = getFilePaths(item, exportName);
         fileEntries.push({
-          item,
-          exportName,
-          buffer: null,
-          size: 0,
-          sha256: null,
-          zipPath: paths[0] ?? exportName,
-          issue: null,
+          item, exportName, buffer: null, size: 0, sha256: null,
+          zipPath: paths[0] ?? exportName, issue: null,
         });
         continue;
       }
@@ -511,6 +659,7 @@ router.post(
           fileName: item.fileName,
           issue: "File not found in storage",
           action: "Re-upload the file",
+          included: "No",
         });
         continue;
       }
@@ -519,19 +668,11 @@ router.post(
       const exportName = buildExportFilename(item, getUsedNames("_global"));
       const paths = getFilePaths(item, exportName);
 
-      // For byDomain / byControl: copy into each linked folder
-      const firstPath = paths[0]!;
       fileEntries.push({
-        item,
-        exportName,
-        buffer: buf,
-        size: buf.length,
-        sha256,
-        zipPath: firstPath,
-        issue: null,
+        item, exportName, buffer: buf, size: buf.length, sha256,
+        zipPath: paths[0]!, issue: null,
       });
 
-      // Add to archive (all paths)
       for (const zipPath of paths) {
         archive.append(buf, { name: zipPath });
       }
@@ -540,18 +681,16 @@ router.post(
     // ── 00_Manifest/ ────────────────────────────────────────────────────────
     const manifestRoot = `${zipRootName}/00_Manifest`;
 
-    // File_Index.xlsx
     if (includeManifest) {
       const headers = [
         "Exported File Name", "Original File Name", "Title", "Record Type",
-        "Evidence/Document Type", "Status", "Linked Controls", "Primary Control",
+        "Artifact Type", "Status", "Primary Control", "All Linked Controls",
         "Security Domain", "CMMC Level", "Owner", "Uploaded Date", "Collection Date",
-        "Review/Expiration Date", "Source Module", "File Path in ZIP",
-        "File Size (bytes)", "SHA-256 Hash", "Notes",
+        "Review Date", "Source Module", "ZIP Path", "SHA-256 Hash", "Notes",
       ];
       const rows = fileEntries.map((e) => {
         const primary = e.item.linkedControls[0];
-        const domains = [...new Set(e.item.linkedControls.map((c) => c.domainCode))].join("; ") || "—";
+        const domains = [...new Set(e.item.linkedControls.map((c) => c.domainName))].join("; ") || "—";
         const levels = [...new Set(e.item.linkedControls.map((c) => c.level))].filter(Boolean).join("; ") || "—";
         return [
           e.exportName,
@@ -560,8 +699,8 @@ router.post(
           e.item.recordType,
           formatTypeLabel(e.item.type),
           e.item.status,
+          primary?.controlId ?? "UNMAPPED",
           e.item.linkedControls.map((c) => c.controlId).join("; ") || "—",
-          primary?.controlId ?? "—",
           domains,
           levels,
           e.item.ownerName ?? "—",
@@ -570,7 +709,6 @@ router.post(
           formatExportDate(e.item.nextReviewDate),
           e.item.recordType,
           e.zipPath,
-          e.size || "—",
           e.sha256 ?? "—",
           e.issue ?? "",
         ] as (string | number | null)[];
@@ -578,18 +716,17 @@ router.post(
       archive.append(buildXlsx(headers, rows), { name: `${manifestRoot}/File_Index.xlsx` });
     }
 
-    // Control_Mapping.xlsx
     if (includeControlMapping) {
       const headers = [
         "Control ID", "Control Title", "Domain", "Level",
         "Artifact Title", "Artifact Type", "Artifact Status",
-        "Exported File Name", "ZIP Path", "Owner", "Collection Date", "Source",
+        "Exported File Name", "ZIP Path", "Owner", "Collection Date", "Source Module",
       ];
       const rows: (string | number | null)[][] = [];
       for (const e of fileEntries) {
         if (!e.item.linkedControls.length) {
           rows.push([
-            "UNLINKED", "—", "—", "—",
+            "UNMAPPED", "—", "—", "—",
             e.item.title, formatTypeLabel(e.item.type), e.item.status,
             e.exportName, e.zipPath, e.item.ownerName ?? "—",
             formatExportDate(e.item.collectedAt), e.item.recordType,
@@ -608,7 +745,6 @@ router.post(
       archive.append(buildXlsx(headers, rows), { name: `${manifestRoot}/Control_Mapping.xlsx` });
     }
 
-    // File_Hash_Manifest.xlsx
     if (includeHashManifest) {
       const headers = [
         "ZIP Path", "Exported File Name", "Original File Name",
@@ -621,86 +757,79 @@ router.post(
       archive.append(buildXlsx(headers, rows), { name: `${manifestRoot}/File_Hash_Manifest.xlsx` });
     }
 
-    // Export_Issues.xlsx (always include)
+    // Export_Issues.xlsx (always)
     {
       const headers = [
-        "Record ID", "Title", "Linked Controls", "Original Filename", "Issue", "Recommended Action",
+        "Record ID", "Title", "Linked Controls", "Original Filename",
+        "Issue", "Recommended Action", "Included in ZIP",
       ];
-      const rows = issues.map((i) => [i.id, i.title, i.controls, i.fileName, i.issue, i.action] as string[]);
+      const rows = issues.map((i) => [
+        i.id, i.title, i.controls, i.fileName, i.issue, i.action, i.included,
+      ] as (string | number | null)[]);
       archive.append(buildXlsx(headers, rows), { name: `${manifestRoot}/Export_Issues.xlsx` });
     }
 
-    // Export_Summary.pdf
-    const summaryPdf = await buildPdf((doc) => {
-      doc.fontSize(18).font("Helvetica-Bold").text("Bulk Download Export Summary", { align: "center" });
-      doc.moveDown(0.5);
-      doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).stroke();
-      doc.moveDown(1);
-
-      const row = (label: string, value: string) => {
-        doc.fontSize(10).font("Helvetica-Bold").text(`${label}: `, { continued: true });
-        doc.font("Helvetica").text(value);
-      };
-
-      row("Organization", orgName);
-      row("Export Date", exportDate.toUTCString());
-      row("Generated By", user.email ?? user.id);
-      row("Export Scope", exportDescription);
-      row("ZIP Structure", structure);
-      doc.moveDown(0.5);
-
-      row("Evidence Items", String(evidenceItems.length));
-      row("Document Items", String(documentItems.length));
-      row("Total Files Exported", String(fileEntries.filter((e) => e.buffer).length));
-      row("Items Skipped (Issues)", String(issues.length));
-
-      const domainSet = new Set(allItems.flatMap((i) => i.linkedControls.map((c) => c.domainCode)));
-      row("Security Domains", [...domainSet].sort().join(", ") || "N/A");
-
-      const ctrlSet = new Set(allItems.flatMap((i) => i.linkedControls.map((c) => c.controlId)));
-      row("Controls Covered", String(ctrlSet.size));
-
-      const statusSet = new Set(allItems.map((i) => i.status));
-      row("Statuses Included", [...statusSet].join(", ") || "N/A");
-
-      if (isAssessor) {
-        doc.moveDown(0.5);
-        doc.fontSize(9).font("Helvetica-Oblique").fillColor("#666")
-          .text("Note: Assessor role — only Approved, Active, and Assessor Ready items are included.");
-        doc.fillColor("#000");
-      }
-
-      doc.moveDown(2);
-      doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).stroke();
-      doc.moveDown(1);
-      doc.fontSize(9).font("Helvetica-Oblique").fillColor("#555")
-        .text(
-          "CONFIDENTIAL — This export package contains compliance evidence for your organization. " +
-          "Do not distribute outside authorized personnel. Handle in accordance with your data classification policy.",
+    // Export_Summary.pdf (always)
+    {
+      const pdf = await buildPdf((doc) => {
+        doc.fontSize(20).font("Helvetica-Bold").text("Bulk Export Summary", { align: "center" });
+        doc.moveDown();
+        doc.fontSize(11).font("Helvetica");
+        const lines = [
+          ["Organization", orgName],
+          ["Export Date", exportDate.toISOString().slice(0, 19).replace("T", " ") + " UTC"],
+          ["Exported By", user.name ?? user.email],
+          ["Role", user.role],
+          ["Scope", exportScope],
+          ["Description", exportDescription],
+          ["ZIP Structure", structure],
+          ["Files Exported", String(fileEntries.filter((e) => e.buffer !== null).length)],
+          ["Evidence Items", String(evidenceItems.length)],
+          ["Documents", String(documentItems.length)],
+          ["Unmapped Items", String(issues.filter((i) => i.issue.includes("No linked control")).length)],
+          ["Items Excluded (no file)", String(issues.filter((i) => i.issue === "No file attached").length)],
+          ["Items Excluded (not in storage)", String(issues.filter((i) => i.issue === "File not found in storage").length)],
+          ["Status Filters", effectiveStatusFilters?.join(", ") ?? "All"],
+          ["Include Unmapped", String(includeUnmapped)],
+        ];
+        for (const [label, value] of lines) {
+          doc.font("Helvetica-Bold").text(`${label}: `, { continued: true });
+          doc.font("Helvetica").text(value);
+        }
+        doc.moveDown();
+        doc.fontSize(9).fillColor("gray").text(
+          "This export was generated by the CMMC Compliance Platform. All files are subject to your organization's data handling policies.",
           { align: "center" }
         );
-    });
-    archive.append(summaryPdf, { name: `${manifestRoot}/Export_Summary.pdf` });
+      });
+      archive.append(pdf, { name: `${manifestRoot}/Export_Summary.pdf` });
+    }
 
-    // Finalize
     await archive.finalize();
 
     // Audit log
     try {
       await db.insert(auditLogsTable).values({
+        id: crypto.randomUUID(),
         organizationId: orgId,
         userId: user.id,
         action: "bulk_download",
-        entityType: "export",
-        entityId: orgId,
+        resourceType: "export",
+        resourceId: zipRootName,
         details: JSON.stringify({
+          scope: exportScope,
+          structure,
           evidenceCount: evidenceItems.length,
           documentCount: documentItems.length,
-          structure,
-          filesExported: fileEntries.filter((e) => e.buffer).length,
-          issueCount: issues.length,
-          description: exportDescription,
+          filesExported: fileEntries.filter((e) => e.buffer !== null).length,
+          unmappedCount: issues.filter((i) => i.issue.includes("No linked control")).length,
+          statusFilters: effectiveStatusFilters ?? "all",
+          includeUnmapped,
+          exportDescription,
         }),
+        ipAddress: req.ip ?? null,
+        userAgent: req.get("user-agent") ?? null,
+        createdAt: exportDate,
       });
     } catch {
       // Non-fatal
@@ -709,3 +838,4 @@ router.post(
 );
 
 export default router;
+export { router as bulkExportRouter };
