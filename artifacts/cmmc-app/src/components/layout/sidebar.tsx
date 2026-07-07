@@ -32,6 +32,7 @@ import carmetechLogo from "@assets/Carme_Tech_Logo_Official_1779981155506.png";
 
 const roadmapItems = [
   { href: "/roadmap", label: "Priority Actions" },
+  { href: "/roadmap/coverage", label: "Coverage Matrix" },
   { href: "/roadmap/progress", label: "Roadmap Progress" },
 ];
 
@@ -210,7 +211,7 @@ export function Sidebar() {
                 <div className="ml-3 pl-3 border-l border-sidebar-border space-y-0.5">
                   {roadmapItems.map((item) => {
                     const isActive = item.href === "/roadmap"
-                      ? location === "/roadmap" || (location.startsWith("/roadmap/") && !location.startsWith("/roadmap/progress"))
+                      ? location === "/roadmap" || (location.startsWith("/roadmap/") && !location.startsWith("/roadmap/coverage") && !location.startsWith("/roadmap/progress"))
                       : location.startsWith(item.href);
                     return (
                       <Link

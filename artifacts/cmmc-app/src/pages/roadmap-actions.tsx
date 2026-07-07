@@ -926,6 +926,12 @@ export default function RoadmapActions() {
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
+          <Link href="/roadmap/coverage">
+            <Button variant="outline" size="sm" className="gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Coverage
+            </Button>
+          </Link>
           <Link href="/roadmap/progress">
             <Button variant="outline" size="sm" className="gap-2">
               <Target className="h-4 w-4" />
