@@ -268,6 +268,7 @@ export default function Organizations() {
   const queryClient = useQueryClient();
   const [showNew, setShowNew] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
 
   const { data: stats = [], isLoading, refetch } = useQuery<OrgStats[]>({
@@ -284,16 +285,34 @@ export default function Organizations() {
   });
 
   const handleSwitch = (orgId: string) => {
-    const org = orgs.find((o) => o.id === orgId);
-    if (org) {
-      setActiveOrg(org);
-      toast({ title: `Switched to ${org.name}` });
+    // First try the context orgs list (has membership role info)
+    const contextOrg = orgs.find((o) => o.id === orgId);
+    if (contextOrg) {
+      setActiveOrg(contextOrg);
+      toast({ title: `Switched to ${contextOrg.name}` });
+      queryClient.invalidateQueries();
+      return;
+    }
+    // Fallback for global admin: org may not have an explicit membership row,
+    // so build an OrgSummary from the stats data already loaded on this page.
+    const statOrg = stats.find((s) => s.id === orgId);
+    if (statOrg) {
+      setActiveOrg({
+        id: statOrg.id,
+        name: statOrg.name,
+        shortName: statOrg.shortName,
+        cmmcTargetLevel: statOrg.cmmcTargetLevel,
+        industry: null,
+        isActive: true,
+        role: "admin",
+      });
+      toast({ title: `Switched to ${statOrg.name}` });
       queryClient.invalidateQueries();
     }
   };
 
   const handleDeleteConfirm = async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || deleteConfirmText !== deleteTarget.name) return;
     setDeleting(true);
     try {
       const token = localStorage.getItem("auth_token");
@@ -304,7 +323,9 @@ export default function Organizations() {
       if (!res.ok) throw new Error("Failed to delete organization");
       toast({ title: `"${deleteTarget.name}" deleted` });
       queryClient.invalidateQueries({ queryKey: ["global-stats"] });
+      refreshOrgs();
       setDeleteTarget(null);
+      setDeleteConfirmText("");
     } catch {
       toast({ title: "Error", description: "Could not delete organization", variant: "destructive" });
     } finally {
@@ -462,21 +483,39 @@ export default function Organizations() {
 
       <NewOrgDialog open={showNew} onClose={() => setShowNew(false)} onSuccess={refreshOrgs} />
 
-      <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
-        <DialogContent className="max-w-sm">
+      <Dialog open={!!deleteTarget} onOpenChange={() => { setDeleteTarget(null); setDeleteConfirmText(""); }}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
               <Trash2 className="h-5 w-5" />
               Delete Organization
             </DialogTitle>
           </DialogHeader>
-          <div className="py-2 text-sm text-muted-foreground">
-            Are you sure you want to permanently delete <span className="font-semibold text-foreground">"{deleteTarget?.name}"</span>?
-            This will remove the organization and all its memberships. All org-scoped data (controls, evidence, tasks, POA&Ms) will be retained in the database but will no longer be accessible through this org.
+          <div className="space-y-4">
+            <div className="rounded-md bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 p-3 text-sm text-red-700 dark:text-red-400">
+              <p className="font-semibold mb-1">⚠ This action is permanent and cannot be undone.</p>
+              <p>Deleting <span className="font-semibold">"{deleteTarget?.name}"</span> will remove the organization and all user memberships. Controls, evidence, tasks, and POA&Ms scoped to this org will no longer be accessible.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm">
+                Type <span className="font-semibold text-foreground">{deleteTarget?.name}</span> to confirm:
+              </Label>
+              <Input
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder={deleteTarget?.name}
+                className="font-mono"
+                autoComplete="off"
+              />
+            </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDeleteConfirm} disabled={deleting}>
+          <DialogFooter className="mt-2">
+            <Button variant="outline" onClick={() => { setDeleteTarget(null); setDeleteConfirmText(""); }}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteConfirm}
+              disabled={deleting || deleteConfirmText !== deleteTarget?.name}
+            >
               {deleting ? "Deleting..." : "Delete Organization"}
             </Button>
           </DialogFooter>
