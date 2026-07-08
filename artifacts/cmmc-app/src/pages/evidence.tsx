@@ -592,13 +592,6 @@ export default function Evidence() {
           <Button variant="outline" onClick={() => setShowWizard(true)}>
             <Package className="mr-2 h-4 w-4" /> Bulk Download
           </Button>
-          {!isAssessor && !isDemoMode && (
-            <Button asChild>
-              <Link href="/evidence/upload">
-                <Plus className="mr-2 h-4 w-4" /> Upload Evidence
-              </Link>
-            </Button>
-          )}
         </div>
       </div>
 
@@ -799,7 +792,7 @@ export default function Evidence() {
                 </p>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Upload evidence from a control's Evidence tab or click "Upload Evidence" above.
+                  Upload evidence from a control's Evidence tab.
                 </p>
               )}
             </div>
