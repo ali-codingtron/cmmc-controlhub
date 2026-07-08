@@ -89,6 +89,8 @@ export const roadmapActionEvidenceItemsTable = pgTable(
     suggestedFilename: text("suggested_filename").notNull(),
     sourceSystem: text("source_system").notNull(),
     mustShow: text("must_show").notNull(),
+    description: text("description"),
+    isRequired: boolean("is_required").notNull().default(true),
     sortOrder: integer("sort_order").notNull().default(0),
   }
 );
@@ -114,6 +116,7 @@ export const roadmapActionChecklistItemsTable = pgTable(
       .notNull()
       .references(() => roadmapActionsTable.id, { onDelete: "cascade" }),
     label: text("label").notNull(),
+    isRequired: boolean("is_required").notNull().default(true),
     sortOrder: integer("sort_order").notNull().default(0),
   }
 );
@@ -131,6 +134,12 @@ export const orgRoadmapProgressTable = pgTable("org_roadmap_progress", {
   targetDate: text("target_date"),
   result: roadmapResultEnum("result"),
   notes: text("notes"),
+  understandAckAt: timestamp("understand_ack_at"),
+  understandAckBy: text("understand_ack_by"),
+  validatedBy: text("validated_by"),
+  validatedAt: timestamp("validated_at"),
+  validationNotes: text("validation_notes"),
+  overrideJustification: text("override_justification"),
   completedAt: timestamp("completed_at"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -149,6 +158,28 @@ export const orgRoadmapChecklistProgressTable = pgTable(
       }),
     completed: boolean("completed").notNull().default(false),
     completedAt: timestamp("completed_at"),
+    completedBy: text("completed_by"),
+    notes: text("notes"),
+  }
+);
+
+// ── Evidence Catalog → Uploaded Evidence Linkage ──────────────────────────────
+
+export const orgRoadmapEvidenceLinksTable = pgTable(
+  "org_roadmap_evidence_links",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizationsTable.id, { onDelete: "cascade" }),
+    roadmapEvidenceItemId: text("roadmap_evidence_item_id")
+      .notNull()
+      .references(() => roadmapActionEvidenceItemsTable.id, {
+        onDelete: "cascade",
+      }),
+    evidenceId: text("evidence_id").notNull(),
+    linkedBy: text("linked_by"),
+    linkedAt: timestamp("linked_at").notNull().defaultNow(),
   }
 );
 

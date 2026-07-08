@@ -1,3 +1,11 @@
+import { RM_0001_STEPS } from "./roadmap-steps/rm-0001";
+import { RM_0002_STEPS } from "./roadmap-steps/rm-0002";
+import { RM_0003_STEPS } from "./roadmap-steps/rm-0003";
+import { RM_0005_STEPS } from "./roadmap-steps/rm-0005";
+import { RM_0006_STEPS } from "./roadmap-steps/rm-0006";
+import { RM_0007_STEPS } from "./roadmap-steps/rm-0007";
+import { RM_0011_STEPS } from "./roadmap-steps/rm-0011";
+
 export interface ProcedureStepSeed {
   id: string;
   actionId: string;
@@ -307,4 +315,13 @@ export const PROCEDURE_STEPS_SEED: ProcedureStepSeed[] = [
     isRequired: true,
     sortOrder: 10,
   },
+
+  // ── Additional priority action runbooks ────────────────────────────────────
+  ...RM_0001_STEPS,
+  ...RM_0002_STEPS,
+  ...RM_0003_STEPS,
+  ...RM_0005_STEPS,
+  ...RM_0006_STEPS,
+  ...RM_0007_STEPS,
+  ...RM_0011_STEPS,
 ];

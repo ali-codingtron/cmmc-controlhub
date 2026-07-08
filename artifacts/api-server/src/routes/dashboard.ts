@@ -12,6 +12,8 @@ import {
   usersTable,
   monitoringItemsTable,
   documentsTable,
+  roadmapActionsTable,
+  orgRoadmapProgressTable,
 } from "@workspace/db";
 import { eq, and, or, count, lte, gte, desc, sql, isNotNull } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
@@ -217,6 +219,41 @@ router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
   const staleEvidence = evidenceByStatus.find((e) => e.status === "stale");
   const pendingReview = evidenceByStatus.find((e) => e.status === "pending_review");
 
+  const [roadmapTotalStats] = await db
+    .select({ total: count() })
+    .from(roadmapActionsTable);
+  const [roadmapCompleteStats] = await db
+    .select({ total: count() })
+    .from(orgRoadmapProgressTable)
+    .where(
+      and(
+        orgId ? eq(orgRoadmapProgressTable.organizationId, orgId) : undefined,
+        eq(orgRoadmapProgressTable.status, "complete")
+      )
+    );
+  const [roadmapInProgressStats] = await db
+    .select({ total: count() })
+    .from(orgRoadmapProgressTable)
+    .where(
+      and(
+        orgId ? eq(orgRoadmapProgressTable.organizationId, orgId) : undefined,
+        or(
+          eq(orgRoadmapProgressTable.status, "in_progress"),
+          eq(orgRoadmapProgressTable.status, "evidence_needed"),
+          eq(orgRoadmapProgressTable.status, "ready_for_review")
+        )
+      )
+    );
+  const [roadmapBlockedStats] = await db
+    .select({ total: count() })
+    .from(orgRoadmapProgressTable)
+    .where(
+      and(
+        orgId ? eq(orgRoadmapProgressTable.organizationId, orgId) : undefined,
+        eq(orgRoadmapProgressTable.status, "blocked")
+      )
+    );
+
   res.json({
     overallReadinessPercent: totalControls > 0 ? Math.round((implemented / totalControls) * 100) : 0,
     l1ReadinessPercent: l1Total > 0 ? Math.round((l1Implemented / l1Total) * 100) : 0,
@@ -246,6 +283,10 @@ router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
     controlsWithNarrative: Number(controlsWithNarrativeStats?.total ?? 0),
     activePolicies,
     activeProcedures,
+    roadmapTotalActions: Number(roadmapTotalStats?.total ?? 0),
+    roadmapCompleteActions: Number(roadmapCompleteStats?.total ?? 0),
+    roadmapInProgressActions: Number(roadmapInProgressStats?.total ?? 0),
+    roadmapBlockedActions: Number(roadmapBlockedStats?.total ?? 0),
   });
 });
 

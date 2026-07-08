@@ -10,17 +10,28 @@ import {
   roadmapActionChecklistItemsTable,
   orgRoadmapProgressTable,
   orgRoadmapChecklistProgressTable,
+  orgRoadmapEvidenceLinksTable,
   roadmapProcedureStepsTable,
   orgProcedureStepProgressTable,
+  evidenceItemsTable,
 } from "@workspace/db";
 import { eq, and, inArray, asc } from "drizzle-orm";
-import { requireAuth } from "../lib/auth";
+import { z } from "zod";
+import { requireAuth, requireNotAssessor, requireRole } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 import { randomUUID } from "crypto";
 import { ROADMAP_SEED } from "../data/roadmap-seed";
 import { PROCEDURE_STEPS_SEED } from "../data/roadmap-procedure-steps-seed";
+import {
+  computeRoadmapProgress,
+  type ProcedureStepStatus,
+  type RoadmapResult,
+  type RoadmapStatus,
+} from "../lib/roadmap-progress";
 
 const router = Router();
+
+const ADMIN_ROLES = new Set(["admin", "compliance_manager"]);
 
 // ── List Actions ──────────────────────────────────────────────────────────────
 router.get(
@@ -42,8 +53,16 @@ router.get(
 
     const actionIds = actions.map((a) => a.id);
 
-    const [controlLinks, progressRows, checklistItems, checklistProgress] =
-      await Promise.all([
+    const [
+      controlLinks,
+      progressRows,
+      checklistItems,
+      checklistProgress,
+      evidenceItems,
+      evidenceLinks,
+      procedureSteps,
+      stepProgress,
+    ] = await Promise.all([
         db
           .select({
             actionId: roadmapActionControlLinksTable.actionId,
@@ -78,6 +97,24 @@ router.get(
           .select()
           .from(orgRoadmapChecklistProgressTable)
           .where(eq(orgRoadmapChecklistProgressTable.organizationId, orgId)),
+        db
+          .select()
+          .from(roadmapActionEvidenceItemsTable)
+          .where(
+            inArray(roadmapActionEvidenceItemsTable.actionId, actionIds)
+          ),
+        db
+          .select()
+          .from(orgRoadmapEvidenceLinksTable)
+          .where(eq(orgRoadmapEvidenceLinksTable.organizationId, orgId)),
+        db
+          .select()
+          .from(roadmapProcedureStepsTable)
+          .where(inArray(roadmapProcedureStepsTable.actionId, actionIds)),
+        db
+          .select()
+          .from(orgProcedureStepProgressTable)
+          .where(eq(orgProcedureStepProgressTable.organizationId, orgId)),
       ]);
 
     const progressMap = new Map(
@@ -92,6 +129,24 @@ router.get(
     const checkProgressSet = new Set(
       checklistProgress.filter((p) => p.completed).map((p) => p.checklistItemId)
     );
+    const evidenceMap = new Map<string, typeof evidenceItems>();
+    for (const item of evidenceItems) {
+      const list = evidenceMap.get(item.actionId) ?? [];
+      list.push(item);
+      evidenceMap.set(item.actionId, list);
+    }
+    const evidenceLinkedSet = new Set(
+      evidenceLinks.map((l) => l.roadmapEvidenceItemId)
+    );
+    const stepsMap = new Map<string, typeof procedureSteps>();
+    for (const step of procedureSteps) {
+      const list = stepsMap.get(step.actionId) ?? [];
+      list.push(step);
+      stepsMap.set(step.actionId, list);
+    }
+    const stepStatusMap = new Map(
+      stepProgress.map((p) => [p.stepId, p.status as ProcedureStepStatus])
+    );
 
     const result = actions.map((action) => {
       const links = controlLinks.filter((l) => l.actionId === action.id);
@@ -100,8 +155,27 @@ router.get(
       const completedChecklist = items.filter((i) =>
         checkProgressSet.has(i.id)
       ).length;
+      const evItems = evidenceMap.get(action.id) ?? [];
+      const steps = stepsMap.get(action.id) ?? [];
 
       const domains = [...new Set(links.map((l) => l.domain))];
+
+      const computed = computeRoadmapProgress({
+        understandAckAt: progress?.understandAckAt ?? null,
+        requiredStepIds: steps.filter((s) => s.isRequired).map((s) => s.id),
+        stepStatusById: stepStatusMap,
+        requiredEvidenceItemIds: evItems
+          .filter((e) => e.isRequired)
+          .map((e) => e.id),
+        linkedEvidenceItemIds: evidenceLinkedSet,
+        requiredChecklistItemIds: items
+          .filter((i) => i.isRequired)
+          .map((i) => i.id),
+        completedChecklistItemIds: checkProgressSet,
+        validatedAt: progress?.validatedAt ?? null,
+        result: (progress?.result ?? null) as RoadmapResult,
+        status: (progress?.status ?? "not_started") as RoadmapStatus,
+      });
 
       return {
         id: action.id,
@@ -116,7 +190,7 @@ router.get(
         controlsCount: links.length,
         fullSupportCount: links.filter((l) => l.supportType === "full_support").length,
         partialSupportCount: links.filter((l) => l.supportType === "partial_support").length,
-        evidenceCount: 0,
+        evidenceCount: evItems.length,
         documentCount: 0,
         domains,
         status: progress?.status ?? "not_started",
@@ -125,6 +199,8 @@ router.get(
         result: progress?.result ?? null,
         checklistTotal: items.length,
         checklistCompleted: completedChecklist,
+        progressPercent: computed.percent,
+        stages: computed.stages,
       };
     });
 
@@ -159,6 +235,9 @@ router.get(
       checklistItems,
       progressRows,
       checklistProgress,
+      procedureSteps,
+      stepProgressRows,
+      evidenceLinkRows,
     ] = await Promise.all([
       db
         .select({
@@ -221,42 +300,221 @@ router.get(
             )
           )
         ),
+      db
+        .select()
+        .from(roadmapProcedureStepsTable)
+        .where(eq(roadmapProcedureStepsTable.actionId, id))
+        .orderBy(roadmapProcedureStepsTable.sortOrder),
+      db
+        .select()
+        .from(orgProcedureStepProgressTable)
+        .where(eq(orgProcedureStepProgressTable.organizationId, orgId)),
+      db
+        .select()
+        .from(orgRoadmapEvidenceLinksTable)
+        .where(eq(orgRoadmapEvidenceLinksTable.organizationId, orgId)),
     ]);
 
     const progress = progressRows[0] ?? null;
     const checkProgressMap = new Map(
       checklistProgress.map((p) => [p.checklistItemId, p.completed])
     );
+    const stepIds = new Set(procedureSteps.map((s) => s.id));
+    const stepProgressMap = new Map(
+      stepProgressRows
+        .filter((p) => stepIds.has(p.stepId))
+        .map((p) => [p.stepId, p])
+    );
+    const evidenceLinksByItem = new Map<string, typeof evidenceLinkRows>();
+    for (const link of evidenceLinkRows) {
+      const list = evidenceLinksByItem.get(link.roadmapEvidenceItemId) ?? [];
+      list.push(link);
+      evidenceLinksByItem.set(link.roadmapEvidenceItemId, list);
+    }
+    const linkedEvidenceItemIds = new Set(
+      evidenceLinkRows.map((l) => l.roadmapEvidenceItemId)
+    );
+
+    const computed = computeRoadmapProgress({
+      understandAckAt: progress?.understandAckAt ?? null,
+      requiredStepIds: procedureSteps
+        .filter((s) => s.isRequired)
+        .map((s) => s.id),
+      stepStatusById: new Map(
+        Array.from(stepProgressMap.entries()).map(([stepId, p]) => [
+          stepId,
+          p.status as ProcedureStepStatus,
+        ])
+      ),
+      requiredEvidenceItemIds: evidenceItems
+        .filter((e) => e.isRequired)
+        .map((e) => e.id),
+      linkedEvidenceItemIds,
+      requiredChecklistItemIds: checklistItems
+        .filter((i) => i.isRequired)
+        .map((i) => i.id),
+      completedChecklistItemIds: new Set(
+        checklistProgress.filter((p) => p.completed).map((p) => p.checklistItemId)
+      ),
+      validatedAt: progress?.validatedAt ?? null,
+      result: (progress?.result ?? null) as RoadmapResult,
+      status: (progress?.status ?? "not_started") as RoadmapStatus,
+    });
 
     res.json({
       ...action,
       controls: controlLinks,
-      evidenceItems,
+      evidenceItems: evidenceItems.map((item) => ({
+        ...item,
+        links: evidenceLinksByItem.get(item.id) ?? [],
+      })),
       documents,
       checklistItems: checklistItems.map((item) => ({
         ...item,
         completed: checkProgressMap.get(item.id) ?? false,
+        completedBy: checklistProgress.find((p) => p.checklistItemId === item.id)
+          ?.completedBy ?? null,
+        notes: checklistProgress.find((p) => p.checklistItemId === item.id)
+          ?.notes ?? null,
+      })),
+      procedureSteps: procedureSteps.map((step) => ({
+        ...step,
+        progress: stepProgressMap.get(step.id) ?? null,
       })),
       progress,
+      computedProgress: computed,
     });
   }
 );
 
 // ── Update Progress ───────────────────────────────────────────────────────────
+const updateProgressSchema = z.object({
+  status: z
+    .enum([
+      "not_started",
+      "in_progress",
+      "evidence_needed",
+      "ready_for_review",
+      "complete",
+      "blocked",
+    ])
+    .optional(),
+  owner: z.string().nullable().optional(),
+  targetDate: z.string().nullable().optional(),
+  result: z
+    .enum(["passed", "passed_with_exceptions", "failed", "needs_follow_up"])
+    .nullable()
+    .optional(),
+  notes: z.string().nullable().optional(),
+  overrideJustification: z.string().nullable().optional(),
+});
+
 router.patch(
   "/roadmap/actions/:id/progress",
   requireAuth,
   requireOrg,
+  requireNotAssessor,
   async (req, res) => {
     const { id } = req.params;
     const orgId = req.orgId!;
-    const { status, owner, targetDate, result, notes } = req.body as {
-      status?: string;
-      owner?: string;
-      targetDate?: string;
-      result?: string;
-      notes?: string;
-    };
+
+    const parsed = updateProgressSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(422).json({ error: "Invalid input", issues: parsed.error.issues });
+      return;
+    }
+    const { status, owner, targetDate, result, notes, overrideJustification } =
+      parsed.data;
+
+    const [action] = await db
+      .select()
+      .from(roadmapActionsTable)
+      .where(eq(roadmapActionsTable.id, id))
+      .limit(1);
+    if (!action) {
+      res.status(404).json({ error: "Action not found" });
+      return;
+    }
+
+    if (status === "complete") {
+      if (!ADMIN_ROLES.has(req.authUser!.role)) {
+        res.status(403).json({
+          error: "Only admins or compliance managers can mark an action complete",
+        });
+        return;
+      }
+
+      const [existingProgress] = await db
+        .select()
+        .from(orgRoadmapProgressTable)
+        .where(
+          and(
+            eq(orgRoadmapProgressTable.organizationId, orgId),
+            eq(orgRoadmapProgressTable.actionId, id)
+          )
+        )
+        .limit(1);
+
+      const [steps, evidenceItems, evidenceLinks, checklistItems, checklistProgress] =
+        await Promise.all([
+          db
+            .select()
+            .from(roadmapProcedureStepsTable)
+            .where(eq(roadmapProcedureStepsTable.actionId, id)),
+          db
+            .select()
+            .from(roadmapActionEvidenceItemsTable)
+            .where(eq(roadmapActionEvidenceItemsTable.actionId, id)),
+          db
+            .select()
+            .from(orgRoadmapEvidenceLinksTable)
+            .where(eq(orgRoadmapEvidenceLinksTable.organizationId, orgId)),
+          db
+            .select()
+            .from(roadmapActionChecklistItemsTable)
+            .where(eq(roadmapActionChecklistItemsTable.actionId, id)),
+          db
+            .select()
+            .from(orgRoadmapChecklistProgressTable)
+            .where(eq(orgRoadmapChecklistProgressTable.organizationId, orgId)),
+        ]);
+
+      const stepProgress = await db
+        .select()
+        .from(orgProcedureStepProgressTable)
+        .where(eq(orgProcedureStepProgressTable.organizationId, orgId));
+
+      const computed = computeRoadmapProgress({
+        understandAckAt: existingProgress?.understandAckAt ?? null,
+        requiredStepIds: steps.filter((s) => s.isRequired).map((s) => s.id),
+        stepStatusById: new Map(
+          stepProgress.map((p) => [p.stepId, p.status as ProcedureStepStatus])
+        ),
+        requiredEvidenceItemIds: evidenceItems
+          .filter((e) => e.isRequired)
+          .map((e) => e.id),
+        linkedEvidenceItemIds: new Set(
+          evidenceLinks.map((l) => l.roadmapEvidenceItemId)
+        ),
+        requiredChecklistItemIds: checklistItems
+          .filter((i) => i.isRequired)
+          .map((i) => i.id),
+        completedChecklistItemIds: new Set(
+          checklistProgress.filter((p) => p.completed).map((p) => p.checklistItemId)
+        ),
+        validatedAt: existingProgress?.validatedAt ?? null,
+        result: (result ?? existingProgress?.result ?? null) as RoadmapResult,
+        status: "complete",
+      });
+
+      if (!computed.readyToComplete && !overrideJustification) {
+        res.status(422).json({
+          error: "Prerequisites not met to mark this action complete",
+          missing: computed.missing,
+        });
+        return;
+      }
+    }
 
     const existing = await db
       .select()
@@ -278,6 +536,7 @@ router.patch(
           ...(targetDate !== undefined && { targetDate }),
           ...(result !== undefined && { result: result as any }),
           ...(notes !== undefined && { notes }),
+          ...(overrideJustification !== undefined && { overrideJustification }),
           ...(status === "complete" && { completedAt: new Date() }),
           updatedAt: new Date(),
         })
@@ -297,6 +556,7 @@ router.patch(
         targetDate: targetDate ?? null,
         result: (result as any) ?? null,
         notes: notes ?? null,
+        overrideJustification: overrideJustification ?? null,
         completedAt: status === "complete" ? new Date() : null,
         updatedAt: new Date(),
       });
@@ -306,15 +566,279 @@ router.patch(
   }
 );
 
+// ── Acknowledge Overview / Understand ─────────────────────────────────────────
+router.post(
+  "/roadmap/actions/:id/understand",
+  requireAuth,
+  requireOrg,
+  requireNotAssessor,
+  async (req, res) => {
+    const { id } = req.params;
+    const orgId = req.orgId!;
+
+    const [action] = await db
+      .select()
+      .from(roadmapActionsTable)
+      .where(eq(roadmapActionsTable.id, id))
+      .limit(1);
+    if (!action) {
+      res.status(404).json({ error: "Action not found" });
+      return;
+    }
+
+    const existing = await db
+      .select()
+      .from(orgRoadmapProgressTable)
+      .where(
+        and(
+          eq(orgRoadmapProgressTable.organizationId, orgId),
+          eq(orgRoadmapProgressTable.actionId, id)
+        )
+      )
+      .limit(1);
+
+    const now = new Date();
+    if (existing.length > 0) {
+      await db
+        .update(orgRoadmapProgressTable)
+        .set({
+          understandAckAt: now,
+          understandAckBy: req.authUser!.id,
+          status:
+            existing[0].status === "not_started"
+              ? "in_progress"
+              : existing[0].status,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(orgRoadmapProgressTable.organizationId, orgId),
+            eq(orgRoadmapProgressTable.actionId, id)
+          )
+        );
+    } else {
+      await db.insert(orgRoadmapProgressTable).values({
+        id: randomUUID(),
+        organizationId: orgId,
+        actionId: id,
+        status: "in_progress",
+        understandAckAt: now,
+        understandAckBy: req.authUser!.id,
+        updatedAt: now,
+      });
+    }
+
+    res.json({ ok: true });
+  }
+);
+
+// ── Record Validation Result ──────────────────────────────────────────────────
+const validationSchema = z.object({
+  result: z.enum([
+    "passed",
+    "passed_with_exceptions",
+    "failed",
+    "needs_follow_up",
+  ]),
+  validationNotes: z.string().nullable().optional(),
+});
+
+router.post(
+  "/roadmap/actions/:id/validation",
+  requireAuth,
+  requireOrg,
+  requireRole("admin", "compliance_manager", "reviewer", "it_contributor"),
+  async (req, res) => {
+    const { id } = req.params;
+    const orgId = req.orgId!;
+
+    const parsed = validationSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(422).json({ error: "Invalid input", issues: parsed.error.issues });
+      return;
+    }
+
+    const [action] = await db
+      .select()
+      .from(roadmapActionsTable)
+      .where(eq(roadmapActionsTable.id, id))
+      .limit(1);
+    if (!action) {
+      res.status(404).json({ error: "Action not found" });
+      return;
+    }
+
+    const { result, validationNotes } = parsed.data;
+    const now = new Date();
+
+    const existing = await db
+      .select()
+      .from(orgRoadmapProgressTable)
+      .where(
+        and(
+          eq(orgRoadmapProgressTable.organizationId, orgId),
+          eq(orgRoadmapProgressTable.actionId, id)
+        )
+      )
+      .limit(1);
+
+    if (existing.length > 0) {
+      await db
+        .update(orgRoadmapProgressTable)
+        .set({
+          result: result as any,
+          validationNotes: validationNotes ?? null,
+          validatedAt: now,
+          validatedBy: req.authUser!.id,
+          status:
+            result === "failed"
+              ? "blocked"
+              : existing[0].status === "not_started" ||
+                  existing[0].status === "in_progress"
+                ? "ready_for_review"
+                : existing[0].status,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(orgRoadmapProgressTable.organizationId, orgId),
+            eq(orgRoadmapProgressTable.actionId, id)
+          )
+        );
+    } else {
+      await db.insert(orgRoadmapProgressTable).values({
+        id: randomUUID(),
+        organizationId: orgId,
+        actionId: id,
+        status: result === "failed" ? "blocked" : "ready_for_review",
+        result: result as any,
+        validationNotes: validationNotes ?? null,
+        validatedAt: now,
+        validatedBy: req.authUser!.id,
+        updatedAt: now,
+      });
+    }
+
+    res.json({ ok: true });
+  }
+);
+
+// ── Link / Unlink Evidence ─────────────────────────────────────────────────────
+const linkEvidenceSchema = z.object({
+  evidenceId: z.string().min(1),
+});
+
+router.post(
+  "/roadmap/evidence-items/:itemId/link",
+  requireAuth,
+  requireOrg,
+  requireNotAssessor,
+  async (req, res) => {
+    const { itemId } = req.params;
+    const orgId = req.orgId!;
+
+    const parsed = linkEvidenceSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(422).json({ error: "Invalid input", issues: parsed.error.issues });
+      return;
+    }
+
+    const [roadmapEvidenceItem] = await db
+      .select()
+      .from(roadmapActionEvidenceItemsTable)
+      .where(eq(roadmapActionEvidenceItemsTable.id, itemId))
+      .limit(1);
+    if (!roadmapEvidenceItem) {
+      res.status(404).json({ error: "Roadmap evidence item not found" });
+      return;
+    }
+
+    const [evidenceItem] = await db
+      .select()
+      .from(evidenceItemsTable)
+      .where(
+        and(
+          eq(evidenceItemsTable.id, parsed.data.evidenceId),
+          eq(evidenceItemsTable.organizationId, orgId)
+        )
+      )
+      .limit(1);
+    if (!evidenceItem) {
+      res.status(404).json({ error: "Evidence item not found in this organization" });
+      return;
+    }
+
+    const existing = await db
+      .select()
+      .from(orgRoadmapEvidenceLinksTable)
+      .where(
+        and(
+          eq(orgRoadmapEvidenceLinksTable.organizationId, orgId),
+          eq(orgRoadmapEvidenceLinksTable.roadmapEvidenceItemId, itemId),
+          eq(orgRoadmapEvidenceLinksTable.evidenceId, parsed.data.evidenceId)
+        )
+      )
+      .limit(1);
+
+    if (existing.length === 0) {
+      await db.insert(orgRoadmapEvidenceLinksTable).values({
+        id: randomUUID(),
+        organizationId: orgId,
+        roadmapEvidenceItemId: itemId,
+        evidenceId: parsed.data.evidenceId,
+        linkedBy: req.authUser!.id,
+        linkedAt: new Date(),
+      });
+    }
+
+    res.json({ ok: true });
+  }
+);
+
+router.delete(
+  "/roadmap/evidence-items/:itemId/link/:evidenceId",
+  requireAuth,
+  requireOrg,
+  requireNotAssessor,
+  async (req, res) => {
+    const { itemId, evidenceId } = req.params;
+    const orgId = req.orgId!;
+
+    await db
+      .delete(orgRoadmapEvidenceLinksTable)
+      .where(
+        and(
+          eq(orgRoadmapEvidenceLinksTable.organizationId, orgId),
+          eq(orgRoadmapEvidenceLinksTable.roadmapEvidenceItemId, itemId),
+          eq(orgRoadmapEvidenceLinksTable.evidenceId, evidenceId)
+        )
+      );
+
+    res.json({ ok: true });
+  }
+);
+
 // ── Toggle Checklist Item ─────────────────────────────────────────────────────
+const toggleChecklistSchema = z.object({
+  completed: z.boolean(),
+  notes: z.string().nullable().optional(),
+});
+
 router.post(
   "/roadmap/actions/:id/checklist/:itemId",
   requireAuth,
   requireOrg,
+  requireNotAssessor,
   async (req, res) => {
     const { itemId } = req.params;
     const orgId = req.orgId!;
-    const { completed } = req.body as { completed: boolean };
+
+    const parsed = toggleChecklistSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(422).json({ error: "Invalid input", issues: parsed.error.issues });
+      return;
+    }
+    const { completed, notes } = parsed.data;
 
     const existing = await db
       .select()
@@ -333,6 +857,8 @@ router.post(
         .set({
           completed,
           completedAt: completed ? new Date() : null,
+          completedBy: completed ? req.authUser!.id : null,
+          ...(notes !== undefined && { notes }),
         })
         .where(
           and(
@@ -347,6 +873,8 @@ router.post(
         checklistItemId: itemId,
         completed,
         completedAt: completed ? new Date() : null,
+        completedBy: completed ? req.authUser!.id : null,
+        notes: notes ?? null,
       });
     }
 
@@ -528,14 +1056,32 @@ router.get(
   }
 );
 
+const stepProgressSchema = z.object({
+  status: z.enum([
+    "not_started",
+    "in_progress",
+    "complete",
+    "blocked",
+    "not_applicable",
+  ]),
+  notes: z.string().nullable().optional(),
+});
+
 router.patch(
   "/roadmap/procedure-steps/:stepId/progress",
   requireAuth,
   requireOrg,
+  requireNotAssessor,
   async (req, res) => {
     const { stepId } = req.params;
     const orgId = req.orgId!;
-    const { status, notes, completedBy } = req.body;
+
+    const parsed = stepProgressSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(422).json({ error: "Invalid input", issues: parsed.error.issues });
+      return;
+    }
+    const { status, notes } = parsed.data;
 
     const [step] = await db
       .select({ id: roadmapProcedureStepsTable.id })
@@ -557,11 +1103,12 @@ router.patch(
       .limit(1);
 
     const completedAt = status === "complete" ? new Date() : null;
+    const completedBy = status === "complete" ? req.authUser!.id : null;
 
     if (existing) {
       await db
         .update(orgProcedureStepProgressTable)
-        .set({ status, notes: notes ?? null, completedBy: completedBy ?? null, completedAt, updatedAt: new Date() })
+        .set({ status, notes: notes ?? null, completedBy, completedAt, updatedAt: new Date() })
         .where(eq(orgProcedureStepProgressTable.id, existing.id));
     } else {
       await db.insert(orgProcedureStepProgressTable).values({
@@ -570,7 +1117,7 @@ router.patch(
         stepId,
         status,
         notes: notes ?? null,
-        completedBy: completedBy ?? null,
+        completedBy,
         completedAt,
         updatedAt: new Date(),
       });
@@ -754,14 +1301,17 @@ export async function seedRoadmapActions(): Promise<void> {
 }
 
 export async function seedProcedureSteps(): Promise<void> {
-  const [existing] = await db
+  const existingRows = await db
     .select({ id: roadmapProcedureStepsTable.id })
-    .from(roadmapProcedureStepsTable)
-    .limit(1);
+    .from(roadmapProcedureStepsTable);
+  const existingIds = new Set(existingRows.map((r) => r.id));
 
-  if (existing) return;
+  const toInsert = PROCEDURE_STEPS_SEED.filter(
+    (step) => !existingIds.has(step.id)
+  );
+  if (toInsert.length === 0) return;
 
-  for (const step of PROCEDURE_STEPS_SEED) {
+  for (const step of toInsert) {
     await db.insert(roadmapProcedureStepsTable).values({
       id: step.id,
       actionId: step.actionId,

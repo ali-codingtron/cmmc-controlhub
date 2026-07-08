@@ -1,0 +1,893 @@
+Improve the Implementation Roadmap so it becomes a true guided implementation workflow, not just a roadmap list.
+
+I reviewed the updated roadmap in production. It is better, but it is still confusing for a normal user.
+
+Current issues:
+1. The Priority Actions page does not clearly explain how the roadmap works.
+2. The page does not explain why completing roadmap actions is beneficial.
+3. The stage tracker appears on action detail pages, but there is no clear way to complete each tracker stage.
+4. The progress/status box is disconnected from the actual steps, evidence, documents, validation, and checklist.
+5. The steps are still too generic. They need to be much more detailed and actionable.
+6. Users need to know exactly what to do, what to upload, how to validate it, and how to know when the action is complete.
+
+Goal:
+Make the Implementation Roadmap feel like a guided CMMC implementation assistant.
+
+The roadmap should answer:
+- What should I do first?
+- Why does this action matter?
+- Which controls does it support?
+- What evidence will I create?
+- What documents will I need?
+- What exact steps do I perform?
+- How do I validate it?
+- How do I mark it complete?
+- What happens next?
+
+====================================================================
+1. ADD A CLEAR OVERVIEW TO THE PRIORITY ACTIONS PAGE
+====================================================================
+
+At the top of the Priority Actions page, add an overview panel.
+
+Title:
+How the Implementation Roadmap Works
+
+Content:
+“The Implementation Roadmap groups related CMMC work into high-impact actions. Instead of working control-by-control, each action helps produce evidence, documents, monitoring records, and validation results that support multiple CMMC controls at once.”
+
+Add a second paragraph:
+“Start with the recommended first action, follow the guided steps, upload the required evidence, complete validation, and then mark the action ready for review. Control HUB will show which controls are supported and what gaps remain.”
+
+Add a simple 5-step visual:
+
+1. Choose Action
+2. Follow Steps
+3. Upload Evidence
+4. Validate
+5. Complete / Ready for Review
+
+Each step should have a one-sentence explanation.
+
+Example:
+Choose Action — Start with the highest-impact item recommended by Control HUB.
+Follow Steps — Complete the implementation instructions.
+Upload Evidence — Attach screenshots, exports, reports, and records.
+Validate — Confirm the configuration or process works.
+Complete — Mark the action ready for review once required items are done.
+
+====================================================================
+2. ADD “WHY USE THIS ROADMAP?” SECTION
+====================================================================
+
+Add a short explanation box:
+
+Why this is useful:
+
+- Helps you avoid working randomly through 110 controls
+- Shows which actions support multiple controls
+- Reduces duplicate evidence collection
+- Helps you know what to do first
+- Tracks required documents and evidence
+- Helps prepare for C3PAO review
+- Creates a repeatable implementation path for each organization
+
+This should be visible on the Priority Actions page.
+
+====================================================================
+3. IMPROVE THE PRIORITY ACTIONS PAGE
+====================================================================
+
+The main Priority Actions page should have three main sections:
+
+A. Start Here
+B. Roadmap Progress
+C. Priority Action List
+
+A. Start Here
+
+Show:
+- recommended first action
+- why it is recommended
+- controls supported
+- expected outputs
+- estimated effort
+- status
+- button: Start This Action or Continue Action
+
+Example:
+
+Recommended First Action:
+Perform User and Access Review
+
+Why this is first:
+This action supports 11 controls across Access Control, Identification and Authentication, and Security Assessment. It helps establish who has access, whether that access is authorized, and what evidence supports account management.
+
+Expected Outputs:
+- user account export
+- privileged role export
+- access review worksheet
+- stale account review
+- access approval records
+
+Button:
+Start This Action
+
+B. Roadmap Progress
+
+Show:
+- total actions
+- complete
+- in progress
+- evidence needed
+- ready for review
+- blocked
+- overall progress
+
+C. Priority Action List
+
+Each action card should show:
+- action title
+- plain-English purpose
+- priority
+- effort
+- phase
+- status
+- progress
+- controls supported
+- evidence required
+- documents required
+- next step
+- button: Start / Continue / Review
+
+Do not make the user rely mainly on impact score.
+
+Impact Score should be secondary.
+
+Replace “Score 49” as the dominant element with:
+High Impact
+Impact Score: 49
+
+Add tooltip:
+“Impact score is based on controls supported, evidence gaps addressed, documents produced, and effort.”
+
+====================================================================
+4. SIMPLIFY VIEW MODES
+====================================================================
+
+The current Guided/List/Phase view is useful, but normal users need a default.
+
+Default view:
+Guided View
+
+Guided View should show one recommended action at a time and explain what to do next.
+
+List View should be for users who want to browse all actions.
+
+Phase View should show roadmap phases:
+- Foundation
+- Identity & Access
+- Endpoint & System
+- Logging & Monitoring
+- Risk & Remediation
+- Audit Preparation
+
+Add helper text:
+“Use Guided View if you are not sure where to start.”
+
+====================================================================
+5. REMOVE OR IMPROVE THE HORIZONTAL ACTION STRIP
+====================================================================
+
+The small horizontal action selector at the bottom of the action card is confusing.
+
+Either remove it or redesign it.
+
+Preferred:
+Replace it with a cleaner “Other Recommended Actions” section below the main card.
+
+Show:
+- action title
+- phase
+- priority
+- status
+- continue button
+
+Do not use a cramped horizontal strip with truncated action names.
+
+====================================================================
+6. FIX THE ACTION DETAIL TRACKER
+====================================================================
+
+The tracker currently shows stages:
+
+1. Understand
+2. Perform Steps
+3. Upload Evidence
+4. Validate
+5. Review & Complete
+
+But there is no obvious way to complete each stage.
+
+Make each tracker stage interactive and tied to actual completion requirements.
+
+Each stage should show:
+- status
+- requirements
+- completion button
+- blockers
+
+Stage statuses:
+- Not Started
+- In Progress
+- Complete
+- Blocked
+
+Stage 1 — Understand:
+Complete when:
+- user opens Overview tab
+- user clicks “Mark Understand Complete”
+
+Button:
+Mark Understand Complete
+
+Stage 2 — Perform Steps:
+Complete when:
+- all required implementation steps are Complete or Not Applicable
+
+Button:
+Go to Steps
+
+Stage 3 — Upload Evidence:
+Complete when:
+- required evidence items are uploaded or linked
+- evidence exists for all required evidence categories
+
+Button:
+Upload / Link Evidence
+
+Stage 4 — Validate:
+Complete when:
+- validation checklist is completed
+- result is set to Passed / Passed with Exception / Failed
+
+Button:
+Complete Validation
+
+Stage 5 — Review & Complete:
+Complete when:
+- all prior stages are complete
+- no blocking issue exists
+- checklist is complete
+- action is marked Ready for Review or Complete
+
+Button:
+Mark Ready for Review
+
+====================================================================
+7. CONNECT THE TRACKER TO ACTUAL PROGRESS
+====================================================================
+
+Do not let the tracker be just a visual indicator.
+
+The tracker should calculate progress from actual records:
+
+- overview acknowledged
+- steps completed
+- evidence uploaded
+- documents linked
+- validation completed
+- checklist completed
+- blockers resolved
+
+Show progress breakdown:
+
+Steps: 0 / 11
+Evidence: 0 / 5
+Documents: 0 / 4
+Validation: Not Complete
+Checklist: 0 / 11
+
+Overall action progress should be calculated automatically.
+
+Example:
+Overall Progress = 0%
+
+If the user completes 5 of 11 checklist items:
+Checklist: 5 / 11
+Progress should update.
+
+If evidence is missing:
+Action status should suggest Evidence Needed.
+
+If all items are complete:
+Action status should suggest Ready for Review.
+
+====================================================================
+8. IMPROVE THE RIGHT-SIDE PROGRESS PANEL
+====================================================================
+
+The current right-side panel has:
+- status
+- owner
+- date
+- result
+- notes
+- Save Progress
+
+This is not enough.
+
+Replace it with a sticky Action Progress panel.
+
+Show:
+- Current Status
+- Owner
+- Target Date
+- Next Step
+- Overall Progress %
+- Stage Progress
+- Evidence Missing
+- Documents Missing
+- Validation Status
+- Checklist Progress
+- Blockers
+- Result
+- Notes
+
+Buttons:
+- Save Progress
+- Mark In Progress
+- Mark Ready for Review
+- Mark Complete
+- Report Blocker
+
+Completion rules:
+- Mark Complete should be disabled until required steps, evidence, documents, validation, and checklist are complete.
+- If user tries to mark complete early, show exactly what is missing.
+
+Example warning:
+“Cannot mark complete yet. Missing: 2 evidence items, 1 required document, validation not completed.”
+
+====================================================================
+9. MAKE CHECKLIST ITEMS ACTUALLY COMPLETE THE TRACKER
+====================================================================
+
+The checklist tab currently shows checkboxes, but it needs to drive action completion.
+
+Each checklist item should:
+- be checkable
+- save immediately
+- show completed by
+- show completed date
+- allow notes
+- update progress percentage
+- update tracker stage status
+
+Checklist table should include:
+- checkbox
+- item
+- required yes/no
+- status
+- completed by
+- completed date
+- notes
+
+When all required checklist items are checked:
+- checklist stage becomes complete
+- action may move to Ready for Review if evidence/documents/validation are also complete
+
+Do not require users to manually update multiple places if checklist completion already proves progress.
+
+====================================================================
+10. ADD “DONE MEANS” BOX TO EACH ACTION
+====================================================================
+
+Every roadmap action detail page should have a “Done Means” box.
+
+Example:
+
+Done Means:
+This action is considered complete when:
+- required implementation steps are complete
+- required evidence is uploaded or linked
+- required documents are linked or generated
+- validation has been performed
+- checklist is complete
+- any exceptions are documented
+- related controls have been reviewed
+- no blocking POA&M exists
+
+This helps users understand how to finish the action.
+
+====================================================================
+11. MAKE STEPS MUCH MORE DETAILED
+====================================================================
+
+The current steps are still too generic.
+
+Every roadmap action must include detailed implementation runbook-style steps.
+
+Each step should have these fields:
+
+- Step Number
+- Step Title
+- Purpose
+- Estimated Time
+- Skill Level
+- Systems Used
+- Prerequisites
+- Exact Navigation Path
+- Detailed Instructions
+- Expected Result
+- Evidence to Capture
+- Suggested Filename
+- Required Documents
+- Validation Method
+- Common Mistakes
+- Troubleshooting
+- Related Controls
+- Completion Checklist
+- Status
+- Notes
+
+Do not write vague steps like:
+“Review user accounts.”
+
+Instead write exact instructions like:
+“Open Microsoft Entra Admin Center > Identity > Users > All Users. Export the user list. Review the export for disabled users, guest users, shared/generic accounts, privileged users, and accounts with no recent sign-in activity.”
+
+====================================================================
+12. REPLACE GENERIC STEPS FOR “PERFORM USER AND ACCESS REVIEW”
+====================================================================
+
+For the roadmap action “Perform User and Access Review,” replace generic steps with detailed steps.
+
+Use this structure:
+
+Step 1: Export All Active Users
+
+Purpose:
+Create a current user inventory for review.
+
+Systems Used:
+Microsoft Entra Admin Center
+
+Navigation:
+Microsoft Entra Admin Center > Identity > Users > All Users
+
+Detailed Instructions:
+1. Open https://entra.microsoft.com.
+2. Sign in with an administrative account.
+3. Navigate to Identity > Users > All Users.
+4. Review the user list.
+5. Add or verify columns for:
+   - Display Name
+   - User Principal Name
+   - Account Enabled
+   - User Type
+   - Department
+   - Job Title
+   - Last Sign-In if available
+6. Export the user list.
+7. Save the export using the suggested filename.
+8. Upload the file to Control HUB and link it to this roadmap action and related controls.
+
+Expected Result:
+A current user inventory exists and can be reviewed for authorized access.
+
+Evidence to Capture:
+- user export CSV/XLSX
+- screenshot of All Users page
+- list of disabled/guest/stale accounts if applicable
+
+Suggested Filename:
+AC-3.1.1_User_Inventory_YYYY-MM-DD.xlsx
+
+Linked Controls:
+AC.L1-3.1.1
+AC.L1-3.1.2
+IA.L1-3.5.1
+
+Validation:
+Confirm every active user has a business purpose and no unauthorized users exist.
+
+Common Mistakes:
+- exporting users but not reviewing them
+- not including guest users
+- not documenting disabled or stale accounts
+- not saving the review evidence
+
+Step 2: Review Privileged Roles
+
+Systems Used:
+Microsoft Entra Admin Center
+
+Navigation:
+Identity > Roles and Administrators
+
+Detailed Instructions:
+1. Open Entra Admin Center.
+2. Navigate to Identity > Roles and Administrators.
+3. Review Global Administrator, Privileged Role Administrator, Exchange Administrator, SharePoint Administrator, Security Administrator, and Intune Administrator roles.
+4. Export or screenshot each relevant role assignment.
+5. Confirm every privileged user has documented approval.
+6. Identify excessive or unnecessary privileged access.
+7. Document remediation actions.
+
+Evidence:
+- privileged role assignment export
+- screenshots of role membership
+- approval records for admin access
+
+Suggested Filename:
+AC-3.1.1_Privileged_Role_Review_YYYY-MM-DD.xlsx
+
+Linked Controls:
+AC.L2-3.1.5
+AC.L2-3.1.6
+AC.L2-3.1.7
+IA.L1-3.5.1
+
+Step 3: Review Guest and External Users
+
+Navigation:
+Identity > Users > All Users > Filter User Type = Guest
+
+Detailed Instructions:
+1. Filter users by User Type = Guest.
+2. Review each guest account.
+3. Confirm business justification.
+4. Confirm sponsor/owner.
+5. Remove or disable unauthorized guests.
+6. Export guest user list or document “no guest users found.”
+
+Evidence:
+- guest user export
+- guest access approval list
+- screenshot showing guest user filter
+
+Suggested Filename:
+AC-3.1.1_Guest_User_Review_YYYY-MM-DD.xlsx
+
+Step 4: Review Stale and Disabled Accounts
+
+Detailed Instructions:
+1. Review accounts with no recent sign-in.
+2. Review disabled accounts.
+3. Determine whether accounts should remain, be removed, or be documented as exceptions.
+4. Record decision and owner.
+5. Document remediation.
+
+Evidence:
+- stale account review worksheet
+- disabled account export
+- remediation tickets
+
+Suggested Filename:
+AC-3.1.1_Stale_Account_Review_YYYY-MM-DD.xlsx
+
+Step 5: Cross-Reference HR / Authorized User List
+
+Detailed Instructions:
+1. Obtain HR roster or approved user list.
+2. Compare active Entra users to approved personnel.
+3. Identify users not on HR roster.
+4. Identify terminated users.
+5. Document exceptions.
+
+Evidence:
+- access review worksheet
+- HR roster comparison
+- exception list
+
+Step 6: Review Group Memberships for CUI Access
+
+Navigation:
+Identity > Groups > All Groups
+
+Detailed Instructions:
+1. Identify groups that provide access to CUI systems, SharePoint sites, Teams, repositories, or admin portals.
+2. Export group membership.
+3. Confirm each member has authorized need.
+4. Remove unauthorized members.
+5. Document approvals or exceptions.
+
+Evidence:
+- group membership export
+- access review worksheet
+- change/removal evidence
+
+Step 7: Document Access Review Results
+
+Detailed Instructions:
+1. Complete access review worksheet.
+2. Record reviewer name and date.
+3. Record findings.
+4. Record removed users or access changes.
+5. Record exceptions and approvals.
+6. Upload final signed/reviewed worksheet.
+
+Evidence:
+- completed access review worksheet
+- signed approval
+- access change tickets
+
+Step 8: Upload and Link Evidence in Control HUB
+
+Detailed Instructions:
+1. Open Control HUB.
+2. Navigate to Implementation Roadmap > Perform User and Access Review.
+3. Open Evidence to Collect.
+4. Upload each required evidence item.
+5. Confirm linked controls are preselected.
+6. Save evidence as Approved or Pending Review depending on workflow.
+
+Step 9: Validate Control Coverage
+
+Detailed Instructions:
+1. Open Controls Supported tab.
+2. Review linked controls.
+3. Confirm evidence appears under each related control.
+4. Open AC.L1-3.1.1 and confirm evidence is visible.
+5. Repeat for key IA and AC controls.
+
+Step 10: Complete Checklist and Mark Ready for Review
+
+Detailed Instructions:
+1. Open Checklist tab.
+2. Complete required checklist items.
+3. Add notes for any exceptions.
+4. Confirm evidence and documents are linked.
+5. Set action status to Ready for Review.
+
+====================================================================
+13. ADD DETAILED STEPS FOR OTHER PRIORITY ACTIONS
+====================================================================
+
+Expand steps for at least these actions next:
+
+- Configure MFA and Conditional Access Baseline
+- Configure Endpoint Compliance and Device Management
+- Configure Logging and Audit Review
+- Define Assessment Scope and SSP Baseline
+- Review Firewall and External Connections
+- Review Vulnerabilities and Patch Compliance
+- Perform Policy and Procedure Review
+
+Each action should use the same detailed runbook format.
+
+Do not leave these actions with generic one-line instructions.
+
+====================================================================
+14. CONNECT “NEXT STEP” TO REAL ACTIONS
+====================================================================
+
+The blue Next Step bar currently says what to do but is not very useful.
+
+Make it actionable.
+
+Examples:
+If current stage is Understand:
+Button:
+Mark Overview Complete
+
+If current stage is Perform Steps:
+Button:
+Go to First Incomplete Step
+
+If current stage is Upload Evidence:
+Button:
+Upload Missing Evidence
+
+If current stage is Validate:
+Button:
+Complete Validation
+
+If current stage is Review & Complete:
+Button:
+Submit for Review
+
+The button should take the user directly to the correct tab/section.
+
+====================================================================
+15. ADD “MARK ACTION COMPLETE” RULES
+====================================================================
+
+Users need a clear way to complete the tracker.
+
+Add button:
+Mark Action Complete
+
+But only enable it when:
+- all required steps complete or not applicable
+- required evidence uploaded/linked
+- required documents linked/generated
+- validation completed
+- checklist complete
+- no unresolved blockers
+
+If conditions are not met, show:
+Missing Requirements
+
+Example:
+- 3 required steps incomplete
+- 2 evidence items missing
+- 1 document missing
+- validation not complete
+- checklist 7/11 complete
+
+Allow admin override only with required justification.
+
+====================================================================
+16. ADD “SUBMIT FOR REVIEW” STATUS
+====================================================================
+
+Add workflow:
+
+Not Started
+In Progress
+Evidence Needed
+Ready for Review
+Complete
+Blocked
+
+Normal user can move action to:
+- In Progress
+- Evidence Needed
+- Ready for Review
+- Blocked
+
+Compliance Manager/Admin can approve:
+- Complete
+
+This prevents users from marking something complete without review.
+
+====================================================================
+17. IMPROVE VALIDATION TAB
+====================================================================
+
+Validation tab should not just display test procedure text.
+
+It should allow the user to record validation.
+
+Fields:
+- validation result: Not Tested / Passed / Passed with Exception / Failed
+- validated by
+- validation date
+- validation notes
+- evidence uploaded
+- create POA&M if failed
+
+If result = Failed:
+- require explanation
+- offer Create POA&M
+
+If result = Passed with Exception:
+- require exception notes
+- allow evidence upload
+
+Validation completion should update tracker stage 4.
+
+====================================================================
+18. IMPROVE EVIDENCE TO COLLECT TAB
+====================================================================
+
+For each evidence item, show:
+
+- required evidence title
+- type
+- suggested filename
+- what must be visible
+- linked controls
+- status
+- uploaded file if present
+- upload/link button
+
+Statuses:
+- Missing
+- Uploaded
+- Pending Review
+- Approved
+- Not Applicable
+
+If uploaded:
+- show file name
+- preview link
+- download link
+- linked controls
+
+Evidence completion should update tracker stage 3.
+
+====================================================================
+19. IMPROVE DOCUMENTS NEEDED TAB
+====================================================================
+
+For each required document, show:
+
+- document title
+- document type
+- linked controls
+- source template if available
+- status
+- existing linked document if found
+- generate/upload/link button
+
+Statuses:
+- Missing
+- Draft
+- Pending Review
+- Approved
+- Active
+- Not Applicable
+
+Document completion should contribute to overall progress.
+
+====================================================================
+20. ADD USER HELP ON THE ROADMAP PAGE
+====================================================================
+
+Add a “How to use this page” button.
+
+Clicking it opens a short help panel:
+
+How to use the roadmap:
+1. Start with the recommended action.
+2. Read the overview.
+3. Complete the steps.
+4. Upload the required evidence.
+5. Link required documents.
+6. Complete validation.
+7. Complete the checklist.
+8. Submit for review.
+
+Explain:
+“Completing a roadmap action does not automatically make every linked control implemented. It creates supporting evidence and documentation that helps move those controls toward readiness.”
+
+====================================================================
+21. ACCEPTANCE TESTS
+====================================================================
+
+Test A:
+Open Priority Actions page.
+An overview explains what the roadmap is, why it helps, and how to use it.
+
+Test B:
+Start recommended action.
+Action detail page shows interactive tracker stages.
+
+Test C:
+Click Mark Overview Complete.
+Stage 1 changes to Complete and Next Step changes to Perform Steps.
+
+Test D:
+Open Steps tab.
+Steps are detailed enough to follow, including portal navigation, expected result, evidence, validation, common mistakes, and troubleshooting.
+
+Test E:
+Complete a step.
+Progress updates.
+
+Test F:
+Upload evidence from Evidence to Collect.
+Evidence links to the action, requirement, and related controls.
+
+Test G:
+Complete validation.
+Validation stage updates.
+
+Test H:
+Complete checklist.
+Checklist progress updates.
+
+Test I:
+Attempt to mark action complete early.
+System shows missing requirements.
+
+Test J:
+After all required items are complete, user can submit action for review.
+
+Test K:
+Compliance Manager/Admin can mark action Complete.
+
+Test L:
+The roadmap feels like a guided implementation workflow, not a confusing list of technical records.

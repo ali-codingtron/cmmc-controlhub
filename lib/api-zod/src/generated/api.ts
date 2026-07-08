@@ -2770,6 +2770,10 @@ export const GetDashboardSummaryResponse = zod.object({
   controlsWithNarrative: zod.number(),
   activePolicies: zod.number(),
   activeProcedures: zod.number(),
+  roadmapTotalActions: zod.number(),
+  roadmapCompleteActions: zod.number(),
+  roadmapInProgressActions: zod.number(),
+  roadmapBlockedActions: zod.number(),
 });
 
 /**

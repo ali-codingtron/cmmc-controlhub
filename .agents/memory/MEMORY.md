@@ -6,3 +6,5 @@
 - [Break-glass account](break-glass.md) — sysadmin@controlhub.com; is_break_glass + mfa_exempt columns; break_glass_sessions table; 4h JWT; single-session revoke; idle 15m/absolute 4h enforcement in requireAuth.
 - [Role guides generator](role-guides-generator.md) — 4 role PDF guides; run ONE at a time (120s timeout); seeding pattern for Internal Company; all control tabs captured per guide.
 - [APEX Solutions seed script](apex-solutions-seed.md) — Production test org with real files in GCS; fixed UUID; isTestOrganization flag; TEST DATA badge in UI.
+- [db lib zod/v4 vs drizzle-zod](db-lib-zod-v4-drizzle-zod.md) — wrong zod import in schema files silently blanks @workspace/db's dist via noEmitOnError, cascading fake errors everywhere.
+- [e2e testing with seeded credentials](e2e-testing-seeded-creds.md) — seeded passwords/MFA state in replit.md drift after prior sessions; verify via curl login before trusting docs, and per-user MFA opt-in overrides a "disabled" global enforcement mode.

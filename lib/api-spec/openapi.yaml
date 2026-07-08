@@ -3446,6 +3446,14 @@ components:
           type: integer
         activeProcedures:
           type: integer
+        roadmapTotalActions:
+          type: integer
+        roadmapCompleteActions:
+          type: integer
+        roadmapInProgressActions:
+          type: integer
+        roadmapBlockedActions:
+          type: integer
       required:
         - overallReadinessPercent
         - l1ReadinessPercent
@@ -3474,6 +3482,10 @@ components:
         - controlsWithNarrative
         - activePolicies
         - activeProcedures
+        - roadmapTotalActions
+        - roadmapCompleteActions
+        - roadmapInProgressActions
+        - roadmapBlockedActions
 
     UpcomingReviews:
       type: object

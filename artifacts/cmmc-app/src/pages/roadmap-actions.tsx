@@ -39,6 +39,9 @@ import {
   Layers,
   ShieldCheck,
   Info,
+  Upload,
+  ClipboardCheck,
+  Lightbulb,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -701,38 +704,48 @@ function GuidedView({ actions }: { actions: RoadmapAction[] }) {
         </div>
       </div>
 
-      {/* Quick-nav thumbnails */}
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {ordered.slice(0, 12).map((a, i) => {
-          const s = STATUS_CONFIG[a.status] ?? STATUS_CONFIG.not_started;
-          return (
-            <button
-              key={a.id}
-              onClick={() => setIdx(i)}
-              className={cn(
-                "shrink-0 rounded border px-3 py-2 text-xs text-left transition-colors min-w-[120px] max-w-[180px]",
-                i === idx
-                  ? "ring-2 ring-primary bg-primary/10 border-primary/40"
-                  : "bg-card hover:bg-muted/30"
-              )}
-            >
-              <div
-                className={cn("flex items-center gap-1 mb-0.5", s.cls)}
-              >
-                {s.icon}
-                <span className="text-[10px]">{s.label}</span>
-              </div>
-              <div className="truncate font-medium text-foreground/80">
-                {a.title}
-              </div>
-            </button>
-          );
-        })}
-        {ordered.length > 12 && (
-          <div className="shrink-0 flex items-center text-xs text-muted-foreground px-2">
-            +{ordered.length - 12} more
-          </div>
-        )}
+      {/* Other Recommended Actions */}
+      <div className="rounded-lg border bg-card p-4">
+        <div className="text-xs font-semibold text-muted-foreground mb-2">
+          Other Recommended Actions
+        </div>
+        <div className="space-y-1">
+          {ordered
+            .filter((_, i) => i !== idx)
+            .slice(0, 5)
+            .map((a) => {
+              const s = STATUS_CONFIG[a.status] ?? STATUS_CONFIG.not_started;
+              const originalIdx = ordered.findIndex((o) => o.id === a.id);
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => setIdx(originalIdx)}
+                  className="w-full flex items-center gap-3 rounded-md px-2 py-2 text-left text-xs hover:bg-muted/30 transition-colors"
+                >
+                  <span className={cn("shrink-0 flex items-center gap-1", s.cls)}>
+                    {s.icon}
+                  </span>
+                  <span className="flex-1 min-w-0 font-medium text-foreground/90 truncate">
+                    {a.title}
+                  </span>
+                  <span
+                    className={cn(
+                      "shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded border",
+                      PHASE_COLORS[a.phase]
+                    )}
+                  >
+                    Phase {a.phase}
+                  </span>
+                  <PriorityBadge priority={a.priority} />
+                  <span className={cn("shrink-0", s.cls)}>{s.label}</span>
+                  <span className="shrink-0 flex items-center gap-0.5 text-primary font-medium">
+                    Continue
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </span>
+                </button>
+              );
+            })}
+        </div>
       </div>
     </div>
   );
@@ -847,6 +860,111 @@ function PhaseView({
   );
 }
 
+const ROADMAP_STEPS: {
+  icon: typeof Target;
+  title: string;
+  desc: string;
+}[] = [
+  {
+    icon: Target,
+    title: "Choose Action",
+    desc: "Start with the highest-impact item recommended by Control HUB.",
+  },
+  {
+    icon: ListOrdered,
+    title: "Follow Steps",
+    desc: "Complete the implementation instructions.",
+  },
+  {
+    icon: Upload,
+    title: "Upload Evidence",
+    desc: "Attach screenshots, exports, reports, and records.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Validate",
+    desc: "Confirm the configuration or process works.",
+  },
+  {
+    icon: ClipboardCheck,
+    title: "Complete",
+    desc: "Mark the action ready for review once required items are done.",
+  },
+];
+
+const ROADMAP_BENEFITS = [
+  "Helps you avoid working randomly through 110 controls",
+  "Shows which actions support multiple controls",
+  "Reduces duplicate evidence collection",
+  "Helps you know what to do first",
+  "Tracks required documents and evidence",
+  "Helps prepare for C3PAO review",
+  "Creates a repeatable implementation path for each organization",
+];
+
+function RoadmapOverviewPanel() {
+  return (
+    <div className="rounded-lg border bg-card p-5 space-y-5">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-2">
+          <Info className="h-4 w-4 text-primary" />
+          How the Implementation Roadmap Works
+        </h2>
+        <p className="text-sm text-muted-foreground mt-2 leading-relaxed max-w-4xl">
+          The Implementation Roadmap groups related CMMC work into
+          high-impact actions. Instead of working control-by-control, each
+          action helps produce evidence, documents, monitoring records, and
+          validation results that support multiple CMMC controls at once.
+        </p>
+        <p className="text-sm text-muted-foreground mt-2 leading-relaxed max-w-4xl">
+          Start with the recommended first action, follow the guided steps,
+          upload the required evidence, complete validation, and then mark
+          the action ready for review. Control HUB will show which controls
+          are supported and what gaps remain.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1 border-t border-border">
+        {ROADMAP_STEPS.map((step, i) => (
+          <div key={step.title} className="flex flex-col items-center text-center gap-1.5 pt-4">
+            <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <step.icon className="h-4 w-4 text-primary" />
+            </div>
+            <div className="text-xs font-semibold">
+              {i + 1}. {step.title}
+            </div>
+            <div className="text-[11px] text-muted-foreground leading-snug">
+              {step.desc}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WhyUseRoadmapPanel() {
+  return (
+    <div className="rounded-lg border border-primary/20 bg-primary/5 p-5">
+      <h2 className="text-sm font-semibold flex items-center gap-2 mb-3">
+        <Lightbulb className="h-4 w-4 text-primary" />
+        Why Use This Roadmap?
+      </h2>
+      <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1.5">
+        {ROADMAP_BENEFITS.map((b) => (
+          <li
+            key={b}
+            className="flex items-start gap-2 text-xs text-muted-foreground"
+          >
+            <CheckCircle2 className="h-3.5 w-3.5 text-primary/70 mt-0.5 shrink-0" />
+            <span>{b}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export default function RoadmapActions() {
   const { activeOrg } = useOrg();
   const [viewMode, setViewMode] = useState<ViewMode>("guided");
@@ -941,6 +1059,12 @@ export default function RoadmapActions() {
         </div>
       </div>
 
+      {/* How the Roadmap Works */}
+      <RoadmapOverviewPanel />
+
+      {/* Why Use This Roadmap? */}
+      <WhyUseRoadmapPanel />
+
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
@@ -1030,6 +1154,11 @@ export default function RoadmapActions() {
           {viewMode === "list" && "All actions with filters and sorting"}
           {viewMode === "phase" && "Actions grouped by implementation phase"}
         </span>
+        {viewMode !== "guided" && (
+          <span className="text-xs text-muted-foreground italic">
+            Use Guided View if you are not sure where to start.
+          </span>
+        )}
       </div>
 
       {/* Main content by view mode */}

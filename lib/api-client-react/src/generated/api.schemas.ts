@@ -901,6 +901,10 @@ export interface DashboardSummary {
   controlsWithNarrative: number;
   activePolicies: number;
   activeProcedures: number;
+  roadmapTotalActions: number;
+  roadmapCompleteActions: number;
+  roadmapInProgressActions: number;
+  roadmapBlockedActions: number;
 }
 
 export interface UpcomingReviews {

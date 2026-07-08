@@ -64,6 +64,13 @@ import {
   EyeOff,
   Package,
   HelpCircle,
+  Search,
+  Link2,
+  Unlink,
+  XCircle,
+  ShieldAlert,
+  Lock,
+  Send,
 } from "lucide-react";
 import {
   Tooltip,
@@ -92,6 +99,14 @@ interface ControlLink {
   controlId: string;
 }
 
+interface EvidenceLink {
+  id: string;
+  roadmapEvidenceItemId: string;
+  evidenceId: string;
+  linkedBy: string | null;
+  linkedAt: string;
+}
+
 interface EvidenceItem {
   id: string;
   title: string;
@@ -99,6 +114,9 @@ interface EvidenceItem {
   suggestedFilename: string;
   sourceSystem: string;
   mustShow: string;
+  description: string | null;
+  isRequired: boolean;
+  links: EvidenceLink[];
 }
 
 interface ActionDocument {
@@ -111,7 +129,10 @@ interface ChecklistItem {
   id: string;
   label: string;
   sortOrder: number;
+  isRequired: boolean;
   completed: boolean;
+  completedBy: string | null;
+  notes: string | null;
 }
 
 interface StepProgress {
@@ -151,6 +172,32 @@ interface Progress {
   targetDate: string | null;
   result: string | null;
   notes: string | null;
+  overrideJustification: string | null;
+  understandAckAt: string | null;
+  understandAckBy: string | null;
+  validationNotes: string | null;
+  validatedAt: string | null;
+  validatedBy: string | null;
+}
+
+type StageState = "not_started" | "in_progress" | "complete" | "blocked";
+
+interface ComputedProgress {
+  percent: number;
+  doneUnits: number;
+  totalUnits: number;
+  missing: string[];
+  stages: {
+    understand: StageState;
+    steps: StageState;
+    evidence: StageState;
+    validate: StageState;
+    review: StageState;
+  };
+  steps: { total: number; completed: number };
+  evidence: { total: number; completed: number };
+  checklist: { total: number; completed: number };
+  readyToComplete: boolean;
 }
 
 interface ActionDetail {
@@ -171,6 +218,7 @@ interface ActionDetail {
   documents: ActionDocument[];
   checklistItems: ChecklistItem[];
   progress: Progress | null;
+  computedProgress: ComputedProgress;
 }
 
 const SUPPORT_TYPE_COLORS: Record<string, string> = {
@@ -334,70 +382,67 @@ function InfoTip({ text }: { text: string }) {
   );
 }
 
-const STAGE_CONFIG = [
-  { label: "Understand", description: "Read the overview and purpose" },
-  { label: "Perform Steps", description: "Complete implementation steps" },
-  { label: "Upload Evidence", description: "Collect and upload evidence" },
-  { label: "Validate", description: "Run validation and testing" },
-  { label: "Review & Complete", description: "Mark complete or request review" },
-];
+const STAGE_KEYS = ["understand", "steps", "evidence", "validate", "review"] as const;
+type StageKey = (typeof STAGE_KEYS)[number];
+
+const STAGE_CONFIG: Record<StageKey, { label: string; description: string; tab: string }> = {
+  understand: { label: "Understand", description: "Read the overview and acknowledge", tab: "overview" },
+  steps: { label: "Perform Steps", description: "Complete implementation steps", tab: "procedure" },
+  evidence: { label: "Upload Evidence", description: "Collect and link evidence", tab: "evidence" },
+  validate: { label: "Validate", description: "Run validation and testing", tab: "test" },
+  review: { label: "Review & Complete", description: "Mark complete or request review", tab: "checklist" },
+};
 
 function StageTracker({
-  status,
-  checklistCompleted,
-  checklistTotal,
-  evidenceCount,
+  stages,
+  onTabChange,
 }: {
-  status: string;
-  checklistCompleted: number;
-  checklistTotal: number;
-  evidenceCount: number;
+  stages: ComputedProgress["stages"];
+  onTabChange: (tab: string) => void;
 }) {
-  let currentStage = 0;
-  if (status === "complete" || status === "ready_for_review") {
-    currentStage = 5;
-  } else if (status === "blocked") {
-    currentStage = 1;
-  } else if (checklistTotal > 0 && checklistCompleted === checklistTotal) {
-    currentStage = evidenceCount > 0 ? 3 : 4;
-  } else if (checklistCompleted > 0) {
-    currentStage = 2;
-  } else if (status === "in_progress") {
-    currentStage = 1;
-  } else {
-    currentStage = 0;
-  }
-
   return (
     <div className="flex items-start gap-0 overflow-x-auto">
-      {STAGE_CONFIG.map((stage, i) => {
-        const done = i < currentStage;
-        const active = i === currentStage;
+      {STAGE_KEYS.map((key, i) => {
+        const state = stages[key];
+        const done = state === "complete";
+        const blocked = state === "blocked";
+        const active = state === "in_progress";
+        const cfg = STAGE_CONFIG[key];
         return (
-          <div key={i} className="flex items-start flex-1 min-w-0">
+          <div key={key} className="flex items-start flex-1 min-w-0">
             <div className="flex flex-col items-center min-w-0 flex-1">
               <div className="flex items-center w-full">
                 {i > 0 && (
                   <div
                     className={cn(
                       "h-0.5 flex-1",
-                      done || active ? "bg-primary" : "bg-border"
+                      done || active ? "bg-primary" : blocked ? "bg-red-500/60" : "bg-border"
                     )}
                   />
                 )}
-                <div
+                <button
+                  type="button"
+                  onClick={() => onTabChange(cfg.tab)}
                   className={cn(
                     "shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-bold transition-colors",
-                    done
+                    blocked
+                      ? "bg-red-500/10 border-red-500 text-red-400"
+                      : done
                       ? "bg-primary border-primary text-primary-foreground"
                       : active
                       ? "border-primary text-primary bg-primary/10"
-                      : "border-border text-muted-foreground bg-background"
+                      : "border-border text-muted-foreground bg-background hover:border-primary/50"
                   )}
                 >
-                  {done ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
-                </div>
-                {i < STAGE_CONFIG.length - 1 && (
+                  {blocked ? (
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                  ) : done ? (
+                    <CheckCircle2 className="h-4 w-4" />
+                  ) : (
+                    i + 1
+                  )}
+                </button>
+                {i < STAGE_KEYS.length - 1 && (
                   <div
                     className={cn(
                       "h-0.5 flex-1",
@@ -410,18 +455,20 @@ function StageTracker({
                 <div
                   className={cn(
                     "text-[11px] font-semibold leading-tight",
-                    active
+                    blocked
+                      ? "text-red-400"
+                      : active
                       ? "text-primary"
                       : done
                       ? "text-foreground/70"
                       : "text-muted-foreground"
                   )}
                 >
-                  {stage.label}
+                  {cfg.label}
                 </div>
-                {active && (
+                {(active || blocked) && (
                   <div className="text-[10px] text-muted-foreground mt-0.5 hidden sm:block">
-                    {stage.description}
+                    {cfg.description}
                   </div>
                 )}
               </div>
@@ -502,17 +549,35 @@ function WhatYouWillProduce({
   );
 }
 
+function nextStepForClient(progress: ComputedProgress): {
+  label: string;
+  tab: string;
+} {
+  if (progress.stages.understand !== "complete") {
+    return { label: "Acknowledge the Overview", tab: "overview" };
+  }
+  if (progress.stages.steps !== "complete") {
+    return { label: "Go to First Incomplete Step", tab: "procedure" };
+  }
+  if (progress.stages.evidence !== "complete") {
+    return { label: "Upload Missing Evidence", tab: "evidence" };
+  }
+  if (progress.checklist.total > progress.checklist.completed) {
+    return { label: "Complete Remaining Checklist Items", tab: "checklist" };
+  }
+  if (progress.stages.validate !== "complete") {
+    return { label: "Record Validation Result", tab: "test" };
+  }
+  return { label: "Mark Ready for Review", tab: "checklist" };
+}
+
 function NextStepBanner({
   status,
-  checklistCompleted,
-  checklistTotal,
-  evidenceCount,
+  computedProgress,
   onTabChange,
 }: {
   status: string;
-  checklistCompleted: number;
-  checklistTotal: number;
-  evidenceCount: number;
+  computedProgress: ComputedProgress;
   onTabChange: (tab: string) => void;
 }) {
   if (status === "complete") return null;
@@ -528,33 +593,17 @@ function NextStepBanner({
     buttonLabel = "";
     targetTab = "";
     variant = "warning";
-  } else if (status === "not_started") {
-    message =
-      "Start by reading the Overview and understanding the purpose of this action.";
-    buttonLabel = "Read Overview";
-    targetTab = "overview";
-    variant = "info";
-  } else if (checklistTotal > 0 && checklistCompleted < checklistTotal) {
-    message = `Complete your implementation steps (${checklistCompleted} of ${checklistTotal} done).`;
-    buttonLabel = "Go to Steps";
-    targetTab = "procedure";
-    variant = "info";
-  } else if (evidenceCount > 0 && (status === "in_progress" || status === "evidence_needed")) {
-    message = `Upload the required evidence files (${evidenceCount} item${evidenceCount !== 1 ? "s" : ""} needed).`;
-    buttonLabel = "View Evidence";
-    targetTab = "evidence";
-    variant = "warning";
   } else if (status === "ready_for_review") {
     message = "This action is ready for review. A reviewer needs to approve it.";
     buttonLabel = "";
     targetTab = "";
     variant = "info";
   } else {
-    message =
-      "All steps appear complete. Update the status to Ready for Review or mark it complete.";
-    buttonLabel = "";
-    targetTab = "";
-    variant = "info";
+    const next = nextStepForClient(computedProgress);
+    message = next.label;
+    buttonLabel = next.label;
+    targetTab = next.tab;
+    variant = computedProgress.stages.evidence === "in_progress" ? "warning" : "info";
   }
 
   const borderColor =
@@ -597,6 +646,368 @@ function NextStepBanner({
         </Button>
       )}
     </div>
+  );
+}
+
+function ProgressSummaryPanel({
+  computedProgress,
+  onTabChange,
+}: {
+  computedProgress: ComputedProgress;
+  onTabChange: (tab: string) => void;
+}) {
+  const { percent, missing, readyToComplete } = computedProgress;
+  return (
+    <div className="rounded-lg border bg-card p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+          Completion
+        </div>
+        <div className="text-lg font-bold tabular-nums">{percent}%</div>
+      </div>
+      <div className="h-2 rounded-full bg-muted overflow-hidden">
+        <div
+          className={cn(
+            "h-full rounded-full transition-all",
+            readyToComplete ? "bg-emerald-500" : "bg-primary"
+          )}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-center text-[11px] text-muted-foreground">
+        <div>
+          <div className="font-semibold text-foreground">
+            {computedProgress.steps.completed}/{computedProgress.steps.total}
+          </div>
+          Steps
+        </div>
+        <div>
+          <div className="font-semibold text-foreground">
+            {computedProgress.evidence.completed}/{computedProgress.evidence.total}
+          </div>
+          Evidence
+        </div>
+        <div>
+          <div className="font-semibold text-foreground">
+            {computedProgress.checklist.completed}/{computedProgress.checklist.total}
+          </div>
+          Checklist
+        </div>
+      </div>
+      {readyToComplete ? (
+        <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium pt-1">
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+          Ready to mark complete
+        </div>
+      ) : missing.length > 0 ? (
+        <div className="pt-1 space-y-1">
+          <div className="text-[11px] font-semibold text-yellow-300 uppercase tracking-wide flex items-center gap-1">
+            <AlertTriangle className="h-3 w-3" />
+            Blocking Items
+          </div>
+          <ul className="space-y-1">
+            {missing.map((m, i) => (
+              <li key={i} className="text-[11px] text-muted-foreground leading-snug">
+                • {m}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      <Button
+        size="sm"
+        variant="outline"
+        className="w-full h-7 text-xs gap-1.5"
+        onClick={() => onTabChange(nextStepForClient(computedProgress).tab)}
+      >
+        {nextStepForClient(computedProgress).label}
+        <ChevronRight className="h-3 w-3" />
+      </Button>
+    </div>
+  );
+}
+
+const RESULT_CONFIG: Record<
+  string,
+  { label: string; Icon: typeof CheckCircle2; color: string; bg: string }
+> = {
+  passed: {
+    label: "Passed",
+    Icon: CheckCircle2,
+    color: "text-emerald-400",
+    bg: "bg-emerald-500/10 border-emerald-500/30",
+  },
+  passed_with_exceptions: {
+    label: "Passed with Exceptions",
+    Icon: AlertTriangle,
+    color: "text-yellow-300",
+    bg: "bg-yellow-500/10 border-yellow-500/30",
+  },
+  failed: {
+    label: "Failed",
+    Icon: XCircle,
+    color: "text-red-400",
+    bg: "bg-red-500/10 border-red-500/30",
+  },
+  needs_follow_up: {
+    label: "Needs Follow-Up",
+    Icon: ShieldAlert,
+    color: "text-blue-300",
+    bg: "bg-blue-500/10 border-blue-500/30",
+  },
+};
+
+function ValidationPanel({
+  actionId,
+  orgId,
+  progress,
+  canValidate,
+}: {
+  actionId: string;
+  orgId: string;
+  progress: Progress | null;
+  canValidate: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [result, setResult] = useState<string | null>(progress?.result ?? null);
+  const [notes, setNotes] = useState(progress?.validationNotes ?? "");
+
+  const validationMutation = useMutation({
+    mutationFn: async () => {
+      if (!result) throw new Error("Select a result");
+      const res = await fetch(`/api/roadmap/actions/${actionId}/validation`, {
+        method: "POST",
+        headers: makeHeaders(orgId),
+        body: JSON.stringify({ result, validationNotes: notes || null }),
+      });
+      if (!res.ok) throw new Error("Failed to save validation");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["roadmap-action", actionId] });
+      queryClient.invalidateQueries({ queryKey: ["roadmap-actions"] });
+      toast({ title: "Validation result saved" });
+    },
+    onError: (err: Error) =>
+      toast({
+        title: "Failed to save validation",
+        description: err.message,
+        variant: "destructive",
+      }),
+  });
+
+  const needsNotes = result === "failed";
+  const canSubmit = !!result && (!needsNotes || notes.trim().length > 0);
+
+  return (
+    <div className="rounded-lg border bg-card p-5 space-y-4">
+      <div className="flex items-center gap-2 text-sm font-semibold">
+        <TestTube className="h-4 w-4 text-primary" />
+        Record Validation Result
+      </div>
+
+      {progress?.validatedAt && progress.result && (
+        <div
+          className={cn(
+            "rounded border px-3 py-2 flex items-start gap-2 text-xs",
+            RESULT_CONFIG[progress.result]?.bg
+          )}
+        >
+          {(() => {
+            const cfg = RESULT_CONFIG[progress.result!];
+            const Ic = cfg?.Icon ?? Info;
+            return <Ic className={cn("h-3.5 w-3.5 shrink-0 mt-0.5", cfg?.color)} />;
+          })()}
+          <div>
+            <div className={cn("font-semibold", RESULT_CONFIG[progress.result]?.color)}>
+              Last recorded: {RESULT_CONFIG[progress.result]?.label}
+            </div>
+            <div className="text-muted-foreground mt-0.5">
+              {new Date(progress.validatedAt).toLocaleString()}
+              {progress.validationNotes ? ` — ${progress.validationNotes}` : ""}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {canValidate ? (
+        <>
+          <div className="flex flex-wrap gap-2">
+            {RESULT_OPTIONS.map((opt) => {
+              const cfg = RESULT_CONFIG[opt.value];
+              const Ic = cfg.Icon;
+              const active = result === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => setResult(opt.value)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-all",
+                    active
+                      ? cn(cfg.bg, cfg.color, "ring-1 ring-offset-1 ring-offset-background ring-current")
+                      : "border-border bg-muted/20 text-muted-foreground hover:border-border/80"
+                  )}
+                >
+                  <Ic className="h-3.5 w-3.5" />
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+          <div>
+            <Label className="text-xs">
+              Validation Notes {needsNotes && <span className="text-red-400">(required for Failed)</span>}
+            </Label>
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Describe what was tested and the outcome…"
+              className="mt-1 text-sm min-h-20 resize-none"
+            />
+          </div>
+          {result === "failed" && (
+            <div className="flex items-start gap-2 text-xs text-yellow-300 bg-yellow-500/10 border border-yellow-500/20 rounded p-2">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <span>
+                A failed validation should be tracked with a POA&amp;M. Create one in the{" "}
+                <Link href="/poams">
+                  <span className="underline cursor-pointer">POA&amp;Ms</span>
+                </Link>{" "}
+                module referencing this action.
+              </span>
+            </div>
+          )}
+          <Button
+            size="sm"
+            className="gap-1.5"
+            disabled={!canSubmit || validationMutation.isPending}
+            onClick={() => validationMutation.mutate()}
+          >
+            <Send className="h-3.5 w-3.5" />
+            Save Validation Result
+          </Button>
+        </>
+      ) : (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Lock className="h-3.5 w-3.5" />
+          Only compliance managers, reviewers, IT contributors, or admins can record validation results.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EvidenceLinkPicker({
+  orgId,
+  roadmapEvidenceItemId,
+  onLinked,
+}: {
+  orgId: string;
+  roadmapEvidenceItemId: string;
+  onLinked: () => void;
+}) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const { data: results = [], isFetching } = useQuery<
+    Array<{ id: string; title: string; evidenceType: string; status: string }>
+  >({
+    queryKey: ["evidence-picker", orgId, search],
+    enabled: open && !!orgId,
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (search) params.set("search", search);
+      const res = await fetch(`/api/evidence?${params.toString()}`, {
+        headers: makeHeaders(orgId),
+      });
+      if (!res.ok) throw new Error("Failed to search evidence");
+      const data = await res.json();
+      return Array.isArray(data) ? data : (data.items ?? []);
+    },
+  });
+
+  const linkMutation = useMutation({
+    mutationFn: async (evidenceId: string) => {
+      const res = await fetch(
+        `/api/roadmap/evidence-items/${roadmapEvidenceItemId}/link`,
+        {
+          method: "POST",
+          headers: makeHeaders(orgId),
+          body: JSON.stringify({ evidenceId }),
+        }
+      );
+      if (!res.ok) throw new Error("Failed to link evidence");
+    },
+    onSuccess: () => {
+      toast({ title: "Evidence linked" });
+      setOpen(false);
+      setSearch("");
+      onLinked();
+    },
+    onError: () => toast({ title: "Failed to link evidence", variant: "destructive" }),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <Button
+        variant="outline"
+        size="sm"
+        className="gap-1.5 shrink-0"
+        onClick={() => setOpen(true)}
+      >
+        <Link2 className="h-3.5 w-3.5" />
+        Link Existing
+      </Button>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Link Evidence from Repository</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search evidence by title…"
+              className="pl-8 h-8 text-sm"
+            />
+          </div>
+          <div className="max-h-72 overflow-y-auto divide-y border rounded">
+            {isFetching ? (
+              <div className="p-4 text-center text-xs text-muted-foreground">Searching…</div>
+            ) : results.length === 0 ? (
+              <div className="p-4 text-center text-xs text-muted-foreground">
+                No evidence found. Upload it first from the Evidence module.
+              </div>
+            ) : (
+              results.map((ev) => (
+                <div
+                  key={ev.id}
+                  className="p-2.5 flex items-center justify-between gap-2 hover:bg-muted/20"
+                >
+                  <div className="min-w-0">
+                    <div className="text-xs font-medium truncate">{ev.title}</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      {ev.evidenceType} · {ev.status}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs shrink-0"
+                    disabled={linkMutation.isPending}
+                    onClick={() => linkMutation.mutate(ev.id)}
+                  >
+                    Link
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1364,6 +1775,13 @@ function ProcedureStepsSection({
   );
 }
 
+const VALIDATOR_ROLES = new Set([
+  "admin",
+  "compliance_manager",
+  "reviewer",
+  "it_contributor",
+]);
+
 export default function RoadmapActionDetail({ id }: { id: string }) {
   const { activeOrg } = useOrg();
   const { user } = useAuth();
@@ -1374,14 +1792,16 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
   const [localStatus, setLocalStatus] = useState<string | null>(null);
   const [localOwner, setLocalOwner] = useState<string | null>(null);
   const [localTargetDate, setLocalTargetDate] = useState<string | null>(null);
-  const [localResult, setLocalResult] = useState<string | null>(null);
   const [localNotes, setLocalNotes] = useState<string | null>(null);
+  const [overrideJustification, setOverrideJustification] = useState("");
   const [initialized, setInitialized] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
 
   const canEdit =
     user?.role === "admin" || user?.role === "compliance_manager";
+  const canMarkComplete = canEdit;
   const canUpdateStatus = user?.role !== "assessor";
+  const canValidate = !!user?.role && VALIDATOR_ROLES.has(user.role);
 
   const { data: action, isLoading } = useQuery<ActionDetail>({
     queryKey: ["roadmap-action", id, activeOrg?.id],
@@ -1398,44 +1818,88 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
         setLocalStatus(data.progress?.status ?? "not_started");
         setLocalOwner(data.progress?.owner ?? "");
         setLocalTargetDate(data.progress?.targetDate ?? "");
-        setLocalResult(data.progress?.result ?? "");
         setLocalNotes(data.progress?.notes ?? "");
         setInitialized(true);
       }
     },
   } as any);
 
+  const { data: evidenceIndex = [] } = useQuery<
+    Array<{ id: string; title: string; status: string }>
+  >({
+    queryKey: ["evidence-index", activeOrg?.id],
+    enabled: !!activeOrg?.id,
+    queryFn: async () => {
+      const res = await fetch(`/api/evidence`, {
+        headers: makeHeaders(activeOrg!.id),
+      });
+      if (!res.ok) throw new Error("Failed to load evidence index");
+      const data = await res.json();
+      return Array.isArray(data) ? data : (data.items ?? []);
+    },
+  });
+  const evidenceIndexMap = new Map(evidenceIndex.map((e) => [e.id, e]));
+
   const progressMutation = useMutation({
-    mutationFn: async (payload: Record<string, string | null>) => {
+    mutationFn: async (payload: Record<string, unknown>) => {
       const res = await fetch(`/api/roadmap/actions/${id}/progress`, {
         method: "PATCH",
         headers: makeHeaders(activeOrg!.id),
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error("Failed to save progress");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}) as any);
+        const missing = Array.isArray(body.missing) ? body.missing.join("; ") : "";
+        throw new Error(
+          missing ? `${body.error} — ${missing}` : body.error || "Failed to save progress"
+        );
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["roadmap-actions"] });
       queryClient.invalidateQueries({ queryKey: ["roadmap-action", id] });
       toast({ title: "Progress saved" });
+      setOverrideJustification("");
     },
-    onError: () => toast({ title: "Failed to save", variant: "destructive" }),
+    onError: (err: Error) =>
+      toast({ title: "Failed to save", description: err.message, variant: "destructive" }),
+  });
+
+  const understandMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/roadmap/actions/${id}/understand`, {
+        method: "POST",
+        headers: makeHeaders(activeOrg!.id),
+      });
+      if (!res.ok) throw new Error("Failed to acknowledge");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["roadmap-action", id] });
+      queryClient.invalidateQueries({ queryKey: ["roadmap-actions"] });
+      toast({ title: "Overview acknowledged" });
+    },
+    onError: () => toast({ title: "Failed to acknowledge", variant: "destructive" }),
   });
 
   const checklistMutation = useMutation({
     mutationFn: async ({
       itemId,
       completed,
+      notes,
     }: {
       itemId: string;
       completed: boolean;
+      notes?: string | null;
     }) => {
       const res = await fetch(
         `/api/roadmap/actions/${id}/checklist/${itemId}`,
         {
           method: "POST",
           headers: makeHeaders(activeOrg!.id),
-          body: JSON.stringify({ completed }),
+          body: JSON.stringify({
+            completed,
+            ...(notes !== undefined ? { notes } : {}),
+          }),
         }
       );
       if (!res.ok) throw new Error("Failed to update checklist");
@@ -1444,15 +1908,47 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
       queryClient.invalidateQueries({ queryKey: ["roadmap-action", id] });
       queryClient.invalidateQueries({ queryKey: ["roadmap-actions"] });
     },
+    onError: () => toast({ title: "Failed to update checklist", variant: "destructive" }),
+  });
+
+  const unlinkEvidenceMutation = useMutation({
+    mutationFn: async ({
+      itemId,
+      evidenceId,
+    }: {
+      itemId: string;
+      evidenceId: string;
+    }) => {
+      const res = await fetch(
+        `/api/roadmap/evidence-items/${itemId}/link/${evidenceId}`,
+        { method: "DELETE", headers: makeHeaders(activeOrg!.id) }
+      );
+      if (!res.ok) throw new Error("Failed to unlink evidence");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["roadmap-action", id] });
+      queryClient.invalidateQueries({ queryKey: ["roadmap-actions"] });
+      toast({ title: "Evidence unlinked" });
+    },
+    onError: () => toast({ title: "Failed to unlink evidence", variant: "destructive" }),
   });
 
   const handleSaveProgress = () => {
+    if (localStatus === "complete" && !canMarkComplete) {
+      toast({
+        title: "Only admins or compliance managers can mark this complete",
+        variant: "destructive",
+      });
+      return;
+    }
     progressMutation.mutate({
       status: localStatus,
       owner: localOwner || null,
       targetDate: localTargetDate || null,
-      result: localResult || null,
       notes: localNotes || null,
+      ...(localStatus === "complete"
+        ? { overrideJustification: overrideJustification || null }
+        : {}),
     });
   };
 
@@ -1507,16 +2003,33 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
             </div>
           </div>
 
-          {/* Progress panel */}
-          <div className="rounded-lg border bg-card p-4 w-72 space-y-3 shrink-0">
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Progress</div>
-            <div className="space-y-2">
-              <Select value={currentStatus} onValueChange={setLocalStatus}>
+          {/* Progress panels */}
+          <div className="w-80 shrink-0 space-y-3">
+            <ProgressSummaryPanel
+              computedProgress={action.computedProgress}
+              onTabChange={setActiveTab}
+            />
+            <div className="rounded-lg border bg-card p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Assignment
+                </div>
+                {!canUpdateStatus && (
+                  <Lock className="h-3 w-3 text-muted-foreground" />
+                )}
+              </div>
+              <Select
+                value={currentStatus}
+                onValueChange={setLocalStatus}
+                disabled={!canUpdateStatus}
+              >
                 <SelectTrigger className="h-8 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {STATUS_OPTIONS.map((o) => (
+                  {STATUS_OPTIONS.filter(
+                    (o) => o.value !== "complete" || canMarkComplete
+                  ).map((o) => (
                     <SelectItem key={o.value} value={o.value}>
                       {o.label}
                     </SelectItem>
@@ -1528,54 +2041,55 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
                 value={localOwner ?? ""}
                 onChange={(e) => setLocalOwner(e.target.value)}
                 className="h-8 text-sm"
+                disabled={!canUpdateStatus}
               />
               <Input
                 type="date"
                 value={localTargetDate ?? ""}
                 onChange={(e) => setLocalTargetDate(e.target.value)}
                 className="h-8 text-sm"
+                disabled={!canUpdateStatus}
               />
-              <Select
-                value={localResult ?? "none"}
-                onValueChange={(v) => setLocalResult(v === "none" ? null : v)}
-              >
-                <SelectTrigger className="h-8 text-sm">
-                  <SelectValue placeholder="Result (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No result yet</SelectItem>
-                  {RESULT_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
               <Textarea
                 placeholder="Notes…"
                 value={localNotes ?? ""}
                 onChange={(e) => setLocalNotes(e.target.value)}
                 className="text-sm min-h-16 resize-none"
+                disabled={!canUpdateStatus}
               />
+              {localStatus === "complete" &&
+                !action.computedProgress.readyToComplete && (
+                  <div className="space-y-1.5 rounded border border-yellow-500/30 bg-yellow-500/5 p-2">
+                    <div className="text-[11px] font-semibold text-yellow-300 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      Prerequisites not met
+                    </div>
+                    <div className="text-[10px] text-muted-foreground leading-snug">
+                      {action.computedProgress.missing.join("; ")}
+                    </div>
+                    <Textarea
+                      placeholder="Override justification (required)…"
+                      value={overrideJustification}
+                      onChange={(e) => setOverrideJustification(e.target.value)}
+                      className="text-xs min-h-14 resize-none"
+                    />
+                  </div>
+                )}
               <Button
                 size="sm"
                 className="w-full"
                 onClick={handleSaveProgress}
-                disabled={progressMutation.isPending}
+                disabled={
+                  progressMutation.isPending ||
+                  !canUpdateStatus ||
+                  (localStatus === "complete" &&
+                    !action.computedProgress.readyToComplete &&
+                    !overrideJustification.trim())
+                }
               >
                 Save Progress
               </Button>
             </div>
-            {localResult === "failed" && (
-              <div className="flex items-start gap-2 text-xs text-yellow-300 bg-yellow-500/10 border border-yellow-500/20 rounded p-2">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                Create a POA&M for this action in the{" "}
-                <Link href="/poams">
-                  <span className="underline cursor-pointer">POA&Ms</span>
-                </Link>{" "}
-                module.
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -1586,19 +2100,15 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
           Where You Are
         </div>
         <StageTracker
-          status={currentStatus}
-          checklistCompleted={completedChecklist}
-          checklistTotal={action.checklistItems.length}
-          evidenceCount={action.evidenceItems.length}
+          stages={action.computedProgress.stages}
+          onTabChange={setActiveTab}
         />
       </div>
 
       {/* Next Step banner */}
       <NextStepBanner
         status={currentStatus}
-        checklistCompleted={completedChecklist}
-        checklistTotal={action.checklistItems.length}
-        evidenceCount={action.evidenceItems.length}
+        computedProgress={action.computedProgress}
         onTabChange={setActiveTab}
       />
 
@@ -1636,6 +2146,43 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
 
         {/* A. Overview = Purpose + Why */}
         <TabsContent value="overview" className="space-y-4">
+          <div
+            className={cn(
+              "rounded-lg border p-4 flex flex-wrap items-center justify-between gap-3",
+              action.progress?.understandAckAt
+                ? "border-emerald-500/30 bg-emerald-500/5"
+                : "border-blue-500/30 bg-blue-500/5"
+            )}
+          >
+            {action.progress?.understandAckAt ? (
+              <div className="flex items-center gap-2 text-sm text-emerald-300">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                <span>
+                  Acknowledged on{" "}
+                  {new Date(action.progress.understandAckAt).toLocaleString()}
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-sm text-blue-300">
+                <Info className="h-4 w-4 shrink-0" />
+                <span>
+                  Acknowledge that you've read this overview to start tracking your progress.
+                </span>
+              </div>
+            )}
+            {!action.progress?.understandAckAt && (
+              <Button
+                size="sm"
+                className="gap-1.5 shrink-0"
+                disabled={!canUpdateStatus || understandMutation.isPending}
+                onClick={() => understandMutation.mutate()}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Acknowledge Overview
+              </Button>
+            )}
+          </div>
+
           <div className="rounded-lg border bg-card p-5 space-y-4">
             <div>
               <div className="flex items-center gap-2 text-sm font-semibold mb-2">
@@ -1749,7 +2296,15 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
         </TabsContent>
 
         {/* D. Test Procedure */}
-        <TabsContent value="test">
+        <TabsContent value="test" className="space-y-4">
+          {activeOrg?.id && (
+            <ValidationPanel
+              actionId={id}
+              orgId={activeOrg.id}
+              progress={action.progress}
+              canValidate={canValidate}
+            />
+          )}
           <div className="rounded-lg border bg-card p-5">
             <div className="flex items-center gap-2 text-sm font-semibold mb-4">
               <TestTube className="h-4 w-4 text-primary" />
@@ -1771,44 +2326,122 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
                 Evidence to Capture
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Upload each item to the Evidence module and link to the listed controls.
+                Upload new evidence or link existing evidence from the repository to each item below.
               </p>
             </div>
             <div className="divide-y">
-              {action.evidenceItems.map((ev, idx) => (
-                <div key={ev.id} className="p-4 space-y-2">
-                  <div className="flex items-start gap-3">
-                    <span className="shrink-0 w-6 h-6 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold flex items-center justify-center mt-0.5">
-                      {idx + 1}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm">{ev.title}</div>
-                      <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
-                        <span className="bg-muted px-2 py-0.5 rounded">{ev.evidenceType}</span>
-                        <span>{ev.sourceSystem}</span>
+              {action.evidenceItems.map((ev, idx) => {
+                const linked = ev.links.length > 0;
+                return (
+                  <div key={ev.id} className="p-4 space-y-2">
+                    <div className="flex items-start gap-3">
+                      <span
+                        className={cn(
+                          "shrink-0 w-6 h-6 rounded-full border text-xs font-bold flex items-center justify-center mt-0.5",
+                          linked
+                            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                            : "bg-primary/10 border-primary/20 text-primary"
+                        )}
+                      >
+                        {linked ? <CheckCircle2 className="h-3.5 w-3.5" /> : idx + 1}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="font-medium text-sm">{ev.title}</div>
+                          <span
+                            className={cn(
+                              "text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0",
+                              ev.isRequired
+                                ? "bg-red-500/10 text-red-300 border-red-500/30"
+                                : "bg-slate-500/10 text-slate-300 border-slate-500/30"
+                            )}
+                          >
+                            {ev.isRequired ? "Required" : "Optional"}
+                          </span>
+                        </div>
+                        {ev.description && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {ev.description}
+                          </p>
+                        )}
+                        <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
+                          <span className="bg-muted px-2 py-0.5 rounded">{ev.evidenceType}</span>
+                          <span>{ev.sourceSystem}</span>
+                        </div>
+                        <div className="mt-2 text-xs text-muted-foreground">
+                          <span className="font-medium text-foreground/70">Must show:</span> {ev.mustShow}
+                        </div>
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <span className="text-xs font-mono bg-muted/50 border px-2 py-0.5 rounded text-muted-foreground">
+                            {ev.suggestedFilename}
+                          </span>
+                        </div>
                       </div>
-                      <div className="mt-2 text-xs text-muted-foreground">
-                        <span className="font-medium text-foreground/70">Must show:</span> {ev.mustShow}
-                      </div>
-                      <div className="mt-1.5 flex items-center gap-2">
-                        <span className="text-xs font-mono bg-muted/50 border px-2 py-0.5 rounded text-muted-foreground">
-                          {ev.suggestedFilename}
-                        </span>
+                      <div className="shrink-0 flex flex-col gap-1.5 items-stretch">
+                        <Link href="/evidence/upload">
+                          <Button variant="outline" size="sm" className="gap-1.5 w-full">
+                            <Upload className="h-3.5 w-3.5" />
+                            Upload New
+                          </Button>
+                        </Link>
+                        {canUpdateStatus && activeOrg?.id && (
+                          <EvidenceLinkPicker
+                            orgId={activeOrg.id}
+                            roadmapEvidenceItemId={ev.id}
+                            onLinked={() =>
+                              queryClient.invalidateQueries({
+                                queryKey: ["roadmap-action", id],
+                              })
+                            }
+                          />
+                        )}
                       </div>
                     </div>
-                    <Link href="/evidence/upload">
-                      <Button variant="outline" size="sm" className="gap-1.5 shrink-0">
-                        <Upload className="h-3.5 w-3.5" />
-                        Upload
-                      </Button>
-                    </Link>
+                    {ev.links.length > 0 && (
+                      <div className="ml-9 space-y-1">
+                        <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                          Linked Evidence
+                        </div>
+                        {ev.links.map((link) => {
+                          const info = evidenceIndexMap.get(link.evidenceId);
+                          return (
+                            <div
+                              key={link.id}
+                              className="flex items-center justify-between gap-2 text-xs bg-muted/20 rounded px-2 py-1.5"
+                            >
+                              <Link href={`/evidence/${link.evidenceId}`}>
+                                <span className="text-primary hover:underline cursor-pointer truncate">
+                                  {info?.title ?? link.evidenceId}
+                                </span>
+                              </Link>
+                              {canUpdateStatus && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-1.5 text-muted-foreground hover:text-red-400"
+                                  disabled={unlinkEvidenceMutation.isPending}
+                                  onClick={() =>
+                                    unlinkEvidenceMutation.mutate({
+                                      itemId: ev.id,
+                                      evidenceId: link.evidenceId,
+                                    })
+                                  }
+                                >
+                                  <Unlink className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div className="ml-9 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground/60">Linked controls:</span>{" "}
+                      {action.controls.map((c) => c.controlRef).join(", ")}
+                    </div>
                   </div>
-                  <div className="ml-9 text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground/60">Linked controls:</span>{" "}
-                    {action.controls.map((c) => c.controlRef).join(", ")}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </TabsContent>
@@ -1872,12 +2505,13 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
               {action.checklistItems
                 .sort((a, b) => a.sortOrder - b.sortOrder)
                 .map((item) => (
-                  <label
+                  <div
                     key={item.id}
-                    className="flex items-start gap-3 p-4 cursor-pointer hover:bg-muted/20 transition-colors"
+                    className="flex items-start gap-3 p-4 hover:bg-muted/20 transition-colors"
                   >
                     <Checkbox
                       checked={item.completed}
+                      disabled={!canUpdateStatus}
                       onCheckedChange={(checked) => {
                         checklistMutation.mutate({
                           itemId: item.id,
@@ -1886,17 +2520,52 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
                       }}
                       className="mt-0.5"
                     />
-                    <span
-                      className={cn(
-                        "text-sm leading-relaxed",
-                        item.completed
-                          ? "line-through text-muted-foreground"
-                          : "text-foreground"
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span
+                          className={cn(
+                            "text-sm leading-relaxed",
+                            item.completed
+                              ? "line-through text-muted-foreground"
+                              : "text-foreground"
+                          )}
+                        >
+                          {item.label}
+                        </span>
+                        <span
+                          className={cn(
+                            "text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0",
+                            item.isRequired
+                              ? "bg-red-500/10 text-red-300 border-red-500/30"
+                              : "bg-slate-500/10 text-slate-300 border-slate-500/30"
+                          )}
+                        >
+                          {item.isRequired ? "Required" : "Optional"}
+                        </span>
+                      </div>
+                      {item.completedBy && (
+                        <div className="text-[10px] text-muted-foreground">
+                          Completed by {item.completedBy}
+                        </div>
                       )}
-                    >
-                      {item.label}
-                    </span>
-                  </label>
+                      <Input
+                        defaultValue={item.notes ?? ""}
+                        disabled={!canUpdateStatus}
+                        placeholder="Add a note (optional)…"
+                        className="h-7 text-xs"
+                        onBlur={(e) => {
+                          const value = e.target.value;
+                          if (value !== (item.notes ?? "")) {
+                            checklistMutation.mutate({
+                              itemId: item.id,
+                              completed: item.completed,
+                              notes: value || null,
+                            });
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
                 ))}
             </div>
           </div>
@@ -1911,13 +2580,13 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
                 size="sm"
                 variant="outline"
                 className="border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20"
+                disabled={!canUpdateStatus || progressMutation.isPending}
                 onClick={() => {
                   setLocalStatus("ready_for_review");
                   progressMutation.mutate({
                     status: "ready_for_review",
                     owner: localOwner || null,
                     targetDate: localTargetDate || null,
-                    result: localResult || null,
                     notes: localNotes || null,
                   });
                 }}

@@ -40,7 +40,8 @@
     "pino": "^9",
     "pino-http": "^10",
     "resend": "^6.12.4",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",
