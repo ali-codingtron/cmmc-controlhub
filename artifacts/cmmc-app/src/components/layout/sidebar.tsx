@@ -138,7 +138,14 @@ function OrgSwitcher() {
               className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-sidebar-accent/50 text-sidebar-foreground transition-colors text-left"
             >
               <div className="flex-1 min-w-0">
-                <div className="truncate font-medium">{org.name}</div>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="truncate font-medium">{org.name}</span>
+                  {org.isTestOrganization && (
+                    <span className="shrink-0 text-[9px] font-semibold px-1 py-px rounded border border-amber-400/60 text-amber-600 bg-amber-50/80 dark:border-amber-600/50 dark:text-amber-400 dark:bg-amber-950/40 leading-tight">
+                      TEST
+                    </span>
+                  )}
+                </div>
                 <div className="text-xs text-sidebar-foreground/60 truncate capitalize">{org.role.replace("_", " ")}</div>
               </div>
               {org.id === activeOrg.id && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}

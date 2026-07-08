@@ -740,12 +740,18 @@ importers:
       jsonwebtoken:
         specifier: ^9.0.3
         version: 9.0.3
+      pdfkit:
+        specifier: ^0.18.0
+        version: 0.18.0
       pg:
         specifier: ^8.20.0
         version: 8.20.0
       playwright:
         specifier: ^1.60.0
         version: 1.60.0
+      xlsx:
+        specifier: ^0.18.5
+        version: 0.18.5
     devDependencies:
       '@types/bcryptjs':
         specifier: ^2.4.6
@@ -753,6 +759,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 25.3.5
+      '@types/pdfkit':
+        specifier: ^0.17.6
+        version: 0.17.6
       tsx:
         specifier: 'catalog:'
         version: 4.21.0

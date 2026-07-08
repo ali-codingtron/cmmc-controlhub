@@ -50,6 +50,7 @@ export const organizationsTable = pgTable("organizations", {
     .notNull()
     .default("L2"),
   notes: text("notes"),
+  isTestOrganization: boolean("is_test_organization").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

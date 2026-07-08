@@ -1,0 +1,701 @@
+Create a new production test organization called APEX Solutions.
+
+Purpose:
+I need a realistic test organization in production that demonstrates Control HUB functionality using fake/sample data only. It must include actual previewable/downloadable documents and evidence files, not just metadata.
+
+Organization Name:
+APEX Solutions
+
+Legal Name:
+APEX Solutions LLC
+
+Short Name:
+APEX Solutions
+
+CMMC Target Level:
+Level 2
+
+Status:
+Active
+
+Environment Type:
+Synthetic test organization / demo data only
+
+Important:
+Do not copy or expose any real VTCCORP.US data.
+Do not copy real customer evidence.
+Do not copy real Microsoft tenant scan data.
+Do not include real secrets, API keys, user credentials, or actual CUI.
+All data must be fake but realistic.
+
+====================================================================
+1. CREATE THE ORGANIZATION SAFELY
+====================================================================
+
+Create APEX Solutions in production as a test organization.
+
+The seed process must be idempotent.
+
+Create script:
+
+pnpm seed:apex-solutions
+
+Behavior:
+- create organization if it does not exist
+- update/refresh sample data if it already exists
+- do not create duplicate controls, documents, evidence, POA&M, monitoring items, or reports
+- do not modify VTCCORP.US
+- do not modify CarmeTechnology demo
+- do not modify any other production organization
+
+Add a clear test/demo flag:
+
+is_test_organization = true
+
+Display badge in app:
+TEST DATA
+
+Only authenticated users with appropriate permissions should see it.
+
+====================================================================
+2. USER ACCESS
+====================================================================
+
+Grant access to:
+
+- Global Admins
+- sysadmin@controlhub.com
+- Joseph Murray / current admin account
+
+Assign current admin as:
+Global Admin / Organization Admin for APEX Solutions.
+
+Do not create public access.
+
+Do not make APEX Solutions part of the public demo unless explicitly enabled later.
+
+====================================================================
+3. SEED ALL 110 CMMC L2 CONTROLS
+====================================================================
+
+APEX Solutions should have all 110 CMMC Level 2 controls.
+
+Use realistic mixed statuses:
+
+- Implemented: 35
+- In Progress: 42
+- Not Started: 25
+- At Risk: 8
+
+Do not make it 100% complete.
+
+Each control should include:
+- control ID
+- title
+- domain
+- level
+- status
+- implementation narrative
+- SSP narrative if applicable
+- linked evidence where applicable
+- linked documents where applicable
+
+Use realistic implementation narratives, not placeholders.
+
+Example:
+“APEX Solutions uses Microsoft Entra ID and role-based access groups to restrict access to authorized users. Access requests are reviewed by the IT Administrator and Compliance Manager, and supporting access review evidence is retained in Control HUB.”
+
+====================================================================
+4. CREATE REAL SAMPLE FILES
+====================================================================
+
+This is critical.
+
+The organization must include actual files that can be:
+
+- opened
+- previewed
+- downloaded
+
+Do not create evidence records with missing files.
+
+Create real sample files in the same storage mechanism production evidence uses.
+
+Supported sample file types:
+- PDF
+- DOCX
+- XLSX
+- PNG
+- TXT
+- CSV
+
+Every generated file must:
+- exist in storage
+- have correct metadata
+- have correct MIME type
+- preview if supported
+- download successfully
+- link to at least one control
+- appear in Evidence Repository and/or All Documents
+
+====================================================================
+5. SAMPLE DOCUMENTS TO CREATE
+====================================================================
+
+Create actual downloadable and previewable sample documents.
+
+Documents should appear under:
+
+Documentation > All Documents
+
+Create at least these sample documents:
+
+Policies:
+- APEX Access Control Policy.docx
+- APEX Identification and Authentication Policy.docx
+- APEX Audit and Accountability Policy.docx
+- APEX Configuration Management Policy.docx
+- APEX Incident Response Policy.docx
+- APEX Risk Assessment Policy.docx
+- APEX Media Protection Policy.docx
+- APEX System and Communications Protection Policy.docx
+
+Procedures:
+- APEX Account Management Procedure.docx
+- APEX MFA and Conditional Access Procedure.docx
+- APEX Audit Log Review Procedure.docx
+- APEX Vulnerability Management Procedure.docx
+- APEX Backup Verification Procedure.docx
+- APEX POA&M Management Procedure.docx
+- APEX Device Compliance Procedure.docx
+
+Records / Logs:
+- APEX User Access Review Log.xlsx
+- APEX Audit Log Review Record.xlsx
+- APEX Training Completion Register.xlsx
+- APEX Risk Register.xlsx
+- APEX POA&M Register.xlsx
+- APEX Backup Restore Test Record.pdf
+
+Each document should include realistic formatted content:
+- title
+- organization name
+- purpose
+- scope
+- roles/responsibilities
+- procedure or policy statements
+- linked controls
+- review date
+- version
+- approval section
+
+Do not generate plain text documents that look unfinished.
+
+Status mix:
+- Approved
+- Active
+- Pending Review
+- Needs Update
+
+Most important documents should be Approved or Active.
+
+====================================================================
+6. SAMPLE EVIDENCE TO CREATE
+====================================================================
+
+Create actual evidence files with realistic fake data.
+
+Evidence should appear in:
+
+Evidence Repository
+
+Create at least 75 sample evidence records.
+
+Evidence types:
+- Screenshot
+- Report
+- Log
+- Configuration Export
+- Access Review
+- Training Record
+- Risk Record
+- Approval Record
+- Backup Verification
+- Vulnerability Scan
+- Policy
+- Procedure
+
+Sample evidence files:
+
+Access Control / Identity:
+- AC-3.1.1_User_Access_Review_2026-07-01.xlsx
+- AC-3.1.1_Active_User_List_2026-07-01.csv
+- AC-3.1.1_Privileged_Role_Assignments_2026-07-01.png
+- AC-3.1.2_Group_Membership_Review_2026-07-01.xlsx
+
+MFA / Authentication:
+- IA-3.5.3_MFA_Registration_Report_2026-07-01.xlsx
+- IA-3.5.3_Conditional_Access_MFA_Policy.png
+- IA-3.5.4_Legacy_Authentication_Block_Policy.png
+- IA-3.5.7_Password_Policy_Settings.png
+
+Audit / Logging:
+- AU-3.3.1_Audit_Log_Configuration.png
+- AU-3.3.5_Audit_Log_Review_2026-07-01.pdf
+- AU-3.3.6_Audit_Log_Retention_Settings.png
+- AU-3.3.8_Privileged_Activity_Log_Review.xlsx
+
+Endpoint / Configuration:
+- CM-3.4.1_Intune_Security_Baseline.png
+- CM-3.4.2_Device_Compliance_Policy.png
+- CM-3.4.3_Device_Inventory_2026-07-01.xlsx
+- CM-3.4.7_Baseline_Change_Approval.pdf
+
+Vulnerability / Risk:
+- RA-3.11.1_Risk_Assessment_Report.pdf
+- RA-3.11.2_Vulnerability_Scan_Report_2026-07-01.pdf
+- RA-3.11.3_Remediation_Tracker.xlsx
+
+Incident Response:
+- IR-3.6.1_Incident_Response_Plan.pdf
+- IR-3.6.3_Tabletop_Exercise_After_Action_Report.pdf
+
+Media / Backup / Encryption:
+- MP-3.8.9_Backup_Restore_Test_Report.pdf
+- SC-3.13.16_Encryption_Status_Report.xlsx
+- SI-3.14.2_Defender_Antivirus_Status.png
+- SI-3.14.3_Defender_Alert_Review.pdf
+- SI-3.14.7_USB_Device_Control_Settings.png
+
+Training:
+- AT-3.2.1_Security_Awareness_Training_Report.xlsx
+- AT-3.2.2_Role_Based_Training_Record.pdf
+
+Physical / Personnel:
+- PE-3.10.1_Visitor_Log_Sample.xlsx
+- PS-3.9.2_User_Termination_Checklist.pdf
+
+Each evidence item must include:
+- title
+- evidence type
+- status
+- linked controls
+- security domain
+- CMMC level
+- owner
+- collection date
+- uploaded date
+- assessor summary
+- file attachment
+- preview/download support
+
+Status mix:
+- Approved
+- Active
+- Pending Review
+- Draft
+- Stale
+
+Most should be Approved so I can test assessor/bulk download functionality.
+
+====================================================================
+7. FILE PREVIEW REQUIREMENTS
+====================================================================
+
+For every generated sample file:
+- preview must work where supported
+- download must work
+- file must not return 404
+- MIME type must be correct
+- file size must be realistic
+- storage path/key must be valid
+
+Test file types:
+- PNG preview works
+- PDF preview works
+- DOCX preview works if supported, otherwise download works
+- XLSX preview works if supported, otherwise download works
+- TXT/CSV preview works
+- download works for all
+
+Do not create metadata-only files.
+
+====================================================================
+8. DOCUMENT-LIKE EVIDENCE
+====================================================================
+
+Policies, procedures, logs, reports, and records uploaded as evidence should also appear in:
+
+Documentation > All Documents
+
+For APEX Solutions, ensure All Documents shows:
+- generated documents
+- uploaded documents
+- document-like evidence
+
+Source labels:
+- Generated Document
+- Uploaded Document
+- Evidence
+
+====================================================================
+9. DASHBOARD SAMPLE DATA
+====================================================================
+
+APEX Solutions dashboard should look populated and realistic.
+
+Dashboard values:
+- Overall Readiness: approximately 55–65%
+- Controls Implemented: 35
+- Controls In Progress: 42
+- Controls Not Started: 25
+- Controls At Risk: 8
+- Evidence Total: at least 75
+- Approved Evidence: at least 50
+- Pending Evidence: at least 10
+- Stale Evidence: at least 5
+- Monitoring Items: 19
+- Current Monitoring: 11
+- Due Within 7 Days: 5
+- Overdue Monitoring: 3
+- Open POA&Ms: 7
+- Critical/High POA&Ms: 3
+
+Dashboard should not look empty.
+
+====================================================================
+10. MONITORING TRACKER
+====================================================================
+
+Create monitoring tracker items for APEX Solutions.
+
+Use 19 monitoring rows similar to VTCCORP.US:
+
+- Review Defender Alerts
+- Review Entra Sign-in Logs
+- Review Audit Logs
+- Review Vulnerabilities
+- Update POA&M
+- Check Device Compliance
+- Review Firewall Rules
+- Review User Accounts
+- Verify Backups
+- Verify Updates
+- Check Media Compliance
+- Review Risk Assessment
+- Review Policies
+- Test Incident Response
+- Security Assessment
+- Update SSP
+- Security Training
+- Formal Risk Review
+- Access Review
+
+Use mixed statuses:
+- Current
+- Open
+- In Progress
+- Overdue
+
+Make dates realistic.
+
+Include:
+- last completed
+- next due
+- notes
+- operating procedure
+- test procedure
+- evidence to retain
+
+====================================================================
+11. POA&M SAMPLE DATA
+====================================================================
+
+Create realistic POA&M items.
+
+Examples:
+- POAM-APEX-001: MFA registration incomplete
+- POAM-APEX-002: stale account review needed
+- POAM-APEX-003: Intune compliance rollout incomplete
+- POAM-APEX-004: audit log review evidence missing
+- POAM-APEX-005: vulnerability remediation backlog
+- POAM-APEX-006: incident response tabletop overdue
+- POAM-APEX-007: backup restore test documentation needs update
+
+Each POA&M should include:
+- POA&M number
+- title
+- deficiency/gap
+- linked control
+- risk level
+- status
+- owner
+- scheduled completion
+- remediation plan
+- required evidence
+- notes
+
+Use mixed statuses:
+- Open
+- In Progress
+- Pending Validation
+- Closed
+
+Closed items should not count as open.
+
+====================================================================
+12. SSP SAMPLE DATA
+====================================================================
+
+Create sample SSP content for APEX Solutions.
+
+Include:
+- SSP Overview
+- system name: APEX Controlled Unclassified Information Enclave
+- system owner
+- system boundary
+- CUI flow summary
+- asset summary
+- external providers
+- SSP control mappings
+- implementation narratives
+
+All 110 controls should have SSP mapping entries.
+
+Do not create duplicate mappings.
+
+SSP Control Mapping status should come from the control status.
+
+====================================================================
+13. PRE-ASSESSMENT SAMPLE DATA
+====================================================================
+
+Create one fake tenant-connected pre-assessment scan for APEX Solutions.
+
+Important:
+This is synthetic data only.
+Do not connect to a real tenant.
+
+Scan values:
+- Tenant Scan Health: 48%
+- Assessment Confidence: 76%
+- Controls Touched by Tenant Scan: 25 / 110
+- Checks Run: 11
+- Passed: 5
+- Gaps Found: 4
+- Unknown / No Data: 2
+- Findings: 6
+- Evidence Snapshots: 11
+- Evidence Requests: 5
+
+Findings:
+- MFA registration coverage gap
+- stale account review needed
+- sign-in log review evidence missing
+- Intune device inventory data unavailable
+- Secure Score improvement recommended
+- audit review process needs documentation
+
+Evidence requests:
+- Upload MFA Registration Report
+- Upload User Access Review
+- Upload Sign-in Log Review
+- Upload Device Inventory Report
+- Upload Secure Score Review
+
+Recommended roadmap:
+- Perform User and Access Review
+- Configure MFA and Conditional Access Baseline
+- Configure Endpoint Compliance and Device Management
+- Configure Logging and Audit Review
+- Run Microsoft Security Baseline Review
+
+====================================================================
+14. IMPLEMENTATION ROADMAP SAMPLE DATA
+====================================================================
+
+Create Implementation Roadmap progress for APEX Solutions.
+
+Use the existing 12 roadmap actions.
+
+Set statuses:
+- 2 Complete
+- 4 In Progress
+- 6 Not Started
+
+At least one roadmap action should have:
+- procedure steps
+- evidence to collect
+- documents needed
+- validation steps
+- checklist progress
+- linked controls
+- linked evidence
+
+This allows testing the roadmap UX.
+
+====================================================================
+15. REPORTS
+====================================================================
+
+Create sample report records/files for APEX Solutions.
+
+Reports:
+- Executive Readiness Report.pdf
+- Domain Readiness Report.pdf
+- Gap Analysis Report.pdf
+- Evidence Inventory Report.pdf
+- POA&M Report.pdf
+- Monitoring Tracker Report.pdf
+- Pre-Assessment Report.pdf
+
+These should be actual PDF files that open/download.
+
+They can contain fake data but should look professional.
+
+====================================================================
+16. BULK DOWNLOAD TEST DATA
+====================================================================
+
+APEX Solutions should be useful for testing bulk download.
+
+Ensure:
+- evidence has linked controls
+- documents have linked controls
+- some files link to multiple controls
+- security domains are populated
+- no files incorrectly show UNLINKED if they have controls
+- bulk download by domain works
+- bulk download by control works
+- all filtered items works
+- documents checkbox includes document-like evidence
+
+====================================================================
+17. DATA QUALITY VALIDATION
+====================================================================
+
+After seeding APEX Solutions, run validation.
+
+Validation should check:
+
+Organization:
+- APEX Solutions exists
+- target level = L2
+- current admin has access
+
+Controls:
+- 110 controls exist for APEX Solutions
+- mixed statuses exist
+- implementation narratives exist
+
+Evidence:
+- at least 75 evidence records
+- every evidence record has an actual file
+- every evidence file downloads successfully
+- most evidence has linked controls
+- preview works for supported file types
+
+Documents:
+- at least 20 document records
+- documents appear in All Documents
+- document files exist and download successfully
+- document-like evidence appears in All Documents
+
+SSP:
+- SSP exists
+- 110 control mappings exist
+- no duplicate SSP mappings
+
+Monitoring:
+- 19 monitoring records exist
+- task titles are not blank
+
+POA&M:
+- at least 7 POA&M records exist
+- statuses save correctly
+- linked controls exist where applicable
+
+Reports:
+- report PDFs exist
+- reports download successfully
+
+Bulk Download:
+- by domain export does not create incorrect UNLINKED files
+- manifests show linked controls
+
+If validation fails, print a clear report and do not claim seed succeeded.
+
+====================================================================
+18. ADMIN UTILITY
+====================================================================
+
+Add an admin-only utility:
+
+Admin > Data Maintenance > Seed APEX Solutions
+
+Buttons:
+- Dry Run
+- Seed / Refresh APEX Solutions
+- Validate APEX Data
+
+This should be visible only to Global Admin.
+
+Do not expose this to regular users or assessors.
+
+====================================================================
+19. ACCEPTANCE TESTS
+====================================================================
+
+Test A:
+Run:
+pnpm seed:apex-solutions
+
+Test B:
+Login as admin and switch to APEX Solutions.
+
+Test C:
+Dashboard shows populated realistic data.
+
+Test D:
+Evidence Repository shows 75+ evidence records.
+
+Test E:
+Open a PNG evidence file.
+Preview works.
+
+Test F:
+Open a PDF evidence file.
+Preview/download works.
+
+Test G:
+Open a DOCX document.
+Preview or download works.
+
+Test H:
+Open an XLSX record.
+Preview or download works.
+
+Test I:
+Documentation > All Documents shows 20+ documents/document-like evidence.
+
+Test J:
+Controls Library shows 110 controls with mixed statuses and evidence counts.
+
+Test K:
+Open AC.L1-3.1.1.
+Implementation, Evidence, SSP, Monitoring, and POA&M tabs have meaningful content.
+
+Test L:
+Monitoring Tracker shows 19 rows with nonblank task titles.
+
+Test M:
+POA&M shows sample records with linked controls.
+
+Test N:
+Bulk Download for APEX Solutions works and labels files by linked controls.
+
+Test O:
+No VTCCORP.US data is copied or exposed.
+
+Test P:
+No real secrets or real customer data are present.

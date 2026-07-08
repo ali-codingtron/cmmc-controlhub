@@ -11,6 +11,7 @@ export interface OrgSummary {
   cmmcTargetLevel: string | null;
   industry: string | null;
   isActive: boolean;
+  isTestOrganization: boolean;
   role: string;
 }
 

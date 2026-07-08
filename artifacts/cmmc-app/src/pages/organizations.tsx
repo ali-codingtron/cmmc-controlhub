@@ -39,6 +39,7 @@ interface OrgStats {
   name: string;
   shortName: string | null;
   cmmcTargetLevel: string | null;
+  isTestOrganization: boolean;
   readinessPercent: number;
   implementedControls: number;
   totalControls: number;
@@ -72,6 +73,11 @@ function OrgCard({ org, onSwitch, onDelete }: { org: OrgStats; onSwitch: (id: st
   return (
     <Card className={cn("hover:shadow-md transition-shadow relative", isActive && "ring-2 ring-primary")}>
       <div className="absolute top-3 right-3 flex items-center gap-1.5">
+        {org.isTestOrganization && (
+          <Badge variant="outline" className="text-[10px] font-semibold px-1.5 py-0 border-amber-300 text-amber-700 bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:bg-amber-950/40">
+            TEST DATA
+          </Badge>
+        )}
         {isActive && <Badge variant="default" className="text-xs">Active</Badge>}
         {!isActive && (
           <button
@@ -304,6 +310,7 @@ export default function Organizations() {
         cmmcTargetLevel: statOrg.cmmcTargetLevel,
         industry: null,
         isActive: true,
+        isTestOrganization: statOrg.isTestOrganization,
         role: "admin",
       });
       toast({ title: `Switched to ${statOrg.name}` });

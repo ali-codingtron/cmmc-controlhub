@@ -36,6 +36,7 @@ router.get("/organizations/my-orgs", requireAuth, async (req, res) => {
         cmmcTargetLevel: organizationsTable.cmmcTargetLevel,
         industry: organizationsTable.industry,
         isActive: organizationsTable.isActive,
+        isTestOrganization: organizationsTable.isTestOrganization,
         role: sql<string>`'admin'`,
       })
       .from(organizationsTable)
@@ -53,6 +54,7 @@ router.get("/organizations/my-orgs", requireAuth, async (req, res) => {
       cmmcTargetLevel: organizationsTable.cmmcTargetLevel,
       industry: organizationsTable.industry,
       isActive: organizationsTable.isActive,
+      isTestOrganization: organizationsTable.isTestOrganization,
       role: organizationUsersTable.role,
       joinedAt: organizationUsersTable.joinedAt,
     })
@@ -124,7 +126,7 @@ router.post("/organizations", requireAuth, requireAdmin, async (req, res) => {
 
 router.get("/organizations/global-stats", requireAuth, requireAdmin, async (req, res) => {
   const orgs = await db
-    .select({ id: organizationsTable.id, name: organizationsTable.name, shortName: organizationsTable.shortName, cmmcTargetLevel: organizationsTable.cmmcTargetLevel })
+    .select({ id: organizationsTable.id, name: organizationsTable.name, shortName: organizationsTable.shortName, cmmcTargetLevel: organizationsTable.cmmcTargetLevel, isTestOrganization: organizationsTable.isTestOrganization })
     .from(organizationsTable)
     .where(eq(organizationsTable.isActive, true))
     .orderBy(organizationsTable.name);
