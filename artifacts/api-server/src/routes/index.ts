@@ -24,6 +24,7 @@ import invitationsRouter from "./invitations";
 import helpRouter from "./help";
 import exportRouter from "./export";
 import bulkExportRouter from "./bulk-export";
+import seedApexFilesRouter from "./seed-apex-files";
 
 const router: IRouter = Router();
 
@@ -52,5 +53,6 @@ router.use(invitationsRouter);
 router.use(helpRouter);
 router.use(exportRouter);
 router.use(bulkExportRouter);
+router.use(seedApexFilesRouter);
 
 export default router;
