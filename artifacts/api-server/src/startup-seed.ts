@@ -24,6 +24,7 @@ import { logger } from "./lib/logger";
 import { DOCUMENT_TEMPLATES } from "./data/document-templates-data";
 import { HELP_CATEGORIES, HELP_ARTICLES, FAQ_ITEMS } from "./data/help-seed-data";
 import { seedDemoOrg } from "./demo-seed-org";
+import { seedApexSolutions } from "./seed-apex-startup";
 
 // __dirname is injected by the esbuild build banner and points to dist/ at runtime
 const cmmcData = JSON.parse(
@@ -523,6 +524,7 @@ export async function runStartupSeed() {
     await seedRoadmapActions();
     await seedProcedureSteps();
     await seedDemoOrg();
+    await seedApexSolutions();
     await seedSecuritySettings();
     await seedHelpContent();
     await fixVtccorpControlLinks();
