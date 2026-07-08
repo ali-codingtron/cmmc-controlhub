@@ -97,7 +97,7 @@ export const auditLogsTable = pgTable("audit_logs", {
   ),
   userId: text("user_id").references(() => usersTable.id),
   userName: text("user_name"),
-  action: auditActionEnum("action").notNull(),
+  action: text("action").notNull(),
   entityType: text("entity_type").notNull(),
   entityId: text("entity_id").notNull(),
   entityLabel: text("entity_label"),

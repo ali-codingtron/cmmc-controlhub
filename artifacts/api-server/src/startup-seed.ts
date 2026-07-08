@@ -363,6 +363,9 @@ async function migrateAuditEnum() {
     "microsoft_identity_linked", "microsoft_identity_unlinked",
     "microsoft_user_denied", "microsoft_breakglass_denied",
     "sso_disabled_account_denied", "sso_inactive_account_denied",
+    "role_changed",
+    "password_reset_requested", "password_reset_requested_unknown_email",
+    "password_reset_completed", "password_reset_email_sent",
   ];
   for (const val of missingValues) {
     try {
