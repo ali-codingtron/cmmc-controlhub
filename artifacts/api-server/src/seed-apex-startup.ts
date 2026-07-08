@@ -170,11 +170,15 @@ export async function seedApexSolutions(): Promise<void> {
 
   logger.info("Seeding APEX Solutions test organization...");
 
-  // 1. Find the admin user
-  const [adminUser] = await db.select({ id: usersTable.id, email: usersTable.email })
+  // 1. Find the admin user (prefer admin@example.com, fall back to any global admin)
+  let [adminUser] = await db.select({ id: usersTable.id, email: usersTable.email })
     .from(usersTable).where(eq(usersTable.email, ADMIN_EMAIL)).limit(1);
   if (!adminUser) {
-    logger.warn("Cannot seed APEX Solutions — admin@example.com not found yet");
+    [adminUser] = await db.select({ id: usersTable.id, email: usersTable.email })
+      .from(usersTable).where(eq(usersTable.role, "admin")).limit(1);
+  }
+  if (!adminUser) {
+    logger.warn("Cannot seed APEX Solutions — no admin user found yet");
     return;
   }
   const adminUserId = adminUser.id;

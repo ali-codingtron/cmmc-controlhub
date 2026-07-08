@@ -482,9 +482,13 @@ router.post("/admin/seed-apex-files", async (req, res) => {
     return res.json({ message: "Already seeded — APEX Solutions already has evidence and documents", skipped: true });
   }
 
-  const [adminUser] = await db.select({ id: usersTable.id })
+  let [adminUser] = await db.select({ id: usersTable.id })
     .from(usersTable).where(eq(usersTable.email, "admin@example.com")).limit(1);
-  if (!adminUser) return res.status(400).json({ error: "admin@example.com not found" });
+  if (!adminUser) {
+    [adminUser] = await db.select({ id: usersTable.id })
+      .from(usersTable).where(eq(usersTable.role, "admin")).limit(1);
+  }
+  if (!adminUser) return res.status(400).json({ error: "No admin user found in database" });
 
   const allControls = await db.select({ id: controlsTable.id, ref: controlsTable.controlId }).from(controlsTable);
   const controlMap = new Map(allControls.map(c => [c.ref, c.id]));
