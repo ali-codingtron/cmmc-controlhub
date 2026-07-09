@@ -30,3 +30,9 @@ id = "8xBH1ePxNW3JgmfmKZWcA"
 uri = "file://generated-guides/Control_HUB_Assessor_Guide.pdf"
 type = "pdf"
 title = "Assessor Guide (2.1 MB — fixed)"
+
+[[outputs]]
+id = "QsJ1tom-9D9q6BzgV2qwZ"
+uri = "file://generated-guides/Control_HUB_Complete_User_Guide.pdf"
+type = "pdf"
+title = "Control HUB — Complete User Guide"

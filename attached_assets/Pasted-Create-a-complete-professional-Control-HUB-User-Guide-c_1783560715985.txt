@@ -1,0 +1,1184 @@
+Create a complete professional Control HUB User Guide covering the full non-admin application experience from top to bottom.
+
+Goal:
+I need a highly professional, detailed user guide that explains how Control HUB works for normal system users. The guide should include screenshots, step-by-step instructions, module explanations, workflow examples, and role explanations.
+
+This should cover all major user-facing functionality except the Admin-only portion.
+
+Do NOT focus this guide only on assessors.
+Do NOT make this an admin guide.
+Do NOT include admin-only instructions such as managing users, organizations, global security settings, system secrets, or backend configuration.
+
+This guide should be suitable for:
+- Compliance Managers
+- IT Contributors
+- Reviewers
+- Executive Viewers
+- Assessor Read-Only users
+- customer users learning the platform
+
+====================================================================
+1. OUTPUT REQUIREMENTS
+====================================================================
+
+Generate the guide as a file in the Replit project file system.
+
+Output folder:
+
+/generated-guides/
+
+Files:
+
+/generated-guides/Control_HUB_Complete_User_Guide.pdf
+
+Optional DOCX:
+
+/generated-guides/Control_HUB_Complete_User_Guide.docx
+
+Do not require the guide to be exposed inside the app UI unless I specifically ask later.
+
+Create script:
+
+pnpm generate:user-guide
+
+The script should:
+- capture fresh screenshots
+- generate the PDF
+- generate DOCX if supported
+- save files to /generated-guides/
+- print the output paths when finished
+
+====================================================================
+2. SCREENSHOT SOURCE
+====================================================================
+
+Use a realistic non-admin user perspective.
+
+Preferred screenshot source:
+- APEX Solutions test organization, if available
+- or CarmeTechnology demo organization
+- or another seeded non-sensitive test organization
+
+Do NOT use sensitive real customer data.
+Do NOT expose secrets, passwords, API keys, or real tenant secrets.
+Do NOT use VTCCORP.US screenshots unless specifically instructed.
+
+Use a user role that can see most functionality but is not a Global Admin.
+
+Preferred role:
+Compliance Manager
+
+Reason:
+A Compliance Manager can see and use most platform features without exposing admin-only settings.
+
+Capture screenshots as a non-admin user.
+
+Do not include screenshots of:
+- Admin > Users
+- Admin > Organizations
+- Security Center
+- SSO configuration
+- Replit settings
+- environment variables
+- secrets
+- tenant app registration secrets
+- database/admin utilities
+
+====================================================================
+3. SCREENSHOT VALIDATION
+====================================================================
+
+Before inserting screenshots into the guide, validate each screenshot.
+
+Reject/retry screenshots if the page contains:
+- “No evidence found” unless explaining an empty state
+- “No documents found” unless explaining an empty state
+- “Control not found”
+- “Access denied”
+- “Loading…”
+- technical error messages
+- seed/demo setup errors
+- blank content
+- wrong organization
+- admin-only pages
+- browser dev tools
+- environment variables
+- secrets
+
+Every screenshot should be readable.
+
+Use:
+- 1440x1000 or 1600x1000 viewport
+- clean app-only screenshot if possible
+- cropped screenshots for important page sections
+- not one tiny full-page screenshot when text becomes unreadable
+
+For complex pages, use multiple screenshots:
+- full page context screenshot
+- focused table screenshot
+- focused detail panel screenshot
+
+====================================================================
+4. GUIDE STYLE AND FORMATTING
+====================================================================
+
+Make the guide look like a professional software user manual.
+
+Use:
+- Control HUB branding
+- Carme Technology branding if logo is available
+- professional cover page
+- table of contents
+- numbered sections
+- headings and subheadings
+- screenshot captions
+- callout boxes
+- tables
+- step-by-step instructions
+- workflow diagrams if possible
+- page numbers
+- header/footer
+- clean spacing
+- consistent fonts
+- navy/blue/gold professional color palette
+
+Footer:
+Confidential — Control HUB User Guide — Prepared by Carme Technology
+
+Cover page:
+- Control HUB logo
+- Carme Technology logo
+- Title: Control HUB Complete User Guide
+- Subtitle: CMMC Readiness, Evidence Management, Monitoring, and Reporting Platform
+- Version
+- Generated date
+- Prepared by Carme Technology
+- Confidential / Internal Use
+
+====================================================================
+5. GUIDE AUDIENCE
+====================================================================
+
+Write the guide for regular users, not developers.
+
+Use clear language.
+
+Explain:
+- what each page does
+- when to use it
+- how to navigate it
+- what each field means
+- what each status means
+- what actions are available
+- how records connect to controls
+- how data flows across the app
+
+Avoid:
+- developer terminology
+- database field names unless necessary
+- implementation internals
+- admin-only setup details
+- references to Replit internals
+
+====================================================================
+6. TABLE OF CONTENTS
+====================================================================
+
+Create a detailed table of contents.
+
+Suggested structure:
+
+1. Introduction
+2. Control HUB Overview
+3. User Roles and Permissions
+4. Logging In
+5. Accepting an Invitation
+6. Password Reset
+7. Multi-Factor Authentication
+8. Selecting an Organization
+9. Dashboard
+10. Controls Library
+11. Control Detail Pages
+    11.1 Implementation Tab
+    11.2 Configure Tab
+    11.3 Evidence Tab
+    11.4 Monitoring Tab
+    11.5 POA&M Tab
+    11.6 SSP Tab
+12. Evidence Repository
+13. Uploading Evidence
+14. Bulk Uploading Evidence
+15. Previewing and Downloading Evidence
+16. Bulk Download / Export Packages
+17. Documentation
+18. Template Library
+19. Generating Documents
+20. Documentation Gap Analysis
+21. System Security Plan Module
+22. Monitoring Tracker
+23. POA&M Register
+24. Implementation Roadmap
+25. Pre-Assessment
+26. Tenant-Connected Assessment Results
+27. Findings
+28. Evidence Requests
+29. Recommended Roadmap from Pre-Assessment
+30. Reports
+31. Help & FAQ
+32. Recommended End-to-End Workflows
+33. Troubleshooting
+34. Glossary
+35. Contact and Support
+
+====================================================================
+7. ROLE SECTION
+====================================================================
+
+Add a section called:
+
+User Roles and Permissions
+
+Explain the purpose of each role:
+
+- Global Admin
+- Organization Admin
+- Compliance Manager
+- IT Contributor
+- Reviewer
+- Executive Viewer
+- Assessor Read-Only
+- Demo Viewer
+
+But do not provide admin instructions.
+
+Use a role matrix table.
+
+Columns:
+- Role
+- Typical User
+- Can View
+- Can Add/Edit
+- Can Approve
+- Can Download
+- Notes
+
+Explain:
+- Compliance Manager manages evidence, documentation, monitoring, POA&M, reports, and readiness.
+- IT Contributor uploads evidence and completes assigned technical work.
+- Reviewer reviews/approves artifacts if permitted.
+- Executive Viewer views dashboards and reports.
+- Assessor Read-Only reviews approved/assessor-ready records only.
+- Demo Viewer can view sample data only.
+
+Important:
+Do not include instructions for creating users, assigning roles, or changing organization access in this guide.
+
+====================================================================
+8. LOGIN AND ACCOUNT ACCESS
+====================================================================
+
+Include screenshots and instructions for:
+
+- Login page
+- Email/password login
+- Sign in with Microsoft, if enabled
+- Forgot password
+- Accepting an invitation
+- Creating a password
+- MFA setup
+- MFA verification
+- Recovery codes
+
+Explain:
+- users receive access by invitation
+- users cannot choose their own role or organization
+- password reset is requested from login page
+- MFA may be required depending on role/settings
+
+Do not include admin-only security configuration.
+
+====================================================================
+9. ORGANIZATION SELECTION
+====================================================================
+
+Explain:
+- Control HUB supports multiple organizations
+- active organization appears in sidebar
+- all dashboard, controls, evidence, documents, monitoring, POA&M, and reports are scoped to the selected organization
+- users only see organizations they are assigned to
+
+Include screenshot:
+- sidebar with active organization selected
+
+Explain what to do if the wrong organization is selected.
+
+====================================================================
+10. DASHBOARD SECTION
+====================================================================
+
+Add a detailed Dashboard guide.
+
+Screenshot:
+- full dashboard
+- focused KPI cards
+- domain readiness
+- recent activity
+- recommended next actions
+
+Explain each dashboard area:
+
+- Overall Readiness
+- Controls
+- Evidence Health
+- Monitoring
+- POA&M Health
+- Domain Readiness
+- Recent Activity
+- Recommended Next Actions
+
+Explain what each number means.
+
+Examples:
+- Overall Readiness shows control progress across the selected organization.
+- Evidence Health shows total, approved, pending, and stale evidence.
+- Monitoring shows current, due soon, and overdue recurring compliance work.
+- POA&M Health shows open remediation items and risk level.
+
+Explain:
+- clicking dashboard items should lead to filtered views where applicable
+- dashboard is a summary, not the full record source
+
+====================================================================
+11. CONTROLS LIBRARY SECTION
+====================================================================
+
+Add a detailed Controls Library guide.
+
+Screenshot:
+- Controls Library with filters and populated records
+
+Explain:
+- the Controls Library contains CMMC controls for the selected organization
+- controls can be searched by ID, title, domain, level, or status
+- each control has organization-specific implementation status
+- evidence count shows how many artifacts are linked
+
+Explain filters:
+- Search
+- Domain
+- Level
+- Status
+- Evidence
+- Document coverage if available
+
+Explain table columns:
+- Control ID
+- Title
+- Domain
+- Level
+- Status
+- Evidence
+- Documents
+- Monitoring
+- POA&M
+
+Explain how to open a control.
+
+====================================================================
+12. CONTROL DETAIL SECTION
+====================================================================
+
+This section must be very detailed.
+
+Explain that the Control Detail page acts as the control-level workspace.
+
+Capture screenshots for a populated sample control.
+
+Use a control with:
+- implementation narrative
+- configure steps
+- evidence
+- monitoring linkage
+- SSP narrative
+- POA&M if possible
+
+Explain each tab separately.
+
+--------------------------------------------------------------------
+12.1 Implementation Tab
+--------------------------------------------------------------------
+
+Screenshot:
+- implementation tab with narrative
+
+Explain:
+- control description
+- implementation guidance
+- implementation status
+- implementation narrative
+- how users should read/update narrative if their role allows
+- how assessors/reviewers use this narrative
+
+Explain:
+Implementation Narrative is the organization’s written explanation of how it satisfies the control.
+
+Add “What good looks like”:
+- specific to the organization
+- references actual systems
+- identifies responsible roles
+- aligns with evidence
+- avoids generic placeholder language
+
+--------------------------------------------------------------------
+12.2 Configure Tab
+--------------------------------------------------------------------
+
+Screenshot:
+- configure tab with step cards
+
+Explain:
+- configure tab provides step-by-step implementation guidance
+- it is different from the implementation narrative
+- steps show what to configure, where to go, what evidence to capture, and how to validate
+
+Explain fields:
+- step title
+- purpose
+- system/portal
+- navigation path
+- detailed instructions
+- expected result
+- evidence to capture
+- suggested filename
+- related controls
+- troubleshooting
+- step status
+
+Explain:
+- how to expand step cards
+- how to mark steps complete if permitted
+- how to upload/link evidence from a step
+- how blocked/not applicable steps work if available
+
+--------------------------------------------------------------------
+12.3 Evidence Tab
+--------------------------------------------------------------------
+
+Screenshot:
+- control evidence tab
+
+Explain:
+- evidence linked to this specific control appears here
+- evidence may also support other controls
+- statuses indicate review readiness
+- how to preview/download/open evidence
+- bulk actions if available
+
+Explain evidence statuses:
+- Draft
+- Pending Review
+- Approved
+- Active
+- Assessor Ready
+- Stale
+- Archived
+
+--------------------------------------------------------------------
+12.4 Monitoring Tab
+--------------------------------------------------------------------
+
+Screenshot:
+- monitoring tab or linked monitoring item
+
+Explain:
+- shows recurring operational monitoring linked to the control
+- frequency
+- last completed
+- next due
+- status
+- notes
+- linked evidence
+
+Explain statuses:
+- Open
+- In Progress
+- Current
+- Overdue if derived
+
+--------------------------------------------------------------------
+12.5 POA&M Tab
+--------------------------------------------------------------------
+
+Screenshot:
+- control POA&M tab or POA&M section
+
+Explain:
+- shows remediation items linked to the control
+- risk level
+- owner
+- due date
+- remediation plan
+- status
+- closure evidence
+
+--------------------------------------------------------------------
+12.6 SSP Tab
+--------------------------------------------------------------------
+
+Screenshot:
+- SSP tab on control detail
+
+Explain:
+- SSP narrative for the control
+- source SSP
+- mapping
+- how SSP narrative relates to implementation narrative
+- how users should review alignment between SSP, evidence, and implementation
+
+====================================================================
+13. EVIDENCE REPOSITORY SECTION
+====================================================================
+
+Add a full Evidence Repository guide.
+
+Screenshots:
+- Evidence Repository table
+- filters
+- evidence detail page
+- file preview
+- file download area
+
+Explain:
+- Evidence Repository is the central location for all evidence
+- evidence is linked to controls, domains, levels, owners, dates, and statuses
+
+Explain filters:
+- search
+- type
+- status
+- domain
+- level
+- control
+- owner
+- archived
+
+Explain columns:
+- title
+- type
+- status
+- linked controls
+- security domain
+- level
+- owner
+- uploaded date
+- expiration/review date
+- actions
+
+Explain how to:
+- open evidence
+- preview evidence
+- download evidence
+- identify linked controls
+- understand metadata
+- archive/remove if role permits
+
+====================================================================
+14. UPLOADING EVIDENCE SECTION
+====================================================================
+
+Explain the evidence upload workflow.
+
+Screenshots:
+- Add Evidence modal/page
+- Bulk Upload modal
+- metadata fields
+
+Explain fields:
+- title
+- evidence type
+- linked controls
+- status
+- collection date
+- expiration/review date
+- description
+- assessor summary
+- internal notes
+- tags
+- owner
+- file attachment
+
+Explain:
+- single upload
+- bulk upload
+- applying default metadata
+- per-file metadata
+- linked controls
+- automatic domain/level tagging
+- evidence naming conventions
+
+Add recommended evidence filename examples:
+- AC-3.1.1_User_Access_Review_YYYY-MM-DD.xlsx
+- IA-3.5.3_MFA_Registration_Report_YYYY-MM-DD.xlsx
+- AU-3.3.5_Audit_Log_Review_YYYY-MM-DD.pdf
+
+====================================================================
+15. PREVIEWING AND DOWNLOADING EVIDENCE
+====================================================================
+
+Explain:
+- supported preview types
+- images
+- PDFs
+- text/log files
+- DOCX/XLSX if preview is supported
+- fallback download behavior
+
+Explain:
+- view icon
+- download icon
+- fullscreen/zoom if available
+
+====================================================================
+16. BULK DOWNLOAD SECTION
+====================================================================
+
+Add a detailed section on Bulk Download / Export Packages.
+
+Screenshots:
+- bulk download wizard scope step
+- structure step
+- generate/review step
+- sample ZIP structure if possible
+
+Explain:
+- selected items
+- filtered items
+- approved/active/assessor-ready items
+- by security domain
+- by control
+- flat ZIP with manifest
+- domain/control folder structure
+- file index
+- control mapping
+- hash manifest
+- export issues report
+
+Explain:
+- files are renamed in the ZIP to include linked controls
+- original files are not renamed inside Control HUB
+- manifests show all linked controls
+- large exports may take time
+
+====================================================================
+17. DOCUMENTATION SECTION
+====================================================================
+
+Add a full Documentation guide.
+
+Screenshots:
+- Documentation Overview
+- All Documents
+- Template Library
+- Generate Document
+- Gap Analysis
+
+Explain:
+- Documentation is for policies, procedures, logs, records, generated docs, and document-like evidence
+- All Documents combines uploaded documents, generated documents, and document-like evidence
+
+Explain All Documents columns:
+- title
+- type
+- status
+- linked controls
+- security domain
+- level
+- owner
+- next review
+- source
+
+Explain document statuses:
+- Draft
+- Pending Review
+- Approved
+- Active
+- Needs Update
+- Expired
+- Superseded
+- Archived
+
+Explain Template Library:
+- template catalog
+- templates mapped to controls
+- generating documents from templates
+- placeholders
+- export as DOCX/PDF
+
+Explain Gap Analysis:
+- missing policies
+- missing procedures
+- expired documents
+- pending review
+- how linked approved documents close gaps
+
+====================================================================
+18. SSP MODULE SECTION
+====================================================================
+
+Add a full SSP guide.
+
+Screenshots:
+- SSP Overview
+- SSP Sections
+- SSP Control Mapping
+- SSP Export
+
+Explain:
+- what the SSP module is
+- SSP metadata
+- sections
+- control mappings
+- implementation narratives
+- status alignment with controls
+- exporting SSP
+
+Explain:
+- SSP narrative vs control implementation narrative
+- how to search SSP mappings
+- how to identify missing/generic narratives
+- how to export SSP if permitted
+
+====================================================================
+19. MONITORING TRACKER SECTION
+====================================================================
+
+Add a detailed Monitoring Tracker guide.
+
+Screenshots:
+- Monitoring Tracker page
+- expanded monitoring item if available
+
+Explain:
+- recurring compliance activities
+- frequency
+- task
+- control ID
+- description
+- last completed
+- next due
+- status
+- notes
+
+Explain status logic:
+- Open
+- In Progress
+- Current
+
+Explain:
+- Current means completed for the current cycle
+- Next Due is calculated from Last Completed and Frequency
+- overdue logic
+- due within 7 days
+- evidence to retain
+- operating procedure
+- test procedure
+- linked evidence
+
+Include example:
+If weekly item last completed July 1, next due should be July 8.
+
+====================================================================
+20. POA&M SECTION
+====================================================================
+
+Add a detailed Plan of Action and Milestones guide.
+
+Use full phrase on first reference:
+Plan of Action and Milestones (POA&M)
+
+Screenshots:
+- POA&M Register
+- Add/Edit POA&M modal/detail if non-admin role can see it
+
+Explain:
+- purpose of POA&M
+- tracking known gaps/remediation
+- linked controls
+- risk level
+- status
+- owner
+- scheduled completion
+- remediation plan
+- required evidence
+- closure evidence
+
+Explain statuses:
+- Open
+- In Progress
+- Pending Validation
+- Closed
+- Accepted Risk if used
+
+Explain:
+- closed items do not count as open
+- POA&M should be reviewed during readiness/audit preparation
+
+====================================================================
+21. IMPLEMENTATION ROADMAP SECTION
+====================================================================
+
+Add a full roadmap guide.
+
+Screenshots:
+- Priority Actions page
+- Start Here/overview panel
+- action detail page
+- steps tab
+- evidence to collect tab
+- documents needed tab
+- validation tab
+- checklist tab
+- controls supported tab
+- coverage matrix
+- progress page
+
+Explain:
+- roadmap groups related work into high-impact actions
+- it helps avoid working randomly through 110 controls
+- actions support multiple controls
+- actions produce evidence/documents/validation outputs
+- roadmap completion does not automatically certify controls
+
+Explain key terms:
+- impact score
+- priority
+- effort
+- phase
+- controls supported
+- full support
+- partial support
+- evidence needed
+- ready for review
+
+Explain workflow:
+1. choose recommended action
+2. read overview
+3. complete steps
+4. upload evidence
+5. link documents
+6. validate
+7. complete checklist
+8. submit/mark ready for review
+
+Explain tracker:
+- Understand
+- Perform Steps
+- Upload Evidence
+- Validate
+- Review & Complete
+
+Explain what “done” means.
+
+====================================================================
+22. PRE-ASSESSMENT SECTION
+====================================================================
+
+Add a full Pre-Assessment guide.
+
+Screenshots:
+- Tenant Connections
+- Run Assessment
+- Scan Progress
+- Assessment Results Summary
+- Findings
+- Evidence Requests
+- Roadmap
+- Permissions
+
+Explain:
+- tenant-connected pre-assessment reviews Microsoft tenant configuration data
+- it is not an official CMMC assessment
+- it generates findings, evidence requests, and roadmap actions
+
+Explain metrics:
+- Tenant Scan Health
+- Assessment Confidence
+- Controls Touched by Tenant Scan
+- Checks Run
+- Passed
+- Gaps Found
+- Unknown / No Data
+- Evidence Snapshots
+- Evidence Requests
+
+Explain Findings:
+- severity
+- observed condition
+- remediation
+- linked controls
+- affected objects if available
+
+Explain Evidence Requests:
+- requested evidence
+- linked controls
+- suggested filename
+- owner/due date
+- status
+
+Explain Recommended Roadmap from pre-assessment.
+
+Do not include Microsoft app registration secret setup in this user guide.
+
+====================================================================
+23. REPORTS SECTION
+====================================================================
+
+Add a full Reports guide.
+
+Screenshots:
+- Reports navigation
+- report list
+- report export/download page
+- sample PDF preview if possible
+
+Explain report types:
+- Executive Readiness
+- Domain Readiness
+- Gap Analysis
+- Control Status
+- Evidence Inventory
+- POA&M Report
+- Monitoring Tracker
+- Audit Readiness
+- SSP Summary
+- Pre-Assessment Report
+- C3PAO Export Package if available
+
+Explain:
+- what each report is for
+- who should use it
+- how to download/export
+- difference between executive and technical reports
+
+====================================================================
+24. HELP AND FAQ SECTION
+====================================================================
+
+Explain:
+- Help & User Guide
+- FAQ
+- contextual help buttons if present
+- support contact
+
+Contact:
+info@carmetechnology.com
+
+====================================================================
+25. END-TO-END WORKFLOW SECTION
+====================================================================
+
+Add practical workflows.
+
+Workflow 1:
+New Organization Readiness Review
+
+Steps:
+1. Select organization
+2. Review Dashboard
+3. Run Pre-Assessment if connected
+4. Review Findings
+5. Review Evidence Requests
+6. Open Implementation Roadmap
+7. Start recommended action
+8. Upload evidence
+9. Review controls
+10. Generate reports
+
+Workflow 2:
+Control Review Workflow
+
+Steps:
+1. Search control
+2. Open Control Detail
+3. Read Implementation Narrative
+4. Open Evidence tab
+5. Preview/download evidence
+6. Review SSP tab
+7. Check Monitoring/POA&M
+8. Record follow-up if needed
+
+Workflow 3:
+Evidence Upload Workflow
+
+Steps:
+1. Navigate to Evidence or Control Evidence tab
+2. Add/Bulk Upload
+3. Select type/status
+4. Link controls
+5. Add metadata
+6. Save
+7. Confirm evidence appears in Evidence Repository and control tab
+
+Workflow 4:
+Monthly Monitoring Workflow
+
+Steps:
+1. Open Monitoring Tracker
+2. Filter due/overdue
+3. Perform review
+4. Update Last Completed
+5. Confirm Next Due
+6. Upload evidence
+7. Add notes
+8. Set status Current
+
+Workflow 5:
+POA&M Remediation Workflow
+
+Steps:
+1. Open POA&M
+2. Review open/high-risk items
+3. Update remediation notes
+4. Attach closure evidence
+5. Mark Pending Validation/Closed if permitted
+
+Workflow 6:
+C3PAO Preparation Workflow
+
+Steps:
+1. Dashboard readiness review
+2. Evidence health review
+3. Documentation gap analysis
+4. SSP review
+5. Monitoring tracker review
+6. POA&M review
+7. Generate reports/export package
+
+====================================================================
+26. TROUBLESHOOTING SECTION
+====================================================================
+
+Include common issues:
+
+- cannot log in
+- forgot password
+- MFA code not working
+- cannot see organization
+- cannot find a control
+- evidence preview not loading
+- evidence download blocked
+- document missing
+- report not generating
+- bulk download has missing files
+- pre-assessment scan has data unavailable
+- monitoring item appears overdue
+- POA&M status looks wrong
+
+For each issue include:
+- likely cause
+- resolution
+- who to contact
+
+====================================================================
+27. GLOSSARY
+====================================================================
+
+Add glossary terms:
+
+- CMMC
+- C3PAO
+- Control
+- Domain
+- Evidence
+- Document
+- SSP
+- POA&M
+- Monitoring Tracker
+- Implementation Narrative
+- Configure Step
+- Tenant Scan Health
+- Assessment Confidence
+- Controls Touched by Tenant Scan
+- Evidence Request
+- Roadmap Action
+- Assessor Ready
+- Active
+- Approved
+- Stale
+
+Use “Plan of Action and Milestones” for POA&M pronunciation/explanation.
+
+====================================================================
+28. EXCLUDE ADMIN-ONLY CONTENT
+====================================================================
+
+Do not include detailed instructions for:
+- creating users
+- editing roles
+- deleting users
+- creating organizations
+- security center administration
+- SSO settings
+- environment variables
+- email provider secrets
+- system admin account
+- database maintenance
+- Replit secrets
+- demo seed scripts
+- admin-only repair/backfill utilities
+
+You may include a high-level role explanation, but not admin procedures.
+
+====================================================================
+29. VERSIONING
+====================================================================
+
+Add:
+- guide version
+- generated date
+- app version if available
+- changelog placeholder
+
+Example:
+Version 1.0
+Generated: [date]
+Application: Control HUB
+
+====================================================================
+30. ACCEPTANCE TESTS
+====================================================================
+
+Test A:
+Run:
+pnpm generate:user-guide
+
+Test B:
+PDF is created at:
+/generated-guides/Control_HUB_Complete_User_Guide.pdf
+
+Test C:
+Guide includes screenshots for every major non-admin module.
+
+Test D:
+Guide does not include Admin pages or admin-only procedures.
+
+Test E:
+Screenshots are readable and do not show blank/error pages.
+
+Test F:
+Controls section includes Implementation, Configure, Evidence, Monitoring, POA&M, and SSP tabs.
+
+Test G:
+Evidence section explains upload, bulk upload, preview, download, metadata, statuses, and linked controls.
+
+Test H:
+Roadmap section explains how the roadmap works and how to complete actions.
+
+Test I:
+Pre-Assessment section explains tenant scan results, findings, evidence requests, and roadmap recommendations.
+
+Test J:
+Guide is professionally formatted with cover page, TOC, screenshots, captions, page numbers, and branding.
+
+Test K:
+No real secrets, admin settings, or unrelated organization data appear.

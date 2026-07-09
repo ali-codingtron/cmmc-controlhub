@@ -14,6 +14,7 @@
     "create:system-admin": "tsx ./src/create-system-admin.ts",
     "generate:assessor-guide": "tsx ./src/generate-assessor-guide.ts",
     "generate:role-guides": "tsx ./src/generate-role-guides.ts",
+    "generate:user-guide": "tsx ./src/generate-user-guide.ts",
     "seed:apex-solutions": "tsx ./src/seed-apex-solutions.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
