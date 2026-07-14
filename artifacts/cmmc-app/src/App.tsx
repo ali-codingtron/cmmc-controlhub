@@ -75,6 +75,9 @@ import HelpArticle from "@/pages/help-article";
 import HelpFaq from "@/pages/help-faq";
 import HelpVideos from "@/pages/help-videos";
 import HelpAdmin from "@/pages/help-admin";
+import DfarsObligations from "@/pages/dfars-obligations";
+import Crosswalk from "@/pages/crosswalk";
+import AdminPackageMigration from "@/pages/admin-package-migration";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -205,6 +208,9 @@ function AppRoutes() {
               <Route path="/pre-assessment/results/:id">
                 {(params: { id: string }) => <PaResults id={params.id} />}
               </Route>
+              <Route path="/dfars-obligations" component={DfarsObligations} />
+              <Route path="/crosswalk" component={Crosswalk} />
+              <Route path="/admin/package-migration" component={AdminPackageMigration} />
               <Route path="/help/article/:slug" component={HelpArticle} />
               <Route path="/help/faq" component={HelpFaq} />
               <Route path="/help/videos" component={HelpVideos} />

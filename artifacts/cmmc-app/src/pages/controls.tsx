@@ -1,13 +1,16 @@
 import { useState, useMemo } from "react";
-import { useListControls } from "@workspace/api-client-react";
+import { useListControls, useListOrgPackages } from "@workspace/api-client-react";
+import { useOrg } from "@/context/OrgContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge, LevelBadge } from "@/components/ui/badges";
 import { Link } from "wouter";
-import { X } from "lucide-react";
+import { X, Info } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const DOMAINS = [
   { code: "AC", label: "AC - Access Control" },
@@ -28,14 +31,34 @@ const DOMAINS = [
 
 type EvidenceCoverage = "all" | "none" | "partial" | "complete";
 
+function packageKeyToLevelFilter(key: string): "L1" | undefined | "dfars_notice" {
+  if (key === "pkg-cmmc-l1-self" || key === "pkg-far-52-204-21") return "L1";
+  if (key?.startsWith("pkg-dfars-")) return "dfars_notice";
+  return undefined;
+}
+
 export default function Controls() {
+  const { activeOrg } = useOrg();
   const [search, setSearch] = useState("");
   const [domainFilter, setDomainFilter] = useState("all");
   const [levelFilter, setLevelFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [evidenceFilter, setEvidenceFilter] = useState<EvidenceCoverage>("all");
+  const [packageFilter, setPackageFilter] = useState("all");
 
   const { data: controls, isLoading } = useListControls({});
+
+  const { data: orgPackages = [] } = useListOrgPackages(activeOrg?.id ?? "", {
+    query: { enabled: !!activeOrg?.id } as any,
+  });
+  const activePackages = (orgPackages as any[]).filter((p) => p.isActive);
+  const hasPackages = activePackages.length > 0;
+
+  const selectedPackage = activePackages.find((p: any) => p.packageId === packageFilter);
+  const pkgDerivedLevel = selectedPackage
+    ? packageKeyToLevelFilter(selectedPackage.packageKey)
+    : undefined;
+  const isDfarsSelected = pkgDerivedLevel === "dfars_notice";
 
   const filtered = useMemo(() => {
     if (!controls) return [];
@@ -53,8 +76,9 @@ export default function Controls() {
         const code = c.controlId?.split(".")[0] ?? "";
         if (code !== domainFilter) return false;
       }
-      if (levelFilter !== "all") {
-        if (c.level !== levelFilter) return false;
+      const effectiveLevel = levelFilter !== "all" ? levelFilter : (!isDfarsSelected ? pkgDerivedLevel : undefined);
+      if (effectiveLevel) {
+        if (c.level !== effectiveLevel) return false;
       }
       if (statusFilter !== "all") {
         const st = c.status ?? "not_started";
@@ -69,14 +93,15 @@ export default function Controls() {
       }
       return true;
     });
-  }, [controls, search, domainFilter, levelFilter, statusFilter, evidenceFilter]);
+  }, [controls, search, domainFilter, levelFilter, statusFilter, evidenceFilter, pkgDerivedLevel, isDfarsSelected]);
 
   const hasActiveFilters =
     search !== "" ||
     domainFilter !== "all" ||
     levelFilter !== "all" ||
     statusFilter !== "all" ||
-    evidenceFilter !== "all";
+    evidenceFilter !== "all" ||
+    packageFilter !== "all";
 
   function clearFilters() {
     setSearch("");
@@ -84,13 +109,56 @@ export default function Controls() {
     setLevelFilter("all");
     setStatusFilter("all");
     setEvidenceFilter("all");
+    setPackageFilter("all");
   }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Controls Library</h1>
+        <div>
+          <h1 className="text-3xl font-bold">Controls & Requirements Library</h1>
+          {hasPackages && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {activePackages.map((pkg: any) => (
+                <Badge
+                  key={pkg.packageId}
+                  variant="outline"
+                  className={cn(
+                    "text-[10px] px-1.5 py-0",
+                    pkg.frameworkShortName === "CMMC"
+                      ? "bg-purple-50 text-purple-700 border-purple-200"
+                      : pkg.frameworkShortName?.startsWith("NIST")
+                      ? "bg-blue-50 text-blue-700 border-blue-200"
+                      : pkg.frameworkShortName === "DFARS"
+                      ? "bg-amber-50 text-amber-700 border-amber-200"
+                      : pkg.frameworkShortName === "FAR"
+                      ? "bg-slate-50 text-slate-600 border-slate-200"
+                      : "bg-slate-100 text-slate-600 border-slate-200"
+                  )}
+                >
+                  {pkg.packageName}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
+
+      {isDfarsSelected && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 flex items-start gap-2.5 text-sm">
+          <Info className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />
+          <div>
+            <span className="font-medium text-amber-900">DFARS packages don't map to CMMC controls. </span>
+            <span className="text-amber-700">
+              DFARS obligations are tracked on the{" "}
+              <Link href="/dfars-obligations" className="underline hover:no-underline">
+                DFARS Contract Obligations
+              </Link>{" "}
+              page. Showing all controls below.
+            </span>
+          </div>
+        </div>
+      )}
 
       <Card>
         <CardContent className="pt-4 pb-0">
@@ -101,6 +169,22 @@ export default function Controls() {
               onChange={(e) => setSearch(e.target.value)}
               className="w-48 shrink-0"
             />
+
+            {hasPackages && (
+              <Select value={packageFilter} onValueChange={setPackageFilter}>
+                <SelectTrigger className="w-56">
+                  <SelectValue placeholder="All packages" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All packages</SelectItem>
+                  {activePackages.map((pkg: any) => (
+                    <SelectItem key={pkg.packageId} value={pkg.packageId}>
+                      {pkg.packageName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
 
             <Select value={domainFilter} onValueChange={setDomainFilter}>
               <SelectTrigger className="w-52">

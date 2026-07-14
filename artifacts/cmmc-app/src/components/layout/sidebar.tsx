@@ -16,15 +16,18 @@ import {
   Check,
   ScrollText,
   BarChart3,
-  DatabaseZap,
   Map,
   Cable,
   HelpCircle,
+  FileCheck2,
+  GitCompare,
+  Package,
 } from "lucide-react";
 
 import { useAuth } from "@/lib/auth";
 import { useOrg } from "@/context/OrgContext";
 import { useDemoMode } from "@/context/DemoModeContext";
+import { useListOrgPackages } from "@workspace/api-client-react";
 import { useState, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -160,6 +163,7 @@ function OrgSwitcher() {
 export function Sidebar() {
   const [location] = useLocation();
   const { user, logout } = useAuth();
+  const { activeOrg } = useOrg();
   const isDocsActive = location.startsWith("/documents");
   const isSspActive = location.startsWith("/ssp");
   const isReportsActive = location.startsWith("/reports");
@@ -174,6 +178,13 @@ export function Sidebar() {
   const canViewRoadmap = user?.role === "admin" || user?.role === "compliance_manager" || user?.role === "reviewer";
   const isPreAssessmentActive = location.startsWith("/pre-assessment");
   const [preAssessmentExpanded, setPreAssessmentExpanded] = useState(isPreAssessmentActive);
+
+  const { data: orgPackages = [] } = useListOrgPackages(activeOrg?.id ?? "", {
+    query: { enabled: !!activeOrg?.id } as any,
+  });
+  const activeOrgPkgs = (orgPackages as any[]).filter((p) => p.isActive);
+  const hasDfarsPackage = activeOrgPkgs.some((p) => p.frameworkShortName === "DFARS");
+  const hasMultiplePackages = activeOrgPkgs.length >= 2;
 
   return (
     <div className="no-print flex flex-col w-64 bg-sidebar border-r border-sidebar-border text-sidebar-foreground h-screen sticky top-0">
@@ -193,7 +204,13 @@ export function Sidebar() {
       <div className="flex-1 overflow-y-auto pb-4">
         <nav className="px-2 space-y-1">
           <NavLink href="/" icon={LayoutDashboard} label="Dashboard" />
-          <NavLink href="/controls" icon={ShieldCheck} label="Controls" />
+          <NavLink href="/controls" icon={ShieldCheck} label="Controls Library" />
+          {hasDfarsPackage && (
+            <NavLink href="/dfars-obligations" icon={FileCheck2} label="DFARS Obligations" />
+          )}
+          {hasMultiplePackages && (
+            <NavLink href="/crosswalk" icon={GitCompare} label="Framework Crosswalk" />
+          )}
           <NavLink href="/evidence" icon={FileText} label="Evidence" />
           <NavLink href="/monitoring" icon={Activity} label="Monitoring Tracker" />
           <NavLink href="/poams" icon={AlertTriangle} label="POA&Ms" />
@@ -409,6 +426,7 @@ export function Sidebar() {
               <NavLink href="/users" icon={Users} label="Users" />
               <NavLink href="/organizations" icon={Building2} label="Organizations" />
               <NavLink href="/security" icon={ShieldCheck} label="Security Center" />
+              <NavLink href="/admin/package-migration" icon={Package} label="Package Migration" />
             </>
           )}
         </nav>

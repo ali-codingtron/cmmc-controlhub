@@ -1337,3 +1337,118 @@ export const FAQ_ITEMS: FaqSeed[] = [
     sortOrder: 23,
   },
 ];
+
+export const COMPLIANCE_FRAMEWORK_ARTICLES: HelpArticleSeed[] = [
+  {
+    slug: "compliance-packages-overview",
+    title: "Understanding Compliance Packages",
+    categoryName: "Getting Started",
+    module: "settings",
+    summary: "Learn how compliance packages work in Control HUB — what they are, why you'd select multiple packages, and how they affect your controls view.",
+    content: `## What are Compliance Packages?
+
+Compliance packages define the set of regulatory requirements your organization is tracking. Control HUB supports multiple compliance frameworks, and each framework can have one or more packages (e.g., CMMC Level 1 Self-Assessment, CMMC Level 2 Self-Assessment, NIST SP 800-171 Rev. 2).
+
+## Why would I select multiple packages?
+
+Many DoD contractors must comply with more than one framework simultaneously:
+
+- **CMMC L2 + NIST 800-171 Rev. 2** — The two frameworks share the same 110 controls. Selecting both allows you to track evidence that satisfies both requirements in a single control assessment.
+- **CMMC + DFARS clauses** — DFARS contract clauses (e.g., DFARS 252.204-7012) impose obligations beyond CMMC controls — such as 72-hour incident reporting, flowdown requirements to subcontractors, and assessment obligations. These are tracked separately on the DFARS Obligations page.
+- **CMMC L2 + FAR 52.204-21** — FAR Basic Safeguarding covers the 17 Level 1 controls. Organizations holding FCI (Federal Contract Information) are subject to FAR even if not pursuing CMMC.
+
+## How packages affect your Controls view
+
+When you have packages assigned, the Controls & Requirements Library page shows a package filter dropdown. Selecting a package narrows the controls shown:
+- **CMMC L1** — shows only the 17 Level 1 controls
+- **CMMC L2 / NIST 800-171** — shows all 110 controls
+- **FAR 52.204-21** — shows the 17 Level 1 controls (same as CMMC L1)
+- **DFARS clauses** — shows a notice linking to the DFARS Obligations page (DFARS doesn't define its own control set)
+
+## Impact Preview (dry-run)
+
+Before adding a new package, use the **Preview Impact** tool in Settings → Compliance Packages. It shows how many net-new controls the package would add, accounting for overlap with packages you already have.`,
+    keywords: "packages compliance framework CMMC NIST DFARS FAR overlap controls filter",
+    sortOrder: 1,
+  },
+  {
+    slug: "dfars-obligations-guide",
+    title: "DFARS Contract Obligations",
+    categoryName: "Controls",
+    module: "dfars",
+    summary: "Understand the DFARS contract clauses relevant to CMMC compliance, including 7012, 7019, 7020, and 7021 obligations.",
+    content: `## What are DFARS Obligations?
+
+DFARS (Defense Federal Acquisition Regulation Supplement) clauses are contractual requirements imposed by DoD on prime contractors — and often flowed down to subcontractors. They complement CMMC by adding specific process, reporting, and assessment obligations that go beyond the control checklist.
+
+## Key DFARS Clauses
+
+### DFARS 252.204-7012 — Safeguarding CDI
+The foundational cybersecurity clause for DoD contractors. Requires:
+- Implementing the 110 NIST SP 800-171 controls
+- Reporting cyber incidents to DoD within **72 hours**
+- Preserving images of systems affected by a cyber incident
+- Submitting a medium assurance certificate for cyber incidents
+- Flowing down equivalent protections to subcontractors who process CDI
+
+### DFARS 252.204-7019 — Notice of NIST SP 800-171 DoD Assessment Requirements
+Requires a current NIST SP 800-171 DoD Assessment in SPRS before award and within 3 years of prior assessment. Your assessment score must be submitted to the Supplier Performance Risk System (SPRS).
+
+### DFARS 252.204-7020 — NIST SP 800-171 DoD Assessment Requirements
+Allows the Government to conduct assessments of a contractor's implementation. Requires cooperation with assessors and access to facilities/systems/records.
+
+### DFARS 252.204-7021 — Cybersecurity Maturity Model Certification Requirements
+The CMMC contract clause. Requires the contractor to maintain the CMMC level specified in the contract at time of award and throughout performance.
+
+## Flowdown Requirements
+
+DFARS 7012 requires prime contractors to include its provisions in all subcontracts where subcontractors may process, store, or transmit CDI. Use the DFARS Obligations page to review which clauses require flowdown.
+
+## 72-Hour Incident Reporting
+
+Any cyber incident affecting CDI or CUI must be reported to DoD within 72 hours via the DIBNet portal (dibnet.dod.mil). This is separate from any other notification requirements.`,
+    keywords: "DFARS 7012 7019 7020 7021 incident reporting flowdown CDI CUI subcontractor obligation",
+    sortOrder: 2,
+  },
+  {
+    slug: "framework-crosswalk-guide",
+    title: "Framework Crosswalk — Mapping Between Standards",
+    categoryName: "Controls",
+    module: "crosswalk",
+    summary: "Learn how the framework crosswalk maps requirements between CMMC, NIST 800-171, FAR, and DFARS, and how to use it to eliminate duplicated compliance work.",
+    content: `## What is the Framework Crosswalk?
+
+The Framework Crosswalk maps requirements between compliance frameworks — showing which requirements are equivalent, overlapping, or unique across the frameworks assigned to your organization. Its primary purpose is to help you identify where a single implementation effort satisfies multiple framework requirements simultaneously.
+
+## CMMC L2 ↔ NIST SP 800-171 Rev. 2
+
+These two frameworks are structurally equivalent. CMMC Level 2 is based directly on the 110 NIST SP 800-171 Rev. 2 requirements. Every CMMC L2 practice maps 1:1 to a NIST 800-171 requirement. If you are pursuing CMMC L2 and also required to maintain a NIST 800-171 assessment score in SPRS, the same evidence base satisfies both.
+
+## NIST 800-171 Rev. 2 ↔ Rev. 3
+
+NIST published Revision 3 of SP 800-171 in May 2024. The crosswalk for Rev. 2 → Rev. 3 shows:
+- **Direct mappings** — requirements that carried over unchanged or with minor updates
+- **New in Rev. 3** — requirements that have no Rev. 2 equivalent (gaps to address)
+- **Removed from Rev. 3** — Rev. 2 requirements merged or removed in the update
+
+## CMMC L1 ↔ FAR 52.204-21
+
+FAR Basic Safeguarding covers the same 17 Level 1 practices as CMMC L1. Organizations subject to FAR 52.204-21 are already implementing these controls. Evidence collected for FAR compliance directly supports a CMMC L1 self-assessment.
+
+## Relationship Types
+
+| Type | Meaning |
+|------|---------|
+| **Equivalent** | Controls/requirements map 1:1 across frameworks |
+| **Subset** | One requirement is a narrower version of another |
+| **Superset** | One requirement is a broader version of another |
+| **Partial Overlap** | Requirements address the same area but with different scope |
+| **Related** | Thematically linked but not directly interchangeable |
+
+## Using the Crosswalk to Reduce Duplication
+
+When your organization has multiple packages assigned, review the crosswalk to identify "one and done" controls — areas where satisfying one framework's requirements also satisfies another's. This lets you allocate remediation resources more efficiently.`,
+    keywords: "crosswalk mapping CMMC NIST 800-171 FAR overlap equivalent framework requirements",
+    sortOrder: 3,
+  },
+];

@@ -6,9 +6,13 @@ import {
   organizationPackagesTable,
   organizationUsersTable,
   organizationsTable,
+  dfarsObligationsTable,
+  requirementCrosswalkTable,
+  complianceRequirementsTable,
 } from "@workspace/db";
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireOrg } from "../middleware/org";
 import { randomUUID } from "crypto";
 import { logger } from "../lib/logger";
 
@@ -282,5 +286,234 @@ router.delete(
     res.json({ success: true });
   }
 );
+
+// ── GET /dfars-obligations — DFARS obligations for org's DFARS packages ───────
+router.get("/dfars-obligations", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId!;
+
+  // Get org's active DFARS package IDs
+  const dfarsPackages = await db
+    .select({
+      packageId: organizationPackagesTable.packageId,
+      packageKey: compliancePackagesTable.packageKey,
+      packageName: compliancePackagesTable.name,
+    })
+    .from(organizationPackagesTable)
+    .innerJoin(
+      compliancePackagesTable,
+      eq(organizationPackagesTable.packageId, compliancePackagesTable.id)
+    )
+    .innerJoin(
+      complianceFrameworksTable,
+      eq(compliancePackagesTable.frameworkId, complianceFrameworksTable.id)
+    )
+    .where(
+      and(
+        eq(organizationPackagesTable.organizationId, orgId),
+        eq(organizationPackagesTable.isActive, true),
+        eq(complianceFrameworksTable.shortName, "DFARS")
+      )
+    );
+
+  if (!dfarsPackages.length) {
+    res.json([]);
+    return;
+  }
+
+  const packageIds = dfarsPackages.map((p) => p.packageId);
+
+  const obligations = await db
+    .select()
+    .from(dfarsObligationsTable)
+    .where(inArray(dfarsObligationsTable.packageId, packageIds))
+    .orderBy(asc(dfarsObligationsTable.clauseNumber), asc(dfarsObligationsTable.sortOrder));
+
+  // Build package name lookup
+  const pkgNameMap: Record<string, string> = {};
+  for (const p of dfarsPackages) {
+    pkgNameMap[p.packageId] = p.packageName;
+  }
+
+  res.json(
+    obligations.map((o) => ({
+      ...o,
+      requiredArtifacts: o.requiredArtifacts
+        ? (() => { try { return JSON.parse(o.requiredArtifacts!); } catch { return []; } })()
+        : [],
+      packageName: pkgNameMap[o.packageId] ?? o.packageId,
+    }))
+  );
+});
+
+// ── GET /crosswalk — requirement crosswalk for org's packages ─────────────────
+router.get("/crosswalk", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId!;
+
+  // Get org's active package IDs
+  const orgPkgRows = await db
+    .select({ packageId: organizationPackagesTable.packageId })
+    .from(organizationPackagesTable)
+    .where(
+      and(
+        eq(organizationPackagesTable.organizationId, orgId),
+        eq(organizationPackagesTable.isActive, true)
+      )
+    );
+
+  if (orgPkgRows.length < 2) {
+    res.json([]);
+    return;
+  }
+
+  const packageIds = orgPkgRows.map((p) => p.packageId);
+
+  // Get requirements for those packages
+  let reqRows: Array<{ id: string; packageId: string; requirementKey: string; title: string }> = [];
+  try {
+    reqRows = await db
+      .select({
+        id: complianceRequirementsTable.id,
+        packageId: complianceRequirementsTable.packageId,
+        requirementKey: complianceRequirementsTable.requirementId,
+        title: complianceRequirementsTable.title,
+      })
+      .from(complianceRequirementsTable)
+      .where(inArray(complianceRequirementsTable.packageId, packageIds));
+  } catch {
+    res.json([]);
+    return;
+  }
+
+  if (!reqRows.length) {
+    res.json([]);
+    return;
+  }
+
+  const reqIds = reqRows.map((r) => r.id);
+  const reqMap: Record<string, typeof reqRows[0]> = {};
+  for (const r of reqRows) reqMap[r.id] = r;
+
+  // Fetch package metadata for labels
+  const pkgRows = await db
+    .select({
+      id: compliancePackagesTable.id,
+      name: compliancePackagesTable.name,
+      frameworkShortName: complianceFrameworksTable.shortName,
+    })
+    .from(compliancePackagesTable)
+    .innerJoin(complianceFrameworksTable, eq(compliancePackagesTable.frameworkId, complianceFrameworksTable.id))
+    .where(inArray(compliancePackagesTable.id, packageIds));
+  const pkgMap: Record<string, typeof pkgRows[0]> = {};
+  for (const p of pkgRows) pkgMap[p.id] = p;
+
+  let crosswalkRows: Array<{
+    id: string;
+    sourceRequirementId: string;
+    targetRequirementId: string;
+    relationshipType: string;
+    notes: string | null;
+  }> = [];
+  try {
+    crosswalkRows = await db
+      .select()
+      .from(requirementCrosswalkTable)
+      .where(
+        and(
+          inArray(requirementCrosswalkTable.sourceRequirementId, reqIds),
+          inArray(requirementCrosswalkTable.targetRequirementId, reqIds)
+        )
+      );
+  } catch {
+    res.json([]);
+    return;
+  }
+
+  const result = crosswalkRows.map((cw) => {
+    const src = reqMap[cw.sourceRequirementId];
+    const tgt = reqMap[cw.targetRequirementId];
+    const srcPkg = src ? pkgMap[src.packageId] : undefined;
+    const tgtPkg = tgt ? pkgMap[tgt.packageId] : undefined;
+    return {
+      id: cw.id,
+      sourceRequirementId: cw.sourceRequirementId,
+      sourceKey: src?.requirementKey ?? cw.sourceRequirementId,
+      sourceTitle: src?.title ?? "",
+      sourcePackageName: srcPkg?.name ?? "",
+      sourceFramework: srcPkg?.frameworkShortName ?? "",
+      targetRequirementId: cw.targetRequirementId,
+      targetKey: tgt?.requirementKey ?? cw.targetRequirementId,
+      targetTitle: tgt?.title ?? "",
+      targetPackageName: tgtPkg?.name ?? "",
+      targetFramework: tgtPkg?.frameworkShortName ?? "",
+      relationshipType: cw.relationshipType,
+      notes: cw.notes,
+    };
+  });
+
+  res.json(result);
+});
+
+// ── GET /admin/orgs-package-status — all orgs with package summary (admin) ───
+router.get("/admin/orgs-package-status", requireAuth, async (req, res) => {
+  const authUser = req.authUser!;
+  if (authUser.role !== "admin" && !req.isBreakGlass) {
+    res.status(403).json({ error: "Admin only" });
+    return;
+  }
+
+  const orgs = await db
+    .select({
+      id: organizationsTable.id,
+      name: organizationsTable.name,
+      shortName: organizationsTable.shortName,
+      cmmcTargetLevel: organizationsTable.cmmcTargetLevel,
+      isTestOrganization: organizationsTable.isTestOrganization,
+      isActive: organizationsTable.isActive,
+    })
+    .from(organizationsTable)
+    .orderBy(asc(organizationsTable.name));
+
+  const orgIds = orgs.map((o) => o.id);
+  if (!orgIds.length) {
+    res.json([]);
+    return;
+  }
+
+  const allPackages = await db
+    .select({
+      organizationId: organizationPackagesTable.organizationId,
+      packageId: organizationPackagesTable.packageId,
+      isActive: organizationPackagesTable.isActive,
+      selectedAt: organizationPackagesTable.selectedAt,
+      packageKey: compliancePackagesTable.packageKey,
+      packageName: compliancePackagesTable.name,
+      packageType: compliancePackagesTable.packageType,
+      frameworkShortName: complianceFrameworksTable.shortName,
+    })
+    .from(organizationPackagesTable)
+    .innerJoin(
+      compliancePackagesTable,
+      eq(organizationPackagesTable.packageId, compliancePackagesTable.id)
+    )
+    .innerJoin(
+      complianceFrameworksTable,
+      eq(compliancePackagesTable.frameworkId, complianceFrameworksTable.id)
+    )
+    .where(inArray(organizationPackagesTable.organizationId, orgIds));
+
+  const pkgByOrg: Record<string, typeof allPackages> = {};
+  for (const p of allPackages) {
+    if (!pkgByOrg[p.organizationId]) pkgByOrg[p.organizationId] = [];
+    pkgByOrg[p.organizationId].push(p);
+  }
+
+  const result = orgs.map((org) => ({
+    ...org,
+    packages: (pkgByOrg[org.id] ?? []).filter((p) => p.isActive),
+    allPackages: pkgByOrg[org.id] ?? [],
+  }));
+
+  res.json(result);
+});
 
 export default router;

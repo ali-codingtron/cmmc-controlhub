@@ -22,7 +22,7 @@ import { seedControlConfigure } from "./routes/configure";
 import { seedRoadmapActions, seedProcedureSteps } from "./routes/roadmap";
 import { logger } from "./lib/logger";
 import { DOCUMENT_TEMPLATES } from "./data/document-templates-data";
-import { HELP_CATEGORIES, HELP_ARTICLES, FAQ_ITEMS } from "./data/help-seed-data";
+import { HELP_CATEGORIES, HELP_ARTICLES, FAQ_ITEMS, COMPLIANCE_FRAMEWORK_ARTICLES } from "./data/help-seed-data";
 import { seedDemoOrg } from "./demo-seed-org";
 import { seedApexSolutions } from "./seed-apex-startup";
 import {
@@ -600,6 +600,47 @@ async function seedComplianceFrameworks() {
   );
 }
 
+async function seedComplianceFrameworkHelpArticles() {
+  const SLUGS = COMPLIANCE_FRAMEWORK_ARTICLES.map((a) => a.slug);
+  const existing = await db
+    .select({ slug: helpArticlesTable.slug })
+    .from(helpArticlesTable)
+    .where(
+      sql`${helpArticlesTable.slug} = ANY(ARRAY[${sql.raw(SLUGS.map((s) => `'${s}'`).join(","))}])`
+    );
+  const existingSlugs = new Set(existing.map((r) => r.slug));
+  const toInsert = COMPLIANCE_FRAMEWORK_ARTICLES.filter((a) => !existingSlugs.has(a.slug));
+  if (!toInsert.length) return;
+
+  for (const article of toInsert) {
+    const [cat] = await db
+      .select({ id: helpCategoriesTable.id })
+      .from(helpCategoriesTable)
+      .where(eq(helpCategoriesTable.name, article.categoryName))
+      .limit(1);
+    if (!cat) {
+      logger.warn({ categoryName: article.categoryName, slug: article.slug }, "Help article category not found — skipping");
+      continue;
+    }
+    await db.insert(helpArticlesTable).values({
+      slug: article.slug,
+      title: article.title,
+      categoryId: cat.id,
+      module: article.module ?? null,
+      content: article.content,
+      summary: article.summary,
+      keywords: article.keywords ?? null,
+      roleVisibility: article.roleVisibility ?? null,
+      sortOrder: article.sortOrder,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
+  if (toInsert.length > 0) {
+    logger.info({ count: toInsert.length }, "Seeded compliance framework help articles");
+  }
+}
+
 export async function runStartupSeed() {
   try {
     await migrateSsoTable();
@@ -620,6 +661,7 @@ export async function runStartupSeed() {
     await seedSecuritySettings();
     await seedHelpContent();
     await seedComplianceFrameworks();
+    await seedComplianceFrameworkHelpArticles();
     await fixVtccorpControlLinks();
   } catch (err) {
     logger.error({ err }, "Startup seed failed — app will continue but may lack reference data");
