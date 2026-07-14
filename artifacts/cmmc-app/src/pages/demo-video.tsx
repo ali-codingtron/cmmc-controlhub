@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight, ExternalLink } from "lucide-react";
 import carmetechLogo from "@assets/Carme_Tech_Logo_Official_1779981155506.png";
 
-const CONSULTATION_HREF = "mailto:info@carmetechnology.com?subject=Control%20HUB%20Consultation%20Request";
+const CONSULTATION_HREF = "https://carmetechnology.com/#contact";
 
 // Max allowed drift (seconds) before audio is hard-snapped to video position
 const SYNC_THRESHOLD = 0.3;
@@ -141,6 +141,8 @@ export default function DemoVideo() {
           </div>
           <a
             href={CONSULTATION_HREF}
+            target="_blank"
+            rel="noopener noreferrer"
             className="hidden sm:flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors"
             style={{ color: "#C9A84C", border: "1px solid rgba(201,168,76,0.3)" }}
           >
@@ -217,6 +219,8 @@ export default function DemoVideo() {
               </Button>
               <a
                 href={CONSULTATION_HREF}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md text-sm font-medium"
                 style={{ color: "#C9A84C", border: "1px solid rgba(201,168,76,0.3)" }}
               >
@@ -248,7 +252,7 @@ export default function DemoVideo() {
             <button onClick={() => navigate("/demo")} className="hover:text-white transition-colors">
               Demo Overview
             </button>
-            <a href={CONSULTATION_HREF} className="hover:text-white transition-colors">
+            <a href={CONSULTATION_HREF} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
               Consultation
             </a>
             <a href="mailto:info@carmetechnology.com" className="hover:text-white transition-colors">
