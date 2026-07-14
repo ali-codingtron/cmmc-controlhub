@@ -5369,3 +5369,98 @@ export const RunDocChecksResponse = zod.object({
   documentsMarkedNeedsUpdate: zod.number(),
   message: zod.string(),
 });
+
+/**
+ * @summary List all active compliance frameworks
+ */
+export const ListFrameworksResponseItem = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  shortName: zod.string(),
+  description: zod.string().nullish(),
+  issuingBody: zod.string().nullish(),
+  status: zod.enum(["active", "draft", "deprecated"]),
+  createdAt: zod.coerce.date().optional(),
+  updatedAt: zod.coerce.date().optional(),
+});
+export const ListFrameworksResponse = zod.array(ListFrameworksResponseItem);
+
+/**
+ * @summary List all active compliance packages (optionally filtered by frameworkId)
+ */
+export const ListPackagesQueryParams = zod.object({
+  frameworkId: zod.coerce.string().optional(),
+});
+
+export const ListPackagesResponseItem = zod.object({
+  id: zod.string(),
+  frameworkId: zod.string(),
+  packageKey: zod.string(),
+  name: zod.string(),
+  version: zod.string().nullish(),
+  description: zod.string().nullish(),
+  packageType: zod.enum([
+    "control_framework",
+    "assessment_procedure",
+    "contract_clause",
+    "evidence_package",
+    "custom",
+  ]),
+  status: zod.enum(["active", "draft", "deprecated", "archived"]),
+  effectiveDate: zod.string().nullish(),
+  sourceReference: zod.string().nullish(),
+  controlCount: zod.number(),
+  sortOrder: zod.number(),
+  frameworkName: zod.string(),
+  frameworkShortName: zod.string(),
+});
+export const ListPackagesResponse = zod.array(ListPackagesResponseItem);
+
+/**
+ * @summary List compliance packages assigned to an organization
+ */
+export const ListOrgPackagesParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ListOrgPackagesResponseItem = zod.object({
+  id: zod.string(),
+  organizationId: zod.string(),
+  packageId: zod.string(),
+  isActive: zod.boolean(),
+  selectedAt: zod.coerce.date(),
+  notes: zod.string().nullish(),
+  packageKey: zod.string(),
+  packageName: zod.string(),
+  packageVersion: zod.string().nullish(),
+  packageType: zod.string(),
+  controlCount: zod.number(),
+  frameworkId: zod.string(),
+  frameworkName: zod.string(),
+  frameworkShortName: zod.string(),
+});
+export const ListOrgPackagesResponse = zod.array(ListOrgPackagesResponseItem);
+
+/**
+ * @summary Assign compliance packages to an organization
+ */
+export const AddOrgPackagesParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AddOrgPackagesBody = zod.object({
+  packageIds: zod.array(zod.string()),
+  notes: zod.string().optional(),
+});
+
+/**
+ * @summary Remove (deactivate) a compliance package from an organization
+ */
+export const RemoveOrgPackageParams = zod.object({
+  id: zod.coerce.string(),
+  packageId: zod.coerce.string(),
+});
+
+export const RemoveOrgPackageResponse = zod.object({
+  success: zod.boolean(),
+});

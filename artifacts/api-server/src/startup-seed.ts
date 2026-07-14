@@ -25,6 +25,16 @@ import { DOCUMENT_TEMPLATES } from "./data/document-templates-data";
 import { HELP_CATEGORIES, HELP_ARTICLES, FAQ_ITEMS } from "./data/help-seed-data";
 import { seedDemoOrg } from "./demo-seed-org";
 import { seedApexSolutions } from "./seed-apex-startup";
+import {
+  complianceFrameworksTable,
+  compliancePackagesTable,
+  dfarsObligationsTable,
+} from "@workspace/db";
+import {
+  COMPLIANCE_FRAMEWORKS,
+  COMPLIANCE_PACKAGES,
+  DFARS_OBLIGATIONS,
+} from "./data/compliance-packages-data";
 
 // __dirname is injected by the esbuild build banner and points to dist/ at runtime
 const cmmcData = JSON.parse(
@@ -511,6 +521,85 @@ async function fixVtccorpControlLinks() {
   }
 }
 
+async function seedComplianceFrameworks() {
+  const [{ value: existing }] = await db
+    .select({ value: count() })
+    .from(complianceFrameworksTable);
+  if (existing > 0) return;
+
+  logger.info("Seeding compliance frameworks and packages...");
+
+  for (const fw of COMPLIANCE_FRAMEWORKS) {
+    await db
+      .insert(complianceFrameworksTable)
+      .values({
+        id: fw.id,
+        name: fw.name,
+        shortName: fw.shortName,
+        description: fw.description,
+        issuingBody: fw.issuingBody,
+        status: "active",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing();
+  }
+
+  for (const pkg of COMPLIANCE_PACKAGES) {
+    await db
+      .insert(compliancePackagesTable)
+      .values({
+        id: pkg.id,
+        frameworkId: pkg.frameworkId,
+        packageKey: pkg.packageKey,
+        name: pkg.name,
+        version: pkg.version,
+        description: pkg.description,
+        packageType: pkg.packageType,
+        status: "active",
+        effectiveDate: pkg.effectiveDate,
+        sourceReference: pkg.sourceReference,
+        controlCount: pkg.controlCount,
+        sortOrder: pkg.sortOrder,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing();
+  }
+
+  for (let i = 0; i < DFARS_OBLIGATIONS.length; i++) {
+    const ob = DFARS_OBLIGATIONS[i];
+    await db
+      .insert(dfarsObligationsTable)
+      .values({
+        id: randomUUID(),
+        packageId: ob.packageId,
+        clauseNumber: ob.clauseNumber,
+        obligationTitle: ob.obligationTitle,
+        obligationDescription: ob.obligationDescription,
+        requiredArtifacts: ob.requiredArtifacts,
+        requiredProcess: ob.requiredProcess,
+        applicableTo: ob.applicableTo,
+        flowdownRequired: ob.flowdownRequired,
+        incidentReportingRequired: ob.incidentReportingRequired,
+        assessmentRequired: ob.assessmentRequired,
+        sortOrder: ob.sortOrder,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing();
+  }
+
+  logger.info(
+    {
+      frameworks: COMPLIANCE_FRAMEWORKS.length,
+      packages: COMPLIANCE_PACKAGES.length,
+      dfarsObligations: DFARS_OBLIGATIONS.length,
+    },
+    "Compliance frameworks seeded"
+  );
+}
+
 export async function runStartupSeed() {
   try {
     await migrateSsoTable();
@@ -530,6 +619,7 @@ export async function runStartupSeed() {
     await seedApexSolutions();
     await seedSecuritySettings();
     await seedHelpContent();
+    await seedComplianceFrameworks();
     await fixVtccorpControlLinks();
   } catch (err) {
     logger.error({ err }, "Startup seed failed — app will continue but may lack reference data");

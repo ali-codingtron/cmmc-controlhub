@@ -25,6 +25,7 @@ import helpRouter from "./help";
 import exportRouter from "./export";
 import bulkExportRouter from "./bulk-export";
 import seedApexFilesRouter from "./seed-apex-files";
+import frameworksRouter from "./frameworks";
 
 const router: IRouter = Router();
 
@@ -54,5 +55,6 @@ router.use(helpRouter);
 router.use(exportRouter);
 router.use(bulkExportRouter);
 router.use(seedApexFilesRouter);
+router.use(frameworksRouter);
 
 export default router;

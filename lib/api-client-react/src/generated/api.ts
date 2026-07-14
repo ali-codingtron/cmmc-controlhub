@@ -19,6 +19,8 @@ import type {
 import type {
   AcceptInvitationBody,
   ActivateDocumentBody,
+  AddOrgPackagesBody,
+  AddOrgPackagesResponse,
   AddUserToOrgBody,
   ApproveDocumentBody,
   ApproveDocumentLogBody,
@@ -33,6 +35,8 @@ import type {
   CompleteChecklistBody,
   CompleteLogBody,
   CompleteTaskBody,
+  ComplianceFramework,
+  CompliancePackageWithFramework,
   ControlDetail,
   ControlWithStatus,
   CreateDocumentTemplateBody,
@@ -68,6 +72,7 @@ import type {
   ListDocumentTemplatesParams,
   ListDocumentsParams,
   ListEvidenceParams,
+  ListPackagesParams,
   ListPoamsParams,
   ListTasksParams,
   LoginBody,
@@ -79,6 +84,7 @@ import type {
   MfaSetupStartResponse,
   MfaSetupVerifyResponse,
   MissingDocReport,
+  OrgPackageAssignment,
   OrganizationSummary,
   Poam,
   RejectDocumentBody,
@@ -8932,4 +8938,435 @@ export const useRunDocChecks = <
   TContext
 > => {
   return useMutation(getRunDocChecksMutationOptions(options));
+};
+
+/**
+ * @summary List all active compliance frameworks
+ */
+export const getListFrameworksUrl = () => {
+  return `/api/frameworks`;
+};
+
+export const listFrameworks = async (
+  options?: RequestInit,
+): Promise<ComplianceFramework[]> => {
+  return customFetch<ComplianceFramework[]>(getListFrameworksUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListFrameworksQueryKey = () => {
+  return [`/api/frameworks`] as const;
+};
+
+export const getListFrameworksQueryOptions = <
+  TData = Awaited<ReturnType<typeof listFrameworks>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listFrameworks>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListFrameworksQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listFrameworks>>> = ({
+    signal,
+  }) => listFrameworks({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listFrameworks>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListFrameworksQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listFrameworks>>
+>;
+export type ListFrameworksQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all active compliance frameworks
+ */
+
+export function useListFrameworks<
+  TData = Awaited<ReturnType<typeof listFrameworks>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listFrameworks>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListFrameworksQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List all active compliance packages (optionally filtered by frameworkId)
+ */
+export const getListPackagesUrl = (params?: ListPackagesParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/packages?${stringifiedParams}`
+    : `/api/packages`;
+};
+
+export const listPackages = async (
+  params?: ListPackagesParams,
+  options?: RequestInit,
+): Promise<CompliancePackageWithFramework[]> => {
+  return customFetch<CompliancePackageWithFramework[]>(
+    getListPackagesUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListPackagesQueryKey = (params?: ListPackagesParams) => {
+  return [`/api/packages`, ...(params ? [params] : [])] as const;
+};
+
+export const getListPackagesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listPackages>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListPackagesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPackages>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListPackagesQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listPackages>>> = ({
+    signal,
+  }) => listPackages(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listPackages>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListPackagesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listPackages>>
+>;
+export type ListPackagesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all active compliance packages (optionally filtered by frameworkId)
+ */
+
+export function useListPackages<
+  TData = Awaited<ReturnType<typeof listPackages>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListPackagesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPackages>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListPackagesQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List compliance packages assigned to an organization
+ */
+export const getListOrgPackagesUrl = (id: string) => {
+  return `/api/organizations/${id}/packages`;
+};
+
+export const listOrgPackages = async (
+  id: string,
+  options?: RequestInit,
+): Promise<OrgPackageAssignment[]> => {
+  return customFetch<OrgPackageAssignment[]>(getListOrgPackagesUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListOrgPackagesQueryKey = (id: string) => {
+  return [`/api/organizations/${id}/packages`] as const;
+};
+
+export const getListOrgPackagesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listOrgPackages>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listOrgPackages>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListOrgPackagesQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listOrgPackages>>> = ({
+    signal,
+  }) => listOrgPackages(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listOrgPackages>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListOrgPackagesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listOrgPackages>>
+>;
+export type ListOrgPackagesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List compliance packages assigned to an organization
+ */
+
+export function useListOrgPackages<
+  TData = Awaited<ReturnType<typeof listOrgPackages>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listOrgPackages>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListOrgPackagesQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Assign compliance packages to an organization
+ */
+export const getAddOrgPackagesUrl = (id: string) => {
+  return `/api/organizations/${id}/packages`;
+};
+
+export const addOrgPackages = async (
+  id: string,
+  addOrgPackagesBody: AddOrgPackagesBody,
+  options?: RequestInit,
+): Promise<AddOrgPackagesResponse> => {
+  return customFetch<AddOrgPackagesResponse>(getAddOrgPackagesUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(addOrgPackagesBody),
+  });
+};
+
+export const getAddOrgPackagesMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addOrgPackages>>,
+    TError,
+    { id: string; data: BodyType<AddOrgPackagesBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addOrgPackages>>,
+  TError,
+  { id: string; data: BodyType<AddOrgPackagesBody> },
+  TContext
+> => {
+  const mutationKey = ["addOrgPackages"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addOrgPackages>>,
+    { id: string; data: BodyType<AddOrgPackagesBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return addOrgPackages(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddOrgPackagesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addOrgPackages>>
+>;
+export type AddOrgPackagesMutationBody = BodyType<AddOrgPackagesBody>;
+export type AddOrgPackagesMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Assign compliance packages to an organization
+ */
+export const useAddOrgPackages = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addOrgPackages>>,
+    TError,
+    { id: string; data: BodyType<AddOrgPackagesBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addOrgPackages>>,
+  TError,
+  { id: string; data: BodyType<AddOrgPackagesBody> },
+  TContext
+> => {
+  return useMutation(getAddOrgPackagesMutationOptions(options));
+};
+
+/**
+ * @summary Remove (deactivate) a compliance package from an organization
+ */
+export const getRemoveOrgPackageUrl = (id: string, packageId: string) => {
+  return `/api/organizations/${id}/packages/${packageId}`;
+};
+
+export const removeOrgPackage = async (
+  id: string,
+  packageId: string,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getRemoveOrgPackageUrl(id, packageId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getRemoveOrgPackageMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeOrgPackage>>,
+    TError,
+    { id: string; packageId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof removeOrgPackage>>,
+  TError,
+  { id: string; packageId: string },
+  TContext
+> => {
+  const mutationKey = ["removeOrgPackage"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof removeOrgPackage>>,
+    { id: string; packageId: string }
+  > = (props) => {
+    const { id, packageId } = props ?? {};
+
+    return removeOrgPackage(id, packageId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RemoveOrgPackageMutationResult = NonNullable<
+  Awaited<ReturnType<typeof removeOrgPackage>>
+>;
+
+export type RemoveOrgPackageMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove (deactivate) a compliance package from an organization
+ */
+export const useRemoveOrgPackage = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeOrgPackage>>,
+    TError,
+    { id: string; packageId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof removeOrgPackage>>,
+  TError,
+  { id: string; packageId: string },
+  TContext
+> => {
+  return useMutation(getRemoveOrgPackageMutationOptions(options));
 };

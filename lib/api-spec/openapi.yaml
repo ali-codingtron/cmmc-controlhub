@@ -40,6 +40,8 @@ tags:
     description: Compliance Checklists
   - name: automation
     description: Documentation Automation Rules
+  - name: frameworks
+    description: Compliance Frameworks and Packages
 paths:
   /healthz:
     get:
@@ -2260,6 +2262,111 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DocCheckResult"
+
+  # ─── COMPLIANCE FRAMEWORKS ───────────────────────────────────
+  /frameworks:
+    get:
+      operationId: listFrameworks
+      tags: [frameworks]
+      summary: List all active compliance frameworks
+      responses:
+        "200":
+          description: List of compliance frameworks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ComplianceFramework"
+
+  /packages:
+    get:
+      operationId: listPackages
+      tags: [frameworks]
+      summary: List all active compliance packages (optionally filtered by frameworkId)
+      parameters:
+        - name: frameworkId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of compliance packages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CompliancePackageWithFramework"
+
+  /organizations/{id}/packages:
+    get:
+      operationId: listOrgPackages
+      tags: [frameworks]
+      summary: List compliance packages assigned to an organization
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Organization package assignments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OrgPackageAssignment"
+    post:
+      operationId: addOrgPackages
+      tags: [frameworks]
+      summary: Assign compliance packages to an organization
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddOrgPackagesBody"
+      responses:
+        "201":
+          description: Packages assigned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddOrgPackagesResponse"
+
+  /organizations/{id}/packages/{packageId}:
+    delete:
+      operationId: removeOrgPackage
+      tags: [frameworks]
+      summary: Remove (deactivate) a compliance package from an organization
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: packageId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Package deactivated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
 
 components:
   schemas:
@@ -4683,3 +4790,129 @@ components:
         password:
           type: string
       required: [token, password]
+
+    # ─── COMPLIANCE FRAMEWORKS ────────────────────────────────────
+    ComplianceFramework:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        shortName:
+          type: string
+        description:
+          type: string
+          nullable: true
+        issuingBody:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [active, draft, deprecated]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, name, shortName, status]
+
+    CompliancePackageWithFramework:
+      type: object
+      properties:
+        id:
+          type: string
+        frameworkId:
+          type: string
+        packageKey:
+          type: string
+        name:
+          type: string
+        version:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        packageType:
+          type: string
+          enum: [control_framework, assessment_procedure, contract_clause, evidence_package, custom]
+        status:
+          type: string
+          enum: [active, draft, deprecated, archived]
+        effectiveDate:
+          type: string
+          nullable: true
+        sourceReference:
+          type: string
+          nullable: true
+        controlCount:
+          type: integer
+        sortOrder:
+          type: integer
+        frameworkName:
+          type: string
+        frameworkShortName:
+          type: string
+      required: [id, frameworkId, packageKey, name, packageType, status, controlCount, sortOrder, frameworkName, frameworkShortName]
+
+    OrgPackageAssignment:
+      type: object
+      properties:
+        id:
+          type: string
+        organizationId:
+          type: string
+        packageId:
+          type: string
+        isActive:
+          type: boolean
+        selectedAt:
+          type: string
+          format: date-time
+        notes:
+          type: string
+          nullable: true
+        packageKey:
+          type: string
+        packageName:
+          type: string
+        packageVersion:
+          type: string
+          nullable: true
+        packageType:
+          type: string
+        controlCount:
+          type: integer
+        frameworkId:
+          type: string
+        frameworkName:
+          type: string
+        frameworkShortName:
+          type: string
+      required: [id, organizationId, packageId, isActive, selectedAt, packageKey, packageName, packageType, controlCount, frameworkId, frameworkName, frameworkShortName]
+
+    AddOrgPackagesBody:
+      type: object
+      properties:
+        packageIds:
+          type: array
+          items:
+            type: string
+        notes:
+          type: string
+      required: [packageIds]
+
+    AddOrgPackagesResponse:
+      type: object
+      properties:
+        inserted:
+          type: array
+          items:
+            type: string
+        skipped:
+          type: array
+          items:
+            type: string
+      required: [inserted, skipped]

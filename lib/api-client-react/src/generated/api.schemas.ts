@@ -1494,6 +1494,91 @@ export interface AcceptInvitationBody {
   password: string;
 }
 
+export type ComplianceFrameworkStatus =
+  (typeof ComplianceFrameworkStatus)[keyof typeof ComplianceFrameworkStatus];
+
+export const ComplianceFrameworkStatus = {
+  active: "active",
+  draft: "draft",
+  deprecated: "deprecated",
+} as const;
+
+export interface ComplianceFramework {
+  id: string;
+  name: string;
+  shortName: string;
+  description?: string | null;
+  issuingBody?: string | null;
+  status: ComplianceFrameworkStatus;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type CompliancePackageWithFrameworkPackageType =
+  (typeof CompliancePackageWithFrameworkPackageType)[keyof typeof CompliancePackageWithFrameworkPackageType];
+
+export const CompliancePackageWithFrameworkPackageType = {
+  control_framework: "control_framework",
+  assessment_procedure: "assessment_procedure",
+  contract_clause: "contract_clause",
+  evidence_package: "evidence_package",
+  custom: "custom",
+} as const;
+
+export type CompliancePackageWithFrameworkStatus =
+  (typeof CompliancePackageWithFrameworkStatus)[keyof typeof CompliancePackageWithFrameworkStatus];
+
+export const CompliancePackageWithFrameworkStatus = {
+  active: "active",
+  draft: "draft",
+  deprecated: "deprecated",
+  archived: "archived",
+} as const;
+
+export interface CompliancePackageWithFramework {
+  id: string;
+  frameworkId: string;
+  packageKey: string;
+  name: string;
+  version?: string | null;
+  description?: string | null;
+  packageType: CompliancePackageWithFrameworkPackageType;
+  status: CompliancePackageWithFrameworkStatus;
+  effectiveDate?: string | null;
+  sourceReference?: string | null;
+  controlCount: number;
+  sortOrder: number;
+  frameworkName: string;
+  frameworkShortName: string;
+}
+
+export interface OrgPackageAssignment {
+  id: string;
+  organizationId: string;
+  packageId: string;
+  isActive: boolean;
+  selectedAt: string;
+  notes?: string | null;
+  packageKey: string;
+  packageName: string;
+  packageVersion?: string | null;
+  packageType: string;
+  controlCount: number;
+  frameworkId: string;
+  frameworkName: string;
+  frameworkShortName: string;
+}
+
+export interface AddOrgPackagesBody {
+  packageIds: string[];
+  notes?: string;
+}
+
+export interface AddOrgPackagesResponse {
+  inserted: string[];
+  skipped: string[];
+}
+
 export type ValidateInvitationParams = {
   token: string;
 };
@@ -1710,3 +1795,7 @@ export type ApproveDocumentLogBody = {
 };
 
 export type RunDocChecksBody = { [key: string]: unknown };
+
+export type ListPackagesParams = {
+  frameworkId?: string;
+};
