@@ -645,19 +645,22 @@ async function seedComplianceFrameworkHelpArticles() {
 
 async function seedCrosswalkRequirements() {
   // Check per-package so new packages can be seeded even if others already exist
-  const [cmmcL2Count, nistR2Count, nistR3Count] = await Promise.all([
+  const [cmmcL2Count, nistR2Count, nistR3Count, dfars7012Count] = await Promise.all([
     db.select({ cnt: count() }).from(complianceRequirementsTable)
       .where(eq(complianceRequirementsTable.packageId, "pkg-cmmc-l2-self")),
     db.select({ cnt: count() }).from(complianceRequirementsTable)
       .where(eq(complianceRequirementsTable.packageId, "pkg-nist-800-171-r2")),
     db.select({ cnt: count() }).from(complianceRequirementsTable)
       .where(eq(complianceRequirementsTable.packageId, "pkg-nist-800-171-r3")),
+    db.select({ cnt: count() }).from(complianceRequirementsTable)
+      .where(eq(complianceRequirementsTable.packageId, "pkg-dfars-7012")),
   ]);
 
   const needCmmcL2 = Number(cmmcL2Count[0].cnt) === 0;
   const needNistR2 = Number(nistR2Count[0].cnt) === 0;
   const needNistR3 = Number(nistR3Count[0].cnt) === 0;
-  const nothingToDo = !needCmmcL2 && !needNistR2 && !needNistR3;
+  const needDfars7012 = Number(dfars7012Count[0].cnt) === 0;
+  const nothingToDo = !needCmmcL2 && !needNistR2 && !needNistR3 && !needDfars7012;
   if (nothingToDo) return;
 
   // Read active controls to derive requirements
@@ -790,13 +793,46 @@ async function seedCrosswalkRequirements() {
     }
   }
 
+  // --- DFARS 252.204-7012 → NIST 800-171 R2 crosswalk (maps_to) ---
+  // DFARS 7012 mandates NIST SP 800-171 compliance; each NIST control is "maps_to" by this clause.
+  if (needDfars7012) {
+    const dfarsReqId = randomUUID();
+    await db.insert(complianceRequirementsTable).values({
+      id: dfarsReqId,
+      packageId: "pkg-dfars-7012",
+      requirementId: "252.204-7012",
+      title: "DFARS 252.204-7012 — Safeguarding Covered Defense Information & Cyber Incident Reporting",
+      level: "L2",
+      sortOrder: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).onConflictDoNothing();
+
+    // Create crosswalk: DFARS 7012 → each NIST 800-171 R2 requirement (all 110 controls mandated)
+    for (const c of nistControls) {
+      const nistR2Id = nistReqMap[c.id];
+      if (nistR2Id) {
+        await db.insert(requirementCrosswalkTable).values({
+          id: randomUUID(),
+          sourceRequirementId: dfarsReqId,
+          targetRequirementId: nistR2Id,
+          relationshipType: "maps_to",
+          notes: `DFARS 252.204-7012 mandates NIST 800-171 §${c.nistRef} (${c.controlId})`,
+          createdAt: new Date(),
+        }).onConflictDoNothing();
+      }
+    }
+  }
+
   logger.info(
     {
       cmmcReqs: needCmmcL2 ? controls.length : "skip",
       nistR2Reqs: needNistR2 ? nistControls.length : "skip",
       nistR3Reqs: needNistR3 ? nistControls.length : "skip",
+      dfars7012Reqs: needDfars7012 ? 1 : "skip",
       crosswalkCmmcR2: (needCmmcL2 || needNistR2) ? nistControls.length : "skip",
       crosswalkR2R3: needNistR3 ? nistControls.length : "skip",
+      crosswalkDfars7012Nist: needDfars7012 ? nistControls.length : "skip",
     },
     "Compliance requirements crosswalk seeded"
   );

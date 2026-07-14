@@ -25,58 +25,34 @@ import { randomUUID } from "crypto";
 const router = Router();
 
 router.get("/controls", requireAuth, requireOrg, async (req, res) => {
-  const { domain, level, status, search } = req.query as Record<string, string>;
+  const { domain, level, status, search, packageId: filterPackageId } = req.query as Record<string, string>;
   const orgId = req.orgId;
 
   // Package-aware filtering via compliance_requirements join.
-  // When org has CMMC/FAR/NIST packages, filter controls to those covered by requirement mappings.
-  // DFARS-only orgs and orgs with no packages see all controls (legacy behaviour).
+  // filterPackageId (from query) → filter controls for THAT specific package only.
+  // No filterPackageId → union of all org's active framework package requirements.
+  // DFARS-only orgs, no-package orgs, or packages with no mapped requirements → show all.
   let packageControlIds: string[] | null = null; // null = no package restriction
 
   if (orgId && !level) {
-    const orgPkgs = await db
-      .select({
-        packageId: compliancePackagesTable.id,
-        packageKey: compliancePackagesTable.packageKey,
-      })
-      .from(organizationPackagesTable)
-      .innerJoin(compliancePackagesTable, eq(organizationPackagesTable.packageId, compliancePackagesTable.id))
-      .where(
-        and(
-          eq(organizationPackagesTable.organizationId, orgId),
-          eq(organizationPackagesTable.isActive, true)
-        )
-      );
+    if (filterPackageId) {
+      // ── Specific package selected (e.g. from Controls page package dropdown) ──────
+      const reqs = await db
+        .select({
+          reqId: complianceRequirementsTable.requirementId,
+          pkgKey: compliancePackagesTable.packageKey,
+        })
+        .from(complianceRequirementsTable)
+        .innerJoin(compliancePackagesTable, eq(complianceRequirementsTable.packageId, compliancePackagesTable.id))
+        .where(eq(complianceRequirementsTable.packageId, filterPackageId));
 
-    if (orgPkgs.length > 0) {
-      // CMMC (L1/L2) and FAR packages: their requirement IDs match controlsTable.controlId
-      const cmmcFarPkgIds = orgPkgs
-        .filter(p => p.packageKey.startsWith("CMMC_") || p.packageKey === "FAR_52_204_21")
-        .map(p => p.packageId);
+      if (reqs.length > 0) {
+        const pkgKey = reqs[0].pkgKey;
+        const reqIds = reqs.map(r => r.reqId);
+        const isCmmcFar = pkgKey.startsWith("CMMC_") || pkgKey === "FAR_52_204_21";
+        const isNist = pkgKey.startsWith("NIST_800_171_");
 
-      // NIST 800-171 requirement packages (exclude assessment procedures, i.e. "171A"):
-      // NIST_800_171_R2, NIST_800_171_R3 → their requirement IDs match controlsTable.nistRef
-      const nistPkgIds = orgPkgs
-        .filter(p => p.packageKey.startsWith("NIST_800_171_"))
-        .map(p => p.packageId);
-
-      const mappedPkgIds = [...cmmcFarPkgIds, ...nistPkgIds];
-
-      if (mappedPkgIds.length > 0) {
-        // Fetch requirement IDs from seeded compliance_requirements for these packages
-        const reqs = await db
-          .select({
-            reqId: complianceRequirementsTable.requirementId,
-            pkgId: complianceRequirementsTable.packageId,
-          })
-          .from(complianceRequirementsTable)
-          .where(inArray(complianceRequirementsTable.packageId, mappedPkgIds));
-
-        if (reqs.length > 0) {
-          const cmmcFarReqIds = reqs.filter(r => cmmcFarPkgIds.includes(r.pkgId)).map(r => r.reqId);
-          const nistReqIds = reqs.filter(r => nistPkgIds.includes(r.pkgId)).map(r => r.reqId);
-
-          // Resolve matching control DB IDs (deduplicated via SELECT DISTINCT)
+        if (isCmmcFar || isNist) {
           const matched = await db
             .selectDistinct({ id: controlsTable.id })
             .from(controlsTable)
@@ -84,19 +60,73 @@ router.get("/controls", requireAuth, requireOrg, async (req, res) => {
               and(
                 eq(controlsTable.isActive, true),
                 or(
-                  cmmcFarReqIds.length > 0 ? inArray(controlsTable.controlId, cmmcFarReqIds) : undefined,
-                  nistReqIds.length > 0 ? inArray(controlsTable.nistRef as any, nistReqIds) : undefined
+                  isCmmcFar ? inArray(controlsTable.controlId, reqIds) : undefined,
+                  isNist ? inArray(controlsTable.nistRef as any, reqIds) : undefined
                 )
               )
             );
-
           packageControlIds = matched.map(c => c.id);
         }
-        // If requirements not yet seeded (empty reqs), fall through → show all (packageControlIds stays null)
+        // DFARS or other non-control packages → packageControlIds stays null (show all)
       }
-      // DFARS-only or unrecognised packages → packageControlIds stays null (show all)
+    } else {
+      // ── No specific package: apply union of all org's active framework packages ──
+      const orgPkgs = await db
+        .select({
+          packageId: compliancePackagesTable.id,
+          packageKey: compliancePackagesTable.packageKey,
+        })
+        .from(organizationPackagesTable)
+        .innerJoin(compliancePackagesTable, eq(organizationPackagesTable.packageId, compliancePackagesTable.id))
+        .where(
+          and(
+            eq(organizationPackagesTable.organizationId, orgId),
+            eq(organizationPackagesTable.isActive, true)
+          )
+        );
+
+      if (orgPkgs.length > 0) {
+        const cmmcFarPkgIds = orgPkgs
+          .filter(p => p.packageKey.startsWith("CMMC_") || p.packageKey === "FAR_52_204_21")
+          .map(p => p.packageId);
+        const nistPkgIds = orgPkgs
+          .filter(p => p.packageKey.startsWith("NIST_800_171_"))
+          .map(p => p.packageId);
+
+        const mappedPkgIds = [...cmmcFarPkgIds, ...nistPkgIds];
+
+        if (mappedPkgIds.length > 0) {
+          const reqs = await db
+            .select({
+              reqId: complianceRequirementsTable.requirementId,
+              pkgId: complianceRequirementsTable.packageId,
+            })
+            .from(complianceRequirementsTable)
+            .where(inArray(complianceRequirementsTable.packageId, mappedPkgIds));
+
+          if (reqs.length > 0) {
+            const cmmcFarReqIds = reqs.filter(r => cmmcFarPkgIds.includes(r.pkgId)).map(r => r.reqId);
+            const nistReqIds = reqs.filter(r => nistPkgIds.includes(r.pkgId)).map(r => r.reqId);
+
+            const matched = await db
+              .selectDistinct({ id: controlsTable.id })
+              .from(controlsTable)
+              .where(
+                and(
+                  eq(controlsTable.isActive, true),
+                  or(
+                    cmmcFarReqIds.length > 0 ? inArray(controlsTable.controlId, cmmcFarReqIds) : undefined,
+                    nistReqIds.length > 0 ? inArray(controlsTable.nistRef as any, nistReqIds) : undefined
+                  )
+                )
+              );
+            packageControlIds = matched.map(c => c.id);
+          }
+        }
+        // DFARS-only or no mappable packages → packageControlIds stays null (show all)
+      }
+      // No packages → show all (legacy behaviour)
     }
-    // No packages → show all (legacy behaviour)
   }
 
   const controls = await db

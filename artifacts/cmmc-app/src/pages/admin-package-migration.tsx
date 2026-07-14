@@ -82,10 +82,13 @@ function PreviewModal({
           <DialogTitle className="flex items-center gap-2">
             <Package className="h-5 w-5 text-primary" />
             Package Assignment Preview
+            <Badge variant="outline" className="ml-auto text-[10px] bg-amber-50 text-amber-700 border-amber-300 font-medium">
+              Preview Only
+            </Badge>
           </DialogTitle>
           <p className="text-sm text-muted-foreground mt-1">
-            Dry-run for{" "}
-            <span className="font-medium text-foreground">{org.name}</span>. No changes are applied automatically.
+            Read-only dry-run for{" "}
+            <span className="font-medium text-foreground">{org.name}</span>. This tool does not apply any changes — use the button below to apply.
           </p>
         </DialogHeader>
 

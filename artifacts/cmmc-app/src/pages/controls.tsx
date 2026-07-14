@@ -49,7 +49,10 @@ export default function Controls() {
   const [evidenceFilter, setEvidenceFilter] = useState<EvidenceCoverage>("all");
   const [packageFilter, setPackageFilter] = useState("all");
 
-  const { data: controls, isLoading } = useListControls({});
+  const { data: controls, isLoading } = useListControls(
+    packageFilter !== "all" ? ({ packageId: packageFilter } as any) : {},
+    { query: { enabled: !!activeOrg?.id } as any }
+  );
 
   const { data: orgPackages = [] } = useListOrgPackages(activeOrg?.id ?? "", {
     query: { enabled: !!activeOrg?.id } as any,
@@ -79,7 +82,8 @@ export default function Controls() {
         const code = c.controlId?.split(".")[0] ?? "";
         if (code !== domainFilter) return false;
       }
-      const effectiveLevel = levelFilter !== "all" ? levelFilter : (!isDfarsSelected ? pkgDerivedLevel : undefined);
+      // Package-level filtering is now server-side (via packageId query param); only apply explicit level filter here
+      const effectiveLevel = levelFilter !== "all" ? levelFilter : undefined;
       if (effectiveLevel) {
         if (c.level !== effectiveLevel) return false;
       }
