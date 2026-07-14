@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Table,
@@ -19,9 +20,26 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ShieldCheck, Package, AlertCircle, Check, Building2, Link as LinkIcon } from "lucide-react";
-import { Link } from "wouter";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  ShieldCheck,
+  Package,
+  AlertCircle,
+  Check,
+  Building2,
+  Plus,
+  Trash2,
+  Loader2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useListPackages, useAddOrgPackages, useRemoveOrgPackage } from "@workspace/api-client-react";
+import type { CompliancePackageWithFramework } from "@workspace/api-client-react";
 
 interface OrgPackageStatus {
   id: string;
@@ -44,17 +62,6 @@ interface OrgPackageStatus {
   }>;
 }
 
-const SUGGESTED_PACKAGES: Record<string, Array<{ key: string; name: string; reason: string }>> = {
-  L1: [
-    { key: "CMMC_L1_SELF", name: "CMMC L1 Self-Assessment", reason: "CMMC Level 1 target requires L1 self-assessment tracking" },
-    { key: "FAR_52_204_21", name: "FAR 52.204-21", reason: "FCI handling requires FAR Basic Safeguarding clause compliance" },
-  ],
-  L2: [
-    { key: "CMMC_L2_SELF", name: "CMMC L2 Self-Assessment", reason: "CMMC Level 2 target requires L2 assessment tracking" },
-    { key: "NIST_800_171_R2", name: "NIST SP 800-171 Rev. 2", reason: "CMMC L2 is based on NIST 800-171 Rev. 2 (110 controls)" },
-  ],
-};
-
 function frameworkColor(fw: string): string {
   if (fw === "CMMC") return "bg-purple-50 text-purple-700 border-purple-200";
   if (fw?.startsWith("NIST")) return "bg-blue-50 text-blue-700 border-blue-200";
@@ -63,116 +70,236 @@ function frameworkColor(fw: string): string {
   return "bg-slate-50 text-slate-600 border-slate-200";
 }
 
-function PreviewModal({
-  org,
-  onClose,
+function ConfirmRemoveDialog({
+  packageName,
+  orgName,
+  onConfirm,
+  onCancel,
+  isPending,
 }: {
-  org: OrgPackageStatus;
-  onClose: () => void;
+  packageName: string;
+  orgName: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  isPending: boolean;
 }) {
-  const level = org.cmmcTargetLevel ?? "L2";
-  const suggested = SUGGESTED_PACKAGES[level] ?? SUGGESTED_PACKAGES["L2"];
-  const activeKeys = org.packages.map((p) => p.packageKey);
-  const toAdd = suggested.filter((s) => !activeKeys.includes(s.key));
-
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-lg">
+    <Dialog open onOpenChange={(open) => { if (!open) onCancel(); }}>
+      <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Package className="h-5 w-5 text-primary" />
-            Package Assignment Preview
-            <Badge variant="outline" className="ml-auto text-[10px] bg-amber-50 text-amber-700 border-amber-300 font-medium">
-              Preview Only
-            </Badge>
+            <Trash2 className="h-4 w-4 text-destructive" />
+            Remove Package
           </DialogTitle>
-          <p className="text-sm text-muted-foreground mt-1">
-            Read-only dry-run for{" "}
-            <span className="font-medium text-foreground">{org.name}</span>. This tool does not apply any changes — use the button below to apply.
-          </p>
+          <DialogDescription>
+            Remove <span className="font-medium text-foreground">{packageName}</span> from{" "}
+            <span className="font-medium text-foreground">{orgName}</span>? The package will no
+            longer appear in their compliance view.
+          </DialogDescription>
         </DialogHeader>
-
-        <div className="space-y-4 py-2">
-          <div>
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-              Current packages ({org.packages.length})
-            </div>
-            {org.packages.length === 0 ? (
-              <p className="text-sm text-muted-foreground">None assigned</p>
-            ) : (
-              <div className="space-y-1">
-                {org.packages.map((pkg) => (
-                  <div key={pkg.packageId} className="flex items-center gap-2 text-sm">
-                    <Check className="h-4 w-4 text-green-600 shrink-0" />
-                    <Badge variant="outline" className={cn("text-[10px]", frameworkColor(pkg.frameworkShortName))}>
-                      {pkg.frameworkShortName}
-                    </Badge>
-                    <span>{pkg.packageName}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-              Suggested packages to add ({toAdd.length})
-            </div>
-            {toAdd.length === 0 ? (
-              <div className="flex items-center gap-2 text-sm text-green-700">
-                <Check className="h-4 w-4" />
-                All recommended packages are already assigned.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {toAdd.map((pkg) => (
-                  <div key={pkg.key} className="rounded-md border border-border/60 p-2.5">
-                    <div className="font-medium text-sm">{pkg.name}</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">{pkg.reason}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {toAdd.length > 0 && (
-            <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
-              <p className="font-medium mb-1">To apply this assignment:</p>
-              <ol className="list-decimal list-inside space-y-1 text-xs">
-                <li>Switch the active org to <span className="font-medium">{org.name}</span> using the org switcher in the sidebar</li>
-                <li>
-                  Click <span className="font-medium">Open Packages Settings</span> below to navigate to Settings → Compliance Packages
-                </li>
-                <li>Click "Add Package" and select the packages listed above</li>
-              </ol>
-              <p className="text-xs mt-2 text-amber-700">
-                No automatic migration is applied from this tool. Admin review is required before assigning packages.
-              </p>
-            </div>
-          )}
-        </div>
-
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose}>Close</Button>
-          {toAdd.length > 0 && (
-            <Link href="/settings/packages" onClick={onClose}>
-              <Button variant="default" size="sm" className="gap-1.5">
-                <LinkIcon className="h-3.5 w-3.5" />
-                Open Packages Settings
-              </Button>
-            </Link>
-          )}
+          <Button variant="outline" onClick={onCancel} disabled={isPending}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={onConfirm} disabled={isPending}>
+            {isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 mr-1.5" />}
+            Remove
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
+function ManagePackagesModal({
+  org,
+  allPackages,
+  onClose,
+  onRefresh,
+}: {
+  org: OrgPackageStatus;
+  allPackages: CompliancePackageWithFramework[];
+  onClose: () => void;
+  onRefresh: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [selectedPackageId, setSelectedPackageId] = useState<string>("");
+  const [confirmRemovePackage, setConfirmRemovePackage] = useState<{ packageId: string; packageName: string } | null>(null);
+
+  const invalidateOrgPackages = () => {
+    void queryClient.invalidateQueries({
+      queryKey: [`/api/organizations/${org.id}/packages`],
+    });
+  };
+
+  const addMutation = useAddOrgPackages({
+    mutation: {
+      onSuccess: () => {
+        setSelectedPackageId("");
+        invalidateOrgPackages();
+        onRefresh();
+      },
+    },
+  });
+
+  const removeMutation = useRemoveOrgPackage({
+    mutation: {
+      onSuccess: () => {
+        setConfirmRemovePackage(null);
+        invalidateOrgPackages();
+        onRefresh();
+      },
+    },
+  });
+
+  const assignedPackageIds = new Set(org.packages.map((p) => p.packageId));
+  const availablePackages = allPackages.filter((p) => !assignedPackageIds.has(p.id));
+
+  const handleAssign = () => {
+    if (!selectedPackageId) return;
+    addMutation.mutate({ id: org.id, data: { packageIds: [selectedPackageId] } });
+  };
+
+  const handleRemoveConfirmed = () => {
+    if (!confirmRemovePackage) return;
+    removeMutation.mutate({ id: org.id, packageId: confirmRemovePackage.packageId });
+  };
+
+  return (
+    <>
+      <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5 text-primary" />
+              Manage Packages
+            </DialogTitle>
+            <DialogDescription>
+              Assign or remove compliance packages for{" "}
+              <span className="font-medium text-foreground">{org.name}</span>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 py-1">
+            <div>
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                Assigned Packages ({org.packages.length})
+              </div>
+              {org.packages.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No packages assigned yet.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {org.packages.map((pkg) => (
+                    <div
+                      key={pkg.packageId}
+                      className="flex items-center gap-2 text-sm rounded-md border border-border/50 px-3 py-2 bg-muted/20"
+                    >
+                      <Badge
+                        variant="outline"
+                        className={cn("text-[10px] shrink-0", frameworkColor(pkg.frameworkShortName))}
+                      >
+                        {pkg.frameworkShortName}
+                      </Badge>
+                      <span className="flex-1 font-medium">{pkg.packageName}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
+                        onClick={() =>
+                          setConfirmRemovePackage({ packageId: pkg.packageId, packageName: pkg.packageName })
+                        }
+                        disabled={removeMutation.isPending}
+                        title={`Remove ${pkg.packageName}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                Assign Package
+              </div>
+              {availablePackages.length === 0 ? (
+                <div className="flex items-center gap-2 text-sm text-green-700 rounded-md border border-green-200 bg-green-50 px-3 py-2">
+                  <Check className="h-4 w-4 shrink-0" />
+                  All available packages are already assigned.
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Select value={selectedPackageId} onValueChange={setSelectedPackageId}>
+                    <SelectTrigger className="flex-1 text-sm h-9">
+                      <SelectValue placeholder="Select a package to assign…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availablePackages.map((pkg) => (
+                        <SelectItem key={pkg.id} value={pkg.id}>
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              variant="outline"
+                              className={cn("text-[9px] px-1 py-0 shrink-0", frameworkColor(pkg.frameworkShortName))}
+                            >
+                              {pkg.frameworkShortName}
+                            </Badge>
+                            <span>{pkg.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size="sm"
+                    onClick={handleAssign}
+                    disabled={!selectedPackageId || addMutation.isPending}
+                    className="h-9"
+                  >
+                    {addMutation.isPending ? (
+                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    ) : (
+                      <Plus className="h-3.5 w-3.5 mr-1.5" />
+                    )}
+                    Assign
+                  </Button>
+                </div>
+              )}
+              {addMutation.isError && (
+                <p className="text-xs text-destructive mt-1.5">
+                  Failed to assign package. Please try again.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={onClose}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {confirmRemovePackage && (
+        <ConfirmRemoveDialog
+          packageName={confirmRemovePackage.packageName}
+          orgName={org.name}
+          onConfirm={handleRemoveConfirmed}
+          onCancel={() => setConfirmRemovePackage(null)}
+          isPending={removeMutation.isPending}
+        />
+      )}
+    </>
+  );
+}
+
 export default function AdminPackageMigration() {
   const { user } = useAuth();
-  const [previewOrg, setPreviewOrg] = useState<OrgPackageStatus | null>(null);
+  const queryClient = useQueryClient();
+  const [manageOrg, setManageOrg] = useState<OrgPackageStatus | null>(null);
 
-  const { data: orgs = [], isLoading } = useQuery<OrgPackageStatus[]>({
+  const { data: orgs = [], isLoading, refetch } = useQuery<OrgPackageStatus[]>({
     queryKey: ["/api/admin/orgs-package-status"],
     queryFn: async () => {
       const token = localStorage.getItem("auth_token");
@@ -186,6 +313,11 @@ export default function AdminPackageMigration() {
     staleTime: 30000,
   });
 
+  const { data: allPackages = [] } = useListPackages(
+    undefined,
+    { query: { enabled: user?.role === "admin", staleTime: 60000 } as any }
+  );
+
   if (user?.role !== "admin") {
     return (
       <div className="space-y-4">
@@ -195,23 +327,32 @@ export default function AdminPackageMigration() {
     );
   }
 
-  const unassignedOrgs = orgs.filter((o) => o.isActive && o.packages.length === 0);
-  const assignedOrgs = orgs.filter((o) => o.isActive && o.packages.length > 0);
+  const activeOrgs = orgs.filter((o) => o.isActive);
+  const unassignedOrgs = activeOrgs.filter((o) => o.packages.length === 0);
+  const assignedOrgs = activeOrgs.filter((o) => o.packages.length > 0);
+
+  const handleRefreshAfterChange = () => {
+    void refetch();
+    void queryClient.invalidateQueries({ queryKey: ["/api/organizations"] });
+  };
+
+  const liveManageOrg = manageOrg
+    ? (orgs.find((o) => o.id === manageOrg.id) ?? manageOrg)
+    : null;
 
   return (
     <div className="space-y-6 max-w-5xl">
       <div>
         <h1 className="text-3xl font-bold">Package Migration Tool</h1>
         <p className="text-muted-foreground mt-1">
-          Review existing organizations and assign compliance packages. This is a read-only dry-run tool — no changes
-          are applied automatically.
+          Assign or remove compliance packages for any organization directly from this page.
         </p>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold">{orgs.filter((o) => o.isActive).length}</div>
+            <div className="text-2xl font-bold">{activeOrgs.length}</div>
             <div className="text-xs text-muted-foreground mt-0.5">Total Organizations</div>
           </CardContent>
         </Card>
@@ -237,8 +378,8 @@ export default function AdminPackageMigration() {
               {unassignedOrgs.length} organization{unassignedOrgs.length !== 1 ? "s" : ""} without packages
             </p>
             <p className="text-sm text-amber-700 mt-0.5">
-              Organizations without compliance packages assigned will default to showing all CMMC controls.
-              Use the Preview button to see suggested packages for each org.
+              Organizations without compliance packages assigned will default to showing all CMMC
+              controls. Click <strong>Manage</strong> to assign packages.
             </p>
           </div>
         </div>
@@ -266,14 +407,14 @@ export default function AdminPackageMigration() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {orgs.filter((o) => o.isActive).length === 0 ? (
+                {activeOrgs.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
                       No organizations found.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  orgs.filter((o) => o.isActive).map((org) => (
+                  activeOrgs.map((org) => (
                     <TableRow key={org.id}>
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -285,7 +426,10 @@ export default function AdminPackageMigration() {
                             )}
                           </div>
                           {org.isTestOrganization && (
-                            <Badge variant="outline" className="text-[9px] border-amber-400/60 text-amber-600 bg-amber-50">
+                            <Badge
+                              variant="outline"
+                              className="text-[9px] border-amber-400/60 text-amber-600 bg-amber-50"
+                            >
                               TEST
                             </Badge>
                           )}
@@ -293,7 +437,10 @@ export default function AdminPackageMigration() {
                       </TableCell>
                       <TableCell>
                         {org.cmmcTargetLevel ? (
-                          <Badge variant="outline" className="text-[11px] bg-purple-50 text-purple-700 border-purple-200">
+                          <Badge
+                            variant="outline"
+                            className="text-[11px] bg-purple-50 text-purple-700 border-purple-200"
+                          >
                             {org.cmmcTargetLevel}
                           </Badge>
                         ) : (
@@ -302,7 +449,15 @@ export default function AdminPackageMigration() {
                       </TableCell>
                       <TableCell>
                         {org.inferredLevel ? (
-                          <Badge variant="outline" className={cn("text-[10px]", org.inferredLevel === "L2" ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-slate-50 text-slate-600 border-slate-200")}>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "text-[10px]",
+                              org.inferredLevel === "L2"
+                                ? "bg-purple-50 text-purple-700 border-purple-200"
+                                : "bg-slate-50 text-slate-600 border-slate-200"
+                            )}
+                          >
                             {org.inferredLevel} (from pkgs)
                           </Badge>
                         ) : (
@@ -312,7 +467,12 @@ export default function AdminPackageMigration() {
                       <TableCell>
                         <div className="flex flex-col gap-0.5">
                           <div>
-                            <span className={cn("text-sm font-medium tabular-nums", org.packageControlCount === 0 ? "text-muted-foreground" : "")}>
+                            <span
+                              className={cn(
+                                "text-sm font-medium tabular-nums",
+                                org.packageControlCount === 0 ? "text-muted-foreground" : ""
+                              )}
+                            >
                               {org.packageControlCount}
                             </span>
                             <span className="text-xs text-muted-foreground ml-1">in scope</span>
@@ -331,24 +491,35 @@ export default function AdminPackageMigration() {
                               <Badge
                                 key={pkg.packageId}
                                 variant="outline"
-                                className={cn("text-[10px] px-1.5 py-0", frameworkColor(pkg.frameworkShortName))}
+                                className={cn(
+                                  "text-[10px] px-1.5 py-0",
+                                  frameworkColor(pkg.frameworkShortName)
+                                )}
                               >
                                 {pkg.frameworkShortName}
                               </Badge>
                             ))
                           )}
                           {org.packages.length > 3 && (
-                            <span className="text-xs text-muted-foreground">+{org.packages.length - 3} more</span>
+                            <span className="text-xs text-muted-foreground">
+                              +{org.packages.length - 3} more
+                            </span>
                           )}
                         </div>
                       </TableCell>
                       <TableCell>
                         {org.packages.length === 0 ? (
-                          <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] bg-amber-50 text-amber-700 border-amber-200"
+                          >
                             Unassigned
                           </Badge>
                         ) : (
-                          <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200">
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] bg-green-50 text-green-700 border-green-200"
+                          >
                             <Check className="h-3 w-3 mr-0.5" />
                             Assigned
                           </Badge>
@@ -358,11 +529,11 @@ export default function AdminPackageMigration() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => setPreviewOrg(org)}
+                          onClick={() => setManageOrg(org)}
                           className="text-xs h-7"
                         >
                           <ShieldCheck className="h-3.5 w-3.5 mr-1" />
-                          Preview
+                          Manage
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -374,21 +545,13 @@ export default function AdminPackageMigration() {
         </CardContent>
       </Card>
 
-      <div className="rounded-lg border border-border/60 bg-muted/20 p-4 text-sm text-muted-foreground">
-        <p className="font-medium text-foreground mb-1">How to use this tool</p>
-        <p>
-          Click <strong>Preview</strong> next to any organization to see a dry-run of suggested package assignments
-          based on the org's CMMC target level. The preview shows which packages are recommended and why — but
-          does not make any changes. To assign packages, use{" "}
-          <Link href="/settings/packages" className="text-primary hover:underline">
-            Settings → Compliance Packages
-          </Link>{" "}
-          while the target organization is active.
-        </p>
-      </div>
-
-      {previewOrg && (
-        <PreviewModal org={previewOrg} onClose={() => setPreviewOrg(null)} />
+      {liveManageOrg && (
+        <ManagePackagesModal
+          org={liveManageOrg}
+          allPackages={allPackages}
+          onClose={() => setManageOrg(null)}
+          onRefresh={handleRefreshAfterChange}
+        />
       )}
     </div>
   );
