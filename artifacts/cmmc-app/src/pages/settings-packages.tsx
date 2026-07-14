@@ -389,6 +389,64 @@ export default function SettingsPackages() {
             )}
           </div>
 
+          {/* Dry-run impact preview */}
+          {pendingAdd.length > 0 && (() => {
+            const pendingPkgs = (allPackages as any[]).filter(p => pendingAdd.includes(p.id));
+            const activeIds = activePackages.map(p => p.packageId);
+            // Raw control count from newly selected control frameworks
+            const newCtlRaw = pendingPkgs
+              .filter((p: any) => p.packageType === "control_framework")
+              .reduce((s: number, p: any) => s + (p.controlCount ?? 0), 0);
+            // Overlaps: pending + already-active packages share controls
+            const allIds = [...activeIds, ...pendingAdd];
+            const hasL2 = allIds.includes("pkg-cmmc-l2-self");
+            const hasNist2 = allIds.includes("pkg-nist-800-171-r2");
+            const hasNist3 = allIds.includes("pkg-nist-800-171-r3");
+            const hasL1 = allIds.includes("pkg-cmmc-l1-self");
+            const hasFar = allIds.includes("pkg-far-52-204-21");
+            // Only subtract overlap if the overlapping partner is not already active
+            // (if partner already active, those controls were already counted)
+            const activeHasL2 = activeIds.includes("pkg-cmmc-l2-self");
+            const activeHasNist2 = activeIds.includes("pkg-nist-800-171-r2");
+            let overlap = 0;
+            if (hasL2 && hasNist2 && !activeHasL2 && !activeHasNist2) overlap += 110;
+            else if (hasL2 && hasNist2 && (activeHasL2 || activeHasNist2)) overlap += 110; // one side already counted
+            if (hasL2 && hasNist3) overlap += 110;
+            if (hasL1 && hasFar) overlap += 17;
+            const netNewCtl = Math.max(0, newCtlRaw - overlap);
+            const overlapNote = (hasL2 && hasNist2) || (hasL2 && hasNist3);
+            const assessmentCount = pendingPkgs
+              .filter((p: any) => p.packageType === "assessment_procedure")
+              .reduce((s: number, p: any) => s + (p.controlCount ?? 0), 0);
+            return (
+              <div className="border-t pt-3 shrink-0">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Impact Preview</div>
+                <div className="flex gap-3 flex-wrap">
+                  {netNewCtl > 0 && (
+                    <div className="flex-1 min-w-[100px] rounded-md bg-muted/30 border border-border/60 p-2 text-center">
+                      <div className="text-xl font-bold">{netNewCtl}</div>
+                      <div className="text-[10px] text-muted-foreground">net new controls</div>
+                    </div>
+                  )}
+                  {assessmentCount > 0 && (
+                    <div className="flex-1 min-w-[100px] rounded-md bg-muted/30 border border-border/60 p-2 text-center">
+                      <div className="text-xl font-bold">{assessmentCount}</div>
+                      <div className="text-[10px] text-muted-foreground">assessment methods</div>
+                    </div>
+                  )}
+                  {netNewCtl === 0 && assessmentCount === 0 && (
+                    <p className="text-xs text-muted-foreground">Contract clause(s) only — no new control requirements.</p>
+                  )}
+                </div>
+                {overlapNote && (
+                  <p className="text-[11px] text-blue-700 dark:text-blue-300 mt-1.5">
+                    ↔ CMMC L2 and NIST 800-171 share the same 110 controls — overlap is excluded from the count above.
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+
           <DialogFooter className="pt-4 border-t shrink-0">
             <Button
               variant="outline"

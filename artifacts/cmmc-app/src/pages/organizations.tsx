@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   Building2,
   Plus,
@@ -217,6 +217,8 @@ function OrgCard({ org, onSwitch, onDelete }: { org: OrgStats; onSwitch: (id: st
 function OrgCreationWizard({ open, onClose, onSuccess }: { open: boolean; onClose: () => void; onSuccess?: () => void }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { setActiveOrg, refreshOrgs } = useOrg();
+  const [, navigate] = useLocation();
   const [step, setStep] = useState(1);
 
   const [form, setForm] = useState({
@@ -292,9 +294,16 @@ function OrgCreationWizard({ open, onClose, onSuccess }: { open: boolean; onClos
   }, [allPackages]);
 
   const selectedPkgs = (allPackages as CompliancePkg[]).filter(p => selectedPkgIds.includes(p.id));
-  const totalControlCount = selectedPkgs
+  const rawControlCount = selectedPkgs
     .filter(p => p.packageType === "control_framework")
     .reduce((s, p) => s + (p.controlCount ?? 0), 0);
+  // Subtract known overlaps: CMMC L2 and NIST 800-171 (r2 or r3) share all 110 controls;
+  // CMMC L1 and FAR 52.204-21 share all 17 practices.
+  const controlOverlap =
+    (selectedPkgIds.includes("pkg-cmmc-l2-self") && selectedPkgIds.includes("pkg-nist-800-171-r2") ? 110 : 0) +
+    (selectedPkgIds.includes("pkg-cmmc-l2-self") && selectedPkgIds.includes("pkg-nist-800-171-r3") ? 110 : 0) +
+    (selectedPkgIds.includes("pkg-cmmc-l1-self") && selectedPkgIds.includes("pkg-far-52-204-21") ? 17 : 0);
+  const totalControlCount = Math.max(0, rawControlCount - controlOverlap);
 
   const handleCreate = async () => {
     if (!form.name.trim()) return;
@@ -314,27 +323,48 @@ function OrgCreationWizard({ open, onClose, onSuccess }: { open: boolean; onClos
       }
       const newOrg = await orgRes.json();
 
+      let pkgAssignFailed = false;
       if (selectedPkgIds.length > 0) {
         const pkgRes = await fetch(`${base}/api/organizations/${newOrg.id}/packages`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ packageIds: selectedPkgIds }),
         });
-        if (!pkgRes.ok) {
-          const errData = await pkgRes.json().catch(() => ({}));
-          throw new Error(errData.error ?? "Organization created but packages could not be assigned. You can add them later in Settings.");
-        }
+        if (!pkgRes.ok) pkgAssignFailed = true;
       }
 
-      toast({
-        title: "Organization created",
-        description: selectedPkgIds.length > 0
-          ? `${selectedPkgIds.length} compliance package${selectedPkgIds.length !== 1 ? "s" : ""} assigned`
-          : undefined,
-      });
-      queryClient.invalidateQueries({ queryKey: ["global-stats"] });
+      // Build an OrgSummary so we can switch into the new org immediately
+      const newOrgSummary = {
+        id: newOrg.id,
+        name: newOrg.name ?? form.name,
+        shortName: newOrg.shortName ?? form.shortName ?? null,
+        cmmcTargetLevel: newOrg.cmmcTargetLevel ?? form.cmmcTargetLevel ?? null,
+        industry: newOrg.industry ?? form.industry ?? null,
+        isActive: true,
+        isTestOrganization: false,
+        role: "admin",
+      };
+      setActiveOrg(newOrgSummary);
+      await refreshOrgs();
+      queryClient.invalidateQueries();
+
+      if (pkgAssignFailed) {
+        toast({
+          title: "Organization created",
+          description: `${form.name} was created successfully. Package assignment failed — add packages in Settings > Compliance Packages.`,
+          variant: "default",
+        });
+      } else {
+        toast({
+          title: "Organization created",
+          description: selectedPkgIds.length > 0
+            ? `${form.name} created with ${selectedPkgIds.length} compliance package${selectedPkgIds.length !== 1 ? "s" : ""}`
+            : `${form.name} created successfully`,
+        });
+      }
       onSuccess?.();
       handleClose();
+      navigate("/");
     } catch (err: any) {
       toast({ title: "Error", description: err.message ?? "Could not create organization", variant: "destructive" });
     } finally {
