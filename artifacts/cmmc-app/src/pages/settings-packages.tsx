@@ -57,6 +57,7 @@ export default function SettingsPackages() {
   const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [pendingAdd, setPendingAdd] = useState<string[]>([]);
+  const [confirmRemove, setConfirmRemove] = useState<{ packageId: string; packageName: string } | null>(null);
 
   const canManage =
     user?.role === "admin" || user?.role === "compliance_manager";
@@ -111,7 +112,12 @@ export default function SettingsPackages() {
   };
 
   const handleRemove = (packageId: string, packageName: string) => {
-    if (!activeOrg?.id) return;
+    setConfirmRemove({ packageId, packageName });
+  };
+
+  const handleConfirmedRemove = () => {
+    if (!activeOrg?.id || !confirmRemove) return;
+    const { packageId, packageName } = confirmRemove;
     removeMutation.mutate(
       { id: activeOrg.id, packageId },
       {
@@ -124,6 +130,7 @@ export default function SettingsPackages() {
             queryKey: [`/api/organizations/${activeOrg.id}/packages`],
           });
           refetch();
+          setConfirmRemove(null);
         },
         onError: () => {
           toast({
@@ -131,6 +138,7 @@ export default function SettingsPackages() {
             description: "Could not remove package",
             variant: "destructive",
           });
+          setConfirmRemove(null);
         },
       }
     );
@@ -398,6 +406,36 @@ export default function SettingsPackages() {
               {addMutation.isPending
                 ? "Adding..."
                 : `Add ${pendingAdd.length > 0 ? pendingAdd.length + " " : ""}Package${pendingAdd.length !== 1 ? "s" : ""}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmation dialog for package removal */}
+      <Dialog open={!!confirmRemove} onOpenChange={(open) => { if (!open) setConfirmRemove(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Remove compliance package?</DialogTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              This will deactivate{" "}
+              <span className="font-medium text-foreground">{confirmRemove?.packageName}</span> from{" "}
+              <span className="font-medium text-foreground">{activeOrg?.name}</span>. Existing controls, evidence, and monitoring items will not be affected — the package can be re-added at any time.
+            </p>
+          </DialogHeader>
+          <DialogFooter className="mt-2">
+            <Button
+              variant="outline"
+              onClick={() => setConfirmRemove(null)}
+              disabled={removeMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmedRemove}
+              disabled={removeMutation.isPending}
+            >
+              {removeMutation.isPending ? "Removing..." : "Remove Package"}
             </Button>
           </DialogFooter>
         </DialogContent>

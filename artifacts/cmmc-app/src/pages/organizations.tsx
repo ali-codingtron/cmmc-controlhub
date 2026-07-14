@@ -64,6 +64,33 @@ interface CompliancePkg {
   sortOrder?: number | null;
 }
 
+const QUICK_START_PROFILES = [
+  {
+    id: "fci-only",
+    label: "FCI Only",
+    description: "Federal Contract Information — basic safeguarding under FAR 52.204-21",
+    pkgIds: ["pkg-cmmc-l1-self", "pkg-far-52-204-21"],
+  },
+  {
+    id: "dod-cui",
+    label: "DoD CUI Contractor",
+    description: "Handles CUI under DoD contracts — CMMC L2, NIST 800-171 r2, and DFARS 7012",
+    pkgIds: ["pkg-cmmc-l2-self", "pkg-nist-800-171-r2", "pkg-dfars-7012"],
+  },
+  {
+    id: "nist-readiness",
+    label: "NIST Readiness",
+    description: "NIST 800-171 assessment prep — control framework and assessment procedures",
+    pkgIds: ["pkg-nist-800-171-r2", "pkg-nist-800-171a-r2"],
+  },
+  {
+    id: "dfars-full",
+    label: "DFARS Contract Support",
+    description: "Full DFARS suite — all four DFARS clauses plus CMMC L2 and NIST 800-171",
+    pkgIds: ["pkg-cmmc-l2-self", "pkg-nist-800-171-r2", "pkg-dfars-7012", "pkg-dfars-7019", "pkg-dfars-7020", "pkg-dfars-7021"],
+  },
+] as const;
+
 function fwBadgeColor(shortName?: string | null): string {
   switch (shortName) {
     case "CMMC": return "bg-purple-50 text-purple-700 border-purple-200";
@@ -214,6 +241,7 @@ function OrgCreationWizard({ open, onClose, onSuccess }: { open: boolean; onClos
 
   const [selectedPkgIds, setSelectedPkgIds] = useState<string[]>([]);
   const [autoApplied, setAutoApplied] = useState(false);
+  const [activeProfile, setActiveProfile] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   const { data: allPackages = [], isLoading: pkgLoading } = useListPackages(
@@ -287,11 +315,15 @@ function OrgCreationWizard({ open, onClose, onSuccess }: { open: boolean; onClos
       const newOrg = await orgRes.json();
 
       if (selectedPkgIds.length > 0) {
-        await fetch(`${base}/api/organizations/${newOrg.id}/packages`, {
+        const pkgRes = await fetch(`${base}/api/organizations/${newOrg.id}/packages`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ packageIds: selectedPkgIds }),
         });
+        if (!pkgRes.ok) {
+          const errData = await pkgRes.json().catch(() => ({}));
+          throw new Error(errData.error ?? "Organization created but packages could not be assigned. You can add them later in Settings.");
+        }
       }
 
       toast({
@@ -316,6 +348,7 @@ function OrgCreationWizard({ open, onClose, onSuccess }: { open: boolean; onClos
     setCtx({ handlesFci: false, handlesCui: false, isDodContractor: false, hasDfars7012: false });
     setSelectedPkgIds([]);
     setAutoApplied(false);
+    setActiveProfile(null);
     onClose();
   };
 
@@ -468,18 +501,71 @@ function OrgCreationWizard({ open, onClose, onSuccess }: { open: boolean; onClos
           )}
 
           {step === 3 && (
-            <div className="space-y-4 py-1">
-              {recommendedIds.length > 0 ? (
+            <div className="space-y-5 py-1">
+              {/* Quick Start profiles */}
+              <div>
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">Quick Start Profile</div>
+                <div className="grid grid-cols-2 gap-2">
+                  {QUICK_START_PROFILES.map(profile => {
+                    const isActive = activeProfile === profile.id;
+                    const availableIds = profile.pkgIds.filter(id =>
+                      allPackages.some((p: CompliancePkg) => p.id === id)
+                    );
+                    return (
+                      <button
+                        key={profile.id}
+                        type="button"
+                        className={cn(
+                          "text-left rounded-lg border p-3 transition-all",
+                          isActive
+                            ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                            : "border-border hover:border-primary/40 hover:bg-muted/20"
+                        )}
+                        onClick={() => {
+                          if (isActive) {
+                            setActiveProfile(null);
+                            setSelectedPkgIds([]);
+                          } else {
+                            setActiveProfile(profile.id);
+                            setSelectedPkgIds(availableIds);
+                          }
+                        }}
+                      >
+                        <div className="flex items-start gap-2">
+                          <div className={cn(
+                            "mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors",
+                            isActive ? "border-primary bg-primary" : "border-border bg-background"
+                          )}>
+                            {isActive && <Check className="h-2.5 w-2.5 text-primary-foreground" strokeWidth={3} />}
+                          </div>
+                          <div>
+                            <div className="text-sm font-semibold leading-tight">{profile.label}</div>
+                            <div className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">{profile.description}</div>
+                            <div className="text-[10px] text-primary mt-1">{availableIds.length} package{availableIds.length !== 1 ? "s" : ""}</div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {activeProfile && (
+                  <button
+                    type="button"
+                    className="mt-1.5 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                    onClick={() => { setActiveProfile(null); }}
+                  >
+                    Clear profile — customize manually below
+                  </button>
+                )}
+              </div>
+
+              {recommendedIds.length > 0 && !activeProfile && (
                 <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
                   <span className="font-semibold text-primary">
                     {recommendedIds.filter(id => allPackages.some((p: CompliancePkg) => p.id === id)).length} package{recommendedIds.filter(id => allPackages.some((p: CompliancePkg) => p.id === id)).length !== 1 ? "s" : ""} recommended
                   </span>
-                  <span className="text-muted-foreground"> based on your answers. Customize the selection below.</span>
+                  <span className="text-muted-foreground"> based on your Step 2 answers. Customize below.</span>
                 </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Select the compliance frameworks and regulatory packages that apply to this organization. You can add or remove packages later in Settings.
-                </p>
               )}
 
               {pkgLoading ? (
@@ -488,9 +574,10 @@ function OrgCreationWizard({ open, onClose, onSuccess }: { open: boolean; onClos
                 </div>
               ) : (
                 <div className="space-y-5">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Individual Packages</div>
                   {grouped.map(([framework, pkgs]) => (
                     <div key={framework}>
-                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">{framework}</div>
+                      <div className="text-[11px] font-medium text-muted-foreground mb-1.5">{framework}</div>
                       <div className="space-y-2">
                         {pkgs.map(pkg => {
                           const isSelected = selectedPkgIds.includes(pkg.id);
@@ -505,11 +592,14 @@ function OrgCreationWizard({ open, onClose, onSuccess }: { open: boolean; onClos
                                   ? "border-primary bg-primary/5"
                                   : "border-border hover:border-primary/40 hover:bg-muted/30"
                               )}
-                              onClick={() => setSelectedPkgIds(prev =>
-                                prev.includes(pkg.id)
-                                  ? prev.filter(id => id !== pkg.id)
-                                  : [...prev, pkg.id]
-                              )}
+                              onClick={() => {
+                                setActiveProfile(null);
+                                setSelectedPkgIds(prev =>
+                                  prev.includes(pkg.id)
+                                    ? prev.filter(id => id !== pkg.id)
+                                    : [...prev, pkg.id]
+                                );
+                              }}
                             >
                               <div className="flex items-start gap-3">
                                 <div className={cn(
@@ -545,7 +635,7 @@ function OrgCreationWizard({ open, onClose, onSuccess }: { open: boolean; onClos
 
               <p className="text-xs text-muted-foreground">
                 {selectedPkgIds.length === 0
-                  ? "No packages selected — you can proceed without packages and add them later."
+                  ? "No packages selected — you can proceed without packages and add them later in Settings."
                   : `${selectedPkgIds.length} package${selectedPkgIds.length !== 1 ? "s" : ""} selected.`}
               </p>
             </div>
@@ -620,10 +710,47 @@ function OrgCreationWizard({ open, onClose, onSuccess }: { open: boolean; onClos
                 )}
               </div>
 
+              {/* Compliance impact summary */}
+              {selectedPkgIds.length > 0 && (
+                <div>
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                    What will be provisioned
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {totalControlCount > 0 && (
+                      <div className="rounded-md border border-border/60 bg-muted/20 p-3 text-center">
+                        <div className="text-2xl font-bold text-foreground">{totalControlCount}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">controls to assess</div>
+                      </div>
+                    )}
+                    <div className="rounded-md border border-border/60 bg-muted/20 p-3 text-center">
+                      <div className="text-2xl font-bold text-foreground">19</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">monitoring items</div>
+                    </div>
+                    {selectedPkgs.some(p => p.packageType === "assessment_procedure") && (
+                      <div className="rounded-md border border-border/60 bg-muted/20 p-3 text-center">
+                        <div className="text-2xl font-bold text-foreground">
+                          {selectedPkgs.filter(p => p.packageType === "assessment_procedure").reduce((s, p) => s + (p.controlCount ?? 0), 0)}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">assessment methods</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Overlap callout */}
+              {selectedPkgIds.includes("pkg-cmmc-l2-self") && selectedPkgIds.includes("pkg-nist-800-171-r2") && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800 p-3 text-xs text-blue-800 dark:text-blue-300">
+                  <p className="font-semibold mb-0.5">CMMC L2 ↔ NIST 800-171 overlap</p>
+                  <p>CMMC Level 2 and NIST 800-171 r2 cover the same 110 security requirements. Assessments and evidence submitted for one will count toward both — reducing your compliance workload.</p>
+                </div>
+              )}
+
               {selectedPkgs.some(p => p.frameworkShortName === "DFARS") && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-3 text-xs text-amber-800 dark:text-amber-300">
                   <p className="font-semibold mb-0.5">DFARS clause obligations included</p>
-                  <p>The selected DFARS packages include contractual obligations such as cyber incident reporting (72-hour), subcontractor flowdown, and SSP/POA&M maintenance. These will be tracked in the Monitoring module.</p>
+                  <p>DFARS packages carry contractual obligations: 72-hour cyber incident reporting, subcontractor flowdown, and SSP/POA&amp;M maintenance. These will be pre-loaded as monitoring items.</p>
                 </div>
               )}
             </div>
