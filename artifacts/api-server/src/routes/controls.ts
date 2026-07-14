@@ -13,6 +13,7 @@ import {
   usersTable,
   organizationPackagesTable,
   compliancePackagesTable,
+  complianceRequirementsTable,
 } from "@workspace/db";
 import { eq, and, ilike, count, inArray, or, desc } from "drizzle-orm";
 
@@ -21,22 +22,23 @@ import { requireOrg } from "../middleware/org";
 import { logAudit } from "../lib/audit";
 import { randomUUID } from "crypto";
 
-// Package keys that cover L2-scope controls
-const L2_PKG_KEYS = new Set(["CMMC_L2_SELF", "NIST_800_171_R2", "NIST_800_171_R3", "NIST_800_171A_R2", "NIST_800_171A_R3"]);
-
 const router = Router();
 
 router.get("/controls", requireAuth, requireOrg, async (req, res) => {
   const { domain, level, status, search } = req.query as Record<string, string>;
   const orgId = req.orgId;
 
-  // Determine package-scoped default level when no explicit level filter given.
-  // Orgs with only L1-scope packages (CMMC L1 / FAR) see only L1 controls by default.
-  // Orgs with L2 or DFARS packages, or no packages at all, see all controls.
-  let packageScopedLevel: "L1" | undefined = undefined;
+  // Package-aware filtering via compliance_requirements join.
+  // When org has CMMC/FAR/NIST packages, filter controls to those covered by requirement mappings.
+  // DFARS-only orgs and orgs with no packages see all controls (legacy behaviour).
+  let packageControlIds: string[] | null = null; // null = no package restriction
+
   if (orgId && !level) {
     const orgPkgs = await db
-      .select({ packageKey: compliancePackagesTable.packageKey })
+      .select({
+        packageId: compliancePackagesTable.id,
+        packageKey: compliancePackagesTable.packageKey,
+      })
       .from(organizationPackagesTable)
       .innerJoin(compliancePackagesTable, eq(organizationPackagesTable.packageId, compliancePackagesTable.id))
       .where(
@@ -47,14 +49,54 @@ router.get("/controls", requireAuth, requireOrg, async (req, res) => {
       );
 
     if (orgPkgs.length > 0) {
-      const hasL2Pkg = orgPkgs.some(p => L2_PKG_KEYS.has(p.packageKey));
-      const hasDfars = orgPkgs.some(p => p.packageKey.startsWith("DFARS_"));
-      if (!hasL2Pkg && !hasDfars) {
-        // Only L1-scope packages present → restrict default view to L1
-        packageScopedLevel = "L1";
+      // CMMC (L1/L2) and FAR packages: their requirement IDs match controlsTable.controlId
+      const cmmcFarPkgIds = orgPkgs
+        .filter(p => p.packageKey.startsWith("CMMC_") || p.packageKey === "FAR_52_204_21")
+        .map(p => p.packageId);
+
+      // NIST 800-171 requirement packages (exclude assessment procedures, i.e. "171A"):
+      // NIST_800_171_R2, NIST_800_171_R3 → their requirement IDs match controlsTable.nistRef
+      const nistPkgIds = orgPkgs
+        .filter(p => p.packageKey.startsWith("NIST_800_171_"))
+        .map(p => p.packageId);
+
+      const mappedPkgIds = [...cmmcFarPkgIds, ...nistPkgIds];
+
+      if (mappedPkgIds.length > 0) {
+        // Fetch requirement IDs from seeded compliance_requirements for these packages
+        const reqs = await db
+          .select({
+            reqId: complianceRequirementsTable.requirementId,
+            pkgId: complianceRequirementsTable.packageId,
+          })
+          .from(complianceRequirementsTable)
+          .where(inArray(complianceRequirementsTable.packageId, mappedPkgIds));
+
+        if (reqs.length > 0) {
+          const cmmcFarReqIds = reqs.filter(r => cmmcFarPkgIds.includes(r.pkgId)).map(r => r.reqId);
+          const nistReqIds = reqs.filter(r => nistPkgIds.includes(r.pkgId)).map(r => r.reqId);
+
+          // Resolve matching control DB IDs (deduplicated via SELECT DISTINCT)
+          const matched = await db
+            .selectDistinct({ id: controlsTable.id })
+            .from(controlsTable)
+            .where(
+              and(
+                eq(controlsTable.isActive, true),
+                or(
+                  cmmcFarReqIds.length > 0 ? inArray(controlsTable.controlId, cmmcFarReqIds) : undefined,
+                  nistReqIds.length > 0 ? inArray(controlsTable.nistRef as any, nistReqIds) : undefined
+                )
+              )
+            );
+
+          packageControlIds = matched.map(c => c.id);
+        }
+        // If requirements not yet seeded (empty reqs), fall through → show all (packageControlIds stays null)
       }
+      // DFARS-only or unrecognised packages → packageControlIds stays null (show all)
     }
-    // No packages assigned → show all controls (legacy behaviour)
+    // No packages → show all (legacy behaviour)
   }
 
   const controls = await db
@@ -88,10 +130,9 @@ router.get("/controls", requireAuth, requireOrg, async (req, res) => {
       and(
         eq(controlsTable.isActive, true),
         domain ? eq(controlsTable.domainId, domain) : undefined,
-        level
-          ? eq(controlsTable.level, level as "L1" | "L2")
-          : packageScopedLevel
-          ? eq(controlsTable.level, packageScopedLevel)
+        level ? eq(controlsTable.level, level as "L1" | "L2")
+          : packageControlIds !== null && packageControlIds.length > 0
+          ? inArray(controlsTable.id, packageControlIds)
           : undefined,
         status
           ? eq(controlAssessmentsTable.status, status as typeof controlAssessmentsTable.status)

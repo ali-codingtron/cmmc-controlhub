@@ -30,6 +30,7 @@ interface OrgPackageStatus {
   cmmcTargetLevel: string | null;
   isTestOrganization: boolean;
   isActive: boolean;
+  packageControlCount: number;
   assessedControlCount: number;
   inferredLevel: string | null;
   packages: Array<{
@@ -135,14 +136,11 @@ function PreviewModal({
             <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
               <p className="font-medium mb-1">To apply this assignment:</p>
               <ol className="list-decimal list-inside space-y-1 text-xs">
+                <li>Switch the active org to <span className="font-medium">{org.name}</span> using the org switcher in the sidebar</li>
                 <li>
-                  Navigate to{" "}
-                  <Link href="/settings/packages" className="underline">
-                    Settings → Compliance Packages
-                  </Link>{" "}
-                  while {org.name} is the active org
+                  Click <span className="font-medium">Open Packages Settings</span> below to navigate to Settings → Compliance Packages
                 </li>
-                <li>Click "Add Package" and select the packages above</li>
+                <li>Click "Add Package" and select the packages listed above</li>
               </ol>
               <p className="text-xs mt-2 text-amber-700">
                 No automatic migration is applied from this tool. Admin review is required before assigning packages.
@@ -151,8 +149,16 @@ function PreviewModal({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2">
           <Button variant="outline" onClick={onClose}>Close</Button>
+          {toAdd.length > 0 && (
+            <Link href="/settings/packages" onClick={onClose}>
+              <Button variant="default" size="sm" className="gap-1.5">
+                <LinkIcon className="h-3.5 w-3.5" />
+                Open Packages Settings
+              </Button>
+            </Link>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -301,10 +307,17 @@ export default function AdminPackageMigration() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <span className={cn("text-sm font-medium tabular-nums", org.assessedControlCount === 0 ? "text-muted-foreground" : "")}>
-                          {org.assessedControlCount}
-                        </span>
-                        <span className="text-xs text-muted-foreground ml-1">controls</span>
+                        <div className="flex flex-col gap-0.5">
+                          <div>
+                            <span className={cn("text-sm font-medium tabular-nums", org.packageControlCount === 0 ? "text-muted-foreground" : "")}>
+                              {org.packageControlCount}
+                            </span>
+                            <span className="text-xs text-muted-foreground ml-1">in scope</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {org.assessedControlCount} assessed
+                          </div>
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">

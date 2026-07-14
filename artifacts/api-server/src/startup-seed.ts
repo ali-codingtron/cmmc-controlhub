@@ -644,8 +644,21 @@ async function seedComplianceFrameworkHelpArticles() {
 }
 
 async function seedCrosswalkRequirements() {
-  const [{ cnt }] = await db.select({ cnt: count() }).from(complianceRequirementsTable);
-  if (Number(cnt) > 0) return;
+  // Check per-package so new packages can be seeded even if others already exist
+  const [cmmcL2Count, nistR2Count, nistR3Count] = await Promise.all([
+    db.select({ cnt: count() }).from(complianceRequirementsTable)
+      .where(eq(complianceRequirementsTable.packageId, "pkg-cmmc-l2-self")),
+    db.select({ cnt: count() }).from(complianceRequirementsTable)
+      .where(eq(complianceRequirementsTable.packageId, "pkg-nist-800-171-r2")),
+    db.select({ cnt: count() }).from(complianceRequirementsTable)
+      .where(eq(complianceRequirementsTable.packageId, "pkg-nist-800-171-r3")),
+  ]);
+
+  const needCmmcL2 = Number(cmmcL2Count[0].cnt) === 0;
+  const needNistR2 = Number(nistR2Count[0].cnt) === 0;
+  const needNistR3 = Number(nistR3Count[0].cnt) === 0;
+  const nothingToDo = !needCmmcL2 && !needNistR2 && !needNistR3;
+  if (nothingToDo) return;
 
   // Read active controls to derive requirements
   const controls = await db
@@ -661,64 +674,130 @@ async function seedCrosswalkRequirements() {
     .where(eq(controlsTable.isActive, true))
     .orderBy(controlsTable.sortOrder);
 
-  // Map control DB id → CMMC L2 requirement UUID
-  const cmmcReqMap: Record<string, string> = {};
-  // Map control DB id → NIST 800-171 R2 requirement UUID
-  const nistReqMap: Record<string, string> = {};
-
-  // Seed CMMC L2 package requirements (all 110 active controls)
-  for (let i = 0; i < controls.length; i++) {
-    const c = controls[i];
-    const id = randomUUID();
-    cmmcReqMap[c.id] = id;
-    await db.insert(complianceRequirementsTable).values({
-      id,
-      packageId: "pkg-cmmc-l2-self",
-      requirementId: c.controlId,
-      title: c.title,
-      level: c.level,
-      sortOrder: i + 1,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }).onConflictDoNothing();
-  }
-
-  // Seed NIST 800-171 R2 requirements (controls that have a nistRef)
   const nistControls = controls.filter(c => c.nistRef);
-  for (let i = 0; i < nistControls.length; i++) {
-    const c = nistControls[i];
-    const id = randomUUID();
-    nistReqMap[c.id] = id;
-    await db.insert(complianceRequirementsTable).values({
-      id,
-      packageId: "pkg-nist-800-171-r2",
-      requirementId: c.nistRef!,
-      title: c.title,
-      level: "L2",
-      sortOrder: i + 1,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }).onConflictDoNothing();
+
+  // Maps: control DB id → requirement UUID (populated from inserts or existing DB rows)
+  const cmmcReqMap: Record<string, string> = {};
+  const nistReqMap: Record<string, string> = {};
+  const nistR3ReqMap: Record<string, string> = {};
+
+  // --- CMMC L2 requirements ---
+  if (needCmmcL2) {
+    for (let i = 0; i < controls.length; i++) {
+      const c = controls[i];
+      const id = randomUUID();
+      cmmcReqMap[c.id] = id;
+      await db.insert(complianceRequirementsTable).values({
+        id,
+        packageId: "pkg-cmmc-l2-self",
+        requirementId: c.controlId,
+        title: c.title,
+        level: c.level,
+        sortOrder: i + 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).onConflictDoNothing();
+    }
+  } else {
+    // Fetch existing IDs so crosswalk rows reference the correct DB UUIDs
+    const existing = await db
+      .select({ id: complianceRequirementsTable.id, requirementId: complianceRequirementsTable.requirementId })
+      .from(complianceRequirementsTable)
+      .where(eq(complianceRequirementsTable.packageId, "pkg-cmmc-l2-self"));
+    const byCtrlId: Record<string, string> = {};
+    for (const r of existing) byCtrlId[r.requirementId] = r.id;
+    for (const c of controls) if (byCtrlId[c.controlId]) cmmcReqMap[c.id] = byCtrlId[c.controlId];
   }
 
-  // Seed crosswalk: CMMC L2 ↔ NIST 800-171 R2 (equivalent 1:1 mapping)
-  for (const c of nistControls) {
-    const srcId = cmmcReqMap[c.id];
-    const tgtId = nistReqMap[c.id];
-    if (srcId && tgtId) {
-      await db.insert(requirementCrosswalkTable).values({
-        id: randomUUID(),
-        sourceRequirementId: srcId,
-        targetRequirementId: tgtId,
-        relationshipType: "equivalent",
-        notes: `${c.controlId} ≡ NIST 800-171 Rev. 2 §${c.nistRef}`,
+  // --- NIST 800-171 R2 requirements ---
+  if (needNistR2) {
+    for (let i = 0; i < nistControls.length; i++) {
+      const c = nistControls[i];
+      const id = randomUUID();
+      nistReqMap[c.id] = id;
+      await db.insert(complianceRequirementsTable).values({
+        id,
+        packageId: "pkg-nist-800-171-r2",
+        requirementId: c.nistRef!,
+        title: c.title,
+        level: "L2",
+        sortOrder: i + 1,
         createdAt: new Date(),
+        updatedAt: new Date(),
       }).onConflictDoNothing();
+    }
+  } else {
+    const existing = await db
+      .select({ id: complianceRequirementsTable.id, requirementId: complianceRequirementsTable.requirementId })
+      .from(complianceRequirementsTable)
+      .where(eq(complianceRequirementsTable.packageId, "pkg-nist-800-171-r2"));
+    const byNistRef: Record<string, string> = {};
+    for (const r of existing) byNistRef[r.requirementId] = r.id;
+    for (const c of nistControls) if (c.nistRef && byNistRef[c.nistRef]) nistReqMap[c.id] = byNistRef[c.nistRef];
+  }
+
+  // --- CMMC L2 ↔ NIST 800-171 R2 crosswalk (equivalent) ---
+  // Only insert if at least one of the two packages was freshly seeded this run
+  if (needCmmcL2 || needNistR2) {
+    for (const c of nistControls) {
+      const srcId = cmmcReqMap[c.id];
+      const tgtId = nistReqMap[c.id];
+      if (srcId && tgtId) {
+        await db.insert(requirementCrosswalkTable).values({
+          id: randomUUID(),
+          sourceRequirementId: srcId,
+          targetRequirementId: tgtId,
+          relationshipType: "equivalent",
+          notes: `${c.controlId} ≡ NIST 800-171 Rev. 2 §${c.nistRef}`,
+          createdAt: new Date(),
+        }).onConflictDoNothing();
+      }
+    }
+  }
+
+  // --- NIST 800-171 R3 requirements (placeholder; R3 restructures but covers same areas) ---
+  if (needNistR3) {
+    for (let i = 0; i < nistControls.length; i++) {
+      const c = nistControls[i];
+      const id = randomUUID();
+      nistR3ReqMap[c.id] = id;
+      await db.insert(complianceRequirementsTable).values({
+        id,
+        packageId: "pkg-nist-800-171-r3",
+        requirementId: c.nistRef!,
+        title: c.title,
+        level: "L2",
+        sortOrder: i + 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).onConflictDoNothing();
+    }
+
+    // Seed crosswalk: NIST 800-171 R2 → R3 (maps_to relationship)
+    for (const c of nistControls) {
+      const r2Id = nistReqMap[c.id];
+      const r3Id = nistR3ReqMap[c.id];
+      if (r2Id && r3Id) {
+        await db.insert(requirementCrosswalkTable).values({
+          id: randomUUID(),
+          sourceRequirementId: r2Id,
+          targetRequirementId: r3Id,
+          relationshipType: "maps_to",
+          notes: `NIST 800-171 Rev. 2 §${c.nistRef} → Rev. 3 (placeholder; verify against Rev. 3 restructuring)`,
+          createdAt: new Date(),
+        }).onConflictDoNothing();
+      }
     }
   }
 
   logger.info(
-    { cmmcReqs: controls.length, nistReqs: nistControls.length, crosswalk: nistControls.length },
+    {
+      cmmcReqs: needCmmcL2 ? controls.length : "skip",
+      nistR2Reqs: needNistR2 ? nistControls.length : "skip",
+      nistR3Reqs: needNistR3 ? nistControls.length : "skip",
+      crosswalkCmmcR2: (needCmmcL2 || needNistR2) ? nistControls.length : "skip",
+      crosswalkR2R3: needNistR3 ? nistControls.length : "skip",
+    },
     "Compliance requirements crosswalk seeded"
   );
 }

@@ -611,7 +611,7 @@ router.get("/admin/orgs-package-status", requireAuth, async (req, res) => {
   const L2_KEYS = new Set(["CMMC_L2_SELF", "NIST_800_171_R2", "NIST_800_171_R3", "NIST_800_171A_R2", "NIST_800_171A_R3"]);
   const L1_KEYS = new Set(["CMMC_L1_SELF", "FAR_52_204_21"]);
 
-  const [allPackages, controlCounts] = await Promise.all([
+  const [allPackages, assessedCounts, packageControlCounts] = await Promise.all([
     db
       .select({
         organizationId: organizationPackagesTable.organizationId,
@@ -621,6 +621,7 @@ router.get("/admin/orgs-package-status", requireAuth, async (req, res) => {
         packageKey: compliancePackagesTable.packageKey,
         packageName: compliancePackagesTable.name,
         packageType: compliancePackagesTable.packageType,
+        controlCount: compliancePackagesTable.controlCount,
         frameworkShortName: complianceFrameworksTable.shortName,
       })
       .from(organizationPackagesTable)
@@ -634,12 +635,30 @@ router.get("/admin/orgs-package-status", requireAuth, async (req, res) => {
       )
       .where(inArray(organizationPackagesTable.organizationId, orgIds)),
 
-    // Count assessed controls per org (proxy for "controls in scope" progress)
+    // Assessed controls per org (for progress tracking)
     db
       .select({ organizationId: controlAssessmentsTable.organizationId, cnt: count() })
       .from(controlAssessmentsTable)
       .where(inArray(controlAssessmentsTable.organizationId, orgIds))
       .groupBy(controlAssessmentsTable.organizationId),
+
+    // Current controls in scope: count distinct controls matched from compliance_requirements
+    // for each org's active framework packages (CMMC/FAR/NIST)
+    db
+      .select({
+        organizationId: organizationPackagesTable.organizationId,
+        cnt: count(complianceRequirementsTable.id),
+      })
+      .from(organizationPackagesTable)
+      .innerJoin(compliancePackagesTable, eq(organizationPackagesTable.packageId, compliancePackagesTable.id))
+      .innerJoin(complianceRequirementsTable, eq(complianceRequirementsTable.packageId, compliancePackagesTable.id))
+      .where(
+        and(
+          inArray(organizationPackagesTable.organizationId, orgIds),
+          eq(organizationPackagesTable.isActive, true)
+        )
+      )
+      .groupBy(organizationPackagesTable.organizationId),
   ]);
 
   const pkgByOrg: Record<string, typeof allPackages> = {};
@@ -649,8 +668,13 @@ router.get("/admin/orgs-package-status", requireAuth, async (req, res) => {
   }
 
   const assessedByOrg: Record<string, number> = {};
-  for (const r of controlCounts) {
+  for (const r of assessedCounts) {
     if (r.organizationId) assessedByOrg[r.organizationId] = Number(r.cnt);
+  }
+
+  const packageControlCountByOrg: Record<string, number> = {};
+  for (const r of packageControlCounts) {
+    packageControlCountByOrg[r.organizationId] = Number(r.cnt);
   }
 
   const result = orgs.map((org) => {
@@ -662,6 +686,7 @@ router.get("/admin/orgs-package-status", requireAuth, async (req, res) => {
       ...org,
       packages: activePkgs,
       allPackages: pkgByOrg[org.id] ?? [],
+      packageControlCount: packageControlCountByOrg[org.id] ?? 0,
       assessedControlCount: assessedByOrg[org.id] ?? 0,
       inferredLevel,
     };
