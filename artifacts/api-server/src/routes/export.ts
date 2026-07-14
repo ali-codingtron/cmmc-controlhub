@@ -1,7 +1,7 @@
 import { Router } from "express";
 import archiver from "archiver";
 import PDFDocument from "pdfkit";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import crypto from "crypto";
 import { db } from "@workspace/db";
 import {
@@ -110,12 +110,13 @@ async function buildPdf(fn: (doc: PDFKit.PDFDocument) => void): Promise<Buffer> 
   });
 }
 
-function buildXlsx(headers: string[], rows: (string | number | null | undefined)[][]): Buffer {
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows.map((r) => r.map((v) => v ?? ""))]);
-  ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length + 2, 18) }));
-  XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-  return Buffer.from(XLSX.write(wb, { type: "buffer", bookType: "xlsx" }));
+async function buildXlsx(headers: string[], rows: (string | number | null | undefined)[][]): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  const ws = workbook.addWorksheet("Sheet1");
+  ws.columns = headers.map((h) => ({ header: h, width: Math.max(h.length + 2, 18) }));
+  rows.forEach((r) => ws.addRow(r.map((v) => v ?? "")));
+  const arrayBuffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(arrayBuffer);
 }
 
 function sha256hex(buf: Buffer): string {
@@ -475,7 +476,7 @@ router.post(
       });
       addEntry(`${root}00_START_HERE/C3PAO_Upload_Instructions.pdf`, uploadInstrPdf);
 
-      addEntry(`${root}00_START_HERE/Package_Index.xlsx`, buildXlsx(
+      addEntry(`${root}00_START_HERE/Package_Index.xlsx`, await buildXlsx(
         ["Folder", "Description", "Key Files"],
         [
           ["00_START_HERE/", "Navigation and instructions", "README.pdf, C3PAO_Upload_Instructions.pdf"],
@@ -586,7 +587,7 @@ router.post(
       });
       addEntry(`${rev}02_SSP/${orgName}_System_Security_Plan.pdf`, sspPdf);
 
-      addEntry(`${rev}02_SSP/SSP_Control_Mapping.xlsx`, buildXlsx(
+      addEntry(`${rev}02_SSP/SSP_Control_Mapping.xlsx`, await buildXlsx(
         ["Control ID", "Control Title", "Domain", "Domain Code", "Level", "Control Status", "SSP Narrative", "Policy Reference", "SSP Status"],
         controls.map((ctrl) => {
           const domain = domainMap.get(ctrl.domainId);
@@ -856,7 +857,7 @@ router.post(
         exportIssues.push({ category: "Empty Document Library", item: "Document Library", detail: "No documents or document-like evidence found", recommendation: "Upload policies/procedures as evidence or documents" });
       }
 
-      addEntry(`${docLibBase}Document_Inventory.xlsx`, buildXlsx(
+      addEntry(`${docLibBase}Document_Inventory.xlsx`, await buildXlsx(
         ["Document ID", "Title", "Document Type", "Status", "Source", "Linked Controls", "Domain", "Level", "Owner", "Effective Date", "Next Review Date", "Original Filename", "Exported Filename", "File Path in ZIP", "SHA-256", "Notes"],
         docInvRows
       ));
@@ -888,7 +889,7 @@ router.post(
       }
 
       // Evidence_Inventory.xlsx
-      addEntry(`${evLibBase}Evidence_Inventory.xlsx`, buildXlsx(
+      addEntry(`${evLibBase}Evidence_Inventory.xlsx`, await buildXlsx(
         ["Evidence ID", "Title", "Evidence Type", "Status", "Linked Controls", "Collection Date", "Expiration Date", "Owner", "Assessor Summary", ...(includeInternalNotes ? ["Internal Notes"] : []), "Original Filename", "File Path in ZIP", "Is Document-Like"],
         evidence.map((ev) => {
           const ctrlIds = (evidenceToControls.get(ev.id) ?? []).map((cid) => controlMap.get(cid)?.controlId ?? cid).join("; ");
@@ -906,7 +907,7 @@ router.post(
       // ════════════════════════════════════════════════════════════════════════
       // SECTION 6: 06_Monitoring
       // ════════════════════════════════════════════════════════════════════════
-      addEntry(`${rev}06_Monitoring/Monitoring_Tracker.xlsx`, buildXlsx(
+      addEntry(`${rev}06_Monitoring/Monitoring_Tracker.xlsx`, await buildXlsx(
         ["Task", "Control Ref", "Frequency", "Status", "Description", "Last Completed", "Next Due", "Operating Procedure", "Test Procedure", "Evidence to Retain", "Notes", "Validation Status", "Review Date"],
         monitoring.map((m) => [
           m.task,           // ← fixed: was m.title (field doesn't exist)
@@ -951,7 +952,7 @@ router.post(
       // ════════════════════════════════════════════════════════════════════════
       // SECTION 7: 07_POAM
       // ════════════════════════════════════════════════════════════════════════
-      const poamXlsx = buildXlsx(
+      const poamXlsx = await buildXlsx(
         ["POAM Number", "Title", "Deficiency Description", "Status", "Risk Level", "Linked Control", "Domain", "Scheduled Completion", "Completed Date", "Remediation Plan", "Resources Required", "Notes"],
         poams.map((p) => {
           const linkedCtrl = p.linkedControlId ? controlMap.get(p.linkedControlId) : null;
@@ -1086,7 +1087,7 @@ router.post(
       }
 
       // Import ssp_files/
-      addEntry(`${imp}ssp_files/SSP_Control_Mapping.xlsx`, buildXlsx(
+      addEntry(`${imp}ssp_files/SSP_Control_Mapping.xlsx`, await buildXlsx(
         ["Control ID", "Control Title", "Domain", "Level", "Status", "SSP Narrative", "Policy Reference"],
         controls.map((c) => {
           const domain = domainMap.get(c.domainId);
@@ -1105,14 +1106,14 @@ router.post(
       importManifestRows.push(["POA&M", "Various", "POA&M Register", "—", "L2", "POAM Register", "POA&M", "active", "—", "POAM_Register.xlsx", "poam_files/POAM_Register.xlsx", `${imp}poam_files/POAM_Register.xlsx`, "POA&M", "", exportDate, "", "", "POA&M"]);
 
       // Import monitoring_files/
-      addEntry(`${imp}monitoring_files/Monitoring_Tracker.xlsx`, buildXlsx(
+      addEntry(`${imp}monitoring_files/Monitoring_Tracker.xlsx`, await buildXlsx(
         ["Task", "Control Ref", "Frequency", "Status", "Last Completed", "Next Due", "Description"],
         monitoring.map((m) => [m.task, m.controlRef, m.frequency, m.status, fmtD(m.lastCompleted), fmtD(m.nextDue), m.description])
       ));
       importManifestRows.push(["Monitoring", "Various", "Monitoring Tracker", "—", "L2", "Monitoring Tracker", "Monitoring", "active", "—", "Monitoring_Tracker.xlsx", "monitoring_files/Monitoring_Tracker.xlsx", `${imp}monitoring_files/Monitoring_Tracker.xlsx`, "Monitoring", "", exportDate, "", "", "Monitoring Record"]);
 
       // import_manifest.xlsx — master upload guide
-      addEntry(`${imp}import_manifest.xlsx`, buildXlsx(
+      addEntry(`${imp}import_manifest.xlsx`, await buildXlsx(
         ["Record Type", "Control ID", "Control Title", "Domain", "Level", "Artifact Title", "Artifact Type", "Artifact Status", "Original Filename", "Exported Filename", "Folder Path", "Full ZIP Path", "Source Module", "Owner", "Collection Date", "Review Date", "Notes", "Suggested C3PAO Upload Category"],
         importManifestRows
       ));
@@ -1139,7 +1140,7 @@ router.post(
           }
         }
       }
-      addEntry(`${man}Control_to_Evidence_Map.xlsx`, buildXlsx(
+      addEntry(`${man}Control_to_Evidence_Map.xlsx`, await buildXlsx(
         ["Control ID", "Control Title", "Domain", "Level", "Control Status", "Evidence Title", "Evidence Type", "Evidence Status", "Collection Date", "Evidence Library Path", "Import Package Path"],
         ctrlEvRows
       ));
@@ -1158,13 +1159,13 @@ router.post(
           }
         }
       }
-      addEntry(`${man}Control_to_Document_Map.xlsx`, buildXlsx(
+      addEntry(`${man}Control_to_Document_Map.xlsx`, await buildXlsx(
         ["Control ID", "Control Title", "Domain Code", "Level", "Document Title", "Document Type", "Document Status", "Document Library Path"],
         ctrlDocRows
       ));
 
       // Export_Issues.xlsx — always created
-      addEntry(`${man}Export_Issues.xlsx`, buildXlsx(
+      addEntry(`${man}Export_Issues.xlsx`, await buildXlsx(
         ["Category", "Item", "Detail", "Recommendation"],
         exportIssues.length > 0
           ? exportIssues.map((i) => [i.category, i.item, i.detail, i.recommendation])
@@ -1172,7 +1173,7 @@ router.post(
       ));
 
       // Export_Audit_Log.xlsx
-      addEntry(`${man}Export_Audit_Log.xlsx`, buildXlsx(
+      addEntry(`${man}Export_Audit_Log.xlsx`, await buildXlsx(
         ["Field", "Value"],
         [
           ["Generated By", `${user.name} (${user.email})`],
@@ -1226,7 +1227,7 @@ router.post(
       // File_Hash_Manifest — goes last (includes all prior entries)
       if (includeHashManifest && hashManifestRows.length > 0) {
         arc.append(
-          buildXlsx(["File Path in ZIP", "Filename", "File Size (bytes)", "SHA-256 Hash", "Export Timestamp"], hashManifestRows as (string | number | null | undefined)[][]),
+          await buildXlsx(["File Path in ZIP", "Filename", "File Size (bytes)", "SHA-256 Hash", "Export Timestamp"], hashManifestRows as (string | number | null | undefined)[][]),
           { name: `${man}File_Hash_Manifest.xlsx` }
         );
       }

@@ -3,7 +3,7 @@ import multer from "multer";
 import path from "path";
 import { createReadStream, readFileSync } from "fs";
 import mammoth from "mammoth";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import {
   db,
   evidenceItemsTable,
@@ -635,12 +635,17 @@ router.get("/evidence/:id/convert", requireAuth, requireOrg, async (req, res) =>
 
   if (isXlsx) {
     try {
-      const workbook = XLSX.read(buffer, { type: "buffer" });
-      const sheets = workbook.SheetNames.slice(0, 10).map(name => {
-        const ws = workbook.Sheets[name];
-        const data = XLSX.utils.sheet_to_json<(string | number)[]>(ws, { header: 1, defval: "" });
+      const workbook = new ExcelJS.Workbook();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await workbook.xlsx.load(buffer as any);
+      const sheets = workbook.worksheets.slice(0, 10).map(ws => {
+        const data: (string | number | null)[][] = [];
+        ws.eachRow({ includeEmpty: true }, (row) => {
+          const values = (row.values as (string | number | null)[]).slice(1);
+          data.push(values);
+        });
         const totalRows = data.length;
-        return { name, data: data.slice(0, 1000), totalRows };
+        return { name: ws.name, data: data.slice(0, 1000), totalRows };
       });
       res.json({ type: "xlsx", sheets });
     } catch {

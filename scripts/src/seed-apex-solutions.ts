@@ -38,7 +38,7 @@ import {
   paRoadmapActionsTable,
 } from "@workspace/db";
 import PDFDocument from "pdfkit";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import AdmZip from "adm-zip";
 import { deflateSync } from "zlib";
 import { randomUUID } from "crypto";
@@ -182,13 +182,15 @@ async function makePdf(cfg: {
 }
 
 // ─── XLSX Generator ───────────────────────────────────────────────────────────
-function makeXlsx(sheets: Array<{ name: string; headers: string[]; rows: (string | number)[][] }>): Buffer {
-  const wb = XLSX.utils.book_new();
+async function makeXlsx(sheets: Array<{ name: string; headers: string[]; rows: (string | number)[][] }>): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
   for (const sh of sheets) {
-    const ws = XLSX.utils.aoa_to_sheet([sh.headers, ...sh.rows]);
-    XLSX.utils.book_append_sheet(wb, ws, sh.name.slice(0, 31));
+    const ws = workbook.addWorksheet(sh.name.slice(0, 31));
+    ws.columns = sh.headers.map((h) => ({ header: h, width: Math.max(h.length + 2, 14) }));
+    sh.rows.forEach((r) => ws.addRow(r));
   }
-  return Buffer.from(XLSX.write(wb, { type: "buffer", bookType: "xlsx" }));
+  const arrayBuffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(arrayBuffer);
 }
 
 // ─── DOCX Generator ──────────────────────────────────────────────────────────
@@ -1508,7 +1510,7 @@ async function generateEvidenceFile(spec: EvidenceSpec): Promise<Buffer> {
 
   if (spec.ext === ".xlsx") {
     if (d.includes("Access_Review") || d.includes("Group_Membership") || d.includes("Least_Privilege") || d.includes("Admin_Role") || d.includes("Remote_Access") || d.includes("Guest_Access")) {
-      return makeXlsx([{
+      return await makeXlsx([{
         name: "Access Review",
         headers: ["Name", "Email", "Role", "Department", "Access Group", "Last Sign-In", "Review Decision", "Reviewer", "Review Date"],
         rows: Array.from({ length: 25 }, (_, i) => [
@@ -1523,7 +1525,7 @@ async function generateEvidenceFile(spec: EvidenceSpec): Promise<Buffer> {
       }]);
     }
     if (d.includes("MFA_Registration") || d.includes("LAPS") || d.includes("Bypass")) {
-      return makeXlsx([{
+      return await makeXlsx([{
         name: "MFA Status",
         headers: ["Display Name", "UPN", "MFA Registered", "Auth Methods", "Registration Date", "Last MFA Use", "Compliant"],
         rows: Array.from({ length: 30 }, (_, i) => [
@@ -1537,7 +1539,7 @@ async function generateEvidenceFile(spec: EvidenceSpec): Promise<Buffer> {
       }]);
     }
     if (d.includes("Password_Change")) {
-      return makeXlsx([{
+      return await makeXlsx([{
         name: "Password Changes",
         headers: ["User", "UPN", "Change Type", "Changed By", "Date", "IP Address", "Location"],
         rows: Array.from({ length: 20 }, (_, i) => [
@@ -1551,7 +1553,7 @@ async function generateEvidenceFile(spec: EvidenceSpec): Promise<Buffer> {
       }]);
     }
     if (d.includes("Device_Inventory") || d.includes("Encryption_Status") || d.includes("BitLocker") || d.includes("Software_Update") || d.includes("Patch")) {
-      return makeXlsx([{
+      return await makeXlsx([{
         name: "Device Inventory",
         headers: ["Device Name", "Owner", "OS Version", "Compliance Status", "BitLocker", "Last Check-In", "Intune Enrolled", "Defender Status"],
         rows: Array.from({ length: 30 }, (_, i) => [
@@ -1567,7 +1569,7 @@ async function generateEvidenceFile(spec: EvidenceSpec): Promise<Buffer> {
       }]);
     }
     if (d.includes("Privileged_Activity") || d.includes("Audit_Log") || d.includes("Security_Alerts")) {
-      return makeXlsx([{
+      return await makeXlsx([{
         name: "Activity Log",
         headers: ["Date", "User", "Operation", "Resource", "IP Address", "Result", "Reviewed", "Notes"],
         rows: Array.from({ length: 20 }, (_, i) => [
@@ -1583,7 +1585,7 @@ async function generateEvidenceFile(spec: EvidenceSpec): Promise<Buffer> {
       }]);
     }
     if (d.includes("Remediation_Tracker") || d.includes("Risk_Register")) {
-      return makeXlsx([{
+      return await makeXlsx([{
         name: "Remediation",
         headers: ["CVE / Risk ID", "Title", "Severity", "CVSS", "Asset", "Owner", "Due Date", "Status", "Notes"],
         rows: [
@@ -1598,7 +1600,7 @@ async function generateEvidenceFile(spec: EvidenceSpec): Promise<Buffer> {
       }]);
     }
     if (d.includes("Training") || d.includes("Completion") || d.includes("Schedule")) {
-      return makeXlsx([{
+      return await makeXlsx([{
         name: "Training Records",
         headers: ["Name", "Email", "Department", "Training", "Assigned Date", "Completed Date", "Score", "Expiry", "Status"],
         rows: Array.from({ length: 28 }, (_, i) => [
@@ -1614,7 +1616,7 @@ async function generateEvidenceFile(spec: EvidenceSpec): Promise<Buffer> {
       }]);
     }
     if (d.includes("Visitor_Log") || d.includes("Physical_Access") || d.includes("Termination")) {
-      return makeXlsx([{
+      return await makeXlsx([{
         name: "Visitor Log",
         headers: ["Date", "Visitor Name", "Company", "Host", "Purpose", "Badge #", "Areas Accessed", "Sign-In", "Sign-Out"],
         rows: Array.from({ length: 20 }, (_, i) => [
@@ -1630,7 +1632,7 @@ async function generateEvidenceFile(spec: EvidenceSpec): Promise<Buffer> {
       }]);
     }
     if (d.includes("Backup_Completion")) {
-      return makeXlsx([{
+      return await makeXlsx([{
         name: "Backup Log",
         headers: ["Job Name", "Type", "Server", "Start Time", "End Time", "Duration", "Size (GB)", "Status", "Restore Verified"],
         rows: Array.from({ length: 15 }, (_, i) => [
@@ -1645,7 +1647,7 @@ async function generateEvidenceFile(spec: EvidenceSpec): Promise<Buffer> {
       }]);
     }
     // Default: media disposal or other
-    return makeXlsx([{
+    return await makeXlsx([{
       name: "Log",
       headers: ["Date", "Item", "Description", "Owner", "Status", "Notes"],
       rows: Array.from({ length: 10 }, (_, i) => [
@@ -1736,7 +1738,7 @@ async function generateDocumentFile(spec: DocumentSpec): Promise<Buffer> {
 
   if (spec.ext === ".xlsx") {
     if (spec.docType === "access_review") {
-      return makeXlsx([{
+      return await makeXlsx([{
         name: "Access Review",
         headers: ["Name", "Email", "Role", "Department", "Access Groups", "Last Sign-In", "Decision", "Reviewer", "Date"],
         rows: Array.from({ length: 30 }, (_, i) => [
@@ -1752,7 +1754,7 @@ async function generateDocumentFile(spec: DocumentSpec): Promise<Buffer> {
     }
     if (spec.docType === "log") {
       if (spec.title.includes("Audit")) {
-        return makeXlsx([{
+        return await makeXlsx([{
           name: "Audit Log Review",
           headers: ["Review Date", "Reviewer", "Period Covered", "Alerts Reviewed", "Anomalies Found", "Escalated", "Closed", "Notes"],
           rows: Array.from({ length: 13 }, (_, i) => [
@@ -1768,7 +1770,7 @@ async function generateDocumentFile(spec: DocumentSpec): Promise<Buffer> {
         }]);
       }
       if (spec.title.includes("Training")) {
-        return makeXlsx([{
+        return await makeXlsx([{
           name: "Training Register",
           headers: ["Name", "Email", "Department", "Training", "Assigned", "Completed", "Score", "Expiry", "Status"],
           rows: Array.from({ length: 35 }, (_, i) => [
@@ -1785,7 +1787,7 @@ async function generateDocumentFile(spec: DocumentSpec): Promise<Buffer> {
       }
     }
     if (spec.docType === "risk_record") {
-      return makeXlsx([{
+      return await makeXlsx([{
         name: "Risk Register",
         headers: ["Risk ID", "Risk Title", "Category", "Likelihood", "Impact", "Risk Score", "Treatment", "Owner", "Due Date", "Status"],
         rows: [
@@ -1800,14 +1802,14 @@ async function generateDocumentFile(spec: DocumentSpec): Promise<Buffer> {
       }]);
     }
     if (spec.docType === "register") {
-      return makeXlsx([{
+      return await makeXlsx([{
         name: "POA&M",
         headers: ["POAM #", "Title", "Control", "Risk Level", "Status", "Owner", "Due Date", "Remediation Plan", "Notes"],
         rows: APEX_POAMS.map(p => [p.num, p.title, p.ctrl, p.risk.toUpperCase(), p.status.replace("_", " ").toUpperCase(), "IT Admin", daysFromNow(p.days).toISOString().split("T")[0]!, p.plan.slice(0, 80) + "...", p.notes]),
       }]);
     }
     // Generic log
-    return makeXlsx([{
+    return await makeXlsx([{
       name: "Log",
       headers: ["Date", "Entry", "Details", "Status", "Owner"],
       rows: Array.from({ length: 10 }, (_, i) => [

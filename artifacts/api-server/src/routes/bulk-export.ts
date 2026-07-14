@@ -1,7 +1,7 @@
 import { Router } from "express";
 import archiver from "archiver";
 import PDFDocument from "pdfkit";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import crypto from "crypto";
 import path from "path";
 import { db } from "@workspace/db";
@@ -425,12 +425,13 @@ async function fetchFile(fileKey: string | null): Promise<Buffer | null> {
 }
 
 // ── XLSX helpers ──────────────────────────────────────────────────────────────
-function buildXlsx(headers: string[], rows: (string | number | null)[][]): Buffer {
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-  ws["!cols"] = headers.map(() => ({ wch: 22 }));
-  XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+async function buildXlsx(headers: string[], rows: (string | number | null)[][]): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  const ws = workbook.addWorksheet("Sheet1");
+  ws.columns = headers.map((h) => ({ header: h, width: 22 }));
+  rows.forEach((r) => ws.addRow(r.map((v) => v ?? "")));
+  const arrayBuffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(arrayBuffer);
 }
 
 // ── PDF helper ────────────────────────────────────────────────────────────────
@@ -724,7 +725,7 @@ router.post(
           e.issue ?? "",
         ] as (string | number | null)[];
       });
-      archive.append(buildXlsx(headers, rows), { name: `${manifestRoot}/File_Index.xlsx` });
+      archive.append(await buildXlsx(headers, rows), { name: `${manifestRoot}/File_Index.xlsx` });
     }
 
     if (includeControlMapping) {
@@ -753,7 +754,7 @@ router.post(
           }
         }
       }
-      archive.append(buildXlsx(headers, rows), { name: `${manifestRoot}/Control_Mapping.xlsx` });
+      archive.append(await buildXlsx(headers, rows), { name: `${manifestRoot}/Control_Mapping.xlsx` });
     }
 
     if (includeHashManifest) {
@@ -765,7 +766,7 @@ router.post(
         e.zipPath, e.exportName, e.item.fileName ?? "—",
         e.size || "—", e.sha256 ?? "—", exportDate.toISOString(),
       ] as (string | number | null)[]);
-      archive.append(buildXlsx(headers, rows), { name: `${manifestRoot}/File_Hash_Manifest.xlsx` });
+      archive.append(await buildXlsx(headers, rows), { name: `${manifestRoot}/File_Hash_Manifest.xlsx` });
     }
 
     // Export_Issues.xlsx (always)
@@ -777,7 +778,7 @@ router.post(
       const rows = issues.map((i) => [
         i.id, i.title, i.controls, i.fileName, i.issue, i.action, i.included,
       ] as (string | number | null)[]);
-      archive.append(buildXlsx(headers, rows), { name: `${manifestRoot}/Export_Issues.xlsx` });
+      archive.append(await buildXlsx(headers, rows), { name: `${manifestRoot}/Export_Issues.xlsx` });
     }
 
     // Export_Summary.pdf (always)
