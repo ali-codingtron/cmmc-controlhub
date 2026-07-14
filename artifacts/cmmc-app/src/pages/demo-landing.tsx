@@ -261,12 +261,13 @@ export default function DemoLanding() {
       {/* ── Stats bar ──────────────────────────────────────────────────────── */}
       <section style={{ background: "#1E293B", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
         <div className="max-w-6xl mx-auto px-6 py-7">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
             {[
               { value: "110", label: "CMMC L2 Controls" },
               { value: "14", label: "Practice Domains" },
               { value: "19", label: "Monitoring Tasks" },
-              { value: "Multi", label: "Tenant MSP Ready" },
+              { value: "L1 / L2", label: "Self-Assessment Ready" },
+              { value: "C3PAO", label: "Ready When Required" },
             ].map((s) => (
               <div key={s.label} className="text-center">
                 <div className="text-3xl font-black text-blue-400">{s.value}</div>
@@ -389,11 +390,9 @@ export default function DemoLanding() {
       <section className="py-20 bg-background border-b">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold mb-5"
-              style={{ background: "rgba(37,99,235,0.08)", border: "1px solid rgba(37,99,235,0.2)", color: "#3B82F6" }}>
-              <Shield className="h-3 w-3" />
-              Platform Value
-            </div>
+            <p className="text-xs font-bold uppercase tracking-widest mb-4" style={{ color: "#3B82F6", letterSpacing: "0.12em" }}>
+              CMMC · NIST 800-171 · DFARS
+            </p>
             <h2 className="text-3xl font-bold mb-3">Why Control HUB Still Matters</h2>
             <p className="text-muted-foreground max-w-xl mx-auto text-sm">
               Regardless of how certification requirements evolve, the underlying evidence, documentation,
