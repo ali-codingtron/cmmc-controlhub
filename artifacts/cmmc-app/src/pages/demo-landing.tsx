@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import carmetechLogo from "@assets/Carme_Tech_Logo_Official_1779981155506.png";
 
-const CONSULTATION_HREF = "https://carmetechnology.com/#contact";
+const CONSULTATION_HREF = "mailto:info@carmetechnology.com?subject=Control%20HUB%20Consultation%20Request";
 
 const FEATURES = [
   { icon: Shield, title: "CMMC 2.0 Control Library", desc: "All 110 Level 2 controls tracked with implementation status, narratives, evidence linkage, and SSP mapping.", color: "#2563EB" },
@@ -138,8 +138,6 @@ export default function DemoLanding() {
           <div className="flex items-center gap-2">
             <a
               href={CONSULTATION_HREF}
-              target="_blank"
-              rel="noopener noreferrer"
               className="hidden sm:flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors"
               style={{ color: "#C9A84C", border: "1px solid rgba(201,168,76,0.3)" }}
             >
@@ -234,8 +232,6 @@ export default function DemoLanding() {
                 </Button>
                 <a
                   href={CONSULTATION_HREF}
-                  target="_blank"
-                  rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-6 h-11 rounded-md text-sm font-medium transition-colors"
                   style={{ color: "#C9A84C", border: "1px solid rgba(201,168,76,0.3)", background: "rgba(201,168,76,0.05)" }}
                 >
@@ -396,8 +392,6 @@ export default function DemoLanding() {
             </Button>
             <a
               href={CONSULTATION_HREF}
-              target="_blank"
-              rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-8 h-11 rounded-md text-sm font-semibold transition-colors"
               style={{ color: "#C9A84C", border: "1px solid rgba(201,168,76,0.4)", background: "rgba(201,168,76,0.08)" }}
             >
@@ -423,7 +417,7 @@ export default function DemoLanding() {
             <div className="flex flex-wrap justify-center gap-5 text-xs text-slate-500">
               <button onClick={handleLaunchDemo} className="hover:text-white transition-colors">Launch Demo</button>
               <button onClick={() => navigate("/demo-video")} className="hover:text-white transition-colors">Watch Walkthrough</button>
-              <a href={CONSULTATION_HREF} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Request Consultation</a>
+              <a href={CONSULTATION_HREF} className="hover:text-white transition-colors">Request Consultation</a>
               <button onClick={() => navigate("/login")} className="hover:text-white transition-colors">Sign In</button>
               <a href="mailto:info@carmetechnology.com" className="hover:text-white transition-colors">info@carmetechnology.com</a>
             </div>

@@ -9,7 +9,8 @@ import { useEffect, useState } from "react";
 import { Shield } from "lucide-react";
 import carmetechLogo from "@assets/Carme_Tech_Logo_Official_1779981155506.png";
 
-const CONSULTATION_HREF = "https://carmetechnology.com/#contact";
+const CONSULTATION_HREF =
+  "mailto:info@carmetechnology.com?subject=Control%20HUB%20Consultation%20Request";
 
 export default function DemoApp() {
   const [status, setStatus] = useState<"loading" | "error" | "unavailable">("loading");
@@ -104,8 +105,6 @@ export default function DemoApp() {
           </p>
           <a
             href={CONSULTATION_HREF}
-            target="_blank"
-            rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-5 h-10 rounded-md text-sm font-medium"
             style={{ color: "#C9A84C", border: "1px solid rgba(201,168,76,0.3)" }}
           >
