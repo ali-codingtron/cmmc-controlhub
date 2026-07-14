@@ -2,6 +2,7 @@ import {
   useGetDashboardSummary,
   useGetReadinessByDomain,
   useGetRecentActivity,
+  useListOrgPackages,
 } from "@workspace/api-client-react";
 import { useOrg } from "@/context/OrgContext";
 import { Card, CardContent } from "@/components/ui/card";
@@ -201,6 +202,11 @@ export default function Dashboard() {
     { limit: 10 },
     { query: { enabled: !!activeOrg } },
   );
+  const { data: orgPackages = [] } = useListOrgPackages(
+    activeOrg?.id ?? "",
+    { query: { enabled: !!activeOrg?.id, staleTime: 120000 } as any }
+  );
+  const activePkgs = orgPackages.filter(p => p.isActive);
 
   const handleRefresh = () => {
     queryClient.invalidateQueries();
@@ -289,6 +295,38 @@ export default function Dashboard() {
               {status.label}
             </span>
           </div>
+          {activePkgs.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {activePkgs.map(pkg => {
+                const key = pkg.packageKey ?? "";
+                let label = pkg.packageName ?? key;
+                if (key === "CMMC_L1_SELF") label = "CMMC L1";
+                else if (key === "CMMC_L2_SELF") label = "CMMC L2";
+                else if (key === "NIST_800_171_R2") label = "NIST 800-171 r2";
+                else if (key === "NIST_800_171_R3") label = "NIST 800-171 r3";
+                else if (key === "NIST_800_171A_R2") label = "800-171A r2";
+                else if (key === "NIST_800_171A_R3") label = "800-171A r3";
+                else if (key === "DFARS_252_204_7012") label = "DFARS 7012";
+                else if (key === "DFARS_252_204_7019") label = "DFARS 7019";
+                else if (key === "DFARS_252_204_7020") label = "DFARS 7020";
+                else if (key === "DFARS_252_204_7021") label = "DFARS 7021";
+                else if (key === "FAR_52_204_21") label = "FAR 52.204-21";
+                const fw = pkg.frameworkShortName;
+                const color = fw === "CMMC"
+                  ? "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800"
+                  : fw === "NIST 800-171" || fw === "NIST 800-171A"
+                  ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800"
+                  : fw === "DFARS"
+                  ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
+                  : "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700";
+                return (
+                  <span key={pkg.id} className={cn("inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium border", color)}>
+                    {label}
+                  </span>
+                );
+              })}
+            </div>
+          )}
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5"><Calendar className="h-3 w-3" />Report Date: {today}</span>
             {lastActivity && (

@@ -28,6 +28,7 @@ import AssessorControl from "@/pages/assessor-control";
 import AuditLogs from "@/pages/audit-logs";
 import Users from "@/pages/users";
 import Settings from "@/pages/settings";
+import SettingsPackages from "@/pages/settings-packages";
 import Documents from "@/pages/documents";
 import DocumentsList from "@/pages/documents-list";
 import DocumentLogs from "@/pages/documents-logs";
@@ -143,6 +144,7 @@ function AppRoutes() {
               </Route>
               <Route path="/audit-logs" component={AuditLogs} />
               <Route path="/users" component={Users} />
+              <Route path="/settings/packages" component={SettingsPackages} />
               <Route path="/settings" component={Settings} />
               <Route path="/organizations" component={Organizations} />
               <Route path="/security" component={SecurityCenter} />

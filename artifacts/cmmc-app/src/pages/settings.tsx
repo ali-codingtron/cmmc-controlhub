@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Eye, EyeOff, User, KeyRound, Shield, Mail, AlertTriangle, CheckCircle2, Send } from "lucide-react";
+import { Eye, EyeOff, User, KeyRound, Shield, Mail, AlertTriangle, CheckCircle2, Send, Package, ChevronRight } from "lucide-react";
+import { Link } from "wouter";
 
 function apiFetch(path: string, opts?: RequestInit) {
   const token = localStorage.getItem("auth_token");
@@ -399,6 +400,27 @@ export default function Settings() {
       <ProfileCard />
       <ChangePasswordCard />
       <SecurityInfoCard />
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Package className="h-5 w-5 text-primary" />
+            <CardTitle>Compliance Packages</CardTitle>
+          </div>
+          <CardDescription>
+            View and manage the regulatory frameworks and compliance packages assigned to this organization.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link href="/settings/packages">
+            <Button variant="outline" className="gap-2">
+              <Package className="h-4 w-4" />
+              Manage Compliance Packages
+              <ChevronRight className="h-4 w-4 ml-1 text-muted-foreground" />
+            </Button>
+          </Link>
+        </CardContent>
+      </Card>
 
       {isAdmin && (
         <>

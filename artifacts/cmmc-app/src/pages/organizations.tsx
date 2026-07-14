@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
@@ -9,6 +9,7 @@ import {
   FileText,
   RefreshCw,
   Trash2,
+  Check,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useOrg } from "@/context/OrgContext";
@@ -33,6 +34,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useListPackages } from "@workspace/api-client-react";
 
 interface OrgStats {
   id: string;
@@ -46,6 +48,31 @@ interface OrgStats {
   openPoams: number;
   openTasks: number;
   evidenceCount: number;
+}
+
+interface CompliancePkg {
+  id: string;
+  frameworkId?: string | null;
+  frameworkName?: string | null;
+  frameworkShortName?: string | null;
+  packageKey?: string | null;
+  name: string;
+  version?: string | null;
+  description?: string | null;
+  packageType?: string | null;
+  controlCount?: number | null;
+  sortOrder?: number | null;
+}
+
+function fwBadgeColor(shortName?: string | null): string {
+  switch (shortName) {
+    case "CMMC": return "bg-purple-50 text-purple-700 border-purple-200";
+    case "NIST 800-171":
+    case "NIST 800-171A": return "bg-blue-50 text-blue-700 border-blue-200";
+    case "DFARS": return "bg-amber-50 text-amber-700 border-amber-200";
+    case "FAR": return "bg-slate-50 text-slate-600 border-slate-200";
+    default: return "bg-slate-100 text-slate-600 border-slate-200";
+  }
 }
 
 function ReadinessRing({ percent, size = 56 }: { percent: number; size?: number }) {
@@ -160,9 +187,11 @@ function OrgCard({ org, onSwitch, onDelete }: { org: OrgStats; onSwitch: (id: st
   );
 }
 
-function NewOrgDialog({ open, onClose, onSuccess }: { open: boolean; onClose: () => void; onSuccess?: () => void }) {
+function OrgCreationWizard({ open, onClose, onSuccess }: { open: boolean; onClose: () => void; onSuccess?: () => void }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [step, setStep] = useState(1);
+
   const [form, setForm] = useState({
     name: "",
     legalName: "",
@@ -174,94 +203,502 @@ function NewOrgDialog({ open, onClose, onSuccess }: { open: boolean; onClose: ()
     cmmcTargetLevel: "L2",
     organizationAddress: "",
     assessmentScope: "",
-    notes: "",
   });
-  const [saving, setSaving] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.name) return;
+  const [ctx, setCtx] = useState({
+    handlesFci: false,
+    handlesCui: false,
+    isDodContractor: false,
+    hasDfars7012: false,
+  });
 
-    setSaving(true);
+  const [selectedPkgIds, setSelectedPkgIds] = useState<string[]>([]);
+  const [autoApplied, setAutoApplied] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  const { data: allPackages = [], isLoading: pkgLoading } = useListPackages(
+    undefined,
+    { query: { enabled: open } as any }
+  );
+
+  const recommendedIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (ctx.handlesFci && !ctx.handlesCui && !ctx.isDodContractor) {
+      ids.add("pkg-cmmc-l1-self");
+      ids.add("pkg-far-52-204-21");
+    }
+    if (ctx.handlesFci && (ctx.isDodContractor || ctx.handlesCui)) {
+      ids.add("pkg-cmmc-l1-self");
+    }
+    if (ctx.handlesCui) {
+      ids.add("pkg-cmmc-l2-self");
+      ids.add("pkg-nist-800-171-r2");
+    }
+    if ((ctx.isDodContractor && ctx.handlesCui) || ctx.hasDfars7012) {
+      ["pkg-dfars-7012", "pkg-dfars-7019", "pkg-dfars-7020", "pkg-dfars-7021"].forEach(id => ids.add(id));
+      ids.add("pkg-cmmc-l2-self");
+      ids.add("pkg-nist-800-171-r2");
+    }
+    return Array.from(ids);
+  }, [ctx]);
+
+  useEffect(() => {
+    if (step === 3 && !autoApplied && allPackages.length > 0) {
+      setSelectedPkgIds(recommendedIds.filter(id => allPackages.some((p: CompliancePkg) => p.id === id)));
+      setAutoApplied(true);
+    }
+  }, [step, allPackages.length, autoApplied, recommendedIds]);
+
+  useEffect(() => {
+    if (step <= 2) setAutoApplied(false);
+  }, [ctx, step]);
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, CompliancePkg[]>();
+    for (const pkg of allPackages as CompliancePkg[]) {
+      const key = pkg.frameworkShortName ?? "Other";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(pkg);
+    }
+    return Array.from(map.entries());
+  }, [allPackages]);
+
+  const selectedPkgs = (allPackages as CompliancePkg[]).filter(p => selectedPkgIds.includes(p.id));
+  const totalControlCount = selectedPkgs
+    .filter(p => p.packageType === "control_framework")
+    .reduce((s, p) => s + (p.controlCount ?? 0), 0);
+
+  const handleCreate = async () => {
+    if (!form.name.trim()) return;
+    setCreating(true);
     try {
       const token = localStorage.getItem("auth_token");
-      const res = await fetch("/api/organizations", {
+      const base = (import.meta.env.BASE_URL ?? "").replace(/\/$/, "");
+
+      const orgRes = await fetch(`${base}/api/organizations`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(form),
       });
-      if (!res.ok) throw new Error("Failed to create organization");
-      toast({ title: "Organization created" });
+      if (!orgRes.ok) {
+        const errData = await orgRes.json().catch(() => ({}));
+        throw new Error(errData.error ?? "Failed to create organization");
+      }
+      const newOrg = await orgRes.json();
+
+      if (selectedPkgIds.length > 0) {
+        await fetch(`${base}/api/organizations/${newOrg.id}/packages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ packageIds: selectedPkgIds }),
+        });
+      }
+
+      toast({
+        title: "Organization created",
+        description: selectedPkgIds.length > 0
+          ? `${selectedPkgIds.length} compliance package${selectedPkgIds.length !== 1 ? "s" : ""} assigned`
+          : undefined,
+      });
       queryClient.invalidateQueries({ queryKey: ["global-stats"] });
       onSuccess?.();
-      onClose();
-    } catch {
-      toast({ title: "Error", description: "Could not create organization", variant: "destructive" });
+      handleClose();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message ?? "Could not create organization", variant: "destructive" });
     } finally {
-      setSaving(false);
+      setCreating(false);
     }
   };
 
+  const handleClose = () => {
+    setStep(1);
+    setForm({ name: "", legalName: "", shortName: "", cageCode: "", uei: "", industry: "", primaryContact: "", cmmcTargetLevel: "L2", organizationAddress: "", assessmentScope: "" });
+    setCtx({ handlesFci: false, handlesCui: false, isDodContractor: false, hasDfars7012: false });
+    setSelectedPkgIds([]);
+    setAutoApplied(false);
+    onClose();
+  };
+
+  const STEP_TITLES = [
+    "Organization Profile",
+    "Contract & Data Context",
+    "Compliance Package Selection",
+    "Review Summary",
+    "Confirm & Create",
+  ];
+
+  const contextQuestions = [
+    {
+      key: "handlesFci" as const,
+      label: "Handles Federal Contract Information (FCI)",
+      desc: "Receives or processes information provided by the federal government under a contract, not intended for public release.",
+    },
+    {
+      key: "handlesCui" as const,
+      label: "Handles Controlled Unclassified Information (CUI)",
+      desc: "Processes, stores, or transmits information designated as CUI — including technical data, export-controlled info, or personally identifiable information.",
+    },
+    {
+      key: "isDodContractor" as const,
+      label: "Active DoD Prime or Subcontractor",
+      desc: "Holds or performs work under active Department of Defense contracts or subcontracts.",
+    },
+    {
+      key: "hasDfars7012" as const,
+      label: "Contract Includes DFARS 252.204-7012",
+      desc: "DoD contracts explicitly include the DFARS 252.204-7012 clause (Safeguarding Covered Defense Information).",
+    },
+  ];
+
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Add New Organization</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
-              <Label>Organization Name *</Label>
-              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Apex Defense LLC" required />
-            </div>
-            <div>
-              <Label>Legal Name</Label>
-              <Input value={form.legalName} onChange={(e) => setForm((f) => ({ ...f, legalName: e.target.value }))} placeholder="Full legal name" />
-            </div>
-            <div>
-              <Label>Short Name</Label>
-              <Input value={form.shortName} onChange={(e) => setForm((f) => ({ ...f, shortName: e.target.value }))} placeholder="Apex" />
-            </div>
-            <div>
-              <Label>CAGE Code</Label>
-              <Input value={form.cageCode} onChange={(e) => setForm((f) => ({ ...f, cageCode: e.target.value }))} placeholder="1ABC2" />
-            </div>
-            <div>
-              <Label>UEI</Label>
-              <Input value={form.uei} onChange={(e) => setForm((f) => ({ ...f, uei: e.target.value }))} placeholder="UEI number" />
-            </div>
-            <div>
-              <Label>Industry</Label>
-              <Input value={form.industry} onChange={(e) => setForm((f) => ({ ...f, industry: e.target.value }))} placeholder="Aerospace & Defense" />
-            </div>
-            <div>
-              <Label>CMMC Target Level</Label>
-              <Select value={form.cmmcTargetLevel} onValueChange={(v) => setForm((f) => ({ ...f, cmmcTargetLevel: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="L1">Level 1</SelectItem>
-                  <SelectItem value="L2">Level 2</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="col-span-2">
-              <Label>Primary Contact</Label>
-              <Input value={form.primaryContact} onChange={(e) => setForm((f) => ({ ...f, primaryContact: e.target.value }))} placeholder="Contact name" />
-            </div>
-            <div className="col-span-2">
-              <Label>Address</Label>
-              <Input value={form.organizationAddress} onChange={(e) => setForm((f) => ({ ...f, organizationAddress: e.target.value }))} placeholder="Street, City, State ZIP" />
-            </div>
-            <div className="col-span-2">
-              <Label>Assessment Scope</Label>
-              <Input value={form.assessmentScope} onChange={(e) => setForm((f) => ({ ...f, assessmentScope: e.target.value }))} placeholder="Brief description of systems in scope" />
-            </div>
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-2xl flex flex-col overflow-hidden" style={{ maxHeight: "90vh" }}>
+        <DialogHeader className="shrink-0 pb-2">
+          <div className="flex items-center gap-1.5 mb-3">
+            {[1, 2, 3, 4, 5].map(n => (
+              <div
+                key={n}
+                className={cn(
+                  "h-1 flex-1 rounded-full transition-all duration-300",
+                  n <= step ? "bg-primary" : "bg-muted"
+                )}
+              />
+            ))}
           </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={saving}>{saving ? "Creating..." : "Create Organization"}</Button>
-          </DialogFooter>
-        </form>
+          <div className="text-xs font-medium text-muted-foreground">Step {step} of 5</div>
+          <DialogTitle className="text-lg">{STEP_TITLES[step - 1]}</DialogTitle>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto min-h-0 pr-1">
+          {step === 1 && (
+            <div className="space-y-4 py-1">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <Label>Organization Name <span className="text-destructive">*</span></Label>
+                  <Input
+                    value={form.name}
+                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                    placeholder="Apex Defense LLC"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <Label>Legal Name</Label>
+                  <Input value={form.legalName} onChange={e => setForm(f => ({ ...f, legalName: e.target.value }))} placeholder="Full legal entity name" />
+                </div>
+                <div>
+                  <Label>Short Name</Label>
+                  <Input value={form.shortName} onChange={e => setForm(f => ({ ...f, shortName: e.target.value }))} placeholder="Apex" />
+                </div>
+                <div>
+                  <Label>CAGE Code</Label>
+                  <Input value={form.cageCode} onChange={e => setForm(f => ({ ...f, cageCode: e.target.value }))} placeholder="1ABC2" />
+                </div>
+                <div>
+                  <Label>UEI</Label>
+                  <Input value={form.uei} onChange={e => setForm(f => ({ ...f, uei: e.target.value }))} placeholder="Unique Entity Identifier" />
+                </div>
+                <div>
+                  <Label>Industry</Label>
+                  <Input value={form.industry} onChange={e => setForm(f => ({ ...f, industry: e.target.value }))} placeholder="Aerospace & Defense" />
+                </div>
+                <div>
+                  <Label>CMMC Target Level</Label>
+                  <Select value={form.cmmcTargetLevel} onValueChange={v => setForm(f => ({ ...f, cmmcTargetLevel: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="L1">Level 1 (FCI only)</SelectItem>
+                      <SelectItem value="L2">Level 2 (CUI)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-2">
+                  <Label>Primary Contact</Label>
+                  <Input value={form.primaryContact} onChange={e => setForm(f => ({ ...f, primaryContact: e.target.value }))} placeholder="Contact name and title" />
+                </div>
+                <div className="col-span-2">
+                  <Label>Organization Address</Label>
+                  <Input value={form.organizationAddress} onChange={e => setForm(f => ({ ...f, organizationAddress: e.target.value }))} placeholder="Street, City, State ZIP" />
+                </div>
+                <div className="col-span-2">
+                  <Label>Assessment Scope</Label>
+                  <Input value={form.assessmentScope} onChange={e => setForm(f => ({ ...f, assessmentScope: e.target.value }))} placeholder="Brief description of systems in scope" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="space-y-3 py-1">
+              <p className="text-sm text-muted-foreground">
+                Answer a few quick questions about this organization's data and contracts. We'll use your answers to recommend the right compliance packages on the next step.
+              </p>
+              {contextQuestions.map(({ key, label, desc }) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={cn(
+                    "w-full text-left rounded-lg border p-4 transition-all",
+                    ctx[key]
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-primary/40 hover:bg-muted/30"
+                  )}
+                  onClick={() => setCtx(c => ({ ...c, [key]: !c[key] }))}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={cn(
+                      "mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
+                      ctx[key] ? "border-primary bg-primary" : "border-border bg-background"
+                    )}>
+                      {ctx[key] && <Check className="h-3 w-3 text-primary-foreground" strokeWidth={3} />}
+                    </div>
+                    <div>
+                      <div className="font-medium text-sm">{label}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{desc}</div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+              {!ctx.handlesFci && !ctx.handlesCui && !ctx.isDodContractor && (
+                <p className="text-xs text-muted-foreground italic pt-1">
+                  You can proceed without selecting any options and choose packages manually, or skip packages and add them later in Settings.
+                </p>
+              )}
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-4 py-1">
+              {recommendedIds.length > 0 ? (
+                <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
+                  <span className="font-semibold text-primary">
+                    {recommendedIds.filter(id => allPackages.some((p: CompliancePkg) => p.id === id)).length} package{recommendedIds.filter(id => allPackages.some((p: CompliancePkg) => p.id === id)).length !== 1 ? "s" : ""} recommended
+                  </span>
+                  <span className="text-muted-foreground"> based on your answers. Customize the selection below.</span>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Select the compliance frameworks and regulatory packages that apply to this organization. You can add or remove packages later in Settings.
+                </p>
+              )}
+
+              {pkgLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map(i => <div key={i} className="h-20 animate-pulse bg-muted rounded-lg" />)}
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {grouped.map(([framework, pkgs]) => (
+                    <div key={framework}>
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">{framework}</div>
+                      <div className="space-y-2">
+                        {pkgs.map(pkg => {
+                          const isSelected = selectedPkgIds.includes(pkg.id);
+                          const isRecommended = recommendedIds.includes(pkg.id);
+                          return (
+                            <button
+                              key={pkg.id}
+                              type="button"
+                              className={cn(
+                                "w-full text-left rounded-lg border p-3 transition-all",
+                                isSelected
+                                  ? "border-primary bg-primary/5"
+                                  : "border-border hover:border-primary/40 hover:bg-muted/30"
+                              )}
+                              onClick={() => setSelectedPkgIds(prev =>
+                                prev.includes(pkg.id)
+                                  ? prev.filter(id => id !== pkg.id)
+                                  : [...prev, pkg.id]
+                              )}
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className={cn(
+                                  "mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
+                                  isSelected ? "border-primary bg-primary" : "border-border bg-background"
+                                )}>
+                                  {isSelected && <Check className="h-3 w-3 text-primary-foreground" strokeWidth={3} />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-sm font-medium">{pkg.name}</span>
+                                    {pkg.version && <span className="text-xs text-muted-foreground">{pkg.version}</span>}
+                                    {isRecommended && (
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+                                        ★ Recommended
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">{pkg.description}</div>
+                                  {pkg.controlCount != null && (
+                                    <div className="text-[10px] text-muted-foreground mt-1.5">{pkg.controlCount} controls/requirements</div>
+                                  )}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <p className="text-xs text-muted-foreground">
+                {selectedPkgIds.length === 0
+                  ? "No packages selected — you can proceed without packages and add them later."
+                  : `${selectedPkgIds.length} package${selectedPkgIds.length !== 1 ? "s" : ""} selected.`}
+              </p>
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="space-y-5 py-1">
+              <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-3">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Organization Details</div>
+                <div className="space-y-2 text-sm divide-y divide-border/50">
+                  <div className="flex justify-between gap-2 py-1.5">
+                    <span className="text-muted-foreground">Name</span>
+                    <span className="font-medium">{form.name}</span>
+                  </div>
+                  {form.shortName && (
+                    <div className="flex justify-between gap-2 py-1.5">
+                      <span className="text-muted-foreground">Short Name</span>
+                      <span>{form.shortName}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between gap-2 py-1.5">
+                    <span className="text-muted-foreground">CMMC Target Level</span>
+                    <span className="font-medium">Level {form.cmmcTargetLevel?.replace("L", "")}</span>
+                  </div>
+                  {form.industry && (
+                    <div className="flex justify-between gap-2 py-1.5">
+                      <span className="text-muted-foreground">Industry</span>
+                      <span>{form.industry}</span>
+                    </div>
+                  )}
+                  {form.primaryContact && (
+                    <div className="flex justify-between gap-2 py-1.5">
+                      <span className="text-muted-foreground">Primary Contact</span>
+                      <span>{form.primaryContact}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                  Compliance Packages — {selectedPkgIds.length} selected
+                </div>
+                {selectedPkgIds.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-border p-4 text-center">
+                    <p className="text-sm text-muted-foreground">
+                      No packages selected — you can add packages later in Settings &gt; Compliance Packages.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {selectedPkgs.map(pkg => (
+                      <div key={pkg.id} className="flex items-center justify-between gap-2 p-2.5 rounded-md border border-border/60 bg-muted/20">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 shrink-0", fwBadgeColor(pkg.frameworkShortName))}>
+                            {pkg.frameworkShortName}
+                          </Badge>
+                          <span className="text-sm font-medium truncate">{pkg.name}</span>
+                          {pkg.version && <span className="text-xs text-muted-foreground shrink-0">{pkg.version}</span>}
+                        </div>
+                        {pkg.controlCount != null && (
+                          <span className="text-xs text-muted-foreground shrink-0">{pkg.controlCount} req.</span>
+                        )}
+                      </div>
+                    ))}
+                    {totalControlCount > 0 && (
+                      <div className="text-xs text-muted-foreground pt-1 text-right">
+                        Control framework scope: <span className="font-semibold text-foreground">{totalControlCount} requirements</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {selectedPkgs.some(p => p.frameworkShortName === "DFARS") && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                  <p className="font-semibold mb-0.5">DFARS clause obligations included</p>
+                  <p>The selected DFARS packages include contractual obligations such as cyber incident reporting (72-hour), subcontractor flowdown, and SSP/POA&M maintenance. These will be tracked in the Monitoring module.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === 5 && (
+            <div className="space-y-6 py-4">
+              <div className="flex flex-col items-center text-center gap-3 py-2">
+                <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Building2 className="h-7 w-7 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold">{form.name}</h3>
+                  <div className="flex items-center justify-center gap-2 mt-2 flex-wrap">
+                    <Badge variant="outline">CMMC Level {form.cmmcTargetLevel?.replace("L", "")}</Badge>
+                    {selectedPkgIds.length > 0 && (
+                      <Badge variant="outline">{selectedPkgIds.length} package{selectedPkgIds.length !== 1 ? "s" : ""}</Badge>
+                    )}
+                    {form.industry && <Badge variant="outline">{form.industry}</Badge>}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border divide-y divide-border text-sm">
+                <div className="flex justify-between gap-2 px-4 py-3">
+                  <span className="text-muted-foreground">Organization name</span>
+                  <span className="font-medium">{form.name}</span>
+                </div>
+                {form.shortName && (
+                  <div className="flex justify-between gap-2 px-4 py-3">
+                    <span className="text-muted-foreground">Short name</span>
+                    <span>{form.shortName}</span>
+                  </div>
+                )}
+                <div className="flex justify-between gap-2 px-4 py-3">
+                  <span className="text-muted-foreground">CMMC target level</span>
+                  <span>Level {form.cmmcTargetLevel?.replace("L", "")}</span>
+                </div>
+                <div className="flex justify-between gap-2 px-4 py-3">
+                  <span className="text-muted-foreground">Compliance packages</span>
+                  <span>{selectedPkgIds.length === 0 ? "None (add later)" : `${selectedPkgIds.length} package${selectedPkgIds.length !== 1 ? "s" : ""}`}</span>
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground text-center">
+                Clicking "Create Organization" will provision this tenant and assign the selected compliance packages. You will be added as an administrator.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="shrink-0 pt-4 border-t mt-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={step === 1 ? handleClose : () => setStep(s => s - 1)}
+          >
+            {step === 1 ? "Cancel" : "← Back"}
+          </Button>
+          {step < 5 ? (
+            <Button
+              onClick={() => setStep(s => s + 1)}
+              disabled={step === 1 && !form.name.trim()}
+            >
+              Next →
+            </Button>
+          ) : (
+            <Button
+              onClick={handleCreate}
+              disabled={creating || !form.name.trim()}
+            >
+              {creating ? "Creating..." : "Create Organization"}
+            </Button>
+          )}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -291,7 +728,6 @@ export default function Organizations() {
   });
 
   const handleSwitch = (orgId: string) => {
-    // First try the context orgs list (has membership role info)
     const contextOrg = orgs.find((o) => o.id === orgId);
     if (contextOrg) {
       setActiveOrg(contextOrg);
@@ -299,8 +735,6 @@ export default function Organizations() {
       queryClient.invalidateQueries();
       return;
     }
-    // Fallback for global admin: org may not have an explicit membership row,
-    // so build an OrgSummary from the stats data already loaded on this page.
     const statOrg = stats.find((s) => s.id === orgId);
     if (statOrg) {
       setActiveOrg({
@@ -375,7 +809,6 @@ export default function Organizations() {
         </div>
       </div>
 
-      {/* Summary banner */}
       <div className="grid grid-cols-4 gap-4">
         <Card className="col-span-1">
           <CardContent className="pt-5 pb-4">
@@ -403,7 +836,6 @@ export default function Organizations() {
         </Card>
       </div>
 
-      {/* Org grid */}
       {isLoading ? (
         <div className="grid grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
@@ -428,7 +860,6 @@ export default function Organizations() {
         </div>
       )}
 
-      {/* Cross-org table view */}
       {stats.length > 1 && (
         <Card>
           <CardHeader className="pb-3">
@@ -488,7 +919,7 @@ export default function Organizations() {
         </Card>
       )}
 
-      <NewOrgDialog open={showNew} onClose={() => setShowNew(false)} onSuccess={refreshOrgs} />
+      <OrgCreationWizard open={showNew} onClose={() => setShowNew(false)} onSuccess={refreshOrgs} />
 
       <Dialog open={!!deleteTarget} onOpenChange={() => { setDeleteTarget(null); setDeleteConfirmText(""); }}>
         <DialogContent className="max-w-md">
