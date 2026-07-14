@@ -47,6 +47,7 @@ interface DfarsObligation {
   status: string;
   owner: string | null;
   notes: string | null;
+  linkedDocumentCount: number;
 }
 
 const STATUS_OPTIONS = [
@@ -217,11 +218,21 @@ function ObligationRow({
               <span className="text-muted-foreground/50">—</span>
             )}
           </TableCell>
+          <TableCell>
+            {obligation.linkedDocumentCount > 0 ? (
+              <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200">
+                <FileText className="h-2.5 w-2.5 mr-0.5" />
+                {obligation.linkedDocumentCount}
+              </Badge>
+            ) : (
+              <span className="text-xs text-muted-foreground/50">0</span>
+            )}
+          </TableCell>
         </TableRow>
       </CollapsibleTrigger>
       <CollapsibleContent asChild>
         <TableRow className="bg-muted/20">
-          <TableCell colSpan={6} className="py-4 px-6">
+          <TableCell colSpan={7} className="py-4 px-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               {obligation.obligationDescription && (
                 <div>
@@ -499,12 +510,13 @@ export default function DfarsObligations() {
                   <TableHead className="w-36">Owner</TableHead>
                   <TableHead className="w-48">Flags</TableHead>
                   <TableHead className="w-28">Artifacts</TableHead>
+                  <TableHead className="w-28">Linked Docs</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
                       No obligations match the current filters.
                     </TableCell>
                   </TableRow>

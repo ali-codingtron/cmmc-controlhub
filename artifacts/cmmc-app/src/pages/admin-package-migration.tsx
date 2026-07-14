@@ -30,6 +30,8 @@ interface OrgPackageStatus {
   cmmcTargetLevel: string | null;
   isTestOrganization: boolean;
   isActive: boolean;
+  assessedControlCount: number;
+  inferredLevel: string | null;
   packages: Array<{
     packageId: string;
     packageKey: string;
@@ -247,6 +249,8 @@ export default function AdminPackageMigration() {
                 <TableRow>
                   <TableHead>Organization</TableHead>
                   <TableHead className="w-24">CMMC Level</TableHead>
+                  <TableHead className="w-32">Inferred Level</TableHead>
+                  <TableHead className="w-36">Controls Assessed</TableHead>
                   <TableHead>Assigned Packages</TableHead>
                   <TableHead className="w-28">Status</TableHead>
                   <TableHead className="w-32">Action</TableHead>
@@ -255,7 +259,7 @@ export default function AdminPackageMigration() {
               <TableBody>
                 {orgs.filter((o) => o.isActive).length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-10">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
                       No organizations found.
                     </TableCell>
                   </TableRow>
@@ -286,6 +290,21 @@ export default function AdminPackageMigration() {
                         ) : (
                           <span className="text-muted-foreground text-xs">—</span>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        {org.inferredLevel ? (
+                          <Badge variant="outline" className={cn("text-[10px]", org.inferredLevel === "L2" ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-slate-50 text-slate-600 border-slate-200")}>
+                            {org.inferredLevel} (from pkgs)
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <span className={cn("text-sm font-medium tabular-nums", org.assessedControlCount === 0 ? "text-muted-foreground" : "")}>
+                          {org.assessedControlCount}
+                        </span>
+                        <span className="text-xs text-muted-foreground ml-1">controls</span>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">

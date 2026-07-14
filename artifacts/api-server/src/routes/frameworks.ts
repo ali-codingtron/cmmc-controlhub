@@ -10,8 +10,10 @@ import {
   dfarsObligationStatusTable,
   requirementCrosswalkTable,
   complianceRequirementsTable,
+  documentsTable,
+  controlAssessmentsTable,
 } from "@workspace/db";
-import { eq, and, asc, inArray } from "drizzle-orm";
+import { eq, and, asc, inArray, count, or } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 import { randomUUID } from "crypto";
@@ -323,36 +325,55 @@ router.get("/dfars-obligations", requireAuth, requireOrg, async (req, res) => {
 
   const packageIds = dfarsPackages.map((p) => p.packageId);
 
-  const obligations = await db
-    .select({
-      id: dfarsObligationsTable.id,
-      packageId: dfarsObligationsTable.packageId,
-      clauseNumber: dfarsObligationsTable.clauseNumber,
-      obligationTitle: dfarsObligationsTable.obligationTitle,
-      obligationDescription: dfarsObligationsTable.obligationDescription,
-      requiredArtifacts: dfarsObligationsTable.requiredArtifacts,
-      requiredProcess: dfarsObligationsTable.requiredProcess,
-      applicableTo: dfarsObligationsTable.applicableTo,
-      flowdownRequired: dfarsObligationsTable.flowdownRequired,
-      incidentReportingRequired: dfarsObligationsTable.incidentReportingRequired,
-      assessmentRequired: dfarsObligationsTable.assessmentRequired,
-      sortOrder: dfarsObligationsTable.sortOrder,
-      // Tracking fields (null when not yet set for this org)
-      trackingStatus: dfarsObligationStatusTable.status,
-      trackingOwner: dfarsObligationStatusTable.owner,
-      trackingNotes: dfarsObligationStatusTable.notes,
-      trackingUpdatedAt: dfarsObligationStatusTable.updatedAt,
-    })
-    .from(dfarsObligationsTable)
-    .leftJoin(
-      dfarsObligationStatusTable,
-      and(
-        eq(dfarsObligationStatusTable.obligationId, dfarsObligationsTable.id),
-        eq(dfarsObligationStatusTable.organizationId, orgId)
+  const [obligations, orgDocs] = await Promise.all([
+    db
+      .select({
+        id: dfarsObligationsTable.id,
+        packageId: dfarsObligationsTable.packageId,
+        clauseNumber: dfarsObligationsTable.clauseNumber,
+        obligationTitle: dfarsObligationsTable.obligationTitle,
+        obligationDescription: dfarsObligationsTable.obligationDescription,
+        requiredArtifacts: dfarsObligationsTable.requiredArtifacts,
+        requiredProcess: dfarsObligationsTable.requiredProcess,
+        applicableTo: dfarsObligationsTable.applicableTo,
+        flowdownRequired: dfarsObligationsTable.flowdownRequired,
+        incidentReportingRequired: dfarsObligationsTable.incidentReportingRequired,
+        assessmentRequired: dfarsObligationsTable.assessmentRequired,
+        sortOrder: dfarsObligationsTable.sortOrder,
+        // Tracking fields (null when not yet set for this org)
+        trackingStatus: dfarsObligationStatusTable.status,
+        trackingOwner: dfarsObligationStatusTable.owner,
+        trackingNotes: dfarsObligationStatusTable.notes,
+        trackingUpdatedAt: dfarsObligationStatusTable.updatedAt,
+      })
+      .from(dfarsObligationsTable)
+      .leftJoin(
+        dfarsObligationStatusTable,
+        and(
+          eq(dfarsObligationStatusTable.obligationId, dfarsObligationsTable.id),
+          eq(dfarsObligationStatusTable.organizationId, orgId)
+        )
       )
-    )
-    .where(inArray(dfarsObligationsTable.packageId, packageIds))
-    .orderBy(asc(dfarsObligationsTable.clauseNumber), asc(dfarsObligationsTable.sortOrder));
+      .where(inArray(dfarsObligationsTable.packageId, packageIds))
+      .orderBy(asc(dfarsObligationsTable.clauseNumber), asc(dfarsObligationsTable.sortOrder)),
+
+    // Fetch active/approved documents for linked-document matching
+    db
+      .select({ name: documentsTable.name })
+      .from(documentsTable)
+      .where(
+        and(
+          eq(documentsTable.organizationId, orgId),
+          or(
+            eq(documentsTable.status, "active"),
+            eq(documentsTable.status, "approved"),
+            eq(documentsTable.status, "assessor_ready")
+          )
+        )
+      ),
+  ]);
+
+  const orgDocNames = orgDocs.map(d => d.name.toLowerCase());
 
   // Build package name lookup
   const pkgNameMap: Record<string, string> = {};
@@ -361,16 +382,29 @@ router.get("/dfars-obligations", requireAuth, requireOrg, async (req, res) => {
   }
 
   res.json(
-    obligations.map((o) => ({
-      ...o,
-      requiredArtifacts: o.requiredArtifacts
+    obligations.map((o) => {
+      const parsedArtifacts: string[] = o.requiredArtifacts
         ? (() => { try { return JSON.parse(o.requiredArtifacts!); } catch { return []; } })()
-        : [],
-      packageName: pkgNameMap[o.packageId] ?? o.packageId,
-      status: o.trackingStatus ?? "pending",
-      owner: o.trackingOwner ?? null,
-      notes: o.trackingNotes ?? null,
-    }))
+        : [];
+
+      // Count org documents whose name contains a keyword from any required artifact
+      const linkedDocumentCount = parsedArtifacts.reduce((total, artifact) => {
+        const keyword = artifact.toLowerCase().split(/[\s(]/)[0];
+        if (keyword.length < 4) return total;
+        const matchCount = orgDocNames.filter(n => n.includes(keyword)).length;
+        return total + matchCount;
+      }, 0);
+
+      return {
+        ...o,
+        requiredArtifacts: parsedArtifacts,
+        packageName: pkgNameMap[o.packageId] ?? o.packageId,
+        status: o.trackingStatus ?? "pending",
+        owner: o.trackingOwner ?? null,
+        notes: o.trackingNotes ?? null,
+        linkedDocumentCount,
+      };
+    })
   );
 });
 
@@ -380,15 +414,33 @@ router.patch("/dfars-obligations/:id/tracking", requireAuth, requireOrg, async (
   const obligationId = req.params.id as string;
   const { status, owner, notes } = req.body as { status?: string; owner?: string; notes?: string };
 
-  // Verify obligation exists
+  // Verify obligation exists and fetch its packageId for authorization
   const [obligation] = await db
-    .select({ id: dfarsObligationsTable.id })
+    .select({ id: dfarsObligationsTable.id, packageId: dfarsObligationsTable.packageId })
     .from(dfarsObligationsTable)
     .where(eq(dfarsObligationsTable.id, obligationId))
     .limit(1);
 
   if (!obligation) {
     res.status(404).json({ error: "Obligation not found" });
+    return;
+  }
+
+  // Verify this obligation belongs to a DFARS package assigned to the caller's org
+  const [pkgAssign] = await db
+    .select({ id: organizationPackagesTable.id })
+    .from(organizationPackagesTable)
+    .where(
+      and(
+        eq(organizationPackagesTable.organizationId, orgId),
+        eq(organizationPackagesTable.packageId, obligation.packageId),
+        eq(organizationPackagesTable.isActive, true)
+      )
+    )
+    .limit(1);
+
+  if (!pkgAssign) {
+    res.status(403).json({ error: "This obligation is not in your organization's assigned packages" });
     return;
   }
 
@@ -556,27 +608,39 @@ router.get("/admin/orgs-package-status", requireAuth, async (req, res) => {
     return;
   }
 
-  const allPackages = await db
-    .select({
-      organizationId: organizationPackagesTable.organizationId,
-      packageId: organizationPackagesTable.packageId,
-      isActive: organizationPackagesTable.isActive,
-      selectedAt: organizationPackagesTable.selectedAt,
-      packageKey: compliancePackagesTable.packageKey,
-      packageName: compliancePackagesTable.name,
-      packageType: compliancePackagesTable.packageType,
-      frameworkShortName: complianceFrameworksTable.shortName,
-    })
-    .from(organizationPackagesTable)
-    .innerJoin(
-      compliancePackagesTable,
-      eq(organizationPackagesTable.packageId, compliancePackagesTable.id)
-    )
-    .innerJoin(
-      complianceFrameworksTable,
-      eq(compliancePackagesTable.frameworkId, complianceFrameworksTable.id)
-    )
-    .where(inArray(organizationPackagesTable.organizationId, orgIds));
+  const L2_KEYS = new Set(["CMMC_L2_SELF", "NIST_800_171_R2", "NIST_800_171_R3", "NIST_800_171A_R2", "NIST_800_171A_R3"]);
+  const L1_KEYS = new Set(["CMMC_L1_SELF", "FAR_52_204_21"]);
+
+  const [allPackages, controlCounts] = await Promise.all([
+    db
+      .select({
+        organizationId: organizationPackagesTable.organizationId,
+        packageId: organizationPackagesTable.packageId,
+        isActive: organizationPackagesTable.isActive,
+        selectedAt: organizationPackagesTable.selectedAt,
+        packageKey: compliancePackagesTable.packageKey,
+        packageName: compliancePackagesTable.name,
+        packageType: compliancePackagesTable.packageType,
+        frameworkShortName: complianceFrameworksTable.shortName,
+      })
+      .from(organizationPackagesTable)
+      .innerJoin(
+        compliancePackagesTable,
+        eq(organizationPackagesTable.packageId, compliancePackagesTable.id)
+      )
+      .innerJoin(
+        complianceFrameworksTable,
+        eq(compliancePackagesTable.frameworkId, complianceFrameworksTable.id)
+      )
+      .where(inArray(organizationPackagesTable.organizationId, orgIds)),
+
+    // Count assessed controls per org (proxy for "controls in scope" progress)
+    db
+      .select({ organizationId: controlAssessmentsTable.organizationId, cnt: count() })
+      .from(controlAssessmentsTable)
+      .where(inArray(controlAssessmentsTable.organizationId, orgIds))
+      .groupBy(controlAssessmentsTable.organizationId),
+  ]);
 
   const pkgByOrg: Record<string, typeof allPackages> = {};
   for (const p of allPackages) {
@@ -584,11 +648,24 @@ router.get("/admin/orgs-package-status", requireAuth, async (req, res) => {
     pkgByOrg[p.organizationId].push(p);
   }
 
-  const result = orgs.map((org) => ({
-    ...org,
-    packages: (pkgByOrg[org.id] ?? []).filter((p) => p.isActive),
-    allPackages: pkgByOrg[org.id] ?? [],
-  }));
+  const assessedByOrg: Record<string, number> = {};
+  for (const r of controlCounts) {
+    if (r.organizationId) assessedByOrg[r.organizationId] = Number(r.cnt);
+  }
+
+  const result = orgs.map((org) => {
+    const activePkgs = (pkgByOrg[org.id] ?? []).filter((p) => p.isActive);
+    const hasL2 = activePkgs.some(p => L2_KEYS.has(p.packageKey));
+    const hasL1 = activePkgs.some(p => L1_KEYS.has(p.packageKey));
+    const inferredLevel = hasL2 ? "L2" : hasL1 ? "L1" : (org.cmmcTargetLevel ?? null);
+    return {
+      ...org,
+      packages: activePkgs,
+      allPackages: pkgByOrg[org.id] ?? [],
+      assessedControlCount: assessedByOrg[org.id] ?? 0,
+      inferredLevel,
+    };
+  });
 
   res.json(result);
 });

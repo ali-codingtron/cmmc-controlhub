@@ -29,6 +29,8 @@ import {
   complianceFrameworksTable,
   compliancePackagesTable,
   dfarsObligationsTable,
+  complianceRequirementsTable,
+  requirementCrosswalkTable,
 } from "@workspace/db";
 import {
   COMPLIANCE_FRAMEWORKS,
@@ -641,6 +643,86 @@ async function seedComplianceFrameworkHelpArticles() {
   }
 }
 
+async function seedCrosswalkRequirements() {
+  const [{ cnt }] = await db.select({ cnt: count() }).from(complianceRequirementsTable);
+  if (Number(cnt) > 0) return;
+
+  // Read active controls to derive requirements
+  const controls = await db
+    .select({
+      id: controlsTable.id,
+      controlId: controlsTable.controlId,
+      title: controlsTable.title,
+      level: controlsTable.level,
+      nistRef: controlsTable.nistRef,
+      sortOrder: controlsTable.sortOrder,
+    })
+    .from(controlsTable)
+    .where(eq(controlsTable.isActive, true))
+    .orderBy(controlsTable.sortOrder);
+
+  // Map control DB id → CMMC L2 requirement UUID
+  const cmmcReqMap: Record<string, string> = {};
+  // Map control DB id → NIST 800-171 R2 requirement UUID
+  const nistReqMap: Record<string, string> = {};
+
+  // Seed CMMC L2 package requirements (all 110 active controls)
+  for (let i = 0; i < controls.length; i++) {
+    const c = controls[i];
+    const id = randomUUID();
+    cmmcReqMap[c.id] = id;
+    await db.insert(complianceRequirementsTable).values({
+      id,
+      packageId: "pkg-cmmc-l2-self",
+      requirementId: c.controlId,
+      title: c.title,
+      level: c.level,
+      sortOrder: i + 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).onConflictDoNothing();
+  }
+
+  // Seed NIST 800-171 R2 requirements (controls that have a nistRef)
+  const nistControls = controls.filter(c => c.nistRef);
+  for (let i = 0; i < nistControls.length; i++) {
+    const c = nistControls[i];
+    const id = randomUUID();
+    nistReqMap[c.id] = id;
+    await db.insert(complianceRequirementsTable).values({
+      id,
+      packageId: "pkg-nist-800-171-r2",
+      requirementId: c.nistRef!,
+      title: c.title,
+      level: "L2",
+      sortOrder: i + 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).onConflictDoNothing();
+  }
+
+  // Seed crosswalk: CMMC L2 ↔ NIST 800-171 R2 (equivalent 1:1 mapping)
+  for (const c of nistControls) {
+    const srcId = cmmcReqMap[c.id];
+    const tgtId = nistReqMap[c.id];
+    if (srcId && tgtId) {
+      await db.insert(requirementCrosswalkTable).values({
+        id: randomUUID(),
+        sourceRequirementId: srcId,
+        targetRequirementId: tgtId,
+        relationshipType: "equivalent",
+        notes: `${c.controlId} ≡ NIST 800-171 Rev. 2 §${c.nistRef}`,
+        createdAt: new Date(),
+      }).onConflictDoNothing();
+    }
+  }
+
+  logger.info(
+    { cmmcReqs: controls.length, nistReqs: nistControls.length, crosswalk: nistControls.length },
+    "Compliance requirements crosswalk seeded"
+  );
+}
+
 export async function runStartupSeed() {
   try {
     await migrateSsoTable();
@@ -662,6 +744,7 @@ export async function runStartupSeed() {
     await seedHelpContent();
     await seedComplianceFrameworks();
     await seedComplianceFrameworkHelpArticles();
+    await seedCrosswalkRequirements();
     await fixVtccorpControlLinks();
   } catch (err) {
     logger.error({ err }, "Startup seed failed — app will continue but may lack reference data");

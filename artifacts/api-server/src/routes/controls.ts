@@ -11,18 +11,51 @@ import {
   taskControlLinksTable,
   poamsTable,
   usersTable,
+  organizationPackagesTable,
+  compliancePackagesTable,
 } from "@workspace/db";
 import { eq, and, ilike, count, inArray, or, desc } from "drizzle-orm";
+
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 import { logAudit } from "../lib/audit";
 import { randomUUID } from "crypto";
+
+// Package keys that cover L2-scope controls
+const L2_PKG_KEYS = new Set(["CMMC_L2_SELF", "NIST_800_171_R2", "NIST_800_171_R3", "NIST_800_171A_R2", "NIST_800_171A_R3"]);
 
 const router = Router();
 
 router.get("/controls", requireAuth, requireOrg, async (req, res) => {
   const { domain, level, status, search } = req.query as Record<string, string>;
   const orgId = req.orgId;
+
+  // Determine package-scoped default level when no explicit level filter given.
+  // Orgs with only L1-scope packages (CMMC L1 / FAR) see only L1 controls by default.
+  // Orgs with L2 or DFARS packages, or no packages at all, see all controls.
+  let packageScopedLevel: "L1" | undefined = undefined;
+  if (orgId && !level) {
+    const orgPkgs = await db
+      .select({ packageKey: compliancePackagesTable.packageKey })
+      .from(organizationPackagesTable)
+      .innerJoin(compliancePackagesTable, eq(organizationPackagesTable.packageId, compliancePackagesTable.id))
+      .where(
+        and(
+          eq(organizationPackagesTable.organizationId, orgId),
+          eq(organizationPackagesTable.isActive, true)
+        )
+      );
+
+    if (orgPkgs.length > 0) {
+      const hasL2Pkg = orgPkgs.some(p => L2_PKG_KEYS.has(p.packageKey));
+      const hasDfars = orgPkgs.some(p => p.packageKey.startsWith("DFARS_"));
+      if (!hasL2Pkg && !hasDfars) {
+        // Only L1-scope packages present → restrict default view to L1
+        packageScopedLevel = "L1";
+      }
+    }
+    // No packages assigned → show all controls (legacy behaviour)
+  }
 
   const controls = await db
     .select({
@@ -55,7 +88,11 @@ router.get("/controls", requireAuth, requireOrg, async (req, res) => {
       and(
         eq(controlsTable.isActive, true),
         domain ? eq(controlsTable.domainId, domain) : undefined,
-        level ? eq(controlsTable.level, level as "L1" | "L2") : undefined,
+        level
+          ? eq(controlsTable.level, level as "L1" | "L2")
+          : packageScopedLevel
+          ? eq(controlsTable.level, packageScopedLevel)
+          : undefined,
         status
           ? eq(controlAssessmentsTable.status, status as typeof controlAssessmentsTable.status)
           : undefined,
