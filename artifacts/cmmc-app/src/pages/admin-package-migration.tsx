@@ -43,12 +43,12 @@ interface OrgPackageStatus {
 
 const SUGGESTED_PACKAGES: Record<string, Array<{ key: string; name: string; reason: string }>> = {
   L1: [
-    { key: "pkg-cmmc-l1-self", name: "CMMC L1 Self-Assessment", reason: "CMMC Level 1 target requires L1 self-assessment tracking" },
-    { key: "pkg-far-52-204-21", name: "FAR 52.204-21", reason: "FCI handling requires FAR Basic Safeguarding clause compliance" },
+    { key: "CMMC_L1_SELF", name: "CMMC L1 Self-Assessment", reason: "CMMC Level 1 target requires L1 self-assessment tracking" },
+    { key: "FAR_52_204_21", name: "FAR 52.204-21", reason: "FCI handling requires FAR Basic Safeguarding clause compliance" },
   ],
   L2: [
-    { key: "pkg-cmmc-l2-self", name: "CMMC L2 Self-Assessment", reason: "CMMC Level 2 target requires L2 assessment tracking" },
-    { key: "pkg-nist-800-171-r2", name: "NIST SP 800-171 Rev. 2", reason: "CMMC L2 is based on NIST 800-171 Rev. 2 (110 controls)" },
+    { key: "CMMC_L2_SELF", name: "CMMC L2 Self-Assessment", reason: "CMMC Level 2 target requires L2 assessment tracking" },
+    { key: "NIST_800_171_R2", name: "NIST SP 800-171 Rev. 2", reason: "CMMC L2 is based on NIST 800-171 Rev. 2 (110 controls)" },
   ],
 };
 

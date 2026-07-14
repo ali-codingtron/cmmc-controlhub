@@ -204,7 +204,7 @@ export function Sidebar() {
       <div className="flex-1 overflow-y-auto pb-4">
         <nav className="px-2 space-y-1">
           <NavLink href="/" icon={LayoutDashboard} label="Dashboard" />
-          <NavLink href="/controls" icon={ShieldCheck} label="Controls Library" />
+          <NavLink href="/controls" icon={ShieldCheck} label="Controls" />
           {hasDfarsPackage && (
             <NavLink href="/dfars-obligations" icon={FileCheck2} label="DFARS Obligations" />
           )}

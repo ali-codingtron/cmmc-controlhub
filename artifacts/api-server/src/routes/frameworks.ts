@@ -7,6 +7,7 @@ import {
   organizationUsersTable,
   organizationsTable,
   dfarsObligationsTable,
+  dfarsObligationStatusTable,
   requirementCrosswalkTable,
   complianceRequirementsTable,
 } from "@workspace/db";
@@ -323,8 +324,33 @@ router.get("/dfars-obligations", requireAuth, requireOrg, async (req, res) => {
   const packageIds = dfarsPackages.map((p) => p.packageId);
 
   const obligations = await db
-    .select()
+    .select({
+      id: dfarsObligationsTable.id,
+      packageId: dfarsObligationsTable.packageId,
+      clauseNumber: dfarsObligationsTable.clauseNumber,
+      obligationTitle: dfarsObligationsTable.obligationTitle,
+      obligationDescription: dfarsObligationsTable.obligationDescription,
+      requiredArtifacts: dfarsObligationsTable.requiredArtifacts,
+      requiredProcess: dfarsObligationsTable.requiredProcess,
+      applicableTo: dfarsObligationsTable.applicableTo,
+      flowdownRequired: dfarsObligationsTable.flowdownRequired,
+      incidentReportingRequired: dfarsObligationsTable.incidentReportingRequired,
+      assessmentRequired: dfarsObligationsTable.assessmentRequired,
+      sortOrder: dfarsObligationsTable.sortOrder,
+      // Tracking fields (null when not yet set for this org)
+      trackingStatus: dfarsObligationStatusTable.status,
+      trackingOwner: dfarsObligationStatusTable.owner,
+      trackingNotes: dfarsObligationStatusTable.notes,
+      trackingUpdatedAt: dfarsObligationStatusTable.updatedAt,
+    })
     .from(dfarsObligationsTable)
+    .leftJoin(
+      dfarsObligationStatusTable,
+      and(
+        eq(dfarsObligationStatusTable.obligationId, dfarsObligationsTable.id),
+        eq(dfarsObligationStatusTable.organizationId, orgId)
+      )
+    )
     .where(inArray(dfarsObligationsTable.packageId, packageIds))
     .orderBy(asc(dfarsObligationsTable.clauseNumber), asc(dfarsObligationsTable.sortOrder));
 
@@ -341,8 +367,59 @@ router.get("/dfars-obligations", requireAuth, requireOrg, async (req, res) => {
         ? (() => { try { return JSON.parse(o.requiredArtifacts!); } catch { return []; } })()
         : [],
       packageName: pkgNameMap[o.packageId] ?? o.packageId,
+      status: o.trackingStatus ?? "pending",
+      owner: o.trackingOwner ?? null,
+      notes: o.trackingNotes ?? null,
     }))
   );
+});
+
+// ── PATCH /dfars-obligations/:id/tracking — upsert org-scoped status/owner ───
+router.patch("/dfars-obligations/:id/tracking", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId!;
+  const obligationId = req.params.id as string;
+  const { status, owner, notes } = req.body as { status?: string; owner?: string; notes?: string };
+
+  // Verify obligation exists
+  const [obligation] = await db
+    .select({ id: dfarsObligationsTable.id })
+    .from(dfarsObligationsTable)
+    .where(eq(dfarsObligationsTable.id, obligationId))
+    .limit(1);
+
+  if (!obligation) {
+    res.status(404).json({ error: "Obligation not found" });
+    return;
+  }
+
+  const validStatuses = ["pending", "in_progress", "compliant", "gap"];
+  if (status && !validStatuses.includes(status)) {
+    res.status(400).json({ error: "Invalid status" });
+    return;
+  }
+
+  await db
+    .insert(dfarsObligationStatusTable)
+    .values({
+      id: randomUUID(),
+      organizationId: orgId,
+      obligationId,
+      status: status ?? "pending",
+      owner: owner ?? null,
+      notes: notes ?? null,
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: [dfarsObligationStatusTable.organizationId, dfarsObligationStatusTable.obligationId],
+      set: {
+        ...(status !== undefined && { status }),
+        ...(owner !== undefined && { owner: owner || null }),
+        ...(notes !== undefined && { notes: notes || null }),
+        updatedAt: new Date(),
+      },
+    });
+
+  res.json({ success: true });
 });
 
 // ── GET /crosswalk — requirement crosswalk for org's packages ─────────────────

@@ -12,6 +12,9 @@ import { Link } from "wouter";
 import { X, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const L1_PACKAGE_KEYS = new Set(["CMMC_L1_SELF", "FAR_52_204_21", "CMMC_L2_SELF", "NIST_800_171_R2", "NIST_800_171_R3", "NIST_800_171A_R2", "NIST_800_171A_R3"]);
+const L2_ONLY_PACKAGE_KEYS = new Set(["CMMC_L2_SELF", "NIST_800_171_R2", "NIST_800_171_R3", "NIST_800_171A_R2", "NIST_800_171A_R3"]);
+
 const DOMAINS = [
   { code: "AC", label: "AC - Access Control" },
   { code: "AT", label: "AT - Awareness and Training" },
@@ -32,8 +35,8 @@ const DOMAINS = [
 type EvidenceCoverage = "all" | "none" | "partial" | "complete";
 
 function packageKeyToLevelFilter(key: string): "L1" | undefined | "dfars_notice" {
-  if (key === "pkg-cmmc-l1-self" || key === "pkg-far-52-204-21") return "L1";
-  if (key?.startsWith("pkg-dfars-")) return "dfars_notice";
+  if (key === "CMMC_L1_SELF" || key === "FAR_52_204_21") return "L1";
+  if (key?.startsWith("DFARS_")) return "dfars_notice";
   return undefined;
 }
 
@@ -257,36 +260,73 @@ export default function Controls() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Control ID</TableHead>
+                  <TableHead className="w-28">Control ID</TableHead>
                   <TableHead>Title</TableHead>
-                  <TableHead>Domain</TableHead>
-                  <TableHead>Level</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Evidence</TableHead>
+                  <TableHead className="w-32">Domain</TableHead>
+                  <TableHead className="w-16">Level</TableHead>
+                  <TableHead className="w-36">Status</TableHead>
+                  <TableHead className="w-24">Evidence</TableHead>
+                  {hasPackages && <TableHead className="w-40">Packages</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
+                    <TableCell colSpan={hasPackages ? 7 : 6} className="text-center text-muted-foreground py-10">
                       No controls match the current filters.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filtered.map((control) => (
-                    <TableRow key={control.id}>
-                      <TableCell className="font-medium">
-                        <Link href={`/controls/${control.id}`} className="text-primary hover:underline">
-                          {control.controlId}
-                        </Link>
-                      </TableCell>
-                      <TableCell>{control.title}</TableCell>
-                      <TableCell>{control.domainName}</TableCell>
-                      <TableCell><LevelBadge level={control.level} /></TableCell>
-                      <TableCell><StatusBadge status={control.status} /></TableCell>
-                      <TableCell>{control.approvedEvidenceCount} / {control.evidenceCount}</TableCell>
-                    </TableRow>
-                  ))
+                  filtered.map((control) => {
+                    const applicablePkgs = hasPackages
+                      ? activePackages.filter((p: any) => {
+                          const key: string = p.packageKey ?? "";
+                          if (control.level === "L1") return L1_PACKAGE_KEYS.has(key);
+                          return L2_ONLY_PACKAGE_KEYS.has(key);
+                        })
+                      : [];
+                    return (
+                      <TableRow key={control.id}>
+                        <TableCell className="font-medium">
+                          <Link href={`/controls/${control.id}`} className="text-primary hover:underline">
+                            {control.controlId}
+                          </Link>
+                        </TableCell>
+                        <TableCell>{control.title}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{control.domainName}</TableCell>
+                        <TableCell><LevelBadge level={control.level} /></TableCell>
+                        <TableCell><StatusBadge status={control.status} /></TableCell>
+                        <TableCell className="text-xs">{control.approvedEvidenceCount} / {control.evidenceCount}</TableCell>
+                        {hasPackages && (
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {applicablePkgs.slice(0, 2).map((p: any) => (
+                                <Badge
+                                  key={p.packageId}
+                                  variant="outline"
+                                  className={cn(
+                                    "text-[9px] px-1 py-0",
+                                    p.frameworkShortName === "CMMC"
+                                      ? "bg-purple-50 text-purple-700 border-purple-200"
+                                      : p.frameworkShortName?.startsWith("NIST")
+                                      ? "bg-blue-50 text-blue-700 border-blue-200"
+                                      : p.frameworkShortName === "FAR"
+                                      ? "bg-slate-50 text-slate-600 border-slate-200"
+                                      : "bg-slate-100 text-slate-600 border-slate-200"
+                                  )}
+                                >
+                                  {p.frameworkShortName}
+                                </Badge>
+                              ))}
+                              {applicablePkgs.length > 2 && (
+                                <span className="text-[9px] text-muted-foreground/60">+{applicablePkgs.length - 2}</span>
+                              )}
+                            </div>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>

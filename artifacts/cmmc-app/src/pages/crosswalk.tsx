@@ -206,9 +206,9 @@ export default function Crosswalk() {
             <GitCompare className="h-12 w-12 mx-auto mb-3 text-muted-foreground/40" />
             <p className="font-medium text-muted-foreground">No crosswalk data available</p>
             <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-              Requirement crosswalk mappings between frameworks will appear here once the requirement
-              data has been loaded. CMMC L2 ↔ NIST 800-171 Rev. 2 mappings (110 pairs) and
-              NIST Rev. 2 ↔ Rev. 3 crosswalk data are included in upcoming data releases.
+              No crosswalk mappings exist between the currently assigned packages. Crosswalk data
+              is available when two packages share overlapping requirements — for example, assigning
+              both a CMMC and NIST 800-171 package together will reveal their shared control mappings.
             </p>
           </CardContent>
         </Card>

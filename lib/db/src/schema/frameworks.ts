@@ -5,6 +5,7 @@ import {
   integer,
   timestamp,
   pgEnum,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { organizationsTable } from "./organizations";
 import { usersTable } from "./users";
@@ -160,6 +161,27 @@ export const dfarsObligationsTable = pgTable("dfars_obligations", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// ── DFARS Obligation Tracking (org-scoped status & ownership) ────────────────
+
+/** Per-org status tracking for DFARS obligations */
+export const dfarsObligationStatusTable = pgTable(
+  "dfars_obligation_status",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizationsTable.id, { onDelete: "cascade" }),
+    obligationId: text("obligation_id")
+      .notNull()
+      .references(() => dfarsObligationsTable.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("pending"),
+    owner: text("owner"),
+    notes: text("notes"),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("dfars_obligation_status_uniq").on(t.organizationId, t.obligationId)]
+);
+
 // ── Exported Types ───────────────────────────────────────────────────────────
 
 export type ComplianceFramework = typeof complianceFrameworksTable.$inferSelect;
@@ -168,3 +190,4 @@ export type OrganizationPackage = typeof organizationPackagesTable.$inferSelect;
 export type ComplianceRequirement = typeof complianceRequirementsTable.$inferSelect;
 export type RequirementCrosswalk = typeof requirementCrosswalkTable.$inferSelect;
 export type DfarsObligation = typeof dfarsObligationsTable.$inferSelect;
+export type DfarsObligationStatus = typeof dfarsObligationStatusTable.$inferSelect;
