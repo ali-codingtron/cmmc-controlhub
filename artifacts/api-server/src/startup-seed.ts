@@ -15,6 +15,7 @@ import {
   helpCategoriesTable,
   helpArticlesTable,
   faqItemsTable,
+  organizationPackagesTable,
 } from "@workspace/db";
 import { count, eq, sql } from "drizzle-orm";
 import { seedMonitoringItemsForOrg } from "./routes/monitoring";
@@ -523,6 +524,48 @@ async function fixVtccorpControlLinks() {
   }
 }
 
+async function seedOrgPackages() {
+  const orgs = await db
+    .select({ id: organizationsTable.id, name: organizationsTable.name, cmmcTargetLevel: organizationsTable.cmmcTargetLevel })
+    .from(organizationsTable);
+
+  if (!orgs.length) return;
+
+  // Package sets per tier
+  const DFARS_PACKAGES = ["pkg-dfars-7012", "pkg-dfars-7019", "pkg-dfars-7020", "pkg-dfars-7021"];
+  const L2_PACKAGES = ["pkg-cmmc-l2-self", "pkg-nist-800-171-r2", ...DFARS_PACKAGES];
+  const L1_PACKAGES = ["pkg-cmmc-l1-self", "pkg-far-52-204-21"];
+
+  let assigned = 0;
+  for (const org of orgs) {
+    const [{ cnt }] = await db
+      .select({ cnt: count() })
+      .from(organizationPackagesTable)
+      .where(eq(organizationPackagesTable.organizationId, org.id));
+
+    if (Number(cnt) > 0) continue;
+
+    const packageIds = org.cmmcTargetLevel === "L1" ? L1_PACKAGES : L2_PACKAGES;
+    for (const packageId of packageIds) {
+      await db.insert(organizationPackagesTable).values({
+        id: randomUUID(),
+        organizationId: org.id,
+        packageId,
+        isActive: true,
+        selectedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).onConflictDoNothing();
+    }
+    assigned++;
+    logger.info({ orgId: org.id, orgName: org.name, count: packageIds.length }, "Seeded default compliance packages for org");
+  }
+
+  if (assigned > 0) {
+    logger.info({ orgs: assigned }, "Default org packages seeded");
+  }
+}
+
 async function seedComplianceFrameworks() {
   const [{ value: existing }] = await db
     .select({ value: count() })
@@ -905,6 +948,7 @@ export async function runStartupSeed() {
     await seedComplianceFrameworks();
     await seedComplianceFrameworkHelpArticles();
     await seedCrosswalkRequirements();
+    await seedOrgPackages();
     await fixVtccorpControlLinks();
   } catch (err) {
     logger.error({ err }, "Startup seed failed — app will continue but may lack reference data");

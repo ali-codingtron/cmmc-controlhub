@@ -13,6 +13,7 @@ import {
   documentTemplatesTable,
   generatedLogsTable,
   checklistCompletionsTable,
+  organizationPackagesTable,
 } from "@workspace/db";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "crypto";
@@ -93,6 +94,32 @@ async function seed() {
     await db.insert(organizationsTable).values(org).onConflictDoNothing();
   }
   console.log("Created 3 organizations");
+
+  // ─── Assign default compliance packages ─────────────────────────────────────
+  const DFARS_PACKAGES = ["pkg-dfars-7012", "pkg-dfars-7019", "pkg-dfars-7020", "pkg-dfars-7021"];
+  const L2_PACKAGES = ["pkg-cmmc-l2-self", "pkg-nist-800-171-r2", ...DFARS_PACKAGES];
+  const L1_PACKAGES = ["pkg-cmmc-l1-self", "pkg-far-52-204-21"];
+
+  const orgPackageMap: { orgId: string; packages: string[] }[] = [
+    { orgId: internalOrgId, packages: L2_PACKAGES },
+    { orgId: clientAOrgId, packages: L2_PACKAGES },
+    { orgId: clientBOrgId, packages: L1_PACKAGES },
+  ];
+
+  for (const { orgId, packages } of orgPackageMap) {
+    for (const packageId of packages) {
+      await db.insert(organizationPackagesTable).values({
+        id: randomUUID(),
+        organizationId: orgId,
+        packageId,
+        isActive: true,
+        selectedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).onConflictDoNothing();
+    }
+  }
+  console.log("Assigned default compliance packages to organizations");
 
   // ─── Assign existing global admin to all orgs ────────────────────────────────
   const orgMemberships = [
