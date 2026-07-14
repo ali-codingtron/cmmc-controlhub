@@ -112,7 +112,7 @@ function KpiCard({ title, children, href, className }: {
   const inner = (
     <Card className={cn("h-full border border-border/60 shadow-sm hover:shadow-md transition-shadow", className)}>
       <CardContent className="p-4 h-full flex flex-col">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">{title}</p>
+        <p className="text-[11px] font-bold uppercase tracking-widest text-foreground/60 mb-3">{title}</p>
         {children}
       </CardContent>
     </Card>
