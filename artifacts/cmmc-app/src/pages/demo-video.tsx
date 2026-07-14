@@ -163,7 +163,7 @@ export default function DemoVideo() {
             Control HUB Demo Walkthrough
           </h1>
           <p className="text-slate-400 text-base max-w-xl mx-auto">
-            See how defense contractors manage CMMC readiness from pre-assessment through evidence collection, monitoring, and reporting.
+            CMMC, NIST 800-171, DFARS readiness, evidence management, monitoring, POA&amp;M, and reporting overview. See how defense contractors prepare for self-assessment, audit review, customer review, or future assessment requirements.
           </p>
         </div>
       </div>
@@ -204,7 +204,7 @@ export default function DemoVideo() {
             style={{ background: "#0F172A", borderTop: "1px solid rgba(255,255,255,0.07)" }}
           >
             <span className="text-xs text-slate-500 hidden sm:block">
-              Control HUB · CMMC 2.0 Platform Overview
+              Control HUB · CMMC, NIST 800-171 &amp; DFARS Readiness Platform
             </span>
             <div className="flex gap-3">
               <Button

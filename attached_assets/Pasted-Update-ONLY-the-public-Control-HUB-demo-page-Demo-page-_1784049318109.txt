@@ -1,0 +1,316 @@
+Update ONLY the public Control HUB demo page.
+
+Demo page URL:
+https://controlhub.carmetechnology.com/demo
+
+Important:
+Do NOT modify production organization data.
+Do NOT modify VTCCORP.US.
+Do NOT modify Carme Tech.
+Do NOT modify APEX Solutions.
+Do NOT modify any controls, evidence, documents, SSP, POA&M, monitoring records, tenant scans, users, roles, reports, or exports.
+Do NOT recreate the C3PAO Export Package.
+Do NOT add a new C3PAO export feature.
+
+This change is only for:
+- /demo
+- /demo-video if needed
+- public demo marketing text
+- public demo page visual content
+- public demo CTA wording
+
+Goal:
+Update the public demo page messaging so it reflects the current CMMC Phase II suspension / self-assessment readiness posture.
+
+The demo page should no longer sound like Control HUB is only for C3PAO certification preparation. It should position Control HUB as a CMMC, NIST SP 800-171, DFARS, evidence management, SSP, POA&M, monitoring, and self-assessment readiness platform.
+
+====================================================================
+1. UPDATE HERO HEADLINE
+====================================================================
+
+Replace the current hero headline with:
+
+CMMC, NIST 800-171, and DFARS Readiness — Built for Defense Contractors
+
+Subheadline:
+
+Control HUB helps defense contractors manage self-assessment readiness, evidence collection, SSP narratives, POA&M tracking, recurring monitoring, and audit support from one secure platform.
+
+Do not use:
+- C3PAO-first language
+- “C3PAO certification required”
+- “mandatory C3PAO”
+- “official CMMC score”
+- “guaranteed certification”
+
+====================================================================
+2. ADD REGULATORY STATUS BANNER
+====================================================================
+
+Add a professional, non-alarming banner near the top of the demo page.
+
+Title:
+CMMC Phase II Update
+
+Text:
+“CMMC Phase II transition requirements are currently suspended during the federal reform review period. Self-assessment, NIST SP 800-171, DFARS, SSP, POA&M, evidence, and monitoring readiness remain important for contractors handling FCI or CUI.”
+
+Add small text:
+“Contract-specific requirements should be confirmed with the contracting officer, prime contractor, or compliance advisor.”
+
+Add button/link:
+Learn What This Means
+
+This can scroll down to a new section on the same page called:
+What Changed — and What Did Not
+
+Do not present this as legal advice.
+
+====================================================================
+3. ADD “WHAT CHANGED / WHAT DID NOT” SECTION
+====================================================================
+
+Add a section under the hero:
+
+What Changed — and What Did Not
+
+Use two side-by-side cards.
+
+Card 1:
+What Changed
+
+Bullets:
+- Phase II transition requirements are suspended during the reform review period.
+- Broad Level 2 third-party assessment expansion is paused.
+- Contractors should verify contract-specific language and amendments.
+
+Card 2:
+What Did Not Change
+
+Bullets:
+- Self-assessment readiness remains important.
+- NIST SP 800-171 implementation still matters for CUI environments.
+- DFARS evidence obligations may still apply by contract.
+- SSP, POA&M, evidence, monitoring, and documentation still need to be maintained.
+- Government, prime contractor, or customer review may still require organized evidence.
+
+Add disclaimer:
+“Control HUB is a readiness and evidence management platform. It does not provide legal advice or official certification.”
+
+====================================================================
+4. UPDATE VALUE PROPOSITION
+====================================================================
+
+Add a section:
+
+Why Control HUB Still Matters
+
+Cards:
+
+1. Self-Assessment Readiness
+Track CMMC Level 1 / Level 2 self-assessment readiness and internal control status.
+
+2. NIST 800-171 Evidence Management
+Organize evidence, documents, SSP narratives, monitoring records, and POA&M items by control.
+
+3. DFARS Support
+Maintain the documentation and evidence needed to support contract cybersecurity obligations.
+
+4. Audit and Customer Review Support
+Prepare clean evidence inventories, reports, and review packages for internal, government, prime, or customer review.
+
+5. Continuous Monitoring
+Track recurring weekly, monthly, quarterly, and annual compliance activities.
+
+6. Implementation Roadmap
+Follow high-impact actions that help support multiple controls at once.
+
+Do not include a C3PAO Export Package card.
+
+====================================================================
+5. UPDATE FEATURE CARDS
+====================================================================
+
+Feature cards on /demo should include:
+
+- Executive readiness dashboard
+- CMMC / NIST control library
+- Evidence repository
+- Documentation and template library
+- SSP control mapping
+- Monitoring tracker
+- POA&M management
+- Implementation roadmap
+- Microsoft tenant technical readiness scan
+- Reports and evidence inventory exports
+- Bulk download by control/domain
+
+Avoid:
+- C3PAO export package
+- C3PAO certification claims
+
+If C3PAO is mentioned at all, use only:
+“Supports external review workflows when contractually required.”
+
+====================================================================
+6. UPDATE CALL-TO-ACTION BUTTONS
+====================================================================
+
+Keep the existing buttons, but update labels if needed.
+
+Primary button:
+Launch Live Demo
+
+Secondary:
+Watch Walkthrough
+
+Third:
+Request Consultation
+
+Request Consultation must open:
+
+mailto:info@carmetechnology.com?subject=Control%20HUB%20Consultation%20Request
+
+Add helper text below buttons:
+
+“Explore a sample organization using synthetic data. No account required.”
+
+====================================================================
+7. UPDATE DEMO EXPLANATION
+====================================================================
+
+Add a section:
+
+What You’ll See in the Demo
+
+Bullets:
+- Review an executive readiness dashboard
+- Open CMMC controls and implementation narratives
+- Review linked evidence and documents
+- Preview and download sample evidence files
+- Review SSP control mappings
+- Track recurring monitoring activities
+- Review POA&M remediation items
+- Explore the implementation roadmap
+- View Microsoft tenant technical readiness scan results
+- Generate readiness and evidence reports
+
+Do not say:
+- “Upload to C3PAO repository”
+- “C3PAO export package”
+- “certification-ready package”
+
+====================================================================
+8. UPDATE PUBLIC DEMO VIDEO TEXT
+====================================================================
+
+On /demo-video, update the video page text to match the new positioning.
+
+Title:
+Control HUB Demo Walkthrough
+
+Subtitle:
+CMMC, NIST 800-171, DFARS readiness, evidence management, monitoring, POA&M, and reporting overview.
+
+If there is a transcript or captions, update wording to avoid C3PAO-first positioning.
+
+Replace:
+“prepare for C3PAO review”
+
+With:
+“prepare for self-assessment, audit review, customer review, or future assessment requirements”
+
+If the audio/video narration still says C3PAO heavily, do not regenerate the video yet unless requested. Just update the visible page copy for now.
+
+====================================================================
+9. UPDATE SOURCE / STATUS FOOTNOTE
+====================================================================
+
+At the bottom of the regulatory section, add a small source/status footer:
+
+“Regulatory status last reviewed: July 2026. Organizations should validate contract-specific requirements with the applicable contracting officer or prime contractor.”
+
+Do not include long legal analysis.
+
+Optional links:
+- Department CMMC page
+- Department Phase II suspension announcement
+- Implementing suspension memo
+
+If links are added, open in a new tab.
+
+====================================================================
+10. VISUAL DESIGN
+====================================================================
+
+Keep the professional dark/navy/blue/gold demo design.
+
+Do not make the page plain white.
+
+Use:
+- navy hero
+- gold/blue accents
+- clean cards
+- readable text
+- professional compliance/cybersecurity style
+
+The page should feel current, polished, and credible.
+
+====================================================================
+11. DO NOT CHANGE APP FUNCTIONALITY
+====================================================================
+
+This is a public marketing/demo page update only.
+
+Do not change:
+- login
+- authenticated app pages
+- production organization records
+- evidence
+- documents
+- controls
+- reports
+- bulk downloads
+- C3PAO export features
+- user roles
+- security settings
+- tenant scans
+- roadmap data
+
+Only update /demo and public demo page copy/styling.
+
+====================================================================
+12. ACCEPTANCE TESTS
+====================================================================
+
+Test A:
+Open https://controlhub.carmetechnology.com/demo.
+The page headline references CMMC, NIST 800-171, and DFARS readiness.
+
+Test B:
+The page includes a CMMC Phase II update banner or section.
+
+Test C:
+The page explains self-assessment readiness remains important.
+
+Test D:
+The page does not say or imply that every contractor currently needs C3PAO certification.
+
+Test E:
+The page does not show or recreate a C3PAO Export Package feature.
+
+Test F:
+Launch Live Demo still works and opens the existing read-only demo.
+
+Test G:
+Watch Walkthrough still works.
+
+Test H:
+Request Consultation opens:
+info@carmetechnology.com
+
+Test I:
+No production data is changed.
+
+Test J:
+The page remains visually polished with Control HUB and Carme Technology branding.
