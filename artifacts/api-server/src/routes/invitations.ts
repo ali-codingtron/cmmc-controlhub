@@ -291,12 +291,12 @@ const adminOnly = requireRole("admin");
 router.post("/users/invite", requireAuth, adminOnly, handleSendInvitation);
 
 router.post("/users/:id/resend-invite", requireAuth, adminOnly, async (req, res) => {
-  req.body = { ...req.body, userId: req.params.id };
+  req.body = { ...req.body, userId: req.params.id as string };
   return handleResendInvitation(req, res);
 });
 
 router.post("/users/:id/cancel-invite", requireAuth, adminOnly, async (req, res) => {
-  req.body = { ...req.body, userId: req.params.id };
+  req.body = { ...req.body, userId: req.params.id as string };
   return handleCancelInvitation(req, res);
 });
 

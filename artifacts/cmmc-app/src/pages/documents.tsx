@@ -116,7 +116,7 @@ export default function Documents() {
             <Card className="border-l-4 border-l-blue-400">
               <CardContent className="pt-6">
                 <p className="text-sm text-muted-foreground">Assessor Ready</p>
-                <p className="text-2xl font-bold mt-1 text-blue-700">{status?.totalAssessorReady ?? 0}</p>
+                <p className="text-2xl font-bold mt-1 text-blue-700">{(status as any)?.totalAssessorReady ?? 0}</p>
                 <Link href="/documents/list?status=assessor_ready" className="text-xs text-primary hover:underline mt-1 flex items-center gap-1">
                   View documents <ChevronRight className="h-3 w-3" />
                 </Link>

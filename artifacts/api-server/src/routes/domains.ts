@@ -63,7 +63,7 @@ router.get("/domains/:id", requireAuth, async (req, res) => {
   const [domain] = await db
     .select()
     .from(domainsTable)
-    .where(eq(domainsTable.id, req.params.id))
+    .where(eq(domainsTable.id, req.params.id as string))
     .limit(1);
 
   if (!domain) {

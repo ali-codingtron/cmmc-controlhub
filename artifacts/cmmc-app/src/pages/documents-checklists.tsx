@@ -66,10 +66,7 @@ export default function DocumentChecklists() {
     completeChecklist(
       {
         id: activeChecklist.id,
-        title: completionTitle,
-        notes,
-        itemResults: results,
-        generateEvidence,
+        data: { title: completionTitle, notes, itemResults: results, generateEvidence },
       },
       {
         onSuccess: () => {

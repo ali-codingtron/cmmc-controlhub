@@ -165,7 +165,7 @@ router.get("/controls", requireAuth, requireOrg, async (req, res) => {
           ? inArray(controlsTable.id, packageControlIds)
           : undefined,
         status
-          ? eq(controlAssessmentsTable.status, status as typeof controlAssessmentsTable.status)
+          ? eq(controlAssessmentsTable.status, status as "not_started" | "in_progress" | "implemented" | "needs_review" | "assessor_ready" | "not_applicable" | "at_risk")
           : undefined,
         search
           ? or(
@@ -280,7 +280,7 @@ router.get("/controls/:id", requireAuth, requireOrg, async (req, res) => {
         orgId ? eq(controlAssessmentsTable.organizationId, orgId) : undefined
       )
     )
-    .where(eq(controlsTable.id, req.params.id))
+    .where(eq(controlsTable.id, req.params.id as string))
     .limit(1);
 
   if (!control) {
@@ -291,7 +291,7 @@ router.get("/controls/:id", requireAuth, requireOrg, async (req, res) => {
   const objectives = await db
     .select()
     .from(assessmentObjectivesTable)
-    .where(eq(assessmentObjectivesTable.controlId, req.params.id))
+    .where(eq(assessmentObjectivesTable.controlId, req.params.id as string))
     .orderBy(assessmentObjectivesTable.sortOrder);
 
   res.json({ ...control, status: control.status ?? "not_started", objectives });
@@ -304,7 +304,7 @@ router.patch("/controls/:id", requireAuth, requireOrg, async (req, res) => {
   const [control] = await db
     .select()
     .from(controlsTable)
-    .where(eq(controlsTable.id, req.params.id))
+    .where(eq(controlsTable.id, req.params.id as string))
     .limit(1);
 
   if (!control) {
@@ -317,7 +317,7 @@ router.patch("/controls/:id", requireAuth, requireOrg, async (req, res) => {
     .from(controlAssessmentsTable)
     .where(
       and(
-        eq(controlAssessmentsTable.controlId, req.params.id),
+        eq(controlAssessmentsTable.controlId, req.params.id as string),
         orgId ? eq(controlAssessmentsTable.organizationId, orgId) : undefined
       )
     )
@@ -327,7 +327,7 @@ router.patch("/controls/:id", requireAuth, requireOrg, async (req, res) => {
     await db.insert(controlAssessmentsTable).values({
       id: randomUUID(),
       organizationId: orgId ?? null,
-      controlId: req.params.id,
+      controlId: req.params.id as string,
       status: status ?? "not_started",
       implementationNarrative,
       createdAt: new Date(),
@@ -345,13 +345,13 @@ router.patch("/controls/:id", requireAuth, requireOrg, async (req, res) => {
       .where(eq(controlAssessmentsTable.id, existing[0].id));
   }
 
-  await logAudit(req, "status_changed", "control", req.params.id, {
+  await logAudit(req, "status_changed", "control", req.params.id as string, {
     entityLabel: control.controlId,
     previousValue: existing[0]?.status ?? "not_started",
     newValue: status,
   });
 
-  res.json({ id: req.params.id, status, implementationNarrative });
+  res.json({ id: req.params.id as string, status, implementationNarrative });
 });
 
 router.get("/controls/:id/evidence", requireAuth, requireOrg, async (req, res) => {
@@ -383,7 +383,7 @@ router.get("/controls/:id/evidence", requireAuth, requireOrg, async (req, res) =
     .leftJoin(usersTable, eq(usersTable.id, evidenceItemsTable.ownerId))
     .where(
       and(
-        eq(evidenceControlLinksTable.controlId, req.params.id),
+        eq(evidenceControlLinksTable.controlId, req.params.id as string),
         orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined,
         inArray(evidenceItemsTable.status, ACTIVE_STATUSES as any[])
       )
@@ -408,7 +408,7 @@ router.get("/controls/:id/tasks", requireAuth, requireOrg, async (req, res) => {
     .innerJoin(tasksTable, eq(tasksTable.id, taskControlLinksTable.taskId))
     .where(
       and(
-        eq(taskControlLinksTable.controlId, req.params.id),
+        eq(taskControlLinksTable.controlId, req.params.id as string),
         orgId ? eq(tasksTable.organizationId, orgId) : undefined
       )
     );
@@ -424,7 +424,7 @@ router.get("/controls/:id/poams", requireAuth, requireOrg, async (req, res) => {
     .from(poamsTable)
     .where(
       and(
-        eq(poamsTable.linkedControlId, req.params.id),
+        eq(poamsTable.linkedControlId, req.params.id as string),
         orgId ? eq(poamsTable.organizationId, orgId) : undefined
       )
     );

@@ -381,10 +381,10 @@ export default function PoamDetail({ id }: { id: string }) {
               <p className="text-muted-foreground whitespace-pre-wrap">{poam.notes}</p>
             </div>
           )}
-          {poam.resolutionSummary && (
+          {(poam as any).resolutionSummary && (
             <div>
               <h3 className="font-semibold mb-1">Resolution Summary</h3>
-              <p className="text-muted-foreground whitespace-pre-wrap">{poam.resolutionSummary}</p>
+              <p className="text-muted-foreground whitespace-pre-wrap">{(poam as any).resolutionSummary}</p>
             </div>
           )}
 

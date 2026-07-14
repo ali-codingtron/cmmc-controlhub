@@ -1,5 +1,5 @@
 import { Router } from "express";
-import archiver from "archiver";
+import * as archiver from "archiver";
 import PDFDocument from "pdfkit";
 import ExcelJS from "exceljs";
 import crypto from "crypto";
@@ -192,7 +192,7 @@ router.post(
   requireAuth,
   requireOrg,
   requireRole("admin", "compliance_manager"),
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     const user = req.authUser!;
     const orgId = req.orgId!;
 
@@ -227,14 +227,14 @@ router.post(
         db.select().from(controlAssessmentsTable).where(eq(controlAssessmentsTable.organizationId, orgId)),
         db.select().from(evidenceItemsTable).where(
           and(eq(evidenceItemsTable.organizationId, orgId), isNull(evidenceItemsTable.deletedAt),
-            inArray(evidenceItemsTable.status, evidenceStatuses as [string, ...string[]]))
+            inArray(evidenceItemsTable.status, evidenceStatuses as any))
         ),
         db.select().from(evidenceControlLinksTable),
         db.select().from(documentsTable).where(
           and(
             eq(documentsTable.organizationId, orgId),
             isNull(documentsTable.deletedAt),
-            inArray(documentsTable.status, ["active", "approved", "assessor_ready", "pending_review", "draft"] as [string, ...string[]])
+            inArray(documentsTable.status, ["active", "approved", "assessor_ready", "pending_review", "draft"] as any)
           )
         ),
         db.select().from(documentControlMapsTable),
@@ -243,7 +243,7 @@ router.post(
         db.select().from(sspControlMappingsTable).where(eq(sspControlMappingsTable.organizationId, orgId)),
       ]);
 
-      if (!org) return res.status(404).json({ error: "Organization not found" });
+      if (!org) return void res.status(404).json({ error: "Organization not found" });
 
       const exportDate = new Date().toISOString().slice(0, 10);
       const exportTimestamp = new Date().toISOString();
@@ -334,7 +334,7 @@ router.post(
       res.setHeader("Content-Disposition", `attachment; filename="${zipName}"`);
       res.writeHead(200);
 
-      const arc = archiver("zip", { zlib: { level: 6 } });
+      const arc = (archiver as any)("zip", { zlib: { level: 6 } }) as import("archiver").Archiver;
       arc.pipe(res);
       res.on("close", () => { if (!res.writableEnded) arc.abort(); });
       arc.on("error", (err: Error) => {

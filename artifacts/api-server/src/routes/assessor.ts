@@ -95,7 +95,7 @@ router.get("/assessor/controls/:id/package", requireAuth, requireOrg, async (req
         orgId ? eq(controlAssessmentsTable.organizationId, orgId) : undefined
       )
     )
-    .where(eq(controlsTable.id, req.params.id))
+    .where(eq(controlsTable.id, req.params.id as string))
     .limit(1);
 
   if (!control) { res.status(404).json({ error: "Not found" }); return; }
@@ -120,7 +120,7 @@ router.get("/assessor/controls/:id/package", requireAuth, requireOrg, async (req
     .leftJoin(usersTable, eq(usersTable.id, evidenceItemsTable.ownerId))
     .where(
       and(
-        eq(evidenceControlLinksTable.controlId, req.params.id),
+        eq(evidenceControlLinksTable.controlId, req.params.id as string),
         or(eq(evidenceItemsTable.status, "approved"), eq(evidenceItemsTable.status, "assessor_ready")),
         orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined
       )
@@ -131,7 +131,7 @@ router.get("/assessor/controls/:id/package", requireAuth, requireOrg, async (req
     .from(poamsTable)
     .where(
       and(
-        eq(poamsTable.linkedControlId, req.params.id),
+        eq(poamsTable.linkedControlId, req.params.id as string),
         orgId ? eq(poamsTable.organizationId, orgId) : undefined
       )
     );
@@ -142,24 +142,24 @@ router.get("/assessor/controls/:id/package", requireAuth, requireOrg, async (req
     .where(
       and(
         eq(auditLogsTable.entityType, "control"),
-        eq(auditLogsTable.entityId, req.params.id),
+        eq(auditLogsTable.entityId, req.params.id as string),
         orgId ? eq(auditLogsTable.organizationId, orgId) : undefined
       )
     )
     .orderBy(desc(auditLogsTable.timestamp))
     .limit(20);
 
-  await logAudit(req, "downloaded", "control", req.params.id, { entityLabel: control.controlId });
+  await logAudit(req, "downloaded", "control", req.params.id as string, { entityLabel: control.controlId });
 
   res.json({ ...control, evidence, poams, history });
 });
 
 router.post("/assessor/controls/:id/export", requireAuth, requireOrg, async (req, res) => {
-  res.json({ message: "Export queued", controlId: req.params.id });
+  res.json({ message: "Export queued", controlId: req.params.id as string });
 });
 
 router.post("/assessor/domains/:id/export", requireAuth, requireOrg, async (req, res) => {
-  res.json({ message: "Export queued", domainId: req.params.id });
+  res.json({ message: "Export queued", domainId: req.params.id as string });
 });
 
 router.post("/assessor/export-full", requireAuth, requireOrg, async (req, res) => {

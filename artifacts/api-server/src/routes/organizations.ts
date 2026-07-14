@@ -204,7 +204,7 @@ router.get("/organizations/:id", requireAuth, async (req, res) => {
   const [org] = await db
     .select()
     .from(organizationsTable)
-    .where(eq(organizationsTable.id, req.params.id))
+    .where(eq(organizationsTable.id, req.params.id as string))
     .limit(1);
 
   if (!org) {
@@ -218,7 +218,7 @@ router.get("/organizations/:id", requireAuth, async (req, res) => {
       .from(organizationUsersTable)
       .where(
         and(
-          eq(organizationUsersTable.organizationId, req.params.id),
+          eq(organizationUsersTable.organizationId, req.params.id as string),
           eq(organizationUsersTable.userId, req.authUser!.id),
           eq(organizationUsersTable.status, "active")
         )
@@ -238,7 +238,7 @@ router.patch("/organizations/:id", requireAuth, requireAdmin, async (req, res) =
   const [existing] = await db
     .select()
     .from(organizationsTable)
-    .where(eq(organizationsTable.id, req.params.id))
+    .where(eq(organizationsTable.id, req.params.id as string))
     .limit(1);
 
   if (!existing) {
@@ -269,9 +269,9 @@ router.patch("/organizations/:id", requireAuth, requireAdmin, async (req, res) =
       isActive: isActive !== undefined ? isActive : existing.isActive,
       updatedAt: new Date(),
     })
-    .where(eq(organizationsTable.id, req.params.id));
+    .where(eq(organizationsTable.id, req.params.id as string));
 
-  const [updated] = await db.select().from(organizationsTable).where(eq(organizationsTable.id, req.params.id)).limit(1);
+  const [updated] = await db.select().from(organizationsTable).where(eq(organizationsTable.id, req.params.id as string)).limit(1);
   res.json(updated);
 });
 
@@ -282,7 +282,7 @@ router.get("/organizations/:id/users", requireAuth, async (req, res) => {
       .from(organizationUsersTable)
       .where(
         and(
-          eq(organizationUsersTable.organizationId, req.params.id),
+          eq(organizationUsersTable.organizationId, req.params.id as string),
           eq(organizationUsersTable.userId, req.authUser!.id),
           eq(organizationUsersTable.status, "active")
         )
@@ -308,7 +308,7 @@ router.get("/organizations/:id/users", requireAuth, async (req, res) => {
     })
     .from(organizationUsersTable)
     .innerJoin(usersTable, eq(usersTable.id, organizationUsersTable.userId))
-    .where(eq(organizationUsersTable.organizationId, req.params.id))
+    .where(eq(organizationUsersTable.organizationId, req.params.id as string))
     .orderBy(organizationUsersTable.role, usersTable.name);
 
   res.json(members);
@@ -327,7 +327,7 @@ router.post("/organizations/:id/users", requireAuth, requireAdmin, async (req, r
     .from(organizationUsersTable)
     .where(
       and(
-        eq(organizationUsersTable.organizationId, req.params.id),
+        eq(organizationUsersTable.organizationId, req.params.id as string),
         eq(organizationUsersTable.userId, userId)
       )
     )
@@ -341,7 +341,7 @@ router.post("/organizations/:id/users", requireAuth, requireAdmin, async (req, r
   } else {
     await db.insert(organizationUsersTable).values({
       id: randomUUID(),
-      organizationId: req.params.id,
+      organizationId: req.params.id as string,
       userId,
       role,
       status: "active",
@@ -349,11 +349,11 @@ router.post("/organizations/:id/users", requireAuth, requireAdmin, async (req, r
     });
   }
 
-  res.json({ organizationId: req.params.id, userId, role });
+  res.json({ organizationId: req.params.id as string, userId, role });
 });
 
 router.delete("/organizations/:id", requireAuth, requireAdmin, async (req, res) => {
-  const { id } = req.params;
+  const { id } = req.params as Record<string, string>;
   const [existing] = await db
     .select()
     .from(organizationsTable)
@@ -380,11 +380,11 @@ router.delete("/organizations/:id", requireAuth, requireAdmin, async (req, res) 
 router.delete("/organizations/:id/users/:userId", requireAuth, requireAdmin, async (req, res) => {
   await db
     .update(organizationUsersTable)
-    .set({ status: "inactive" })
+    .set({ status: "suspended" })
     .where(
       and(
-        eq(organizationUsersTable.organizationId, req.params.id),
-        eq(organizationUsersTable.userId, req.params.userId)
+        eq(organizationUsersTable.organizationId, req.params.id as string),
+        eq(organizationUsersTable.userId, req.params.userId as string)
       )
     );
 

@@ -47,7 +47,7 @@ router.get("/microsoft/config-status", requireAuth, (_req, res) => {
   res.json(status);
 });
 
-router.get("/connections", requireAuth, requireOrg, async (req, res) => {
+router.get("/connections", requireAuth, requireOrg, async (req, res): Promise<void> => {
   try {
     const rows = await db
       .select()
@@ -63,10 +63,10 @@ router.get("/connections", requireAuth, requireOrg, async (req, res) => {
   }
 });
 
-router.post("/microsoft/connect/start", requireAuth, requireOrg, async (req, res) => {
+router.post("/microsoft/connect/start", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const cfg = getMicrosoftConfig();
   if (!cfg.ok) {
-    return res.status(503).json({
+    return void res.status(503).json({
       error: "Microsoft tenant connection is not configured yet",
       detail:
         `Microsoft tenant connection is not configured yet. Missing: ${cfg.missing.join(", ")}. ` +
@@ -107,20 +107,20 @@ router.post("/microsoft/connect/start", requireAuth, requireOrg, async (req, res
   res.json({ authUrl });
 });
 
-router.get("/microsoft/callback", async (req, res) => {
+router.get("/microsoft/callback", async (req, res): Promise<void> => {
   const { state, tenant, error, error_description } = req.query as Record<string, string | undefined>;
 
   const frontendBase = process.env.FRONTEND_BASE_URL || "";
 
   if (!state || !oauthStateStore.has(state)) {
-    return res.redirect(`${frontendBase}/pre-assessment/connections?error=invalid_state`);
+    return void res.redirect(`${frontendBase}/pre-assessment/connections?error=invalid_state`);
   }
 
   const stateData = oauthStateStore.get(state)!;
   oauthStateStore.delete(state);
 
   if (Date.now() > stateData.expiresAt) {
-    return res.redirect(`${frontendBase}/pre-assessment/connections?error=state_expired`);
+    return void res.redirect(`${frontendBase}/pre-assessment/connections?error=state_expired`);
   }
 
   if (error) {
@@ -128,13 +128,13 @@ router.get("/microsoft/callback", async (req, res) => {
       error === "access_denied"
         ? "Admin consent was declined. A global administrator must approve the permissions."
         : error_description ?? error;
-    return res.redirect(
+    return void res.redirect(
       `${frontendBase}/pre-assessment/connections?error=${encodeURIComponent(reason)}`
     );
   }
 
   if (!tenant) {
-    return res.redirect(`${frontendBase}/pre-assessment/connections?error=missing_tenant`);
+    return void res.redirect(`${frontendBase}/pre-assessment/connections?error=missing_tenant`);
   }
 
   let tenantName: string = tenant;
@@ -199,7 +199,7 @@ router.get("/microsoft/callback", async (req, res) => {
       });
     }
   } catch (err) {
-    return res.redirect(
+    return void res.redirect(
       `${frontendBase}/pre-assessment/connections?error=${encodeURIComponent("Failed to save connection")}`
     );
   }
@@ -207,18 +207,18 @@ router.get("/microsoft/callback", async (req, res) => {
   res.redirect(`${frontendBase}/pre-assessment/connections?connected=true&tenantName=${encodeURIComponent(tenantName)}`);
 });
 
-router.post("/connections/:id/test", requireAuth, requireOrg, async (req, res) => {
+router.post("/connections/:id/test", requireAuth, requireOrg, async (req, res): Promise<void> => {
   try {
     const [conn] = await db
       .select()
       .from(tenantConnectionsTable)
       .where(
         and(
-          eq(tenantConnectionsTable.id, req.params.id),
+          eq(tenantConnectionsTable.id, req.params.id as string),
           eq(tenantConnectionsTable.organizationId, req.orgId!)
         )
       );
-    if (!conn) return res.status(404).json({ error: "Connection not found" });
+    if (!conn) return void res.status(404).json({ error: "Connection not found" });
 
     const result = await testTenantConnection(conn.microsoftTenantId);
 
@@ -229,7 +229,7 @@ router.post("/connections/:id/test", requireAuth, requireOrg, async (req, res) =
         lastFailedReason: result.success ? null : (result.error ?? null),
         updatedAt: new Date(),
       })
-      .where(eq(tenantConnectionsTable.id, req.params.id));
+      .where(eq(tenantConnectionsTable.id, req.params.id as string));
 
     res.json(result);
   } catch (err) {
@@ -238,10 +238,10 @@ router.post("/connections/:id/test", requireAuth, requireOrg, async (req, res) =
   }
 });
 
-router.delete("/connections/:id", requireAuth, requireOrg, async (req, res) => {
+router.delete("/connections/:id", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const user = req.authUser;
   if (user?.role !== "admin" && user?.role !== "compliance_manager") {
-    return res.status(403).json({ error: "Only admins and compliance managers can disconnect tenants" });
+    return void res.status(403).json({ error: "Only admins and compliance managers can disconnect tenants" });
   }
 
   try {
@@ -250,17 +250,17 @@ router.delete("/connections/:id", requireAuth, requireOrg, async (req, res) => {
       .from(tenantConnectionsTable)
       .where(
         and(
-          eq(tenantConnectionsTable.id, req.params.id),
+          eq(tenantConnectionsTable.id, req.params.id as string),
           eq(tenantConnectionsTable.organizationId, req.orgId!)
         )
       );
-    if (!existing) return res.status(404).json({ error: "Connection not found" });
+    if (!existing) return void res.status(404).json({ error: "Connection not found" });
 
     invalidateTokenCacheForTenant(existing.microsoftTenantId);
 
     await db
       .delete(tenantConnectionsTable)
-      .where(eq(tenantConnectionsTable.id, req.params.id));
+      .where(eq(tenantConnectionsTable.id, req.params.id as string));
 
     res.json({ success: true });
   } catch (err) {
@@ -269,7 +269,7 @@ router.delete("/connections/:id", requireAuth, requireOrg, async (req, res) => {
   }
 });
 
-router.get("/scans", requireAuth, requireOrg, async (req, res) => {
+router.get("/scans", requireAuth, requireOrg, async (req, res): Promise<void> => {
   try {
     const rows = await db
       .select()
@@ -284,10 +284,10 @@ router.get("/scans", requireAuth, requireOrg, async (req, res) => {
   }
 });
 
-router.post("/scans", requireAuth, requireOrg, async (req, res) => {
+router.post("/scans", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const user = req.authUser;
   if (user?.role !== "admin" && user?.role !== "compliance_manager") {
-    return res.status(403).json({ error: "Only admins and compliance managers can run scans" });
+    return void res.status(403).json({ error: "Only admins and compliance managers can run scans" });
   }
 
   const {
@@ -301,7 +301,7 @@ router.post("/scans", requireAuth, requireOrg, async (req, res) => {
   };
 
   if (!tenantConnectionId) {
-    return res.status(400).json({ error: "tenantConnectionId is required" });
+    return void res.status(400).json({ error: "tenantConnectionId is required" });
   }
 
   const [conn] = await db
@@ -313,9 +313,9 @@ router.post("/scans", requireAuth, requireOrg, async (req, res) => {
         eq(tenantConnectionsTable.organizationId, req.orgId!)
       )
     );
-  if (!conn) return res.status(404).json({ error: "Tenant connection not found" });
+  if (!conn) return void res.status(404).json({ error: "Tenant connection not found" });
   if (conn.connectionStatus === "disconnected") {
-    return res.status(400).json({ error: "Tenant is disconnected. Reconnect before running a scan." });
+    return void res.status(400).json({ error: "Tenant is disconnected. Reconnect before running a scan." });
   }
 
   const id = randomUUID();
@@ -351,39 +351,39 @@ router.post("/scans", requireAuth, requireOrg, async (req, res) => {
   }
 });
 
-router.get("/scans/:id", requireAuth, requireOrg, async (req, res) => {
+router.get("/scans/:id", requireAuth, requireOrg, async (req, res): Promise<void> => {
   try {
     const [scan] = await db
       .select()
       .from(paScanRunsTable)
       .where(
         and(
-          eq(paScanRunsTable.id, req.params.id),
+          eq(paScanRunsTable.id, req.params.id as string),
           eq(paScanRunsTable.organizationId, req.orgId!)
         )
       );
-    if (!scan) return res.status(404).json({ error: "Scan not found" });
+    if (!scan) return void res.status(404).json({ error: "Scan not found" });
 
     const findings = await db
       .select()
       .from(paFindingsTable)
-      .where(eq(paFindingsTable.scanRunId, req.params.id))
+      .where(eq(paFindingsTable.scanRunId, req.params.id as string))
       .orderBy(paFindingsTable.severity);
 
     const evidenceRecords = await db
       .select()
       .from(paEvidenceRecordsTable)
-      .where(eq(paEvidenceRecordsTable.scanRunId, req.params.id));
+      .where(eq(paEvidenceRecordsTable.scanRunId, req.params.id as string));
 
     const evidenceRequests = await db
       .select()
       .from(paEvidenceRequestsTable)
-      .where(eq(paEvidenceRequestsTable.scanRunId, req.params.id));
+      .where(eq(paEvidenceRequestsTable.scanRunId, req.params.id as string));
 
     const roadmapActions = await db
       .select()
       .from(paRoadmapActionsTable)
-      .where(eq(paRoadmapActionsTable.scanRunId, req.params.id))
+      .where(eq(paRoadmapActionsTable.scanRunId, req.params.id as string))
       .orderBy(paRoadmapActionsTable.priority);
 
     res.json({ scan, findings, evidenceRecords, evidenceRequests, roadmapActions });
@@ -393,13 +393,13 @@ router.get("/scans/:id", requireAuth, requireOrg, async (req, res) => {
   }
 });
 
-router.get("/scans/:id/report-data", requireAuth, requireOrg, async (req, res) => {
+router.get("/scans/:id/report-data", requireAuth, requireOrg, async (req, res): Promise<void> => {
   try {
     const [scan] = await db
       .select()
       .from(paScanRunsTable)
-      .where(and(eq(paScanRunsTable.id, req.params.id), eq(paScanRunsTable.organizationId, req.orgId!)));
-    if (!scan) return res.status(404).json({ error: "Scan not found" });
+      .where(and(eq(paScanRunsTable.id, req.params.id as string), eq(paScanRunsTable.organizationId, req.orgId!)));
+    if (!scan) return void res.status(404).json({ error: "Scan not found" });
 
     const [org] = await db.select().from(organizationsTable).where(eq(organizationsTable.id, req.orgId!));
     const [tenantConnection] = scan.tenantConnectionId
@@ -407,10 +407,10 @@ router.get("/scans/:id/report-data", requireAuth, requireOrg, async (req, res) =
       : [null];
 
     const [findings, evidenceRecords, evidenceRequests, roadmapActions] = await Promise.all([
-      db.select().from(paFindingsTable).where(eq(paFindingsTable.scanRunId, req.params.id)),
-      db.select().from(paEvidenceRecordsTable).where(eq(paEvidenceRecordsTable.scanRunId, req.params.id)),
-      db.select().from(paEvidenceRequestsTable).where(eq(paEvidenceRequestsTable.scanRunId, req.params.id)),
-      db.select().from(paRoadmapActionsTable).where(eq(paRoadmapActionsTable.scanRunId, req.params.id)),
+      db.select().from(paFindingsTable).where(eq(paFindingsTable.scanRunId, req.params.id as string)),
+      db.select().from(paEvidenceRecordsTable).where(eq(paEvidenceRecordsTable.scanRunId, req.params.id as string)),
+      db.select().from(paEvidenceRequestsTable).where(eq(paEvidenceRequestsTable.scanRunId, req.params.id as string)),
+      db.select().from(paRoadmapActionsTable).where(eq(paRoadmapActionsTable.scanRunId, req.params.id as string)),
     ]);
 
     res.json({
@@ -433,13 +433,13 @@ router.get("/scans/:id/report-data", requireAuth, requireOrg, async (req, res) =
   }
 });
 
-router.get("/scans/:id/report.pdf", requireAuth, requireOrg, async (req, res) => {
+router.get("/scans/:id/report.pdf", requireAuth, requireOrg, async (req, res): Promise<void> => {
   try {
     const [scan] = await db
       .select()
       .from(paScanRunsTable)
-      .where(and(eq(paScanRunsTable.id, req.params.id), eq(paScanRunsTable.organizationId, req.orgId!)));
-    if (!scan) return res.status(404).json({ error: "Scan not found" });
+      .where(and(eq(paScanRunsTable.id, req.params.id as string), eq(paScanRunsTable.organizationId, req.orgId!)));
+    if (!scan) return void res.status(404).json({ error: "Scan not found" });
 
     const [org] = await db.select().from(organizationsTable).where(eq(organizationsTable.id, req.orgId!));
     const [tenantConnection] = scan.tenantConnectionId
@@ -447,10 +447,10 @@ router.get("/scans/:id/report.pdf", requireAuth, requireOrg, async (req, res) =>
       : [null];
 
     const [findings, evidenceRecords, evidenceRequests, roadmapActions] = await Promise.all([
-      db.select().from(paFindingsTable).where(eq(paFindingsTable.scanRunId, req.params.id)),
-      db.select().from(paEvidenceRecordsTable).where(eq(paEvidenceRecordsTable.scanRunId, req.params.id)),
-      db.select().from(paEvidenceRequestsTable).where(eq(paEvidenceRequestsTable.scanRunId, req.params.id)),
-      db.select().from(paRoadmapActionsTable).where(eq(paRoadmapActionsTable.scanRunId, req.params.id)),
+      db.select().from(paFindingsTable).where(eq(paFindingsTable.scanRunId, req.params.id as string)),
+      db.select().from(paEvidenceRecordsTable).where(eq(paEvidenceRecordsTable.scanRunId, req.params.id as string)),
+      db.select().from(paEvidenceRequestsTable).where(eq(paEvidenceRequestsTable.scanRunId, req.params.id as string)),
+      db.select().from(paRoadmapActionsTable).where(eq(paRoadmapActionsTable.scanRunId, req.params.id as string)),
     ]);
 
     const reportData = {
@@ -470,9 +470,9 @@ router.get("/scans/:id/report.pdf", requireAuth, requireOrg, async (req, res) =>
 
     const reportType = (req.query.type as string) === "executive" ? "executive" : "technical";
     if (reportType === "executive") {
-      generatePaExecutiveReportPdf(reportData, res);
+      generatePaExecutiveReportPdf(reportData as any, res);
     } else {
-      generatePaReportPdf(reportData, res);
+      generatePaReportPdf(reportData as any, res);
     }
   } catch (err) {
     req.log.error(err, "pa: generate report pdf failed");
@@ -480,12 +480,12 @@ router.get("/scans/:id/report.pdf", requireAuth, requireOrg, async (req, res) =>
   }
 });
 
-router.get("/scans/:id/snapshots", requireAuth, requireOrg, async (req, res) => {
+router.get("/scans/:id/snapshots", requireAuth, requireOrg, async (req, res): Promise<void> => {
   try {
     const rows = await db
       .select()
       .from(paScanSnapshotsTable)
-      .where(eq(paScanSnapshotsTable.scanRunId, req.params.id));
+      .where(eq(paScanSnapshotsTable.scanRunId, req.params.id as string));
     res.json({ snapshots: rows });
   } catch (err) {
     req.log.error(err, "pa: get snapshots failed");
@@ -493,45 +493,45 @@ router.get("/scans/:id/snapshots", requireAuth, requireOrg, async (req, res) => 
   }
 });
 
-router.patch("/findings/:id", requireAuth, requireOrg, async (req, res) => {
+router.patch("/findings/:id", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const user = req.authUser;
   if (user?.role !== "admin" && user?.role !== "compliance_manager") {
-    return res.status(403).json({ error: "Insufficient permissions" });
+    return void res.status(403).json({ error: "Insufficient permissions" });
   }
 
   const { action, reason } = req.body as { action: "approve" | "reject" | "acknowledge" | "dismiss"; reason?: string };
   if (!["approve", "reject", "acknowledge", "dismiss"].includes(action)) {
-    return res.status(400).json({ error: "action must be approve, reject, acknowledge, or dismiss" });
+    return void res.status(400).json({ error: "action must be approve, reject, acknowledge, or dismiss" });
   }
 
   try {
     const [finding] = await db
       .select({ id: paFindingsTable.id, orgId: paFindingsTable.organizationId })
       .from(paFindingsTable)
-      .where(eq(paFindingsTable.id, req.params.id));
+      .where(eq(paFindingsTable.id, req.params.id as string));
 
     if (!finding || finding.orgId !== req.orgId) {
-      return res.status(404).json({ error: "Finding not found" });
+      return void res.status(404).json({ error: "Finding not found" });
     }
 
     if (action === "approve") {
       await db
         .update(paFindingsTable)
         .set({ approvedStatus: "approved", approvedBy: user?.email ?? null, approvedAt: new Date(), rejectedAt: null, rejectedBy: null, updatedAt: new Date() })
-        .where(eq(paFindingsTable.id, req.params.id));
+        .where(eq(paFindingsTable.id, req.params.id as string));
     } else if (action === "reject" || action === "dismiss") {
       await db
         .update(paFindingsTable)
         .set({ approvedStatus: "rejected", rejectedBy: user?.email ?? null, rejectedAt: new Date(), approvedAt: null, approvedBy: null, updatedAt: new Date() })
-        .where(eq(paFindingsTable.id, req.params.id));
+        .where(eq(paFindingsTable.id, req.params.id as string));
     } else {
       await db
         .update(paFindingsTable)
         .set({ approvedStatus: "pending_review", updatedAt: new Date() })
-        .where(eq(paFindingsTable.id, req.params.id));
+        .where(eq(paFindingsTable.id, req.params.id as string));
     }
 
-    const [updated] = await db.select().from(paFindingsTable).where(eq(paFindingsTable.id, req.params.id));
+    const [updated] = await db.select().from(paFindingsTable).where(eq(paFindingsTable.id, req.params.id as string));
     res.json(updated);
   } catch (err) {
     req.log.error(err, "pa: patch finding failed");
@@ -539,10 +539,10 @@ router.patch("/findings/:id", requireAuth, requireOrg, async (req, res) => {
   }
 });
 
-router.patch("/evidence-records/:id", requireAuth, requireOrg, async (req, res) => {
+router.patch("/evidence-records/:id", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const user = req.authUser;
   if (user?.role !== "admin" && user?.role !== "compliance_manager") {
-    return res.status(403).json({ error: "Insufficient permissions" });
+    return void res.status(403).json({ error: "Insufficient permissions" });
   }
 
   const { status, assessorSummary } = req.body as { status?: string; assessorSummary?: string };
@@ -551,9 +551,9 @@ router.patch("/evidence-records/:id", requireAuth, requireOrg, async (req, res) 
     const [rec] = await db
       .select({ id: paEvidenceRecordsTable.id, orgId: paEvidenceRecordsTable.organizationId })
       .from(paEvidenceRecordsTable)
-      .where(eq(paEvidenceRecordsTable.id, req.params.id));
+      .where(eq(paEvidenceRecordsTable.id, req.params.id as string));
     if (!rec || rec.orgId !== req.orgId) {
-      return res.status(404).json({ error: "Evidence record not found" });
+      return void res.status(404).json({ error: "Evidence record not found" });
     }
 
     const updates: Record<string, unknown> = { updatedAt: new Date() };
@@ -566,8 +566,8 @@ router.patch("/evidence-records/:id", requireAuth, requireOrg, async (req, res) 
     }
     if (assessorSummary !== undefined) updates.assessorSummary = assessorSummary;
 
-    await db.update(paEvidenceRecordsTable).set(updates).where(eq(paEvidenceRecordsTable.id, req.params.id));
-    const [updated] = await db.select().from(paEvidenceRecordsTable).where(eq(paEvidenceRecordsTable.id, req.params.id));
+    await db.update(paEvidenceRecordsTable).set(updates).where(eq(paEvidenceRecordsTable.id, req.params.id as string));
+    const [updated] = await db.select().from(paEvidenceRecordsTable).where(eq(paEvidenceRecordsTable.id, req.params.id as string));
     res.json(updated);
   } catch (err) {
     req.log.error(err, "pa: patch evidence record failed");
@@ -575,7 +575,7 @@ router.patch("/evidence-records/:id", requireAuth, requireOrg, async (req, res) 
   }
 });
 
-router.get("/findings", requireAuth, requireOrg, async (req, res) => {
+router.get("/findings", requireAuth, requireOrg, async (req, res): Promise<void> => {
   try {
     const rows = await db
       .select()
@@ -589,7 +589,7 @@ router.get("/findings", requireAuth, requireOrg, async (req, res) => {
   }
 });
 
-router.get("/evidence-requests", requireAuth, requireOrg, async (req, res) => {
+router.get("/evidence-requests", requireAuth, requireOrg, async (req, res): Promise<void> => {
   try {
     const rows = await db
       .select()
@@ -603,21 +603,21 @@ router.get("/evidence-requests", requireAuth, requireOrg, async (req, res) => {
   }
 });
 
-router.patch("/evidence-requests/:id", requireAuth, requireOrg, async (req, res) => {
+router.patch("/evidence-requests/:id", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const { status } = req.body as { status?: string };
   try {
     const [req_] = await db
       .select({ id: paEvidenceRequestsTable.id, orgId: paEvidenceRequestsTable.organizationId })
       .from(paEvidenceRequestsTable)
-      .where(eq(paEvidenceRequestsTable.id, req.params.id));
+      .where(eq(paEvidenceRequestsTable.id, req.params.id as string));
     if (!req_ || req_.orgId !== req.orgId) {
-      return res.status(404).json({ error: "Evidence request not found" });
+      return void res.status(404).json({ error: "Evidence request not found" });
     }
     await db
       .update(paEvidenceRequestsTable)
       .set({ status: status as any, updatedAt: new Date() })
-      .where(eq(paEvidenceRequestsTable.id, req.params.id));
-    const [updated] = await db.select().from(paEvidenceRequestsTable).where(eq(paEvidenceRequestsTable.id, req.params.id));
+      .where(eq(paEvidenceRequestsTable.id, req.params.id as string));
+    const [updated] = await db.select().from(paEvidenceRequestsTable).where(eq(paEvidenceRequestsTable.id, req.params.id as string));
     res.json(updated);
   } catch (err) {
     req.log.error(err, "pa: patch evidence request failed");
@@ -625,7 +625,7 @@ router.patch("/evidence-requests/:id", requireAuth, requireOrg, async (req, res)
   }
 });
 
-router.get("/roadmap", requireAuth, requireOrg, async (req, res) => {
+router.get("/roadmap", requireAuth, requireOrg, async (req, res): Promise<void> => {
   try {
     const rows = await db
       .select()
@@ -639,23 +639,23 @@ router.get("/roadmap", requireAuth, requireOrg, async (req, res) => {
   }
 });
 
-router.patch("/roadmap/:id", requireAuth, requireOrg, async (req, res) => {
+router.patch("/roadmap/:id", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const { status } = req.body as { status?: string };
-  if (!status) return res.status(400).json({ error: "status is required" });
+  if (!status) return void res.status(400).json({ error: "status is required" });
 
   try {
     const [action] = await db
       .select({ id: paRoadmapActionsTable.id, orgId: paRoadmapActionsTable.organizationId })
       .from(paRoadmapActionsTable)
-      .where(eq(paRoadmapActionsTable.id, req.params.id));
+      .where(eq(paRoadmapActionsTable.id, req.params.id as string));
     if (!action || action.orgId !== req.orgId) {
-      return res.status(404).json({ error: "Roadmap action not found" });
+      return void res.status(404).json({ error: "Roadmap action not found" });
     }
     await db
       .update(paRoadmapActionsTable)
       .set({ status, updatedAt: new Date() })
-      .where(eq(paRoadmapActionsTable.id, req.params.id));
-    const [updated] = await db.select().from(paRoadmapActionsTable).where(eq(paRoadmapActionsTable.id, req.params.id));
+      .where(eq(paRoadmapActionsTable.id, req.params.id as string));
+    const [updated] = await db.select().from(paRoadmapActionsTable).where(eq(paRoadmapActionsTable.id, req.params.id as string));
     res.json(updated);
   } catch (err) {
     req.log.error(err, "pa: patch roadmap action failed");

@@ -24,7 +24,7 @@ const objSvc = new ObjectStorageService();
 const APEX_ORG_ID = "7a2f5c8e-4b3d-4a9f-8e2c-1d0a5b6c7d8f";
 
 function requireAdmin(req: any, res: any, next: any) {
-  if (req.authUser?.role !== "admin") return res.status(403).json({ error: "Admin access required" });
+  if (req.authUser?.role !== "admin") return void res.status(403).json({ error: "Admin access required" });
   next();
 }
 
@@ -471,12 +471,12 @@ async function generateDocumentFile(spec: DocumentSpec): Promise<Buffer> {
 // ── Endpoint ─────────────────────────────────────────────────────────────────
 const SEED_SECRET = "apex-seed-2026-controlhub";
 
-router.post("/admin/seed-apex-files", async (req, res) => {
+router.post("/admin/seed-apex-files", async (req, res): Promise<void> => {
   const secret = req.headers["x-seed-secret"];
-  if (secret !== SEED_SECRET) return res.status(403).json({ error: "Missing or invalid X-Seed-Secret header" });
+  if (secret !== SEED_SECRET) return void res.status(403).json({ error: "Missing or invalid X-Seed-Secret header" });
   const [org] = await db.select({ id: organizationsTable.id, name: organizationsTable.name })
     .from(organizationsTable).where(eq(organizationsTable.id, APEX_ORG_ID)).limit(1);
-  if (!org) return res.status(404).json({ error: "APEX Solutions org not found — run startup seed first" });
+  if (!org) return void res.status(404).json({ error: "APEX Solutions org not found — run startup seed first" });
 
   const [existingEv] = await db.select({ id: evidenceItemsTable.id })
     .from(evidenceItemsTable).where(eq(evidenceItemsTable.organizationId, APEX_ORG_ID)).limit(1);
@@ -484,7 +484,7 @@ router.post("/admin/seed-apex-files", async (req, res) => {
     .from(documentsTable).where(eq(documentsTable.organizationId, APEX_ORG_ID)).limit(1);
 
   if (existingEv && existingDoc) {
-    return res.json({ message: "Already seeded — APEX Solutions already has evidence and documents", skipped: true });
+    return void res.json({ message: "Already seeded — APEX Solutions already has evidence and documents", skipped: true });
   }
 
   let [adminUser] = await db.select({ id: usersTable.id })
@@ -493,7 +493,7 @@ router.post("/admin/seed-apex-files", async (req, res) => {
     [adminUser] = await db.select({ id: usersTable.id })
       .from(usersTable).where(eq(usersTable.role, "admin")).limit(1);
   }
-  if (!adminUser) return res.status(400).json({ error: "No admin user found in database" });
+  if (!adminUser) return void res.status(400).json({ error: "No admin user found in database" });
 
   const allControls = await db.select({ id: controlsTable.id, ref: controlsTable.controlId }).from(controlsTable);
   const controlMap = new Map(allControls.map(c => [c.ref, c.id]));

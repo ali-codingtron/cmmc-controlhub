@@ -600,7 +600,7 @@ router.patch("/monitoring/:id", requireAuth, requireOrg, async (req, res) => {
     .from(monitoringItemsTable)
     .where(
       and(
-        eq(monitoringItemsTable.id, req.params.id),
+        eq(monitoringItemsTable.id, req.params.id as string),
         orgId ? eq(monitoringItemsTable.organizationId, orgId) : undefined
       )
     )
@@ -663,12 +663,12 @@ router.patch("/monitoring/:id", requireAuth, requireOrg, async (req, res) => {
           : existing.reviewDate,
       updatedAt: new Date(),
     })
-    .where(eq(monitoringItemsTable.id, req.params.id));
+    .where(eq(monitoringItemsTable.id, req.params.id as string));
 
   const [updated] = await db
     .select()
     .from(monitoringItemsTable)
-    .where(eq(monitoringItemsTable.id, req.params.id))
+    .where(eq(monitoringItemsTable.id, req.params.id as string))
     .limit(1);
 
   res.json(updated);

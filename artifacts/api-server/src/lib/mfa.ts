@@ -50,7 +50,7 @@ export function generateOtpAuthUri(secret: string, email: string): string {
 
 export function verifyTotp(secret: string, token: string): boolean {
   try {
-    return verifySync({ secret, token, strategy: "totp" });
+    return verifySync({ secret, token, strategy: "totp" }) as unknown as boolean;
   } catch {
     return false;
   }

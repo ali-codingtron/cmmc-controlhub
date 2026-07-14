@@ -281,7 +281,7 @@ async function uploadFile(buf: Buffer, ext: string, mime: string, name: string):
   const upRes = await fetch(signed_url, {
     method: "PUT",
     headers: { "Content-Type": mime, "Content-Disposition": `attachment; filename="${encodeURIComponent(name)}"` },
-    body: buf,
+    body: buf as unknown as BodyInit,
     signal: AbortSignal.timeout(120_000),
   });
   if (!upRes.ok) throw new Error(`Upload failed ${upRes.status}`);

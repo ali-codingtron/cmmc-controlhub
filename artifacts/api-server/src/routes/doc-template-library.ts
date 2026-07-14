@@ -30,7 +30,7 @@ const router = Router();
 
 function requireAdmin(req: any, res: any, next: any) {
   if (req.authUser?.role !== "admin") {
-    return res.status(403).json({ error: "Admin access required" });
+    return void res.status(403).json({ error: "Admin access required" });
   }
   next();
 }
@@ -41,7 +41,7 @@ function canGenerateDocs(req: any) {
 }
 
 // ── GET /api/doc-templates/library ───────────────────────────────────────────
-router.get("/doc-templates/library", requireAuth, async (req, res) => {
+router.get("/doc-templates/library", requireAuth, async (req, res): Promise<void> => {
   const { search, artifactType, family, controlRef, status } = req.query as Record<string, string>;
 
   let templates = await db
@@ -80,7 +80,7 @@ router.get("/doc-templates/library", requireAuth, async (req, res) => {
     )
     .orderBy(asc(documentTemplatesTable.domainAbbr), asc(documentTemplatesTable.title));
 
-  if (!templates.length) return res.json([]);
+  if (!templates.length) return void res.json([]);
 
   const templateIds = templates.map((t) => t.id);
 
@@ -128,8 +128,8 @@ router.get("/doc-templates/library", requireAuth, async (req, res) => {
 });
 
 // ── GET /api/doc-templates/library/:id ───────────────────────────────────────
-router.get("/doc-templates/library/:id", requireAuth, async (req, res) => {
-  const { id } = req.params;
+router.get("/doc-templates/library/:id", requireAuth, async (req, res): Promise<void> => {
+  const { id } = req.params as Record<string, string>;
 
   const [template] = await db
     .select()
@@ -137,7 +137,7 @@ router.get("/doc-templates/library/:id", requireAuth, async (req, res) => {
     .where(eq(documentTemplatesTable.id, id))
     .limit(1);
 
-  if (!template) return res.status(404).json({ error: "Template not found" });
+  if (!template) return void res.status(404).json({ error: "Template not found" });
 
   const [sections, requirements, roles, steps, records, tables, controlMaps] = await Promise.all([
     db.select().from(docTemplateSectionsTable).where(eq(docTemplateSectionsTable.templateId, id)).orderBy(asc(docTemplateSectionsTable.sectionOrder)),
@@ -224,7 +224,7 @@ router.get("/doc-templates/artifact-types", requireAuth, async (_req, res) => {
 
 // ── POST /api/admin/doc-templates/import ─────────────────────────────────────
 // Admin: import a ZIP package (multipart or path)
-router.post("/admin/doc-templates/import", requireAuth, requireAdmin, async (req, res) => {
+router.post("/admin/doc-templates/import", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const workspaceRoot = process.env.REPL_HOME ?? "/home/runner/workspace";
   const zipPath = `${workspaceRoot}/attached_assets/CMMC_L2_Document_Library_1780837345246.zip`;
   const actorId = (req as any).authUser?.id ?? null;
@@ -232,12 +232,12 @@ router.post("/admin/doc-templates/import", requireAuth, requireAdmin, async (req
 
   const fs = await import("fs");
   if (!fs.existsSync(zipPath)) {
-    return res.status(400).json({ error: `ZIP file not found at ${zipPath}` });
+    return void res.status(400).json({ error: `ZIP file not found at ${zipPath}` });
   }
 
   const zip = new AdmZip(zipPath);
   const jsonEntry = zip.getEntry("cmmc_l2_document_templates.json");
-  if (!jsonEntry) return res.status(400).json({ error: "cmmc_l2_document_templates.json not in ZIP" });
+  if (!jsonEntry) return void res.status(400).json({ error: "cmmc_l2_document_templates.json not in ZIP" });
 
   const library = JSON.parse(jsonEntry.getData().toString("utf-8")) as any;
   const templates: any[] = library.templates ?? [];
@@ -366,8 +366,8 @@ router.post("/admin/doc-templates/import", requireAuth, requireAdmin, async (req
 });
 
 // ── POST /api/doc-templates/generate ─────────────────────────────────────────
-router.post("/doc-templates/generate", requireAuth, requireOrg, async (req, res) => {
-  if (!canGenerateDocs(req)) return res.status(403).json({ error: "Compliance Manager or Admin access required" });
+router.post("/doc-templates/generate", requireAuth, requireOrg, async (req, res): Promise<void> => {
+  if (!canGenerateDocs(req)) return void res.status(403).json({ error: "Compliance Manager or Admin access required" });
 
   const orgId = (req as any).orgId!;
   const actorId = (req as any).authUser?.id;
@@ -381,13 +381,13 @@ router.post("/doc-templates/generate", requireAuth, requireOrg, async (req, res)
     reviewDateStr?: string;
   };
 
-  if (!templateId) return res.status(400).json({ error: "templateId is required" });
+  if (!templateId) return void res.status(400).json({ error: "templateId is required" });
 
   const [template] = await db.select().from(documentTemplatesTable).where(eq(documentTemplatesTable.id, templateId)).limit(1);
-  if (!template) return res.status(404).json({ error: "Template not found" });
+  if (!template) return void res.status(404).json({ error: "Template not found" });
 
   const [org] = await db.select().from(organizationsTable).where(eq(organizationsTable.id, orgId)).limit(1);
-  if (!org) return res.status(404).json({ error: "Organization not found" });
+  if (!org) return void res.status(404).json({ error: "Organization not found" });
 
   // Load satellite data
   const [sections, requirements, roles, steps, records, tables, controlMaps] = await Promise.all([
@@ -489,11 +489,11 @@ router.post("/doc-templates/generate", requireAuth, requireOrg, async (req, res)
 });
 
 // ── GET /api/doc-templates/generated/:docId/docx ─────────────────────────────
-router.get("/doc-templates/generated/:docId/docx", requireAuth, requireOrg, async (req, res) => {
+router.get("/doc-templates/generated/:docId/docx", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = (req as any).orgId!;
   const [doc] = await db.select().from(documentsTable)
-    .where(and(eq(documentsTable.id, req.params.docId), eq(documentsTable.organizationId, orgId))).limit(1);
-  if (!doc) return res.status(404).json({ error: "Document not found" });
+    .where(and(eq(documentsTable.id, req.params.docId as string), eq(documentsTable.organizationId, orgId))).limit(1);
+  if (!doc) return void res.status(404).json({ error: "Document not found" });
 
   const [template] = doc.templateId
     ? await db.select().from(documentTemplatesTable).where(eq(documentTemplatesTable.id, doc.templateId)).limit(1)
@@ -736,11 +736,11 @@ router.get("/doc-templates/generated/:docId/docx", requireAuth, requireOrg, asyn
 });
 
 // ── GET /api/doc-templates/generated/:docId/pdf ──────────────────────────────
-router.get("/doc-templates/generated/:docId/pdf", requireAuth, requireOrg, async (req, res) => {
+router.get("/doc-templates/generated/:docId/pdf", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = (req as any).orgId!;
   const [doc] = await db.select().from(documentsTable)
-    .where(and(eq(documentsTable.id, req.params.docId), eq(documentsTable.organizationId, orgId))).limit(1);
-  if (!doc) return res.status(404).json({ error: "Document not found" });
+    .where(and(eq(documentsTable.id, req.params.docId as string), eq(documentsTable.organizationId, orgId))).limit(1);
+  if (!doc) return void res.status(404).json({ error: "Document not found" });
 
   const [template] = doc.templateId
     ? await db.select().from(documentTemplatesTable).where(eq(documentTemplatesTable.id, doc.templateId)).limit(1)
@@ -854,13 +854,13 @@ router.get("/doc-templates/generated/:docId/pdf", requireAuth, requireOrg, async
 });
 
 // ── GET /api/doc-templates/control-requirements/:controlId ───────────────────
-router.get("/doc-templates/control-requirements/:controlId", requireAuth, requireOrg, async (req, res) => {
+router.get("/doc-templates/control-requirements/:controlId", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = (req as any).orgId!;
-  const { controlId } = req.params;
+  const { controlId } = req.params as Record<string, string>;
 
   // Find control
   const [control] = await db.select().from(controlsTable).where(eq(controlsTable.id, controlId)).limit(1);
-  if (!control) return res.status(404).json({ error: "Control not found" });
+  if (!control) return void res.status(404).json({ error: "Control not found" });
 
   // Get required templates for this control
   const templateMaps = await db
@@ -923,7 +923,7 @@ function metaTable(rows: [string, string][]): any[] {
       borders: {
         top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE },
         left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE },
-        insideH: { style: BorderStyle.NONE }, insideV: { style: BorderStyle.NONE },
+        insideHorizontal: { style: BorderStyle.NONE }, insideVertical: { style: BorderStyle.NONE },
       },
       rows: rows.map(([k, v]) =>
         new TableRow({

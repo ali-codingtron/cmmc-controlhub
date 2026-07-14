@@ -130,13 +130,13 @@ async function seed() {
   ];
 
   if (complianceUser) {
-    orgMemberships.push({ id: randomUUID(), organizationId: internalOrgId, userId: complianceUser.id, role: "compliance_manager" as const, status: "active" as const, joinedAt: new Date() });
+    orgMemberships.push({ id: randomUUID(), organizationId: internalOrgId, userId: complianceUser.id, role: "compliance_manager" as any, status: "active" as const, joinedAt: new Date() });
   }
   if (reviewerUser) {
-    orgMemberships.push({ id: randomUUID(), organizationId: internalOrgId, userId: reviewerUser.id, role: "reviewer" as const, status: "active" as const, joinedAt: new Date() });
+    orgMemberships.push({ id: randomUUID(), organizationId: internalOrgId, userId: reviewerUser.id, role: "reviewer" as any, status: "active" as const, joinedAt: new Date() });
   }
   if (assessorUser) {
-    orgMemberships.push({ id: randomUUID(), organizationId: internalOrgId, userId: assessorUser.id, role: "assessor" as const, status: "active" as const, joinedAt: new Date() });
+    orgMemberships.push({ id: randomUUID(), organizationId: internalOrgId, userId: assessorUser.id, role: "assessor" as any, status: "active" as const, joinedAt: new Date() });
   }
 
   for (const m of orgMemberships) {

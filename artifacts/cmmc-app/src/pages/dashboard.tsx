@@ -193,14 +193,14 @@ export default function Dashboard() {
   const { activeOrg, isLoading: orgLoading } = useOrg();
   const queryClient = useQueryClient();
   const { data: summary, isLoading: summaryLoading } = useGetDashboardSummary({
-    query: { enabled: !!activeOrg },
+    query: { enabled: !!activeOrg } as any,
   });
   const { data: domains, isLoading: domainsLoading } = useGetReadinessByDomain({
-    query: { enabled: !!activeOrg },
+    query: { enabled: !!activeOrg } as any,
   });
   const { data: recentActivity, isLoading: activityLoading } = useGetRecentActivity(
     { limit: 10 },
-    { query: { enabled: !!activeOrg } },
+    { query: { enabled: !!activeOrg } as any },
   );
   const { data: orgPackages = [] } = useListOrgPackages(
     activeOrg?.id ?? "",

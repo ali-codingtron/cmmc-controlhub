@@ -360,7 +360,7 @@ router.get("/dfars-obligations", requireAuth, requireOrg, async (req, res) => {
 
     // Fetch active/approved documents for linked-document matching
     db
-      .select({ name: documentsTable.name })
+      .select({ title: documentsTable.title })
       .from(documentsTable)
       .where(
         and(
@@ -374,7 +374,7 @@ router.get("/dfars-obligations", requireAuth, requireOrg, async (req, res) => {
       ),
   ]);
 
-  const orgDocNames = orgDocs.map(d => d.name.toLowerCase());
+  const orgDocNames = orgDocs.map(d => d.title.toLowerCase());
 
   // Build package name lookup
   const pkgNameMap: Record<string, string> = {};

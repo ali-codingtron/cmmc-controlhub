@@ -94,10 +94,10 @@ const upload = multer({
 const router = Router();
 
 // ── Get control mapping from primary SSP (must be before /:id routes) ─────────
-router.get("/ssp/control-mapping", requireAuth, requireOrg, async (req, res) => {
+router.get("/ssp/control-mapping", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = (req as any).orgId as string;
   const { controlRef } = req.query as { controlRef?: string };
-  if (!controlRef) return res.json(null);
+  if (!controlRef) return void res.json(null);
 
   const [primary] = await db
     .select()
@@ -105,7 +105,7 @@ router.get("/ssp/control-mapping", requireAuth, requireOrg, async (req, res) => 
     .where(and(eq(sspDocumentsTable.organizationId, orgId), eq(sspDocumentsTable.isPrimary, true)))
     .limit(1);
 
-  if (!primary) return res.json(null);
+  if (!primary) return void res.json(null);
 
   const [mapping] = await db
     .select()
@@ -118,7 +118,7 @@ router.get("/ssp/control-mapping", requireAuth, requireOrg, async (req, res) => 
     )
     .limit(1);
 
-  if (!mapping) return res.json(null);
+  if (!mapping) return void res.json(null);
 
   const controlStatus = mapping.controlDbId
     ? await db
@@ -158,16 +158,16 @@ router.get("/ssp/control-mapping", requireAuth, requireOrg, async (req, res) => 
 });
 
 // ── Update control mapping (from control-detail tab) ─────────────────────────
-router.patch("/ssp/control-mappings/:mappingId", requireAuth, requireOrg, async (req, res) => {
+router.patch("/ssp/control-mappings/:mappingId", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = (req as any).orgId as string;
-  const { mappingId } = req.params;
+  const { mappingId } = req.params as Record<string, string>;
 
   const [mapping] = await db
     .select()
     .from(sspControlMappingsTable)
     .where(and(eq(sspControlMappingsTable.id, mappingId), eq(sspControlMappingsTable.organizationId, orgId)))
     .limit(1);
-  if (!mapping) return res.status(404).json({ error: "Not found" });
+  if (!mapping) return void res.status(404).json({ error: "Not found" });
 
   const updates: Record<string, any> = { updatedAt: new Date(), isEdited: true };
   if ("implementationNarrative" in req.body) updates.implementationNarrative = req.body.implementationNarrative;
@@ -183,19 +183,19 @@ router.patch("/ssp/control-mappings/:mappingId", requireAuth, requireOrg, async 
 });
 
 // ── Get primary SSP (must be before /:id) ────────────────────────────────────
-router.get("/ssp/primary", requireAuth, requireOrg, async (req, res) => {
+router.get("/ssp/primary", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = (req as any).orgId as string;
   const [doc] = await db
     .select()
     .from(sspDocumentsTable)
     .where(and(eq(sspDocumentsTable.organizationId, orgId), eq(sspDocumentsTable.isPrimary, true)))
     .limit(1);
-  if (!doc) return res.json(null);
+  if (!doc) return void res.json(null);
   res.json(doc);
 });
 
 // ── List SSPs for org ─────────────────────────────────────────────────────────
-router.get("/ssp", requireAuth, requireOrg, async (req, res) => {
+router.get("/ssp", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = (req as any).orgId as string;
   const docs = await db
     .select()
@@ -206,7 +206,7 @@ router.get("/ssp", requireAuth, requireOrg, async (req, res) => {
 });
 
 // ── Create / Upload SSP ───────────────────────────────────────────────────────
-router.post("/ssp", requireAuth, requireOrg, upload.single("file"), async (req, res) => {
+router.post("/ssp", requireAuth, requireOrg, upload.single("file"), async (req, res): Promise<void> => {
   const orgId = (req as any).orgId as string;
   const {
     title, documentNumber, revisionNumber, revisionDate, preparedBy,
@@ -214,7 +214,7 @@ router.post("/ssp", requireAuth, requireOrg, upload.single("file"), async (req, 
     cmmcLevel, status, notes, nextReviewDate,
   } = req.body as Record<string, string>;
 
-  if (!title?.trim()) return res.status(400).json({ error: "title is required" });
+  if (!title?.trim()) return void res.status(400).json({ error: "title is required" });
 
   const id = randomUUID();
   const multerFile = (req as any).file as Express.Multer.File | undefined;
@@ -227,7 +227,7 @@ router.post("/ssp", requireAuth, requireOrg, upload.single("file"), async (req, 
     try {
       fileKey = await uploadBufferToGCS(multerFile.buffer, mimeType, ext, multerFile.originalname);
     } catch {
-      return res.status(500).json({ error: "File upload to storage failed" });
+      return void res.status(500).json({ error: "File upload to storage failed" });
     }
   }
 
@@ -268,16 +268,16 @@ router.post("/ssp", requireAuth, requireOrg, upload.single("file"), async (req, 
 });
 
 // ── SSP stats for overview ────────────────────────────────────────────────────
-router.get("/ssp/:id/stats", requireAuth, requireOrg, async (req, res) => {
+router.get("/ssp/:id/stats", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = (req as any).orgId as string;
-  const { id } = req.params;
+  const { id } = req.params as Record<string, string>;
 
   const [doc] = await db
     .select()
     .from(sspDocumentsTable)
     .where(and(eq(sspDocumentsTable.id, id), eq(sspDocumentsTable.organizationId, orgId)))
     .limit(1);
-  if (!doc) return res.status(404).json({ error: "Not found" });
+  if (!doc) return void res.status(404).json({ error: "Not found" });
 
   const [[sectionsRow], [completeSectionsRow], [mappingsRow], [editedRow], [totalControlsRow]] = await Promise.all([
     db.select({ total: count() }).from(sspSectionsTable).where(eq(sspSectionsTable.sspDocumentId, id)),
@@ -297,20 +297,20 @@ router.get("/ssp/:id/stats", requireAuth, requireOrg, async (req, res) => {
 });
 
 // ── Parse / extract SSP data ──────────────────────────────────────────────────
-router.post("/ssp/:id/parse", requireAuth, requireOrg, async (req, res) => {
+router.post("/ssp/:id/parse", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = (req as any).orgId as string;
-  const { id } = req.params;
+  const { id } = req.params as Record<string, string>;
 
   const [doc] = await db
     .select()
     .from(sspDocumentsTable)
     .where(and(eq(sspDocumentsTable.id, id), eq(sspDocumentsTable.organizationId, orgId)))
     .limit(1);
-  if (!doc) return res.status(404).json({ error: "Not found" });
-  if (!doc.fileKey) return res.status(400).json({ error: "No file uploaded for this SSP" });
+  if (!doc) return void res.status(404).json({ error: "Not found" });
+  if (!doc.fileKey) return void res.status(400).json({ error: "No file uploaded for this SSP" });
 
   const buffer = await readSSPFileBuffer(doc.fileKey);
-  if (!buffer) return res.status(404).json({ error: "SSP file not found in storage. Please re-upload the file." });
+  if (!buffer) return void res.status(404).json({ error: "SSP file not found in storage. Please re-upload the file." });
 
   const { sections, controlMappings } = await parseSSPDocument(buffer);
 
@@ -372,16 +372,16 @@ router.post("/ssp/:id/parse", requireAuth, requireOrg, async (req, res) => {
 });
 
 // ── Set primary SSP ───────────────────────────────────────────────────────────
-router.post("/ssp/:id/set-primary", requireAuth, requireOrg, async (req, res) => {
+router.post("/ssp/:id/set-primary", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = (req as any).orgId as string;
-  const { id } = req.params;
+  const { id } = req.params as Record<string, string>;
 
   const [doc] = await db
     .select()
     .from(sspDocumentsTable)
     .where(and(eq(sspDocumentsTable.id, id), eq(sspDocumentsTable.organizationId, orgId)))
     .limit(1);
-  if (!doc) return res.status(404).json({ error: "Not found" });
+  if (!doc) return void res.status(404).json({ error: "Not found" });
 
   await db
     .update(sspDocumentsTable)
@@ -398,16 +398,16 @@ router.post("/ssp/:id/set-primary", requireAuth, requireOrg, async (req, res) =>
 });
 
 // ── Download original file ────────────────────────────────────────────────────
-router.get("/ssp/:id/download", requireAuth, requireOrg, async (req, res) => {
+router.get("/ssp/:id/download", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = (req as any).orgId as string;
-  const { id } = req.params;
+  const { id } = req.params as Record<string, string>;
 
   const [doc] = await db
     .select()
     .from(sspDocumentsTable)
     .where(and(eq(sspDocumentsTable.id, id), eq(sspDocumentsTable.organizationId, orgId)))
     .limit(1);
-  if (!doc || !doc.fileKey) return res.status(404).json({ error: "File not found" });
+  if (!doc || !doc.fileKey) return void res.status(404).json({ error: "File not found" });
 
   const filename = doc.originalFileName ?? doc.fileKey;
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
@@ -425,9 +425,9 @@ router.get("/ssp/:id/download", requireAuth, requireOrg, async (req, res) => {
       nodeStream.pipe(res as any);
     } catch (err) {
       if (err instanceof ObjectNotFoundError) {
-        return res.status(404).json({ error: "File no longer exists in storage. Please re-upload the SSP document." });
+        return void res.status(404).json({ error: "File no longer exists in storage. Please re-upload the SSP document." });
       }
-      return res.status(500).json({ error: "Failed to retrieve file" });
+      return void res.status(500).json({ error: "Failed to retrieve file" });
     }
   } else {
     // Legacy local-disk fallback (dev records only — file will not exist in production)
@@ -445,16 +445,16 @@ router.get("/ssp/:id/download", requireAuth, requireOrg, async (req, res) => {
 });
 
 // ── Export updated DOCX ───────────────────────────────────────────────────────
-router.get("/ssp/:id/export", requireAuth, requireOrg, async (req, res) => {
+router.get("/ssp/:id/export", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = (req as any).orgId as string;
-  const { id } = req.params;
+  const { id } = req.params as Record<string, string>;
 
   const [doc] = await db
     .select()
     .from(sspDocumentsTable)
     .where(and(eq(sspDocumentsTable.id, id), eq(sspDocumentsTable.organizationId, orgId)))
     .limit(1);
-  if (!doc) return res.status(404).json({ error: "Not found" });
+  if (!doc) return void res.status(404).json({ error: "Not found" });
 
   const sections = await db
     .select()
@@ -479,29 +479,29 @@ router.get("/ssp/:id/export", requireAuth, requireOrg, async (req, res) => {
 });
 
 // ── Get single SSP ────────────────────────────────────────────────────────────
-router.get("/ssp/:id", requireAuth, requireOrg, async (req, res) => {
+router.get("/ssp/:id", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = (req as any).orgId as string;
-  const { id } = req.params;
+  const { id } = req.params as Record<string, string>;
   const [doc] = await db
     .select()
     .from(sspDocumentsTable)
     .where(and(eq(sspDocumentsTable.id, id), eq(sspDocumentsTable.organizationId, orgId)))
     .limit(1);
-  if (!doc) return res.status(404).json({ error: "Not found" });
+  if (!doc) return void res.status(404).json({ error: "Not found" });
   res.json(doc);
 });
 
 // ── Update SSP metadata ───────────────────────────────────────────────────────
-router.patch("/ssp/:id", requireAuth, requireOrg, async (req, res) => {
+router.patch("/ssp/:id", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = (req as any).orgId as string;
-  const { id } = req.params;
+  const { id } = req.params as Record<string, string>;
 
   const [doc] = await db
     .select()
     .from(sspDocumentsTable)
     .where(and(eq(sspDocumentsTable.id, id), eq(sspDocumentsTable.organizationId, orgId)))
     .limit(1);
-  if (!doc) return res.status(404).json({ error: "Not found" });
+  if (!doc) return void res.status(404).json({ error: "Not found" });
 
   const allowed = [
     "title", "documentNumber", "revisionNumber", "revisionDate", "preparedBy",
@@ -523,16 +523,16 @@ router.patch("/ssp/:id", requireAuth, requireOrg, async (req, res) => {
 });
 
 // ── Delete SSP ────────────────────────────────────────────────────────────────
-router.delete("/ssp/:id", requireAuth, requireOrg, async (req, res) => {
+router.delete("/ssp/:id", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = (req as any).orgId as string;
-  const { id } = req.params;
+  const { id } = req.params as Record<string, string>;
 
   const [doc] = await db
     .select()
     .from(sspDocumentsTable)
     .where(and(eq(sspDocumentsTable.id, id), eq(sspDocumentsTable.organizationId, orgId)))
     .limit(1);
-  if (!doc) return res.status(404).json({ error: "Not found" });
+  if (!doc) return void res.status(404).json({ error: "Not found" });
 
   if (doc.fileKey) {
     if (doc.fileKey.startsWith("/objects/")) {
@@ -549,16 +549,16 @@ router.delete("/ssp/:id", requireAuth, requireOrg, async (req, res) => {
 });
 
 // ── Get sections ──────────────────────────────────────────────────────────────
-router.get("/ssp/:id/sections", requireAuth, requireOrg, async (req, res) => {
+router.get("/ssp/:id/sections", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = (req as any).orgId as string;
-  const { id } = req.params;
+  const { id } = req.params as Record<string, string>;
 
   const [doc] = await db
     .select({ id: sspDocumentsTable.id })
     .from(sspDocumentsTable)
     .where(and(eq(sspDocumentsTable.id, id), eq(sspDocumentsTable.organizationId, orgId)))
     .limit(1);
-  if (!doc) return res.status(404).json({ error: "Not found" });
+  if (!doc) return void res.status(404).json({ error: "Not found" });
 
   const sections = await db
     .select()
@@ -570,16 +570,16 @@ router.get("/ssp/:id/sections", requireAuth, requireOrg, async (req, res) => {
 });
 
 // ── Update a section ──────────────────────────────────────────────────────────
-router.patch("/ssp/:id/sections/:sectionId", requireAuth, requireOrg, async (req, res) => {
+router.patch("/ssp/:id/sections/:sectionId", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = (req as any).orgId as string;
-  const { id, sectionId } = req.params;
+  const { id, sectionId } = req.params as Record<string, string>;
 
   const [doc] = await db
     .select({ id: sspDocumentsTable.id })
     .from(sspDocumentsTable)
     .where(and(eq(sspDocumentsTable.id, id), eq(sspDocumentsTable.organizationId, orgId)))
     .limit(1);
-  if (!doc) return res.status(404).json({ error: "Not found" });
+  if (!doc) return void res.status(404).json({ error: "Not found" });
 
   const updates: Record<string, any> = { updatedAt: new Date() };
   if ("content" in req.body) updates.content = req.body.content;
@@ -596,9 +596,9 @@ router.patch("/ssp/:id/sections/:sectionId", requireAuth, requireOrg, async (req
 });
 
 // ── Get control mappings ──────────────────────────────────────────────────────
-router.get("/ssp/:id/control-mappings", requireAuth, requireOrg, async (req, res) => {
+router.get("/ssp/:id/control-mappings", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = (req as any).orgId as string;
-  const { id } = req.params;
+  const { id } = req.params as Record<string, string>;
   const { search, status } = req.query as { search?: string; status?: string };
 
   const [doc] = await db
@@ -606,7 +606,7 @@ router.get("/ssp/:id/control-mappings", requireAuth, requireOrg, async (req, res
     .from(sspDocumentsTable)
     .where(and(eq(sspDocumentsTable.id, id), eq(sspDocumentsTable.organizationId, orgId)))
     .limit(1);
-  if (!doc) return res.status(404).json({ error: "Not found" });
+  if (!doc) return void res.status(404).json({ error: "Not found" });
 
   let mappings = await db
     .select({
@@ -663,16 +663,16 @@ router.get("/ssp/:id/control-mappings", requireAuth, requireOrg, async (req, res
 });
 
 // ── Update a control mapping ──────────────────────────────────────────────────
-router.patch("/ssp/:id/control-mappings/:mappingId", requireAuth, requireOrg, async (req, res) => {
+router.patch("/ssp/:id/control-mappings/:mappingId", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = (req as any).orgId as string;
-  const { id, mappingId } = req.params;
+  const { id, mappingId } = req.params as Record<string, string>;
 
   const [doc] = await db
     .select({ id: sspDocumentsTable.id })
     .from(sspDocumentsTable)
     .where(and(eq(sspDocumentsTable.id, id), eq(sspDocumentsTable.organizationId, orgId)))
     .limit(1);
-  if (!doc) return res.status(404).json({ error: "Not found" });
+  if (!doc) return void res.status(404).json({ error: "Not found" });
 
   const updates: Record<string, any> = { updatedAt: new Date() };
   if ("implementationNarrative" in req.body) updates.implementationNarrative = req.body.implementationNarrative;

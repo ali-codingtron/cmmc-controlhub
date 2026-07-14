@@ -215,11 +215,11 @@ async function seedDocumentTemplates() {
       bodyTemplate: tmpl.bodyTemplate,
       requiredFields: tmpl.requiredFields,
       placeholders: uniquePlaceholders,
-      linkedControlIds: [],
+      linkedControlIds: [] as string[],
       requiresApproval: tmpl.requiresApproval,
       isSystemTemplate: tmpl.isSystemTemplate,
       recurrenceRule: (tmpl as any).recurrenceRule ?? null,
-    }).onConflictDoNothing();
+    } as any).onConflictDoNothing();
 
     if (checklistItems?.length) {
       await db.insert(checklistItemsTable).values(

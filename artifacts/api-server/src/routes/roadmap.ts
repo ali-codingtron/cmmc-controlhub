@@ -214,7 +214,7 @@ router.get(
   requireAuth,
   requireOrg,
   async (req, res) => {
-    const { id } = req.params;
+    const { id } = req.params as Record<string, string>;
     const orgId = req.orgId!;
 
     const [action] = await db
@@ -415,7 +415,7 @@ router.patch(
   requireOrg,
   requireNotAssessor,
   async (req, res) => {
-    const { id } = req.params;
+    const { id } = req.params as Record<string, string>;
     const orgId = req.orgId!;
 
     const parsed = updateProgressSchema.safeParse(req.body);
@@ -573,7 +573,7 @@ router.post(
   requireOrg,
   requireNotAssessor,
   async (req, res) => {
-    const { id } = req.params;
+    const { id } = req.params as Record<string, string>;
     const orgId = req.orgId!;
 
     const [action] = await db
@@ -649,7 +649,7 @@ router.post(
   requireOrg,
   requireRole("admin", "compliance_manager", "reviewer", "it_contributor"),
   async (req, res) => {
-    const { id } = req.params;
+    const { id } = req.params as Record<string, string>;
     const orgId = req.orgId!;
 
     const parsed = validationSchema.safeParse(req.body);
@@ -734,7 +734,7 @@ router.post(
   requireOrg,
   requireNotAssessor,
   async (req, res) => {
-    const { itemId } = req.params;
+    const { itemId } = req.params as Record<string, string>;
     const orgId = req.orgId!;
 
     const parsed = linkEvidenceSchema.safeParse(req.body);
@@ -801,7 +801,7 @@ router.delete(
   requireOrg,
   requireNotAssessor,
   async (req, res) => {
-    const { itemId, evidenceId } = req.params;
+    const { itemId, evidenceId } = req.params as Record<string, string>;
     const orgId = req.orgId!;
 
     await db
@@ -830,7 +830,7 @@ router.post(
   requireOrg,
   requireNotAssessor,
   async (req, res) => {
-    const { itemId } = req.params;
+    const { itemId } = req.params as Record<string, string>;
     const orgId = req.orgId!;
 
     const parsed = toggleChecklistSchema.safeParse(req.body);
@@ -957,7 +957,7 @@ router.get(
   requireAuth,
   requireOrg,
   async (req, res) => {
-    const { controlId } = req.params;
+    const { controlId } = req.params as Record<string, string>;
     const orgId = req.orgId!;
 
     const [control] = await db
@@ -1029,7 +1029,7 @@ router.get(
   requireAuth,
   requireOrg,
   async (req, res) => {
-    const { id } = req.params;
+    const { id } = req.params as Record<string, string>;
     const orgId = req.orgId!;
 
     const steps = await db
@@ -1073,7 +1073,7 @@ router.patch(
   requireOrg,
   requireNotAssessor,
   async (req, res) => {
-    const { stepId } = req.params;
+    const { stepId } = req.params as Record<string, string>;
     const orgId = req.orgId!;
 
     const parsed = stepProgressSchema.safeParse(req.body);
@@ -1135,7 +1135,7 @@ router.post(
     if (role !== "admin" && role !== "compliance_manager") {
       return res.status(403).json({ error: "Forbidden" });
     }
-    const { id } = req.params;
+    const { id } = req.params as Record<string, string>;
     const {
       stepNumber, title, purpose, systemPortal, navigationPath,
       instructions, recommendedSettings, expectedResult, evidenceToCapture,
@@ -1179,7 +1179,7 @@ router.put(
     if (role !== "admin" && role !== "compliance_manager") {
       return res.status(403).json({ error: "Forbidden" });
     }
-    const { stepId } = req.params;
+    const { stepId } = req.params as Record<string, string>;
     const {
       title, purpose, systemPortal, navigationPath, instructions,
       recommendedSettings, expectedResult, evidenceToCapture, suggestedFilename,
@@ -1217,7 +1217,7 @@ router.delete(
     }
     await db
       .delete(roadmapProcedureStepsTable)
-      .where(eq(roadmapProcedureStepsTable.id, req.params.stepId));
+      .where(eq(roadmapProcedureStepsTable.id, req.params.stepId as string));
     return res.json({ ok: true });
   }
 );

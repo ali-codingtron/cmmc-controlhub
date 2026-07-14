@@ -104,7 +104,7 @@ async function enrichDocument(doc: typeof documentsTable.$inferSelect & {
   approverName?: string | null;
   templateTitle?: string | null;
 }) {
-  const labels = await getControlLabels(doc.linkedControlIds ?? []);
+  const labels = await getControlLabels((doc as any).linkedControlIds ?? []);
   return { ...doc, linkedControlLabels: labels };
 }
 
@@ -189,7 +189,7 @@ router.get("/document-templates/:id", requireAuth, async (req, res) => {
   const [template] = await db
     .select()
     .from(documentTemplatesTable)
-    .where(eq(documentTemplatesTable.id, req.params.id));
+    .where(eq(documentTemplatesTable.id, req.params.id as string));
 
   if (!template) { res.status(404).json({ error: "Not found" }); return; }
 
@@ -204,7 +204,7 @@ router.get("/document-templates/:id", requireAuth, async (req, res) => {
 
 router.patch("/document-templates/:id", requireAuth, requireNotAssessor, async (req, res) => {
   const { title, bodyTemplate, description, isActive, linkedControlIds, checklistItems } = req.body;
-  const prev = await db.select().from(documentTemplatesTable).where(eq(documentTemplatesTable.id, req.params.id));
+  const prev = await db.select().from(documentTemplatesTable).where(eq(documentTemplatesTable.id, req.params.id as string));
   if (!prev[0]) { res.status(404).json({ error: "Not found" }); return; }
 
   const updates: Partial<typeof documentTemplatesTable.$inferSelect> = { updatedAt: new Date() };
@@ -215,21 +215,21 @@ router.patch("/document-templates/:id", requireAuth, requireNotAssessor, async (
   }
   if (description !== undefined) updates.description = description;
   if (isActive !== undefined) updates.isActive = isActive;
-  if (linkedControlIds !== undefined) updates.linkedControlIds = linkedControlIds;
+  // linkedControlIds handled via junction table
 
   const [updated] = await db
     .update(documentTemplatesTable)
     .set(updates)
-    .where(eq(documentTemplatesTable.id, req.params.id))
+    .where(eq(documentTemplatesTable.id, req.params.id as string))
     .returning();
 
   if (checklistItems !== undefined) {
-    await db.delete(checklistItemsTable).where(eq(checklistItemsTable.templateId, req.params.id));
+    await db.delete(checklistItemsTable).where(eq(checklistItemsTable.templateId, req.params.id as string));
     if (checklistItems.length) {
       await db.insert(checklistItemsTable).values(
         checklistItems.map((item: any, i: number) => ({
           id: randomUUID(),
-          templateId: req.params.id,
+          templateId: req.params.id as string,
           itemText: item.itemText,
           description: item.description,
           isRequired: item.isRequired ?? true,
@@ -239,7 +239,7 @@ router.patch("/document-templates/:id", requireAuth, requireNotAssessor, async (
     }
   }
 
-  await logAudit(req, "update", "document_template", req.params.id, { entityLabel: updated.title, previousValue: prev[0], newValue: updated });
+  await logAudit(req, "update", "document_template", req.params.id as string, { entityLabel: updated.title, previousValue: prev[0], newValue: updated });
   res.json({ ...updated, checklistItems: checklistItems ?? [] });
 });
 
@@ -402,7 +402,7 @@ router.get("/documents/:id/download", requireAuth, requireOrg, async (req, res) 
   const [doc] = await db
     .select({ fileKey: documentsTable.fileKey, fileName: documentsTable.fileName })
     .from(documentsTable)
-    .where(eq(documentsTable.id, req.params.id))
+    .where(eq(documentsTable.id, req.params.id as string))
     .limit(1);
 
   if (!doc?.fileKey) {
@@ -493,7 +493,7 @@ router.get("/documents/all", requireAuth, requireOrg, async (req, res) => {
         orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined,
         isNull(evidenceItemsTable.deletedAt),
         eq(evidenceItemsTable.isCurrentVersion, true),
-        inArray(evidenceItemsTable.evidenceType, DOCUMENT_LIKE_EVIDENCE_TYPES as unknown as string[]),
+        inArray(evidenceItemsTable.evidenceType, DOCUMENT_LIKE_EVIDENCE_TYPES as unknown as any),
         type ? eq(evidenceItemsTable.evidenceType, type as any) : undefined,
         status ? eq(evidenceItemsTable.status, status as any) : undefined,
         search ? ilike(evidenceItemsTable.title, `%${search}%`) : undefined,
@@ -698,7 +698,6 @@ router.post("/documents/generate", requireAuth, requireOrg, async (req, res) => 
       nextReviewDate: nextReviewDate
         ? new Date(nextReviewDate)
         : addReviewDays(template.reviewFrequency),
-      linkedControlIds: controlIds,
     })
     .returning();
 
@@ -979,7 +978,7 @@ router.get("/documents/:id", requireAuth, requireOrg, async (req, res) => {
     .from(documentsTable)
     .leftJoin(usersTable, eq(usersTable.id, documentsTable.ownerId))
     .leftJoin(documentTemplatesTable, eq(documentTemplatesTable.id, documentsTable.templateId))
-    .where(eq(documentsTable.id, req.params.id));
+    .where(eq(documentsTable.id, req.params.id as string));
 
   if (!rows[0]) { res.status(404).json({ error: "Not found" }); return; }
 
@@ -1002,7 +1001,7 @@ router.get("/documents/:id", requireAuth, requireOrg, async (req, res) => {
     })
       .from(documentVersionsTable)
       .leftJoin(usersTable, eq(usersTable.id, documentVersionsTable.changedById))
-      .where(eq(documentVersionsTable.documentId, req.params.id))
+      .where(eq(documentVersionsTable.documentId, req.params.id as string))
       .orderBy(desc(documentVersionsTable.createdAt)),
     db.select({
       id: documentReviewsTable.id,
@@ -1016,7 +1015,7 @@ router.get("/documents/:id", requireAuth, requireOrg, async (req, res) => {
     })
       .from(documentReviewsTable)
       .leftJoin(usersTable, eq(usersTable.id, documentReviewsTable.reviewerId))
-      .where(eq(documentReviewsTable.documentId, req.params.id))
+      .where(eq(documentReviewsTable.documentId, req.params.id as string))
       .orderBy(desc(documentReviewsTable.reviewedAt)),
   ]);
 
@@ -1030,7 +1029,7 @@ router.patch("/documents/:id", requireAuth, requireOrg, async (req, res) => {
     fileKey, fileName, fileSize,
   } = req.body;
 
-  const [prev] = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.id));
+  const [prev] = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.id as string));
   if (!prev) { res.status(404).json({ error: "Not found" }); return; }
 
   const updates: Partial<typeof documentsTable.$inferSelect> = { updatedAt: new Date() };
@@ -1043,7 +1042,7 @@ router.patch("/documents/:id", requireAuth, requireOrg, async (req, res) => {
   if (internalNotes !== undefined) updates.internalNotes = internalNotes;
   if (comments !== undefined) updates.comments = comments;
   if (fieldValues !== undefined) updates.fieldValues = fieldValues;
-  if (linkedControlIds !== undefined) updates.linkedControlIds = linkedControlIds;
+  // linkedControlIds handled via junction table
   if (fileKey !== undefined) updates.fileKey = fileKey ?? null;
   if (fileName !== undefined) updates.fileName = fileName ?? null;
   if (fileSize !== undefined) updates.fileSize = fileSize ?? null;
@@ -1051,42 +1050,42 @@ router.patch("/documents/:id", requireAuth, requireOrg, async (req, res) => {
   const [updated] = await db
     .update(documentsTable)
     .set(updates)
-    .where(eq(documentsTable.id, req.params.id))
+    .where(eq(documentsTable.id, req.params.id as string))
     .returning();
 
-  await logAudit(req, "update", "document", req.params.id, { entityLabel: updated.title, previousValue: prev, newValue: updated });
-  const labels = await getControlLabels(updated.linkedControlIds ?? []);
+  await logAudit(req, "update", "document", req.params.id as string, { entityLabel: updated.title, previousValue: prev, newValue: updated });
+  const labels = await getControlLabels((updated as any).linkedControlIds ?? []);
   res.json({ ...updated, linkedControlLabels: labels });
 });
 
 router.post("/documents/:id/submit-review", requireAuth, requireOrg, async (req, res) => {
   const { reviewerId, notes } = req.body;
-  const [prev] = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.id));
+  const [prev] = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.id as string));
   if (!prev) { res.status(404).json({ error: "Not found" }); return; }
 
   const [updated] = await db
     .update(documentsTable)
     .set({ status: "pending_review", reviewerId, updatedAt: new Date() })
-    .where(eq(documentsTable.id, req.params.id))
+    .where(eq(documentsTable.id, req.params.id as string))
     .returning();
 
   await db.insert(documentReviewsTable).values({
     id: randomUUID(),
-    documentId: req.params.id,
+    documentId: req.params.id as string,
     reviewerId: (req as any).user.id,
     action: "submitted_for_review",
     notes,
     version: updated.version,
   });
 
-  await logAudit(req, "submit_review", "document", req.params.id, { entityLabel: updated.title, previousValue: prev, newValue: updated });
-  const labels = await getControlLabels(updated.linkedControlIds ?? []);
+  await logAudit(req, "submit_review", "document", req.params.id as string, { entityLabel: updated.title, previousValue: prev, newValue: updated });
+  const labels = await getControlLabels((updated as any).linkedControlIds ?? []);
   res.json({ ...updated, linkedControlLabels: labels });
 });
 
 router.post("/documents/:id/approve", requireAuth, requireOrg, async (req, res) => {
   const { notes } = req.body;
-  const [prev] = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.id));
+  const [prev] = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.id as string));
   if (!prev) { res.status(404).json({ error: "Not found" }); return; }
 
   const now = new Date();
@@ -1099,51 +1098,51 @@ router.post("/documents/:id/approve", requireAuth, requireOrg, async (req, res) 
       reviewedAt: now,
       updatedAt: now,
     })
-    .where(eq(documentsTable.id, req.params.id))
+    .where(eq(documentsTable.id, req.params.id as string))
     .returning();
 
   await db.insert(documentReviewsTable).values({
     id: randomUUID(),
-    documentId: req.params.id,
+    documentId: req.params.id as string,
     reviewerId: (req as any).user.id,
     action: "approved",
     notes,
     version: updated.version,
   });
 
-  await logAudit(req, "approve", "document", req.params.id, { entityLabel: updated.title, previousValue: prev, newValue: updated });
-  const labels = await getControlLabels(updated.linkedControlIds ?? []);
+  await logAudit(req, "approve", "document", req.params.id as string, { entityLabel: updated.title, previousValue: prev, newValue: updated });
+  const labels = await getControlLabels((updated as any).linkedControlIds ?? []);
   res.json({ ...updated, linkedControlLabels: labels });
 });
 
 router.post("/documents/:id/reject", requireAuth, requireOrg, async (req, res) => {
   const { rejectionNotes } = req.body;
-  const [prev] = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.id));
+  const [prev] = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.id as string));
   if (!prev) { res.status(404).json({ error: "Not found" }); return; }
 
   const [updated] = await db
     .update(documentsTable)
     .set({ status: "draft", rejectionNotes, updatedAt: new Date() })
-    .where(eq(documentsTable.id, req.params.id))
+    .where(eq(documentsTable.id, req.params.id as string))
     .returning();
 
   await db.insert(documentReviewsTable).values({
     id: randomUUID(),
-    documentId: req.params.id,
+    documentId: req.params.id as string,
     reviewerId: (req as any).user.id,
     action: "rejected",
     notes: rejectionNotes,
     version: updated.version,
   });
 
-  await logAudit(req, "reject", "document", req.params.id, { entityLabel: updated.title, previousValue: prev, newValue: updated });
-  const labels = await getControlLabels(updated.linkedControlIds ?? []);
+  await logAudit(req, "reject", "document", req.params.id as string, { entityLabel: updated.title, previousValue: prev, newValue: updated });
+  const labels = await getControlLabels((updated as any).linkedControlIds ?? []);
   res.json({ ...updated, linkedControlLabels: labels });
 });
 
 router.post("/documents/:id/activate", requireAuth, requireOrg, async (req, res) => {
   const { notes } = req.body;
-  const [prev] = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.id));
+  const [prev] = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.id as string));
   if (!prev) { res.status(404).json({ error: "Not found" }); return; }
 
   const now = new Date();
@@ -1151,45 +1150,45 @@ router.post("/documents/:id/activate", requireAuth, requireOrg, async (req, res)
   const [updated] = await db
     .update(documentsTable)
     .set({ status: "active", activatedAt: now, updatedAt: now, expiresAt })
-    .where(eq(documentsTable.id, req.params.id))
+    .where(eq(documentsTable.id, req.params.id as string))
     .returning();
 
   await db.insert(documentReviewsTable).values({
     id: randomUUID(),
-    documentId: req.params.id,
+    documentId: req.params.id as string,
     reviewerId: (req as any).user.id,
     action: "activated",
     notes,
     version: updated.version,
   });
 
-  await logAudit(req, "activate", "document", req.params.id, { entityLabel: updated.title, previousValue: prev, newValue: updated });
-  const labels = await getControlLabels(updated.linkedControlIds ?? []);
+  await logAudit(req, "activate", "document", req.params.id as string, { entityLabel: updated.title, previousValue: prev, newValue: updated });
+  const labels = await getControlLabels((updated as any).linkedControlIds ?? []);
   res.json({ ...updated, linkedControlLabels: labels });
 });
 
 router.post("/documents/:id/archive", requireAuth, requireOrg, async (req, res) => {
   const { notes } = req.body;
-  const [prev] = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.id));
+  const [prev] = await db.select().from(documentsTable).where(eq(documentsTable.id, req.params.id as string));
   if (!prev) { res.status(404).json({ error: "Not found" }); return; }
 
   const [updated] = await db
     .update(documentsTable)
     .set({ status: "archived", updatedAt: new Date() })
-    .where(eq(documentsTable.id, req.params.id))
+    .where(eq(documentsTable.id, req.params.id as string))
     .returning();
 
   await db.insert(documentReviewsTable).values({
     id: randomUUID(),
-    documentId: req.params.id,
+    documentId: req.params.id as string,
     reviewerId: (req as any).user.id,
     action: "archived",
     notes,
     version: updated.version,
   });
 
-  await logAudit(req, "archive", "document", req.params.id, { entityLabel: updated.title, previousValue: prev, newValue: updated });
-  const labels = await getControlLabels(updated.linkedControlIds ?? []);
+  await logAudit(req, "archive", "document", req.params.id as string, { entityLabel: updated.title, previousValue: prev, newValue: updated });
+  const labels = await getControlLabels((updated as any).linkedControlIds ?? []);
   res.json({ ...updated, linkedControlLabels: labels });
 });
 
@@ -1206,7 +1205,7 @@ router.get("/documents/:id/versions", requireAuth, requireOrg, async (req, res) 
     })
     .from(documentVersionsTable)
     .leftJoin(usersTable, eq(usersTable.id, documentVersionsTable.changedById))
-    .where(eq(documentVersionsTable.documentId, req.params.id))
+    .where(eq(documentVersionsTable.documentId, req.params.id as string))
     .orderBy(desc(documentVersionsTable.createdAt));
 
   res.json(versions);
@@ -1328,14 +1327,14 @@ router.get("/document-logs/:id", requireAuth, requireOrg, async (req, res) => {
     .from(generatedLogsTable)
     .leftJoin(usersTable, eq(usersTable.id, generatedLogsTable.responsibleUserId))
     .leftJoin(documentTemplatesTable, eq(documentTemplatesTable.id, generatedLogsTable.templateId))
-    .where(eq(generatedLogsTable.id, req.params.id));
+    .where(eq(generatedLogsTable.id, req.params.id as string));
 
   if (!rows[0]) { res.status(404).json({ error: "Not found" }); return; }
 
   const entries = await db
     .select()
     .from(logEntriesTable)
-    .where(eq(logEntriesTable.logId, req.params.id))
+    .where(eq(logEntriesTable.logId, req.params.id as string))
     .orderBy(logEntriesTable.sortOrder);
 
   res.json({ ...rows[0], entries });
@@ -1343,7 +1342,7 @@ router.get("/document-logs/:id", requireAuth, requireOrg, async (req, res) => {
 
 router.patch("/document-logs/:id", requireAuth, requireOrg, async (req, res) => {
   const { completionNotes, fieldValues } = req.body;
-  const [prev] = await db.select().from(generatedLogsTable).where(eq(generatedLogsTable.id, req.params.id));
+  const [prev] = await db.select().from(generatedLogsTable).where(eq(generatedLogsTable.id, req.params.id as string));
   if (!prev) { res.status(404).json({ error: "Not found" }); return; }
 
   const updates: Partial<typeof generatedLogsTable.$inferSelect> = { updatedAt: new Date() };
@@ -1353,7 +1352,7 @@ router.patch("/document-logs/:id", requireAuth, requireOrg, async (req, res) => 
   const [updated] = await db
     .update(generatedLogsTable)
     .set(updates)
-    .where(eq(generatedLogsTable.id, req.params.id))
+    .where(eq(generatedLogsTable.id, req.params.id as string))
     .returning();
 
   res.json(updated);
@@ -1361,7 +1360,7 @@ router.patch("/document-logs/:id", requireAuth, requireOrg, async (req, res) => 
 
 router.post("/document-logs/:id/complete", requireAuth, requireOrg, async (req, res) => {
   const { completionNotes, entries, generateEvidence } = req.body;
-  const [prev] = await db.select().from(generatedLogsTable).where(eq(generatedLogsTable.id, req.params.id));
+  const [prev] = await db.select().from(generatedLogsTable).where(eq(generatedLogsTable.id, req.params.id as string));
   if (!prev) { res.status(404).json({ error: "Not found" }); return; }
 
   if (entries?.length) {
@@ -1396,16 +1395,16 @@ router.post("/document-logs/:id/complete", requireAuth, requireOrg, async (req, 
       reviewedAt: new Date(),
       updatedAt: new Date(),
     })
-    .where(eq(generatedLogsTable.id, req.params.id))
+    .where(eq(generatedLogsTable.id, req.params.id as string))
     .returning();
 
-  await logAudit(req, "complete", "log", req.params.id, { entityLabel: updated.title, previousValue: prev, newValue: updated });
+  await logAudit(req, "complete", "log", req.params.id as string, { entityLabel: updated.title, previousValue: prev, newValue: updated });
   res.json(updated);
 });
 
 router.post("/document-logs/:id/approve", requireAuth, requireOrg, async (req, res) => {
   const { notes } = req.body;
-  const [prev] = await db.select().from(generatedLogsTable).where(eq(generatedLogsTable.id, req.params.id));
+  const [prev] = await db.select().from(generatedLogsTable).where(eq(generatedLogsTable.id, req.params.id as string));
   if (!prev) { res.status(404).json({ error: "Not found" }); return; }
 
   const [updated] = await db
@@ -1416,10 +1415,10 @@ router.post("/document-logs/:id/approve", requireAuth, requireOrg, async (req, r
       approvedAt: new Date(),
       updatedAt: new Date(),
     })
-    .where(eq(generatedLogsTable.id, req.params.id))
+    .where(eq(generatedLogsTable.id, req.params.id as string))
     .returning();
 
-  await logAudit(req, "approve", "log", req.params.id, { entityLabel: updated.title, previousValue: prev, newValue: updated });
+  await logAudit(req, "approve", "log", req.params.id as string, { entityLabel: updated.title, previousValue: prev, newValue: updated });
   res.json(updated);
 });
 
@@ -1451,7 +1450,7 @@ router.post("/checklists/:id/complete", requireAuth, requireOrg, async (req, res
   const [template] = await db
     .select()
     .from(documentTemplatesTable)
-    .where(eq(documentTemplatesTable.id, req.params.id));
+    .where(eq(documentTemplatesTable.id, req.params.id as string));
 
   if (!template) { res.status(404).json({ error: "Not found" }); return; }
 
@@ -1474,7 +1473,7 @@ router.post("/checklists/:id/complete", requireAuth, requireOrg, async (req, res
     .insert(checklistCompletionsTable)
     .values({
       id: completionId,
-      templateId: req.params.id,
+      templateId: req.params.id as string,
       completedById: (req as any).user.id,
       title,
       notes,

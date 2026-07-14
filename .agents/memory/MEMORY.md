@@ -8,3 +8,4 @@
 - [APEX Solutions seed script](apex-solutions-seed.md) — Production test org with real files in GCS; fixed UUID; isTestOrganization flag; TEST DATA badge in UI.
 - [db lib zod/v4 vs drizzle-zod](db-lib-zod-v4-drizzle-zod.md) — wrong zod import in schema files silently blanks @workspace/db's dist via noEmitOnError, cascading fake errors everywhere.
 - [e2e testing with seeded credentials](e2e-testing-seeded-creds.md) — seeded passwords/MFA state in replit.md drift after prior sessions; verify via curl login before trusting docs, and per-user MFA opt-in overrides a "disabled" global enforcement mode.
+- [Express 5 typecheck patterns](express5-typecheck-patterns.md) — req.params cast, async void handlers, inArray enum, archiver ESM import, logAudit metadata fields.

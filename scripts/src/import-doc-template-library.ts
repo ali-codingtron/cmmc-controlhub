@@ -166,7 +166,7 @@ async function main() {
       // Read markdown body if available
       const mdFilename = `markdown_templates/${t.template_id}_${t.title.replace(/[^a-zA-Z0-9]/g, "_")}.md`;
       const mdEntry = zip.getEntries().find(
-        (e) => e.entryName.startsWith("markdown_templates/") &&
+        (e: { entryName: string }) => e.entryName.startsWith("markdown_templates/") &&
           e.entryName.includes(t.template_id)
       );
       const markdownBody = mdEntry ? mdEntry.getData().toString("utf-8") : "";

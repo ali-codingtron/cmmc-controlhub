@@ -8,7 +8,7 @@ const router = Router();
 
 // ── Public Read Endpoints ──────────────────────────────────────────────────────
 
-router.get("/help/categories", requireAuth, async (req, res) => {
+router.get("/help/categories", requireAuth, async (req, res): Promise<void> => {
   const categories = await db
     .select({
       id: helpCategoriesTable.id,
@@ -35,7 +35,7 @@ router.get("/help/categories", requireAuth, async (req, res) => {
   res.json(categories.map((c) => ({ ...c, articleCount: countMap[c.id] ?? 0 })));
 });
 
-router.get("/help/articles", requireAuth, async (req, res) => {
+router.get("/help/articles", requireAuth, async (req, res): Promise<void> => {
   const { category, module: mod, status, role } = req.query as Record<string, string>;
 
   const conditions: ReturnType<typeof eq>[] = [];
@@ -83,7 +83,7 @@ router.get("/help/articles", requireAuth, async (req, res) => {
   res.json(rows);
 });
 
-router.get("/help/articles/:slug", requireAuth, async (req, res) => {
+router.get("/help/articles/:slug", requireAuth, async (req, res): Promise<void> => {
   const [article] = await db
     .select({
       id: helpArticlesTable.id,
@@ -103,15 +103,15 @@ router.get("/help/articles/:slug", requireAuth, async (req, res) => {
     })
     .from(helpArticlesTable)
     .leftJoin(helpCategoriesTable, eq(helpArticlesTable.categoryId, helpCategoriesTable.id))
-    .where(eq(helpArticlesTable.slug, req.params.slug));
+    .where(eq(helpArticlesTable.slug, req.params.slug as string));
 
-  if (!article) return res.status(404).json({ error: "Article not found" });
+  if (!article) return void res.status(404).json({ error: "Article not found" });
   res.json(article);
 });
 
-router.get("/help/search", requireAuth, async (req, res) => {
+router.get("/help/search", requireAuth, async (req, res): Promise<void> => {
   const q = ((req.query.q as string) ?? "").trim();
-  if (!q) return res.json({ articles: [], faq: [] });
+  if (!q) return void res.json({ articles: [], faq: [] });
 
   const term = `%${q}%`;
 
@@ -153,7 +153,7 @@ router.get("/help/search", requireAuth, async (req, res) => {
   res.json({ articles, faq: faqResults });
 });
 
-router.get("/help/faq", requireAuth, async (req, res) => {
+router.get("/help/faq", requireAuth, async (req, res): Promise<void> => {
   const { category } = req.query as Record<string, string>;
   const conditions: ReturnType<typeof eq>[] = [eq(faqItemsTable.status, "published")];
   if (category) conditions.push(eq(faqItemsTable.category, category));
@@ -169,7 +169,7 @@ router.get("/help/faq", requireAuth, async (req, res) => {
 
 // ── Admin CRUD ─────────────────────────────────────────────────────────────────
 
-router.post("/help/categories", requireAuth, requireRole("admin"), async (req, res) => {
+router.post("/help/categories", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
   const { name, description, icon, sortOrder } = req.body;
   const [row] = await db
     .insert(helpCategoriesTable)
@@ -178,18 +178,18 @@ router.post("/help/categories", requireAuth, requireRole("admin"), async (req, r
   res.json(row);
 });
 
-router.put("/help/categories/:id", requireAuth, requireRole("admin"), async (req, res) => {
+router.put("/help/categories/:id", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
   const { name, description, icon, sortOrder } = req.body;
   const [row] = await db
     .update(helpCategoriesTable)
     .set({ name, description, icon, sortOrder })
-    .where(eq(helpCategoriesTable.id, req.params.id))
+    .where(eq(helpCategoriesTable.id, req.params.id as string))
     .returning();
-  if (!row) return res.status(404).json({ error: "Not found" });
+  if (!row) return void res.status(404).json({ error: "Not found" });
   res.json(row);
 });
 
-router.post("/help/articles", requireAuth, requireRole("admin"), async (req, res) => {
+router.post("/help/articles", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
   const { slug, title, categoryId, module: mod, content, summary, keywords, roleVisibility, sortOrder, status } = req.body;
   const [row] = await db
     .insert(helpArticlesTable)
@@ -212,18 +212,18 @@ router.post("/help/articles", requireAuth, requireRole("admin"), async (req, res
   res.json(row);
 });
 
-router.put("/help/articles/:id", requireAuth, requireRole("admin"), async (req, res) => {
+router.put("/help/articles/:id", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
   const { slug, title, categoryId, module: mod, content, summary, keywords, roleVisibility, sortOrder, status } = req.body;
   const [row] = await db
     .update(helpArticlesTable)
     .set({ slug, title, categoryId: categoryId ?? null, module: mod ?? null, content, summary, keywords, roleVisibility: roleVisibility ?? null, sortOrder, status, updatedAt: new Date() })
-    .where(eq(helpArticlesTable.id, req.params.id))
+    .where(eq(helpArticlesTable.id, req.params.id as string))
     .returning();
-  if (!row) return res.status(404).json({ error: "Not found" });
+  if (!row) return void res.status(404).json({ error: "Not found" });
   res.json(row);
 });
 
-router.post("/help/faq", requireAuth, requireRole("admin"), async (req, res) => {
+router.post("/help/faq", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
   const { question, answer, category, sortOrder, status } = req.body;
   const [row] = await db
     .insert(faqItemsTable)
@@ -232,19 +232,19 @@ router.post("/help/faq", requireAuth, requireRole("admin"), async (req, res) => 
   res.json(row);
 });
 
-router.put("/help/faq/:id", requireAuth, requireRole("admin"), async (req, res) => {
+router.put("/help/faq/:id", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
   const { question, answer, category, sortOrder, status } = req.body;
   const [row] = await db
     .update(faqItemsTable)
     .set({ question, answer, category, sortOrder, status, updatedAt: new Date() })
-    .where(eq(faqItemsTable.id, req.params.id))
+    .where(eq(faqItemsTable.id, req.params.id as string))
     .returning();
-  if (!row) return res.status(404).json({ error: "Not found" });
+  if (!row) return void res.status(404).json({ error: "Not found" });
   res.json(row);
 });
 
-router.delete("/help/faq/:id", requireAuth, requireRole("admin"), async (req, res) => {
-  await db.delete(faqItemsTable).where(eq(faqItemsTable.id, req.params.id));
+router.delete("/help/faq/:id", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+  await db.delete(faqItemsTable).where(eq(faqItemsTable.id, req.params.id as string));
   res.json({ success: true });
 });
 

@@ -347,7 +347,7 @@ router.post(
       organizationId: req.orgId ?? null,
       title,
       description,
-      evidenceType,
+      evidenceType: evidenceType as any,
       status: uploadStatus,
       ownerId: req.authUser!.id,
       fileKey,
@@ -361,7 +361,7 @@ router.post(
       tags: parsedTags,
       createdAt: new Date(),
       updatedAt: new Date(),
-    });
+    } as any);
 
     const parsedControlIds: string[] = (() => {
       try {
@@ -478,7 +478,7 @@ router.get("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
     .leftJoin(usersTable, eq(usersTable.id, evidenceItemsTable.ownerId))
     .where(
       and(
-        eq(evidenceItemsTable.id, req.params.id),
+        eq(evidenceItemsTable.id, req.params.id as string),
         orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined
       )
     )
@@ -497,7 +497,7 @@ router.get("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
     })
     .from(evidenceControlLinksTable)
     .innerJoin(controlsTable, eq(controlsTable.id, evidenceControlLinksTable.controlId))
-    .where(eq(evidenceControlLinksTable.evidenceId, req.params.id));
+    .where(eq(evidenceControlLinksTable.evidenceId, req.params.id as string));
 
   res.json({
     ...item,
@@ -521,7 +521,7 @@ router.get("/evidence/:id/preview", requireAuth, requireOrg, async (req, res) =>
       organizationId: evidenceItemsTable.organizationId,
     })
     .from(evidenceItemsTable)
-    .where(eq(evidenceItemsTable.id, req.params.id))
+    .where(eq(evidenceItemsTable.id, req.params.id as string))
     .limit(1);
 
   if (!item || !item.fileKey) {
@@ -581,7 +581,7 @@ router.get("/evidence/:id/convert", requireAuth, requireOrg, async (req, res) =>
       organizationId: evidenceItemsTable.organizationId,
     })
     .from(evidenceItemsTable)
-    .where(eq(evidenceItemsTable.id, req.params.id))
+    .where(eq(evidenceItemsTable.id, req.params.id as string))
     .limit(1);
 
   if (!item || !item.fileKey) {
@@ -671,7 +671,7 @@ router.get("/evidence/:id/download", requireAuth, requireOrg, async (req, res) =
     .from(evidenceItemsTable)
     .where(
       and(
-        eq(evidenceItemsTable.id, req.params.id),
+        eq(evidenceItemsTable.id, req.params.id as string),
         orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined
       )
     )
@@ -774,7 +774,7 @@ router.patch("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
   const [item] = await db
     .select({ id: evidenceItemsTable.id, title: evidenceItemsTable.title, status: evidenceItemsTable.status })
     .from(evidenceItemsTable)
-    .where(and(eq(evidenceItemsTable.id, req.params.id), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined))
+    .where(and(eq(evidenceItemsTable.id, req.params.id as string), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined))
     .limit(1);
 
   if (!item) {
@@ -811,23 +811,23 @@ router.patch("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
   if (internalNotes !== undefined) updateData.internalNotes = internalNotes;
   if (tags !== undefined) updateData.tags = tags;
 
-  await db.update(evidenceItemsTable).set(updateData as any).where(eq(evidenceItemsTable.id, req.params.id));
+  await db.update(evidenceItemsTable).set(updateData as any).where(eq(evidenceItemsTable.id, req.params.id as string));
 
   if (status && status !== item.status) {
-    await logAudit(req, "status_changed", "evidence", req.params.id, {
+    await logAudit(req, "status_changed", "evidence", req.params.id as string, {
       entityLabel: title ?? item.title,
       previousValue: item.status,
       newValue: status,
     });
   } else {
-    await logAudit(req, "updated", "evidence", req.params.id, { entityLabel: title ?? item.title });
+    await logAudit(req, "updated", "evidence", req.params.id as string, { entityLabel: title ?? item.title });
   }
 
   const [updated] = await db
     .select(evidenceSelect)
     .from(evidenceItemsTable)
     .leftJoin(usersTable, eq(usersTable.id, evidenceItemsTable.ownerId))
-    .where(eq(evidenceItemsTable.id, req.params.id))
+    .where(eq(evidenceItemsTable.id, req.params.id as string))
     .limit(1);
 
   res.json(updated);
@@ -840,17 +840,17 @@ router.post("/evidence/:id/archive", requireAuth, requireOrg, async (req, res) =
   const [item] = await db
     .select({ id: evidenceItemsTable.id, title: evidenceItemsTable.title, status: evidenceItemsTable.status })
     .from(evidenceItemsTable)
-    .where(and(eq(evidenceItemsTable.id, req.params.id), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined))
+    .where(and(eq(evidenceItemsTable.id, req.params.id as string), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined))
     .limit(1);
 
   if (!item) { res.status(404).json({ error: "Not found" }); return; }
 
   await db.update(evidenceItemsTable)
     .set({ status: "archived", updatedAt: new Date() })
-    .where(eq(evidenceItemsTable.id, req.params.id));
+    .where(eq(evidenceItemsTable.id, req.params.id as string));
 
-  await logAudit(req, "status_changed", "evidence", req.params.id, { entityLabel: item.title, previousValue: item.status, newValue: "archived" });
-  res.json({ id: req.params.id, status: "archived" });
+  await logAudit(req, "status_changed", "evidence", req.params.id as string, { entityLabel: item.title, previousValue: item.status, newValue: "archived" });
+  res.json({ id: req.params.id as string, status: "archived" });
 });
 
 // ── Hard delete evidence ───────────────────────────────────────────────────
@@ -865,16 +865,16 @@ router.delete("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
       organizationId: evidenceItemsTable.organizationId,
     })
     .from(evidenceItemsTable)
-    .where(and(eq(evidenceItemsTable.id, req.params.id), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined))
+    .where(and(eq(evidenceItemsTable.id, req.params.id as string), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined))
     .limit(1);
 
   if (!item) { res.status(404).json({ error: "Not found" }); return; }
 
   // Write audit log BEFORE deleting so we have a record
-  await logAudit(req, "deleted", "evidence", req.params.id, { entityLabel: item.title });
+  await logAudit(req, "deleted", "evidence", req.params.id as string, { entityLabel: item.title });
 
-  await db.delete(evidenceControlLinksTable).where(eq(evidenceControlLinksTable.evidenceId, req.params.id));
-  await db.delete(evidenceItemsTable).where(eq(evidenceItemsTable.id, req.params.id));
+  await db.delete(evidenceControlLinksTable).where(eq(evidenceControlLinksTable.evidenceId, req.params.id as string));
+  await db.delete(evidenceItemsTable).where(eq(evidenceItemsTable.id, req.params.id as string));
 
   // Clean up stored file (best effort)
   if (item.fileKey) {
@@ -888,7 +888,7 @@ router.delete("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
     }
   }
 
-  res.json({ id: req.params.id, deleted: true });
+  res.json({ id: req.params.id as string, deleted: true });
 });
 
 // ── Unlink evidence from a specific control ────────────────────────────────
@@ -898,54 +898,54 @@ router.delete("/evidence/:id/controls/:controlId", requireAuth, requireOrg, asyn
   const [item] = await db
     .select({ id: evidenceItemsTable.id, title: evidenceItemsTable.title })
     .from(evidenceItemsTable)
-    .where(and(eq(evidenceItemsTable.id, req.params.id), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined))
+    .where(and(eq(evidenceItemsTable.id, req.params.id as string), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined))
     .limit(1);
 
   if (!item) { res.status(404).json({ error: "Not found" }); return; }
 
   await db.delete(evidenceControlLinksTable).where(
     and(
-      eq(evidenceControlLinksTable.evidenceId, req.params.id),
-      eq(evidenceControlLinksTable.controlId, req.params.controlId)
+      eq(evidenceControlLinksTable.evidenceId, req.params.id as string),
+      eq(evidenceControlLinksTable.controlId, req.params.controlId as string)
     )
   );
 
-  await logAudit(req, "link_removed", "evidence", req.params.id, {
+  await logAudit(req, "link_removed", "evidence", req.params.id as string, {
     entityLabel: item.title,
-    newValue: `Removed from control ${req.params.controlId}`,
+    newValue: `Removed from control ${req.params.controlId as string}`,
   });
 
-  res.json({ id: req.params.id, unlinkedControlId: req.params.controlId });
+  res.json({ id: req.params.id as string, unlinkedControlId: req.params.controlId as string });
 });
 
 // ── Status transitions ─────────────────────────────────────────────────────
 router.post("/evidence/:id/submit", requireAuth, requireOrg, async (req, res) => {
   const orgId = req.orgId;
-  const [item] = await db.select().from(evidenceItemsTable).where(and(eq(evidenceItemsTable.id, req.params.id), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined)).limit(1);
+  const [item] = await db.select().from(evidenceItemsTable).where(and(eq(evidenceItemsTable.id, req.params.id as string), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined)).limit(1);
   if (!item) { res.status(404).json({ error: "Not found" }); return; }
-  await db.update(evidenceItemsTable).set({ status: "pending_review", updatedAt: new Date() }).where(eq(evidenceItemsTable.id, req.params.id));
-  await logAudit(req, "submitted", "evidence", req.params.id, { entityLabel: item.title, previousValue: item.status, newValue: "pending_review" });
-  res.json({ id: req.params.id, status: "pending_review" });
+  await db.update(evidenceItemsTable).set({ status: "pending_review", updatedAt: new Date() }).where(eq(evidenceItemsTable.id, req.params.id as string));
+  await logAudit(req, "submitted", "evidence", req.params.id as string, { entityLabel: item.title, previousValue: item.status, newValue: "pending_review" });
+  res.json({ id: req.params.id as string, status: "pending_review" });
 });
 
 router.post("/evidence/:id/approve", requireAuth, requireOrg, async (req, res) => {
   const { assessorSummary } = req.body;
   const orgId = req.orgId;
-  const [item] = await db.select().from(evidenceItemsTable).where(and(eq(evidenceItemsTable.id, req.params.id), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined)).limit(1);
+  const [item] = await db.select().from(evidenceItemsTable).where(and(eq(evidenceItemsTable.id, req.params.id as string), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined)).limit(1);
   if (!item) { res.status(404).json({ error: "Not found" }); return; }
-  await db.update(evidenceItemsTable).set({ status: "approved", approverId: req.authUser!.id, approvedAt: new Date(), assessorSummary: assessorSummary ?? item.assessorSummary, updatedAt: new Date() }).where(eq(evidenceItemsTable.id, req.params.id));
-  await logAudit(req, "approved", "evidence", req.params.id, { entityLabel: item.title, previousValue: item.status, newValue: "approved" });
-  res.json({ id: req.params.id, status: "approved" });
+  await db.update(evidenceItemsTable).set({ status: "approved", approverId: req.authUser!.id, approvedAt: new Date(), assessorSummary: assessorSummary ?? item.assessorSummary, updatedAt: new Date() }).where(eq(evidenceItemsTable.id, req.params.id as string));
+  await logAudit(req, "approved", "evidence", req.params.id as string, { entityLabel: item.title, previousValue: item.status, newValue: "approved" });
+  res.json({ id: req.params.id as string, status: "approved" });
 });
 
 router.post("/evidence/:id/reject", requireAuth, requireOrg, async (req, res) => {
   const { reason } = req.body;
   const orgId = req.orgId;
-  const [item] = await db.select().from(evidenceItemsTable).where(and(eq(evidenceItemsTable.id, req.params.id), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined)).limit(1);
+  const [item] = await db.select().from(evidenceItemsTable).where(and(eq(evidenceItemsTable.id, req.params.id as string), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined)).limit(1);
   if (!item) { res.status(404).json({ error: "Not found" }); return; }
-  await db.update(evidenceItemsTable).set({ status: "rejected", rejectionNotes: reason, reviewerId: req.authUser!.id, updatedAt: new Date() }).where(eq(evidenceItemsTable.id, req.params.id));
-  await logAudit(req, "rejected", "evidence", req.params.id, { entityLabel: item.title, previousValue: item.status, newValue: "rejected" });
-  res.json({ id: req.params.id, status: "rejected" });
+  await db.update(evidenceItemsTable).set({ status: "rejected", rejectionNotes: reason, reviewerId: req.authUser!.id, updatedAt: new Date() }).where(eq(evidenceItemsTable.id, req.params.id as string));
+  await logAudit(req, "rejected", "evidence", req.params.id as string, { entityLabel: item.title, previousValue: item.status, newValue: "rejected" });
+  res.json({ id: req.params.id as string, status: "rejected" });
 });
 
 // ── Link controls ──────────────────────────────────────────────────────────
@@ -953,7 +953,7 @@ router.post("/evidence/:id/link-controls", requireAuth, requireOrg, async (req, 
   const { controlIds } = req.body;
   if (!Array.isArray(controlIds)) { res.status(400).json({ error: "controlIds must be an array" }); return; }
 
-  const existing = await db.select({ controlId: evidenceControlLinksTable.controlId }).from(evidenceControlLinksTable).where(eq(evidenceControlLinksTable.evidenceId, req.params.id));
+  const existing = await db.select({ controlId: evidenceControlLinksTable.controlId }).from(evidenceControlLinksTable).where(eq(evidenceControlLinksTable.evidenceId, req.params.id as string));
   const existingIds = new Set(existing.map((l) => l.controlId));
   const newIds = controlIds.filter((id: string) => !existingIds.has(id));
 
@@ -961,7 +961,7 @@ router.post("/evidence/:id/link-controls", requireAuth, requireOrg, async (req, 
     await db.insert(evidenceControlLinksTable).values(
       newIds.map((cid: string) => ({
         id: randomUUID(),
-        evidenceId: req.params.id,
+        evidenceId: req.params.id as string,
         controlId: cid,
         linkedAt: new Date(),
         linkedById: req.authUser!.id,
@@ -969,8 +969,8 @@ router.post("/evidence/:id/link-controls", requireAuth, requireOrg, async (req, 
     );
   }
 
-  await logAudit(req, "link_added", "evidence", req.params.id, { newValue: controlIds });
-  res.json({ id: req.params.id, linkedControlIds: controlIds });
+  await logAudit(req, "link_added", "evidence", req.params.id as string, { newValue: controlIds });
+  res.json({ id: req.params.id as string, linkedControlIds: controlIds });
 });
 
 // ── Audit log ─────────────────────────────────────────────────────────────
@@ -978,7 +978,7 @@ router.get("/evidence/:id/audit-log", requireAuth, requireOrg, async (req, res) 
   const logs = await db
     .select()
     .from(auditLogsTable)
-    .where(and(eq(auditLogsTable.entityType, "evidence"), eq(auditLogsTable.entityId, req.params.id)))
+    .where(and(eq(auditLogsTable.entityType, "evidence"), eq(auditLogsTable.entityId, req.params.id as string)))
     .orderBy(desc(auditLogsTable.timestamp));
 
   res.json(logs);

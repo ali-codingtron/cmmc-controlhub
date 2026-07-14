@@ -1,5 +1,5 @@
 import { Router } from "express";
-import archiver from "archiver";
+import * as archiver from "archiver";
 import PDFDocument from "pdfkit";
 import ExcelJS from "exceljs";
 import crypto from "crypto";
@@ -571,7 +571,7 @@ router.post(
       `attachment; filename="${zipRootName}.zip"`
     );
 
-    const archive = archiver("zip", { zlib: { level: 6 } });
+    const archive = (archiver as any)("zip", { zlib: { level: 6 } }) as import("archiver").Archiver;
     archive.pipe(res);
 
     interface FileEntry {
@@ -825,10 +825,10 @@ router.post(
         id: crypto.randomUUID(),
         organizationId: orgId,
         userId: user.id,
-        action: "bulk_download",
-        resourceType: "export",
-        resourceId: zipRootName,
-        details: JSON.stringify({
+        action: "bulk_download" as any,
+        entityType: "export" as any,
+        entityId: zipRootName,
+        newValue: {
           scope: exportScope,
           structure,
           evidenceCount: evidenceItems.length,
@@ -838,11 +838,11 @@ router.post(
           statusFilters: effectiveStatusFilters ?? "all",
           includeUnmapped,
           exportDescription,
-        }),
+        },
         ipAddress: req.ip ?? null,
         userAgent: req.get("user-agent") ?? null,
         createdAt: exportDate,
-      });
+      } as any);
     } catch {
       // Non-fatal
     }

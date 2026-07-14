@@ -31,7 +31,7 @@ export default function DocTemplateDetail({ id: propId }: { id?: string }) {
   const { data: template, isLoading } = useQuery({
     queryKey: ["doc-template-detail", id],
     queryFn: async () => {
-      const r = await fetch(`/api/doc-templates/library/${id}`, { headers: authHeaders() });
+      const r = await fetch(`/api/doc-templates/library/${id}`, { headers: authHeaders() as Record<string, string> });
       if (!r.ok) throw new Error("Template not found");
       return r.json();
     },

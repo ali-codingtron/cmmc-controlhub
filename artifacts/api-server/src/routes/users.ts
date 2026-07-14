@@ -136,7 +136,7 @@ router.get("/users/:id", requireAuth, async (req, res) => {
       updatedAt: usersTable.updatedAt,
     })
     .from(usersTable)
-    .where(eq(usersTable.id, req.params.id))
+    .where(eq(usersTable.id, req.params.id as string))
     .limit(1);
 
   if (!user) {
@@ -152,7 +152,7 @@ router.patch("/users/:id", requireAuth, requireRole("admin"), async (req, res) =
   const [existing] = await db
     .select()
     .from(usersTable)
-    .where(eq(usersTable.id, req.params.id))
+    .where(eq(usersTable.id, req.params.id as string))
     .limit(1);
 
   if (!existing) {
@@ -192,10 +192,10 @@ router.patch("/users/:id", requireAuth, requireRole("admin"), async (req, res) =
       isActive: isActive !== undefined ? isActive : existing.isActive,
       updatedAt: new Date(),
     })
-    .where(eq(usersTable.id, req.params.id));
+    .where(eq(usersTable.id, req.params.id as string));
 
   const action = changes.roleChanged ? "role_changed" : "updated";
-  await logAudit(req, action, "user", req.params.id, { entityLabel: existing.email });
+  await logAudit(req, action, "user", req.params.id as string, { entityLabel: existing.email });
 
   const [updated] = await db
     .select({
@@ -209,7 +209,7 @@ router.patch("/users/:id", requireAuth, requireRole("admin"), async (req, res) =
       updatedAt: usersTable.updatedAt,
     })
     .from(usersTable)
-    .where(eq(usersTable.id, req.params.id))
+    .where(eq(usersTable.id, req.params.id as string))
     .limit(1);
 
   res.json(updated);
@@ -220,7 +220,7 @@ router.delete("/users/:id", requireAuth, requireRole("admin"), async (req, res) 
   const [existing] = await db
     .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, isBreakGlass: usersTable.isBreakGlass })
     .from(usersTable)
-    .where(eq(usersTable.id, req.params.id))
+    .where(eq(usersTable.id, req.params.id as string))
     .limit(1);
 
   if (!existing) {
@@ -234,14 +234,14 @@ router.delete("/users/:id", requireAuth, requireRole("admin"), async (req, res) 
   }
 
   // Prevent self-deletion
-  if (req.authUser?.id === req.params.id) {
+  if (req.authUser?.id === req.params.id as string) {
     res.status(400).json({ error: "Cannot delete your own account" });
     return;
   }
 
   await logAudit(req, "deleted", "user", existing.id, { entityLabel: existing.email });
 
-  const targetId = req.params.id;
+  const targetId = req.params.id as string;
   const adminId = req.authUser!.id;
 
   await db.transaction(async (tx) => {
@@ -249,7 +249,7 @@ router.delete("/users/:id", requireAuth, requireRole("admin"), async (req, res) 
     await tx.update(auditLogsTable).set({ userId: null }).where(eq(auditLogsTable.userId, targetId));
     await tx.update(controlAssessmentsTable).set({ assessedById: null }).where(eq(controlAssessmentsTable.assessedById, targetId));
     await tx.update(tasksTable).set({ assigneeId: null }).where(eq(tasksTable.assigneeId, targetId));
-    await tx.update(tasksTable).set({ createdById: null }).where(eq(tasksTable.createdById, targetId));
+    await tx.update(tasksTable).set({ createdById: null as any }).where(eq(tasksTable.createdById, targetId));
     await tx.update(poamsTable).set({ ownerId: null }).where(eq(poamsTable.ownerId, targetId));
     await tx.update(documentsTable).set({ reviewerId: null }).where(eq(documentsTable.reviewerId, targetId));
     await tx.update(documentsTable).set({ approverId: null }).where(eq(documentsTable.approverId, targetId));
@@ -286,7 +286,7 @@ router.post("/users/:id/deactivate", requireAuth, requireRole("admin"), async (r
   const [existing] = await db
     .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, isBreakGlass: usersTable.isBreakGlass })
     .from(usersTable)
-    .where(eq(usersTable.id, req.params.id))
+    .where(eq(usersTable.id, req.params.id as string))
     .limit(1);
 
   if (!existing) {
@@ -299,7 +299,7 @@ router.post("/users/:id/deactivate", requireAuth, requireRole("admin"), async (r
     return;
   }
 
-  if (req.authUser?.id === req.params.id) {
+  if (req.authUser?.id === req.params.id as string) {
     res.status(400).json({ error: "Cannot deactivate your own account" });
     return;
   }
@@ -307,7 +307,7 @@ router.post("/users/:id/deactivate", requireAuth, requireRole("admin"), async (r
   await db
     .update(usersTable)
     .set({ isActive: false, status: "suspended", updatedAt: new Date() })
-    .where(eq(usersTable.id, req.params.id));
+    .where(eq(usersTable.id, req.params.id as string));
 
   await logAudit(req, "deactivated", "user", existing.id, { entityLabel: existing.email });
 
@@ -323,7 +323,7 @@ router.post("/users/:id/deactivate", requireAuth, requireRole("admin"), async (r
       updatedAt: usersTable.updatedAt,
     })
     .from(usersTable)
-    .where(eq(usersTable.id, req.params.id))
+    .where(eq(usersTable.id, req.params.id as string))
     .limit(1);
 
   res.json(updated);
@@ -334,7 +334,7 @@ router.post("/users/:id/activate", requireAuth, requireRole("admin"), async (req
   const [existing] = await db
     .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email })
     .from(usersTable)
-    .where(eq(usersTable.id, req.params.id))
+    .where(eq(usersTable.id, req.params.id as string))
     .limit(1);
 
   if (!existing) {
@@ -345,7 +345,7 @@ router.post("/users/:id/activate", requireAuth, requireRole("admin"), async (req
   await db
     .update(usersTable)
     .set({ isActive: true, status: "active", updatedAt: new Date() })
-    .where(eq(usersTable.id, req.params.id));
+    .where(eq(usersTable.id, req.params.id as string));
 
   await logAudit(req, "activated", "user", existing.id, { entityLabel: existing.email });
 
@@ -361,7 +361,7 @@ router.post("/users/:id/activate", requireAuth, requireRole("admin"), async (req
       updatedAt: usersTable.updatedAt,
     })
     .from(usersTable)
-    .where(eq(usersTable.id, req.params.id))
+    .where(eq(usersTable.id, req.params.id as string))
     .limit(1);
 
   res.json(updated);
@@ -378,7 +378,7 @@ router.post("/users/:id/reset-password", requireAuth, requireRole("admin"), asyn
   const [existing] = await db
     .select({ id: usersTable.id, email: usersTable.email })
     .from(usersTable)
-    .where(eq(usersTable.id, req.params.id))
+    .where(eq(usersTable.id, req.params.id as string))
     .limit(1);
 
   if (!existing) {
@@ -390,7 +390,7 @@ router.post("/users/:id/reset-password", requireAuth, requireRole("admin"), asyn
   await db
     .update(usersTable)
     .set({ passwordHash, updatedAt: new Date() })
-    .where(eq(usersTable.id, req.params.id));
+    .where(eq(usersTable.id, req.params.id as string));
 
   await logAudit(req, "password_reset", "user", existing.id, { entityLabel: existing.email });
 
@@ -402,7 +402,7 @@ router.post("/users/:id/send-password-reset", requireAuth, requireRole("admin"),
   const [user] = await db
     .select()
     .from(usersTable)
-    .where(and(eq(usersTable.id, req.params.id), eq(usersTable.isActive, true)))
+    .where(and(eq(usersTable.id, req.params.id as string), eq(usersTable.isActive, true)))
     .limit(1);
 
   if (!user) {
@@ -476,7 +476,7 @@ router.get("/users/:id/orgs", requireAuth, async (req, res) => {
       organizationsTable,
       eq(organizationsTable.id, organizationUsersTable.organizationId)
     )
-    .where(eq(organizationUsersTable.userId, req.params.id))
+    .where(eq(organizationUsersTable.userId, req.params.id as string))
     .orderBy(organizationsTable.name);
 
   res.json(memberships);
@@ -484,7 +484,7 @@ router.get("/users/:id/orgs", requireAuth, async (req, res) => {
 
 // ── Add user to org ───────────────────────────────────────────────────────────
 router.post("/users/:id/orgs", requireAuth, requireRole("admin"), async (req, res) => {
-  const userId = req.params.id;
+  const userId = req.params.id as string;
   const { organizationId, role, status } = req.body;
 
   if (!organizationId || !role) {
@@ -533,7 +533,6 @@ router.post("/users/:id/orgs", requireAuth, requireRole("admin"), async (req, re
 
   await logAudit(req, "org_access_changed", "user", userId, {
     entityLabel: user.email,
-    organizationId,
   });
 
   const [membership] = await db
@@ -563,7 +562,7 @@ router.post("/users/:id/orgs", requireAuth, requireRole("admin"), async (req, re
 
 // ── Update org membership ────────────────────────────────────────────────────
 router.patch("/users/:id/orgs/:orgId", requireAuth, requireRole("admin"), async (req, res) => {
-  const { id: userId, orgId: organizationId } = req.params;
+  const { id: userId, orgId: organizationId } = req.params as Record<string, string>;
   const { role, status } = req.body;
 
   const [membership] = await db
@@ -590,7 +589,7 @@ router.patch("/users/:id/orgs/:orgId", requireAuth, requireRole("admin"), async 
     })
     .where(eq(organizationUsersTable.id, membership.id));
 
-  await logAudit(req, "org_access_changed", "user", userId, { organizationId });
+  await logAudit(req, "org_access_changed", "user", userId, {});
 
   const [updated] = await db
     .select({
@@ -614,7 +613,7 @@ router.patch("/users/:id/orgs/:orgId", requireAuth, requireRole("admin"), async 
 
 // ── Remove user from org ─────────────────────────────────────────────────────
 router.delete("/users/:id/orgs/:orgId", requireAuth, requireRole("admin"), async (req, res) => {
-  const { id: userId, orgId: organizationId } = req.params;
+  const { id: userId, orgId: organizationId } = req.params as Record<string, string>;
 
   const [membership] = await db
     .select({ id: organizationUsersTable.id })
@@ -637,8 +636,7 @@ router.delete("/users/:id/orgs/:orgId", requireAuth, requireRole("admin"), async
     .where(eq(organizationUsersTable.id, membership.id));
 
   await logAudit(req, "org_access_changed", "user", userId, {
-    organizationId,
-    removed: true,
+    newValue: { removed: true },
   });
 
   res.json({ success: true });

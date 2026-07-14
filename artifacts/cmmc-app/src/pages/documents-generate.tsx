@@ -42,14 +42,16 @@ export default function DocumentsGenerate() {
 
     generate(
       {
-        templateId: selectedTemplateId,
-        title: title || selectedTemplate?.title,
-        organizationName: orgName,
-        systemName: systemName,
-        policyOwner: policyOwner,
-        effectiveDate: effectiveDate ? new Date(effectiveDate).toISOString() : undefined,
-        nextReviewDate: nextReviewDate ? new Date(nextReviewDate).toISOString() : undefined,
-        fieldValues: {},
+        data: {
+          templateId: selectedTemplateId,
+          title: title || selectedTemplate?.title,
+          organizationName: orgName,
+          systemName: systemName,
+          policyOwner: policyOwner,
+          effectiveDate: effectiveDate ? new Date(effectiveDate).toISOString() : undefined,
+          nextReviewDate: nextReviewDate ? new Date(nextReviewDate).toISOString() : undefined,
+          fieldValues: {},
+        },
       },
       {
         onSuccess: (doc) => {

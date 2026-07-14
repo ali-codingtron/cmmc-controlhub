@@ -21,23 +21,23 @@ const router = Router();
 
 function requireAdmin(req: any, res: any, next: any) {
   if (req.authUser?.role !== "admin") {
-    return res.status(403).json({ error: "Admin access required" });
+    return void res.status(403).json({ error: "Admin access required" });
   }
   next();
 }
 
 // ── GET /api/admin/backfill/narratives?orgId=xxx  ─────────────────────────────
 // Dry-run: returns stats without touching the DB.
-router.get("/admin/backfill/narratives", requireAuth, requireAdmin, async (req, res) => {
+router.get("/admin/backfill/narratives", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const { orgId } = req.query as { orgId?: string };
-  if (!orgId) return res.status(400).json({ error: "orgId is required" });
+  if (!orgId) return void res.status(400).json({ error: "orgId is required" });
 
   const [org] = await db
     .select({ id: organizationsTable.id, name: organizationsTable.name, legalName: organizationsTable.legalName })
     .from(organizationsTable)
     .where(eq(organizationsTable.id, orgId))
     .limit(1);
-  if (!org) return res.status(404).json({ error: "Organization not found" });
+  if (!org) return void res.status(404).json({ error: "Organization not found" });
 
   const allControls = await db
     .select({
@@ -91,16 +91,16 @@ router.get("/admin/backfill/narratives", requireAuth, requireAdmin, async (req, 
 
 // ── POST /api/admin/backfill/narratives  ──────────────────────────────────────
 // Execute: copies guidance → narrative for blank rows, writes one audit log per update.
-router.post("/admin/backfill/narratives", requireAuth, requireAdmin, async (req, res) => {
+router.post("/admin/backfill/narratives", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const { orgId } = req.body as { orgId?: string };
-  if (!orgId) return res.status(400).json({ error: "orgId is required" });
+  if (!orgId) return void res.status(400).json({ error: "orgId is required" });
 
   const [org] = await db
     .select({ id: organizationsTable.id, name: organizationsTable.name })
     .from(organizationsTable)
     .where(eq(organizationsTable.id, orgId))
     .limit(1);
-  if (!org) return res.status(404).json({ error: "Organization not found" });
+  if (!org) return void res.status(404).json({ error: "Organization not found" });
 
   const allControls = await db
     .select({
@@ -197,16 +197,16 @@ router.get("/admin/orgs", requireAuth, requireAdmin, async (_req, res) => {
 
 // ── GET /api/admin/backfill/roadmap?orgId=xxx  ────────────────────────────────
 // Dry-run: returns current roadmap status summary for the org without changing anything.
-router.get("/admin/backfill/roadmap", requireAuth, requireAdmin, async (req, res) => {
+router.get("/admin/backfill/roadmap", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const { orgId } = req.query as { orgId?: string };
-  if (!orgId) return res.status(400).json({ error: "orgId is required" });
+  if (!orgId) return void res.status(400).json({ error: "orgId is required" });
 
   const [org] = await db
     .select({ id: organizationsTable.id, name: organizationsTable.name, legalName: organizationsTable.legalName })
     .from(organizationsTable)
     .where(eq(organizationsTable.id, orgId))
     .limit(1);
-  if (!org) return res.status(404).json({ error: "Organization not found" });
+  if (!org) return void res.status(404).json({ error: "Organization not found" });
 
   const allActions = await db
     .select()
@@ -214,7 +214,7 @@ router.get("/admin/backfill/roadmap", requireAuth, requireAdmin, async (req, res
     .orderBy(roadmapActionsTable.sortOrder);
 
   if (allActions.length === 0) {
-    return res.json({ org, totalActions: 0, statusCounts: {}, actions: [] });
+    return void res.json({ org, totalActions: 0, statusCounts: {}, actions: [] });
   }
 
   const actionIds = allActions.map((a) => a.id);
@@ -277,16 +277,16 @@ router.get("/admin/backfill/roadmap", requireAuth, requireAdmin, async (req, res
 // ── POST /api/admin/backfill/roadmap  ─────────────────────────────────────────
 // Execute: marks ALL roadmap actions for the org as complete.
 // Creates missing progress records. Writes one audit log per action + one summary.
-router.post("/admin/backfill/roadmap", requireAuth, requireAdmin, async (req, res) => {
+router.post("/admin/backfill/roadmap", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const { orgId } = req.body as { orgId?: string };
-  if (!orgId) return res.status(400).json({ error: "orgId is required" });
+  if (!orgId) return void res.status(400).json({ error: "orgId is required" });
 
   const [org] = await db
     .select({ id: organizationsTable.id, name: organizationsTable.name })
     .from(organizationsTable)
     .where(eq(organizationsTable.id, orgId))
     .limit(1);
-  if (!org) return res.status(404).json({ error: "Organization not found" });
+  if (!org) return void res.status(404).json({ error: "Organization not found" });
 
   const allActions = await db
     .select()
@@ -294,7 +294,7 @@ router.post("/admin/backfill/roadmap", requireAuth, requireAdmin, async (req, re
     .orderBy(roadmapActionsTable.sortOrder);
 
   if (allActions.length === 0) {
-    return res.json({ org, updated: 0, created: 0, checklistUpdated: 0, stepsUpdated: 0 });
+    return void res.json({ org, updated: 0, created: 0, checklistUpdated: 0, stepsUpdated: 0 });
   }
 
   const actionIds = allActions.map((a) => a.id);
@@ -471,7 +471,7 @@ router.get("/admin/email-settings", requireAuth, requireAdmin, (_req, res) => {
 });
 
 // ── POST /api/admin/email-settings/test ───────────────────────────────────────
-router.post("/admin/email-settings/test", requireAuth, requireAdmin, async (req, res) => {
+router.post("/admin/email-settings/test", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const adminUser = req.authUser;
   if (!adminUser?.email) {
     res.status(400).json({ error: "Could not determine admin email address" });

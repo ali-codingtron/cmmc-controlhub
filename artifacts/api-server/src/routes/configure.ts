@@ -523,7 +523,7 @@ router.get(
     let control = await db
       .select({ id: controlsTable.id, controlId: controlsTable.controlId })
       .from(controlsTable)
-      .where(eq(controlsTable.id, req.params.id))
+      .where(eq(controlsTable.id, req.params.id as string))
       .limit(1)
       .then((r) => r[0]);
 
@@ -608,7 +608,7 @@ router.patch(
       .where(
         and(
           eq(orgControlStepProgressTable.organizationId, orgId),
-          eq(orgControlStepProgressTable.stepId, req.params.stepId)
+          eq(orgControlStepProgressTable.stepId, req.params.stepId as string)
         )
       )
       .limit(1);
@@ -630,7 +630,7 @@ router.patch(
       await db.insert(orgControlStepProgressTable).values({
         id: randomUUID(),
         organizationId: orgId,
-        stepId: req.params.stepId,
+        stepId: req.params.stepId as string,
         status: status ?? "not_started",
         notes: notes ?? null,
         completedBy: status === "complete" ? (userId ?? null) : null,
@@ -646,7 +646,7 @@ router.patch(
       .where(
         and(
           eq(orgControlStepProgressTable.organizationId, orgId),
-          eq(orgControlStepProgressTable.stepId, req.params.stepId)
+          eq(orgControlStepProgressTable.stepId, req.params.stepId as string)
         )
       )
       .limit(1);

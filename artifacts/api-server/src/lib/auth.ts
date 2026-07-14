@@ -15,7 +15,7 @@ export interface AuthUser {
 }
 
 export function signToken(user: AuthUser, expiresIn: string = "24h"): string {
-  return jwt.sign(user, JWT_SECRET, { expiresIn });
+  return jwt.sign(user, JWT_SECRET, { expiresIn: expiresIn as any });
 }
 
 export function verifyToken(token: string): AuthUser | null {

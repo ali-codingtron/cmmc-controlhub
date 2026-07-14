@@ -778,7 +778,7 @@ router.post("/auth/mfa/disable", requireAuth, async (req, res) => {
       return;
     }
     const [self] = await db.select().from(usersTable).where(eq(usersTable.id, req.authUser!.id)).limit(1);
-    if (!self || !await bcrypt.compare(password, self.passwordHash)) {
+    if (!self || !self.passwordHash || !await bcrypt.compare(password, self.passwordHash)) {
       res.status(400).json({ error: "Incorrect password" });
       return;
     }
@@ -1072,6 +1072,7 @@ router.post("/auth/forgot-password", async (req, res) => {
           id: randomUUID(),
           action: "password_reset_requested_unknown_email" as any,
           entityType: "user",
+          entityId: normalizedEmail,
           entityLabel: normalizedEmail,
           ipAddress: ip,
           userAgent: ua,

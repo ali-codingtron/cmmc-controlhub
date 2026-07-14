@@ -45,10 +45,12 @@ export default function DocumentLogs() {
     }
     generateLog(
       {
-        templateId: selectedTemplateId,
-        title: logTitle || undefined,
-        periodStart: periodStart ? new Date(periodStart).toISOString() : undefined,
-        periodEnd: periodEnd ? new Date(periodEnd).toISOString() : undefined,
+        data: {
+          templateId: selectedTemplateId,
+          title: logTitle || undefined,
+          periodStart: periodStart ? new Date(periodStart).toISOString() : undefined,
+          periodEnd: periodEnd ? new Date(periodEnd).toISOString() : undefined,
+        },
       },
       {
         onSuccess: () => {

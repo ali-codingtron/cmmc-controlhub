@@ -443,8 +443,8 @@ export default function Poams() {
   const { isDemoMode } = useDemoMode();
 
   const { data: poams = [], isLoading } = useListPoams({
-    status: filterStatus !== "all" ? filterStatus : undefined,
-    riskLevel: filterRisk !== "all" ? filterRisk : undefined,
+    status: filterStatus !== "all" ? filterStatus as any : undefined,
+    riskLevel: filterRisk !== "all" ? filterRisk as any : undefined,
   });
 
   const filtered = poams.filter((p) => {

@@ -157,7 +157,7 @@ router.get("/poams/:id", requireAuth, requireOrg, async (req, res) => {
     .leftJoin(usersTable, eq(usersTable.id, poamsTable.ownerId))
     .where(
       and(
-        eq(poamsTable.id, req.params.id),
+        eq(poamsTable.id, req.params.id as string),
         orgId ? eq(poamsTable.organizationId, orgId) : undefined
       )
     )
@@ -170,7 +170,7 @@ router.get("/poams/:id", requireAuth, requireOrg, async (req, res) => {
 router.patch("/poams/:id", requireAuth, requireOrg, async (req, res) => {
   const orgId = req.orgId;
 
-  const [existing] = await db.select().from(poamsTable).where(and(eq(poamsTable.id, req.params.id), orgId ? eq(poamsTable.organizationId, orgId) : undefined)).limit(1);
+  const [existing] = await db.select().from(poamsTable).where(and(eq(poamsTable.id, req.params.id as string), orgId ? eq(poamsTable.organizationId, orgId) : undefined)).limit(1);
   if (!existing) { res.status(404).json({ error: "Not found" }); return; }
 
   const {
@@ -196,24 +196,24 @@ router.patch("/poams/:id", requireAuth, requireOrg, async (req, res) => {
       notes: notes !== undefined ? notes : existing.notes,
       updatedAt: new Date(),
     })
-    .where(eq(poamsTable.id, req.params.id));
+    .where(eq(poamsTable.id, req.params.id as string));
 
-  await logAudit(req, "updated", "poam", req.params.id, { entityLabel: existing.title });
+  await logAudit(req, "updated", "poam", req.params.id as string, { entityLabel: existing.title });
 
-  const [updated] = await db.select().from(poamsTable).where(eq(poamsTable.id, req.params.id)).limit(1);
+  const [updated] = await db.select().from(poamsTable).where(eq(poamsTable.id, req.params.id as string)).limit(1);
   res.json(updated);
 });
 
 router.post("/poams/:id/close", requireAuth, requireOrg, async (req, res) => {
   const { resolutionSummary } = req.body;
   const orgId = req.orgId;
-  const [existing] = await db.select().from(poamsTable).where(and(eq(poamsTable.id, req.params.id), orgId ? eq(poamsTable.organizationId, orgId) : undefined)).limit(1);
+  const [existing] = await db.select().from(poamsTable).where(and(eq(poamsTable.id, req.params.id as string), orgId ? eq(poamsTable.organizationId, orgId) : undefined)).limit(1);
 
   if (!existing) { res.status(404).json({ error: "Not found" }); return; }
 
-  await db.update(poamsTable).set({ status: "closed", completedDate: new Date(), resolutionSummary, updatedAt: new Date() }).where(eq(poamsTable.id, req.params.id));
-  await logAudit(req, "closed", "poam", req.params.id, { entityLabel: existing.title });
-  res.json({ id: req.params.id, status: "closed" });
+  await db.update(poamsTable).set({ status: "closed", completedDate: new Date(), resolutionSummary, updatedAt: new Date() }).where(eq(poamsTable.id, req.params.id as string));
+  await logAudit(req, "closed", "poam", req.params.id as string, { entityLabel: existing.title });
+  res.json({ id: req.params.id as string, status: "closed" });
 });
 
 export default router;

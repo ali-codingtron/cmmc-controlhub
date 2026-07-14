@@ -38,7 +38,7 @@ function sevenDaysFromNow() {
 }
 
 // ── 1. Executive Readiness Report ─────────────────────────────────────────────
-router.get("/reports/executive", requireAuth, requireOrg, async (req, res) => {
+router.get("/reports/executive", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = req.orgId!;
 
   const [org] = await db
@@ -147,7 +147,7 @@ router.get("/reports/executive", requireAuth, requireOrg, async (req, res) => {
 });
 
 // ── 2. Gap Analysis Report ────────────────────────────────────────────────────
-router.get("/reports/gap", requireAuth, requireOrg, async (req, res) => {
+router.get("/reports/gap", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = req.orgId!;
 
   const controls = await db
@@ -263,7 +263,7 @@ router.get("/reports/gap", requireAuth, requireOrg, async (req, res) => {
 });
 
 // ── 3. Control Status Report ──────────────────────────────────────────────────
-router.get("/reports/controls", requireAuth, requireOrg, async (req, res) => {
+router.get("/reports/controls", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = req.orgId!;
 
   const controls = await db
@@ -313,7 +313,7 @@ router.get("/reports/controls", requireAuth, requireOrg, async (req, res) => {
 });
 
 // ── 4. Evidence Inventory Report ──────────────────────────────────────────────
-router.get("/reports/evidence", requireAuth, requireOrg, async (req, res) => {
+router.get("/reports/evidence", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = req.orgId!;
 
   const evidence = await db
@@ -366,7 +366,7 @@ router.get("/reports/evidence", requireAuth, requireOrg, async (req, res) => {
 });
 
 // ── 5. POA&M Report ───────────────────────────────────────────────────────────
-router.get("/reports/poam", requireAuth, requireOrg, async (req, res) => {
+router.get("/reports/poam", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = req.orgId!;
   const now = new Date();
 
@@ -415,7 +415,7 @@ router.get("/reports/poam", requireAuth, requireOrg, async (req, res) => {
 });
 
 // ── 6. Monitoring Tracker Report ──────────────────────────────────────────────
-router.get("/reports/monitoring", requireAuth, requireOrg, async (req, res) => {
+router.get("/reports/monitoring", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = req.orgId!;
   const now = new Date();
 
@@ -449,7 +449,7 @@ router.get("/reports/monitoring", requireAuth, requireOrg, async (req, res) => {
 });
 
 // ── 7. Domain Readiness & C3PAO Readiness Report ─────────────────────────────
-router.get("/reports/domain", requireAuth, requireOrg, async (req, res) => {
+router.get("/reports/domain", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = req.orgId!;
   const now = new Date();
 
@@ -727,7 +727,7 @@ router.get("/reports/domain", requireAuth, requireOrg, async (req, res) => {
 });
 
 // ── 8. Audit Readiness Report ─────────────────────────────────────────────────
-router.get("/reports/audit", requireAuth, requireOrg, async (req, res) => {
+router.get("/reports/audit", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = req.orgId!;
   const now = new Date();
 
@@ -846,7 +846,7 @@ router.get("/reports/audit", requireAuth, requireOrg, async (req, res) => {
 });
 
 // ── 9. SSP Summary Report ─────────────────────────────────────────────────────
-router.get("/reports/ssp", requireAuth, requireOrg, async (req, res) => {
+router.get("/reports/ssp", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = req.orgId!;
 
   const [primaryDoc] = await db
@@ -856,7 +856,7 @@ router.get("/reports/ssp", requireAuth, requireOrg, async (req, res) => {
     .limit(1);
 
   if (!primaryDoc) {
-    return res.json({ reportDate: new Date().toISOString(), hasSSP: false });
+    return void res.json({ reportDate: new Date().toISOString(), hasSSP: false });
   }
 
   const sections = await db
