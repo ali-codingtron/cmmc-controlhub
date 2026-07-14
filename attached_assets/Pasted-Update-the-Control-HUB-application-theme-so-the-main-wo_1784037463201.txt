@@ -1,0 +1,195 @@
+Update the Control HUB application theme so the main workspace is less bright and more professional.
+
+Current issue:
+The sidebar looks good, but the main content area is too bright because the app uses a pure white background across most pages. I want the app to feel more polished, modern, and enterprise-ready without switching to full dark mode.
+
+Do not change the sidebar color scheme. The sidebar is good.
+
+Goal:
+Use a soft slate/off-white background for the main application canvas, while keeping cards, tables, and modals readable.
+
+1. Theme Direction
+
+Use a professional “enterprise compliance platform” theme.
+
+Keep:
+- dark navy sidebar
+- blue primary buttons
+- green/amber/red status colors
+- white cards for readability
+
+Change:
+- main page background from pure white to soft slate/off-white
+- table/card borders to subtle blue-gray
+- section backgrounds to softer tones
+
+2. Recommended Theme Tokens
+
+Create or update global CSS/theme variables:
+
+--app-bg: #F3F6FA;
+--app-bg-secondary: #EEF3F8;
+--card-bg: #FFFFFF;
+--card-border: #D8E1EC;
+--table-header-bg: #F8FAFC;
+--table-row-hover: #F1F5F9;
+--text-primary: #0F172A;
+--text-secondary: #64748B;
+--text-muted: #94A3B8;
+--primary-blue: #2563EB;
+--success-green: #16A34A;
+--warning-amber: #F59E0B;
+--danger-red: #DC2626;
+
+3. Main Layout Background
+
+Apply:
+
+body / app shell / main content background:
+#F3F6FA
+
+The content area should no longer be pure white.
+
+The main app should feel like a soft neutral dashboard background.
+
+4. Cards
+
+Cards should remain white for contrast.
+
+Apply:
+- background: #FFFFFF
+- border: 1px solid #D8E1EC
+- subtle shadow
+- border-radius consistent with current design
+
+Do not make cards gray. Keep cards white so data remains easy to read.
+
+5. Tables
+
+Update tables:
+
+Table container:
+- white background
+- light border
+
+Table header:
+- background #F8FAFC
+- text #64748B
+- subtle bottom border
+
+Table rows:
+- white background
+- hover background #F1F5F9
+- light row separators
+
+6. Page Headers
+
+Page headers should sit on the soft background.
+
+Use:
+- primary text #0F172A
+- secondary text #64748B
+- badges unchanged
+
+7. Modals
+
+Modal backdrop can remain dark transparent.
+
+Modal content:
+- white background
+- border #D8E1EC
+- consistent shadow
+
+8. Forms and Inputs
+
+Inputs should remain white but use softer borders.
+
+Input border:
+#CBD5E1
+
+Input focus:
+blue focus ring using #2563EB
+
+9. Dashboard
+
+Update dashboard page specifically:
+
+- Main page background #F3F6FA
+- KPI cards remain white
+- Domain readiness card remains white
+- Recent activity card remains white
+- Recommended actions card remains white
+- Use slightly stronger card separation so sections stand out
+
+10. Evidence, Controls, Documentation, Monitoring, POA&M
+
+Apply the same theme consistently across:
+
+- Dashboard
+- Controls
+- Evidence Repository
+- Documentation
+- SSP
+- Monitoring Tracker
+- POA&M
+- Implementation Roadmap
+- Pre-Assessment
+- Reports
+- Help & User Guide
+- Settings
+
+No page should have a harsh pure white full-page background.
+
+11. Do Not Affect PDFs
+
+Do not apply this app background to generated PDF reports or exported documents.
+
+Reports/PDFs should remain print-friendly with white paper backgrounds.
+
+12. Add Optional Appearance Setting
+
+Add a simple appearance setting later, not required immediately:
+
+Settings > Appearance
+
+Options:
+- Light
+- Soft Light
+- Dark
+
+Default:
+Soft Light
+
+For now, implement Soft Light as the default app theme.
+
+13. Accessibility
+
+Make sure contrast remains readable.
+
+Do not use light gray text on gray background.
+
+Primary text must remain dark enough.
+
+14. Acceptance Tests
+
+Test A:
+Open Dashboard.
+Main page background is soft slate/off-white, not pure white.
+
+Test B:
+Sidebar remains unchanged.
+
+Test C:
+Cards and tables remain readable.
+
+Test D:
+Evidence Repository table looks professional and not washed out.
+
+Test E:
+Controls Library, Monitoring Tracker, POA&M, and Documentation all use the same background theme.
+
+Test F:
+PDF exports are not affected by the app background change.
+
+Test G:
+Buttons, badges, and status colors remain clear.
