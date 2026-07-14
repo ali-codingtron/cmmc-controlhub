@@ -73,7 +73,7 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* LIGHT MODE — Soft Light theme */
+/* LIGHT MODE — Soft Slate Enterprise Theme */
 :root {
   --button-outline: rgba(0,0,0, .10);
   --badge-outline: rgba(0,0,0, .05);
@@ -83,16 +83,25 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  /* Main canvas: soft blue-slate (#F3F6FA) instead of pure white */
-  --background: 214 41% 97%;
-  --foreground: 222 47% 11%;
-  /* Slightly more visible separators against the softer background */
-  --border: 213 34% 89%;
+  /* ── Soft Slate Enterprise palette ── */
+  --app-bg:           #E8EEF6;
+  --app-bg-secondary: #EEF3F9;
+  --page-surface:     #EEF3F9;
+  --card-bg:          #FFFFFF;
+  --card-border-hex:  #CBD6E2;
+  --table-header-hex: #F1F5F9;
+  --table-hover-hex:  #F8FAFC;
 
-  /* Cards stay white for contrast and readability */
+  /* Main canvas — #E8EEF6 = HSL 215 44% 94% — clearly blue-gray, not white */
+  --background: 215 44% 94%;
+  --foreground: 222 47% 11%;
+  /* Borders — #CBD6E2 = HSL 211 28% 84% — visible against blue-gray bg */
+  --border: 211 28% 84%;
+
+  /* Cards remain white for contrast */
   --card: 0 0% 100%;
   --card-foreground: 222 47% 11%;
-  --card-border: 213 34% 89%;
+  --card-border: 211 28% 84%;
 
   --sidebar: 222 47% 11%;
   --sidebar-foreground: 210 40% 98%;
@@ -105,27 +114,28 @@
 
   --popover: 0 0% 100%;
   --popover-foreground: 222 47% 11%;
-  --popover-border: 213 34% 89%;
+  --popover-border: 211 28% 84%;
 
   --primary: 221 83% 53%;
   --primary-foreground: 210 40% 98%;
 
-  /* Secondary / muted: slightly blue-tinted for table headers & chips */
-  --secondary: 213 33% 96%;
+  /* Secondary chips / buttons — soft blue-tinted */
+  --secondary: 213 33% 95%;
   --secondary-foreground: 222 47% 11%;
 
-  --muted: 210 40% 96%;
-  --muted-foreground: 215 16% 47%;
+  /* Muted — #F1F5F9 — used for table header backgrounds */
+  --muted: 210 39% 96%;
+  --muted-foreground: 215 18% 44%;
 
-  /* Accent (table row hover): #F1F5F9 */
-  --accent: 210 40% 96%;
+  /* Accent — #F8FAFC — used for row hover states */
+  --accent: 210 40% 98%;
   --accent-foreground: 222 47% 11%;
 
   --destructive: 0 84% 60%;
   --destructive-foreground: 210 40% 98%;
 
-  /* Input borders slightly more visible: #CBD5E1 */
-  --input: 213 27% 84%;
+  /* Input borders match card borders */
+  --input: 211 28% 84%;
   --ring: 221 83% 53%;
   
   --chart-1: 221 83% 53%;
@@ -138,15 +148,17 @@
   --app-font-serif: Georgia, serif;
   --app-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   
-  --radius: 0.3rem; 
-  --shadow-2xs: 0px 1px 2px 0px rgba(0,0,0, 0.05);
-  --shadow-xs: 0px 1px 2px 0px rgba(0,0,0, 0.05);
-  --shadow-sm: 0px 1px 3px 0px rgba(0,0,0, 0.1), 0px 1px 2px -1px rgba(0,0,0, 0.1);
-  --shadow: 0px 1px 3px 0px rgba(0,0,0, 0.1), 0px 1px 2px -1px rgba(0,0,0, 0.1);
-  --shadow-md: 0px 4px 6px -1px rgba(0,0,0, 0.1), 0px 2px 4px -2px rgba(0,0,0, 0.1);
-  --shadow-lg: 0px 10px 15px -3px rgba(0,0,0, 0.1), 0px 4px 6px -4px rgba(0,0,0, 0.1);
-  --shadow-xl: 0px 20px 25px -5px rgba(0,0,0, 0.1), 0px 8px 10px -6px rgba(0,0,0, 0.1);
-  --shadow-2xl: 0px 25px 50px -12px rgba(0,0,0, 0.25);
+  /* Larger radius — 8px for a modern enterprise feel */
+  --radius: 0.5rem;
+  /* Stronger shadows so cards pop against the blue-gray canvas */
+  --shadow-2xs: 0px 1px 3px 0px rgba(15,23,42, 0.05);
+  --shadow-xs:  0px 1px 3px 0px rgba(15,23,42, 0.05);
+  --shadow-sm:  0px 2px 8px 0px rgba(15,23,42, 0.07), 0px 1px 3px 0px rgba(15,23,42, 0.05);
+  --shadow:     0px 4px 16px -2px rgba(15,23,42, 0.09), 0px 2px 6px -1px rgba(15,23,42, 0.06);
+  --shadow-md:  0px 8px 20px -4px rgba(15,23,42, 0.10), 0px 3px 8px -2px rgba(15,23,42, 0.06);
+  --shadow-lg:  0px 12px 28px -6px rgba(15,23,42, 0.12), 0px 4px 10px -3px rgba(15,23,42, 0.08);
+  --shadow-xl:  0px 20px 40px -8px rgba(15,23,42, 0.14), 0px 8px 16px -4px rgba(15,23,42, 0.09);
+  --shadow-2xl: 0px 28px 52px -12px rgba(15,23,42, 0.22);
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 
@@ -309,4 +321,58 @@
   .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
     inset: -1px;
   }
+}
+
+/* ── Soft Slate Enterprise: Global overrides ────────────────────────── */
+
+/* Anchor html/body/root so no parent can revert to white */
+html,
+body,
+#root {
+  background-color: hsl(var(--background));
+}
+
+/* ── Table header tinting ─────────────────────────────────────────── */
+/* All tables get #F1F5F9 headers — works for shadcn Table and plain <table> */
+thead tr {
+  background-color: hsl(var(--muted));
+}
+
+thead th,
+thead [role="columnheader"] {
+  color: hsl(var(--muted-foreground));
+  font-weight: 600;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+/* Table row dividers — slightly stronger than current */
+tbody tr + tr {
+  border-top: 1px solid hsl(211 28% 92%);
+}
+
+/* ── Page header band ─────────────────────────────────────────────── */
+/* Utility class for page headers — apply to header wrapper divs */
+.page-header-band {
+  background: linear-gradient(180deg, #F8FAFC 0%, #EEF3F9 100%);
+  border-bottom: 1px solid var(--card-border-hex);
+  padding: 24px 32px;
+}
+
+/* ── Card elevation ───────────────────────────────────────────────── */
+/* Give shadcn cards a stronger shadow on the blue-gray canvas */
+.card {
+  box-shadow: var(--shadow-sm);
+}
+.card:hover {
+  box-shadow: var(--shadow);
+}
+
+/* ── Theme class on the app shell ────────────────────────────────── */
+.theme-soft-slate {
+  background-color: var(--app-bg);
+}
+
+/* Main content inner padding area uses the slightly lighter secondary bg */
+.theme-soft-slate > main > div {
+  background-color: var(--app-bg);
 }

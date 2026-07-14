@@ -1,0 +1,303 @@
+Update the Control HUB visual theme again. The previous change is too subtle and the app still looks almost the same.
+
+Current issue:
+The sidebar looks good, but the main workspace still feels too white and flat. The page background, cards, tables, and panels blend together. I want the app to look more polished, modern, and enterprise/GRC-style.
+
+Do not change the dark navy sidebar. The sidebar is good.
+
+Goal:
+Create a stronger “Soft Slate Enterprise Theme” for the main workspace so there is a clear visual difference between:
+- app background
+- page header
+- cards
+- tables
+- panels
+- content sections
+
+This should not be full dark mode. It should be a professional soft blue-gray theme with white cards.
+
+1. Use Stronger Main Background
+
+Change the main content background to a more noticeable blue-gray.
+
+Use:
+
+--app-bg: #E8EEF6;
+--app-bg-secondary: #F1F5FA;
+--page-surface: #EEF3F9;
+--card-bg: #FFFFFF;
+--card-border: #CBD6E2;
+--card-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+
+The current background is too close to white. Use #E8EEF6 for the main workspace.
+
+Apply this to:
+- body
+- app shell
+- main content wrapper
+- dashboard page wrapper
+- all page containers outside cards
+
+Make sure no parent container is overriding it back to white.
+
+2. Add a Page Header Surface
+
+The top page header should sit on a subtle panel instead of floating on white.
+
+For page headers, use:
+- background: linear-gradient(180deg, #F8FAFC 0%, #EEF3F9 100%)
+- border-bottom: 1px solid #CBD6E2
+- padding: 24px 32px
+- border-radius where appropriate if inside page content
+
+For example:
+“Carme Tech Compliance Dashboard” should sit on a slightly tinted header area, not pure white.
+
+3. Make Cards Stand Out More
+
+Cards should remain white, but with stronger visual separation.
+
+Use:
+- card background: #FFFFFF
+- border: 1px solid #CBD6E2
+- border-radius: 14px
+- box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06)
+
+On hover:
+- border-color: #94A3B8
+- box-shadow: 0 12px 28px rgba(15, 23, 42, 0.09)
+
+Apply to:
+- dashboard KPI cards
+- domain readiness card
+- recent activity card
+- implementation roadmap card
+- evidence tables
+- documentation cards
+- control detail cards
+- monitoring tracker panels
+- POA&M panels
+- reports panels
+
+4. Add Subtle Card Header Bands
+
+For major cards, add a subtle header section.
+
+Example:
+KPI card title area:
+- background: #F8FAFC
+- border-bottom: 1px solid #E2E8F0
+- padding: 12px 16px
+
+This will make each card feel more structured and less flat.
+
+Apply to:
+- Overall Readiness
+- Controls
+- Evidence Health
+- Monitoring
+- POA&M Health
+- Domain Readiness
+- Recent Activity
+- Recommended Next Actions
+
+5. Improve Dashboard Background Separation
+
+Dashboard should have visible layers:
+
+Main workspace:
+#E8EEF6
+
+Dashboard content area:
+#EEF3F9
+
+Cards:
+#FFFFFF
+
+Table/card headers:
+#F8FAFC
+
+This should make the dashboard feel like a professional SaaS/GRC platform.
+
+6. Improve Tables
+
+Tables still look too white.
+
+Update table styling:
+
+Table container:
+- background: #FFFFFF
+- border: 1px solid #CBD6E2
+- border-radius: 14px
+- overflow: hidden
+
+Table header:
+- background: #F1F5F9
+- color: #475569
+- font-weight: 600
+- border-bottom: 1px solid #CBD6E2
+
+Table rows:
+- background: #FFFFFF
+
+Table row hover:
+- background: #F8FAFC
+
+Row separator:
+- border-bottom: 1px solid #E2E8F0
+
+7. Add Section Dividers
+
+For large pages, add subtle section blocks.
+
+Example:
+Dashboard should visually separate:
+- header
+- KPI cards
+- roadmap progress
+- domain readiness/recent activity
+- recommended actions
+
+Use:
+- section spacing: 24px
+- section backgrounds where needed
+- subtle borders
+
+8. Add Slight Tint to Empty Page Areas
+
+Large blank content areas should not be white.
+
+Use:
+- #E8EEF6 or #EEF3F9
+
+This applies to pages like:
+- Controls
+- Evidence
+- Documentation
+- SSP
+- Monitoring Tracker
+- POA&M
+- Reports
+- Implementation Roadmap
+- Pre-Assessment
+
+9. Do Not Make Everything White Again
+
+Audit the CSS and remove/override any hardcoded:
+
+background: white;
+background-color: #fff;
+bg-white;
+bg-background if it resolves to white
+
+from full-page wrappers.
+
+White should be used for cards and tables only, not the entire page shell.
+
+10. Add a Theme Class
+
+Add a root class:
+
+theme-soft-slate
+
+Apply it to the app shell.
+
+All layout components should use CSS variables from this theme.
+
+Do not scatter hardcoded colors everywhere.
+
+11. Suggested Final Theme Tokens
+
+Use these:
+
+:root {
+  --sidebar-bg: #0F172A;
+  --app-bg: #E8EEF6;
+  --app-bg-secondary: #EEF3F9;
+  --page-header-bg: #F8FAFC;
+  --card-bg: #FFFFFF;
+  --card-border: #CBD6E2;
+  --card-border-strong: #94A3B8;
+  --table-header-bg: #F1F5F9;
+  --table-row-hover: #F8FAFC;
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #64748B;
+  --primary-blue: #2563EB;
+  --success-green: #16A34A;
+  --warning-amber: #F59E0B;
+  --danger-red: #DC2626;
+}
+
+12. Add More Visual Polish to Dashboard KPI Cards
+
+For KPI cards, add:
+- small icon tile with tinted background
+- clear title
+- metric
+- supporting text
+- subtle top accent border based on category
+
+Examples:
+Overall Readiness accent: blue
+Controls accent: slate/blue
+Evidence Health accent: green
+Monitoring accent: amber
+POA&M Health accent: red/amber
+
+Do not overdo colors. Keep it professional.
+
+13. Improve Recent Activity and Domain Readiness
+
+Recent Activity:
+- use slightly tinted row hover
+- use small icon badges
+- improve spacing between activity rows
+
+Domain Readiness:
+- add card header background
+- make progress bars slightly thicker
+- improve spacing between domain rows
+- keep domain rows on white card
+
+14. Make Buttons Fit the Theme
+
+Primary buttons stay blue.
+
+Secondary buttons:
+- background #FFFFFF
+- border #CBD6E2
+- hover #F8FAFC
+
+15. Do Not Affect PDFs or Exports
+
+Do not apply the app background to PDF reports, DOCX exports, or C3PAO export PDFs.
+
+Exported documents should remain print-friendly white.
+
+16. Acceptance Tests
+
+Test A:
+Open Dashboard.
+The main workspace should clearly look blue-gray / soft slate, not white.
+
+Test B:
+Sidebar remains unchanged.
+
+Test C:
+Cards stand out clearly against the background.
+
+Test D:
+Tables have tinted headers and clear borders.
+
+Test E:
+Controls, Evidence, Monitoring Tracker, POA&M, Documentation, SSP, Reports, and Roadmap pages all use the same soft slate background.
+
+Test F:
+No page has a full white background except inside cards/tables.
+
+Test G:
+PDF reports and exported documents remain white and print-friendly.
+
+Test H:
+The app looks noticeably different from the previous version.

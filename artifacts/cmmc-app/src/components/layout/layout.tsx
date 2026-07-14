@@ -27,7 +27,7 @@ export function Layout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-background">
+    <div className="theme-soft-slate flex min-h-screen w-full bg-background">
       <Sidebar />
       <main className="flex-1 flex flex-col overflow-hidden">
         {isDemoMode && (
