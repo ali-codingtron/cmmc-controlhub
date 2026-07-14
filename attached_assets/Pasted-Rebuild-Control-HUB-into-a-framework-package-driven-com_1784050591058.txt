@@ -1,0 +1,998 @@
+Rebuild Control HUB into a framework/package-driven compliance platform.
+
+Goal:
+When creating an organization, the user should be able to choose which compliance package(s) apply to that organization. Based on the selected package(s), the app should display the correct controls, requirements, evidence needs, documentation needs, reports, dashboards, roadmap actions, monitoring tracker items, and assessment language.
+
+Control HUB should support CMMC, NIST SP 800-171, NIST assessment packages, and DFARS contract obligation packages.
+
+Important:
+Do not damage or modify existing production data.
+Do not change existing VTCCORP.US controls, evidence, documents, SSP, monitoring, POA&M, users, or reports unless explicitly approved.
+This should be implemented as a new framework/package architecture that can coexist with current CMMC L2 data.
+
+====================================================================
+1. CORE CONCEPT
+====================================================================
+
+The app should no longer assume every organization is only CMMC L2.
+
+Each organization should have one or more selected compliance packages.
+
+Examples:
+- CMMC Level 1 Self-Assessment
+- CMMC Level 2 Self-Assessment
+- NIST SP 800-171 Rev. 2
+- NIST SP 800-171 Rev. 3
+- NIST SP 800-171A Rev. 2 Assessment Objectives
+- NIST SP 800-171A Rev. 3 Assessment Procedures
+- DFARS 252.204-7012
+- DFARS 252.204-7019
+- DFARS 252.204-7020
+- DFARS 252.204-7021
+- FAR 52.204-21 Basic Safeguarding
+- Custom / Contract-Specific Package
+
+The selected package should determine what the organization sees in:
+- Dashboard
+- Controls / Requirements Library
+- Evidence Repository
+- Documentation
+- SSP
+- Monitoring Tracker
+- POA&M
+- Implementation Roadmap
+- Pre-Assessment
+- Reports
+- Help text
+
+====================================================================
+2. CREATE FRAMEWORK / PACKAGE DATA MODEL
+====================================================================
+
+Add a normalized framework/package model.
+
+Create models similar to:
+
+ComplianceFramework
+- id
+- name
+- short_name
+- description
+- issuing_body
+- status
+- created_at
+- updated_at
+
+Examples:
+- CMMC
+- NIST SP 800-171
+- NIST SP 800-171A
+- DFARS
+- FAR
+- Custom
+
+CompliancePackage
+- id
+- framework_id
+- package_key
+- name
+- version
+- description
+- package_type
+- status
+- effective_date
+- source_reference
+- control_count
+- sort_order
+- created_at
+- updated_at
+
+Package types:
+- Control Framework
+- Assessment Procedure
+- Contract Clause
+- Evidence Package
+- Custom
+
+Examples:
+- CMMC_L1_SELF
+- CMMC_L2_SELF
+- NIST_800_171_R2
+- NIST_800_171_R3
+- NIST_800_171A_R2
+- NIST_800_171A_R3
+- DFARS_252_204_7012
+- DFARS_252_204_7019
+- DFARS_252_204_7020
+- DFARS_252_204_7021
+- FAR_52_204_21
+
+ComplianceRequirement
+- id
+- package_id
+- requirement_id
+- family_code
+- family_name
+- title
+- requirement_text
+- discussion
+- level
+- sort_order
+- status
+- source_reference
+- created_at
+- updated_at
+
+AssessmentObjective
+- id
+- requirement_id
+- objective_id
+- objective_text
+- assessment_method
+- expected_evidence
+- sort_order
+
+RequirementCrosswalk
+- id
+- source_requirement_id
+- target_requirement_id
+- relationship_type
+- notes
+
+Relationship types:
+- equivalent
+- maps_to
+- partially_maps_to
+- replaces
+- replaced_by
+- supports
+- supported_by
+- derived_from
+
+OrganizationPackage
+- id
+- organization_id
+- package_id
+- selected
+- selected_by
+- selected_at
+- active
+- notes
+
+OrganizationRequirementStatus
+- id
+- organization_id
+- requirement_id
+- status
+- owner
+- implementation_narrative
+- ssp_narrative
+- applicability
+- notes
+- created_at
+- updated_at
+
+RequirementEvidenceMap
+- id
+- requirement_id
+- evidence_type
+- title
+- description
+- required
+- suggested_filename
+- frequency
+- sort_order
+
+RequirementDocumentMap
+- id
+- requirement_id
+- document_type
+- title
+- description
+- required
+- template_id
+- frequency
+- sort_order
+
+DFARSObligation
+- id
+- package_id
+- clause_number
+- obligation_title
+- obligation_description
+- required_artifacts
+- required_process
+- applicable_to
+- flowdown_required
+- incident_reporting_required
+- assessment_required
+- notes
+
+====================================================================
+3. PACKAGE LIBRARY
+====================================================================
+
+Add a Package Library.
+
+Location:
+Settings > Compliance Packages
+or
+Frameworks > Package Library
+
+The Package Library should show all available frameworks and packages.
+
+Columns:
+- Package Name
+- Framework
+- Version
+- Type
+- Requirement Count
+- Status
+- Source
+- Actions
+
+Actions:
+- View Package
+- View Requirements
+- View Crosswalk
+- Enable / Disable
+- Import / Update Package
+- Archive
+
+Only Global Admin can manage global packages.
+
+Normal users should only see selected organization packages.
+
+====================================================================
+4. DEFAULT PACKAGES TO SEED
+====================================================================
+
+Seed these packages:
+
+CMMC:
+- CMMC Level 1 Self-Assessment
+- CMMC Level 2 Self-Assessment
+
+NIST:
+- NIST SP 800-171 Rev. 2
+- NIST SP 800-171 Rev. 3
+- NIST SP 800-171A Rev. 2 Assessment Objectives
+- NIST SP 800-171A Rev. 3 Assessment Procedures
+
+DFARS:
+- DFARS 252.204-7012 — Safeguarding Covered Defense Information and Cyber Incident Reporting
+- DFARS 252.204-7019 — Notice of NIST SP 800-171 DoD Assessment Requirements
+- DFARS 252.204-7020 — NIST SP 800-171 DoD Assessment Requirements
+- DFARS 252.204-7021 — Contractor Compliance With CMMC Level Requirements
+
+FAR:
+- FAR 52.204-21 — Basic Safeguarding of Covered Contractor Information Systems
+
+Custom:
+- Custom / Contract-Specific Requirement Package
+
+Important:
+DFARS packages should be treated as contract obligation packages, not normal control families.
+
+====================================================================
+5. ORGANIZATION CREATE WIZARD
+====================================================================
+
+Update the Create Organization workflow.
+
+Add package selection during organization creation.
+
+Step 1:
+Organization Profile
+- Organization name
+- Legal name
+- Short name
+- Industry
+- CAGE code
+- Primary contact
+- System name
+- Scope name
+
+Step 2:
+Data Type / Contract Context
+Questions:
+- Does the organization handle FCI?
+- Does the organization handle CUI?
+- Does the organization have DoD contracts?
+- Are DFARS clauses present?
+- Is this for internal readiness, self-assessment, customer review, or government review?
+
+Step 3:
+Select Compliance Packages
+
+Show package cards:
+
+CMMC Packages:
+- CMMC Level 1 Self-Assessment
+- CMMC Level 2 Self-Assessment
+
+NIST Packages:
+- NIST SP 800-171 Rev. 2
+- NIST SP 800-171 Rev. 3
+- NIST SP 800-171A Rev. 2
+- NIST SP 800-171A Rev. 3
+
+DFARS Packages:
+- DFARS 252.204-7012
+- DFARS 252.204-7019
+- DFARS 252.204-7020
+- DFARS 252.204-7021
+
+FAR Packages:
+- FAR 52.204-21
+
+Custom:
+- Custom / Contract-Specific
+
+Step 4:
+Package Review
+
+Show:
+- selected packages
+- total unique controls/requirements
+- overlapping requirements
+- new families/domains introduced
+- DFARS obligations
+- reports that will be enabled
+- monitoring templates that will be created
+
+Step 5:
+Create Organization
+
+When created:
+- generate OrganizationRequirementStatus records only for selected packages
+- seed relevant roadmap actions
+- seed monitoring tracker templates
+- seed document/evidence requirements
+- configure dashboard labels
+- configure report availability
+
+====================================================================
+6. PACKAGE RECOMMENDATION LOGIC
+====================================================================
+
+Add helper recommendations in the wizard.
+
+If user selects:
+“Handles FCI only”
+
+Suggest:
+- FAR 52.204-21
+- CMMC Level 1 Self-Assessment
+
+If user selects:
+“Handles CUI”
+
+Suggest:
+- NIST SP 800-171 Rev. 2
+- CMMC Level 2 Self-Assessment
+- DFARS 252.204-7012 if DoD contract
+
+If user selects:
+“DoD contract with DFARS 7012”
+
+Suggest:
+- DFARS 252.204-7012
+- NIST SP 800-171 Rev. 2
+- SSP
+- POA&M
+- Incident reporting workflow
+
+If user selects:
+“Need future readiness”
+
+Suggest:
+- NIST SP 800-171 Rev. 3 as future-readiness package
+- Rev. 2 as active operational package if applicable
+
+Do not auto-select packages without allowing user review.
+
+====================================================================
+7. ORGANIZATION PACKAGE SETTINGS
+====================================================================
+
+Add an organization page:
+
+Settings > Compliance Packages
+
+This page should allow authorized users to:
+- view selected packages
+- add a package
+- deactivate a package
+- compare packages
+- view package coverage
+- view crosswalk impact
+
+Do not delete organization data when a package is removed.
+Instead:
+- mark package inactive
+- preserve historical data
+- keep evidence/documents unless user explicitly deletes them
+- retain audit log
+
+If adding a new package to an existing organization:
+- show dry run first
+- show new requirements to be added
+- show duplicate/overlapping requirements
+- show reports/roadmap items to be enabled
+- ask for confirmation
+
+====================================================================
+8. CONTROL / REQUIREMENT LIBRARY CHANGES
+====================================================================
+
+Rename or broaden “Controls” to support multiple package types.
+
+Preferred UI label:
+Controls & Requirements
+
+But if keeping sidebar label “Controls,” then page title can say:
+Controls & Requirements Library
+
+The library should show requirements based on selected organization packages.
+
+Columns:
+- Requirement ID
+- Title
+- Framework / Package
+- Family / Domain
+- Version
+- Status
+- Evidence
+- Documents
+- Monitoring
+- POA&M
+
+Filters:
+- Framework
+- Package
+- Version
+- Family / Domain
+- Status
+- Evidence Coverage
+- Document Coverage
+- Search
+
+If multiple packages are selected and requirements overlap:
+- show unified view by default
+- allow grouped view by package
+
+Unified view:
+- one row per logical requirement/control
+- badges showing packages it belongs to
+
+Package view:
+- separate rows per package requirement
+
+====================================================================
+9. REQUIREMENT DETAIL PAGE
+====================================================================
+
+Requirement detail page should support multiple frameworks.
+
+Header:
+- requirement ID
+- title
+- package/framework badges
+- family/domain
+- version
+- status
+
+Tabs:
+- Implementation
+- Configure
+- Evidence
+- Documents
+- Monitoring
+- POA&M
+- SSP
+- Crosswalk
+- Assessment Objectives
+
+Implementation tab:
+- requirement text
+- organization implementation narrative
+- status
+- owner
+
+Configure tab:
+- detailed implementation steps if available
+
+Evidence tab:
+- linked evidence for this requirement
+
+Documents tab:
+- linked policies/procedures/records
+
+Crosswalk tab:
+- show equivalent/related controls across selected packages
+- examples:
+  - CMMC L2 control maps to NIST 800-171 Rev. 2 requirement
+  - NIST Rev. 2 requirement maps to Rev. 3 requirement
+  - DFARS 7012 obligation maps to NIST/SSP/incident evidence
+
+Assessment Objectives tab:
+- for NIST 800-171A packages
+- show assessment objectives / determination statements
+- show evidence and status per objective if implemented
+
+====================================================================
+10. FRAMEWORK CROSSWALK
+====================================================================
+
+Add crosswalk functionality.
+
+Examples:
+- CMMC Level 2 ↔ NIST SP 800-171 Rev. 2
+- NIST SP 800-171 Rev. 2 ↔ NIST SP 800-171 Rev. 3
+- NIST SP 800-171 Rev. 2 ↔ NIST SP 800-171A Rev. 2 objectives
+- NIST SP 800-171 Rev. 3 ↔ NIST SP 800-171A Rev. 3 objectives
+- DFARS clauses ↔ required artifacts/processes
+
+Crosswalk page should show:
+- source requirement
+- target requirement
+- relationship type
+- notes
+- coverage status
+
+Add crosswalk reports:
+- Rev. 2 to Rev. 3 Gap Report
+- CMMC to NIST 800-171 Map
+- DFARS Obligation Coverage Report
+- Assessment Objective Coverage Report
+
+====================================================================
+11. DFARS PACKAGE HANDLING
+====================================================================
+
+DFARS clauses are not normal security controls.
+
+Create a DFARS Obligations page for organizations that select DFARS packages.
+
+Page:
+DFARS Obligations
+
+Show:
+- clause number
+- title
+- obligation summary
+- required artifacts
+- status
+- owner
+- linked evidence
+- linked documents
+- linked reports
+
+DFARS 252.204-7012 should include obligation areas such as:
+- safeguard covered defense information
+- implement required security requirements
+- cyber incident reporting process
+- malicious software submission awareness/process if applicable
+- media preservation / investigation support awareness
+- subcontractor flowdown awareness
+- incident response evidence
+
+DFARS 252.204-7019 / 7020 should include:
+- NIST SP 800-171 assessment support
+- self-assessment score support
+- SPRS-related evidence tracking if applicable
+- assessment methodology support
+- DoD assessment access readiness
+
+DFARS 252.204-7021 should include:
+- CMMC requirement tracking where contractually applicable
+- current requirement mode
+- contract-specific notes
+- future review tracking
+
+Do not create C3PAO export package.
+Keep DFARS as obligation tracking and evidence readiness.
+
+====================================================================
+12. DASHBOARD CHANGES
+====================================================================
+
+Dashboard should reflect selected packages.
+
+At top, show:
+- Organization name
+- selected package badges
+- assessment mode
+- readiness status
+
+Example:
+APEX Solutions Readiness Dashboard
+Packages: CMMC L2 Self | NIST 800-171 Rev. 2 | DFARS 7012
+
+Dashboard cards:
+- Overall Readiness
+- Requirements Implemented
+- Evidence Health
+- Documentation Health
+- Monitoring
+- POA&M
+- DFARS Obligations if DFARS selected
+
+Domain readiness should show domains/families based on selected package:
+- CMMC/NIST Rev. 2: 14 families
+- NIST Rev. 3: 17 families
+- DFARS: obligation groups
+
+If multiple frameworks selected:
+- default to unified readiness
+- allow filter by package
+
+====================================================================
+13. EVIDENCE AND DOCUMENTS
+====================================================================
+
+Evidence and documents should support multiple framework mappings.
+
+Evidence records should be linkable to:
+- one or more CMMC controls
+- one or more NIST 800-171 requirements
+- one or more NIST 800-171A assessment objectives
+- one or more DFARS obligations
+
+Update evidence metadata:
+- linked controls/requirements
+- linked framework packages
+- primary package
+- primary requirement
+- source module
+
+Bulk upload should allow:
+- select package
+- select requirements
+- apply to all files
+- per-file requirement edits
+
+All Documents should show:
+- linked requirements across packages
+- source package
+- framework badges
+
+====================================================================
+14. DOCUMENT TEMPLATE LIBRARY
+====================================================================
+
+Document templates should support package applicability.
+
+Each template should map to:
+- CMMC controls
+- NIST requirements
+- DFARS obligations
+- FAR requirements
+- custom requirements
+
+When generating documents:
+- user selects organization
+- app knows selected packages
+- suggested templates reflect selected packages
+- generated document links to all mapped requirements
+
+Example:
+Access Control Policy may support:
+- CMMC L2 controls
+- NIST 800-171 Rev. 2 access control requirements
+- NIST 800-171 Rev. 3 access control requirements
+- DFARS 7012 safeguarding obligation
+
+====================================================================
+15. SSP MODULE
+====================================================================
+
+SSP should remain central for NIST/CMMC readiness.
+
+SSP mapping should support:
+- NIST SP 800-171 Rev. 2 requirements
+- NIST SP 800-171 Rev. 3 requirements
+- CMMC mapped controls
+- DFARS obligation references
+
+If an organization selected NIST 800-171 Rev. 3:
+- SSP mapping should show Rev. 3 requirement IDs/families
+- include ODP support if relevant
+- allow ODP fields to be defined where applicable
+
+Do not overwrite existing SSP narratives.
+If adding a new package to an existing organization, create blank or suggested new mappings without altering current SSP text.
+
+====================================================================
+16. MONITORING TRACKER
+====================================================================
+
+Monitoring templates should be package-aware.
+
+Examples:
+For NIST/CMMC:
+- access review
+- audit log review
+- vulnerability review
+- incident response test
+- backup verification
+- policy review
+- risk assessment review
+
+For DFARS 7012:
+- incident reporting process review
+- subcontractor flowdown review
+- covered defense information handling review
+- cyber incident response evidence check
+
+Monitoring records should show:
+- linked package
+- linked requirement/obligation
+- frequency
+- evidence to retain
+
+====================================================================
+17. IMPLEMENTATION ROADMAP
+====================================================================
+
+Implementation Roadmap should adapt to selected packages.
+
+For CMMC/NIST:
+- high-impact implementation actions
+
+For DFARS:
+- obligation readiness actions
+
+Roadmap should show:
+- package badges
+- controls/requirements supported
+- DFARS obligations supported
+- evidence/documents produced
+
+Do not assume every roadmap action is only CMMC.
+
+Examples:
+- Define CUI/FCI Scope and SSP
+- Perform User and Access Review
+- Configure MFA and Conditional Access
+- Configure Logging and Audit Review
+- Establish DFARS Incident Reporting Procedure
+- Validate Subcontractor Flowdown Process
+- Prepare NIST 800-171 Self-Assessment Support
+
+====================================================================
+18. PRE-ASSESSMENT
+====================================================================
+
+Pre-Assessment should support package context.
+
+When running tenant-connected readiness scan:
+- map findings to selected packages
+- if NIST 800-171 Rev. 2 selected, map to Rev. 2
+- if CMMC L2 selected, map to CMMC/NIST equivalent
+- if DFARS selected, map findings to DFARS obligations where relevant
+
+Do not call the scan a full assessment.
+Use:
+Microsoft Tenant Technical Readiness Scan
+
+====================================================================
+19. REPORTS
+====================================================================
+
+Reports should be package-aware.
+
+Available reports based on selected packages:
+
+For CMMC:
+- CMMC Readiness Report
+- Domain Readiness Report
+- Evidence Inventory
+- Control Status Report
+
+For NIST SP 800-171:
+- NIST 800-171 Readiness Report
+- NIST Requirement Status Report
+- NIST Evidence Inventory
+- NIST 800-171A Assessment Objective Coverage
+
+For DFARS:
+- DFARS Obligation Readiness Report
+- DFARS Evidence Support Report
+- Incident Reporting Readiness Report
+- Subcontractor Flowdown Evidence Report
+- SPRS / DoD Assessment Support Report if applicable
+
+For multi-package organizations:
+- Unified Readiness Report
+- Crosswalk Coverage Report
+- Package Coverage Comparison
+
+Reports should not include C3PAO export package language.
+
+====================================================================
+20. HELP AND FAQ
+====================================================================
+
+Update Help & User Guide to explain:
+
+- what a compliance package is
+- how package selection works
+- difference between CMMC, NIST, DFARS, FAR
+- difference between controls and contract obligations
+- how to change selected packages
+- how crosswalks work
+- why the same evidence may support multiple packages
+
+Add FAQ:
+
+Q: Why do controls change when I select a package?
+A: Each package has its own requirements. Control HUB displays the requirements applicable to the selected package(s).
+
+Q: Can one organization have multiple packages?
+A: Yes. For example, an organization can select NIST 800-171 Rev. 2, CMMC Level 2 Self-Assessment, and DFARS 7012.
+
+Q: Are DFARS clauses controls?
+A: No. DFARS clauses are contract obligations. Control HUB tracks them as obligations mapped to evidence, documents, reports, and related controls.
+
+Q: Can the same evidence support multiple packages?
+A: Yes. Evidence can be linked to multiple controls, NIST requirements, assessment objectives, or DFARS obligations.
+
+====================================================================
+21. MIGRATION SAFETY
+====================================================================
+
+Do not automatically migrate existing production organizations.
+
+For current CMMC L2 organizations:
+- leave current data as-is
+- create a safe mapping layer to existing CMMC package
+- do not duplicate controls
+- do not reset statuses
+- do not unlink evidence
+- do not overwrite narratives
+
+Add a migration/dry-run tool:
+
+Admin > Data Maintenance > Package Migration
+
+For each existing org, show:
+- current control count
+- inferred package
+- suggested package assignment
+- changes to be made
+- conflicts
+- data that will remain unchanged
+
+Do not run migration automatically.
+
+For VTCCORP.US:
+- suggest CMMC Level 2 Self-Assessment and NIST 800-171 Rev. 2
+- do not apply without explicit confirmation
+
+====================================================================
+22. USER EXPERIENCE
+====================================================================
+
+On Create Organization, make package selection clear and friendly.
+
+Do not overwhelm the user with all packages at once.
+
+Use categories:
+- Quick Start
+- CMMC
+- NIST
+- DFARS
+- FAR
+- Custom
+
+Quick Start cards:
+- FCI Only
+- CUI / DoD Contractor
+- NIST 800-171 Readiness
+- DFARS Contract Support
+- Custom Framework
+
+If user selects Quick Start:
+- app recommends packages
+- user can review before confirming
+
+====================================================================
+23. PACKAGE SELECTION EXAMPLES
+====================================================================
+
+Create examples in the UI.
+
+Example 1:
+FCI Only
+Recommended:
+- FAR 52.204-21
+- CMMC Level 1 Self-Assessment
+
+Example 2:
+DoD Contractor with CUI
+Recommended:
+- NIST SP 800-171 Rev. 2
+- CMMC Level 2 Self-Assessment
+- DFARS 252.204-7012
+
+Example 3:
+Future NIST Readiness
+Recommended:
+- NIST SP 800-171 Rev. 3
+- NIST SP 800-171A Rev. 3
+
+Example 4:
+DFARS Contract Support
+Recommended:
+- DFARS 252.204-7012
+- DFARS 252.204-7019
+- DFARS 252.204-7020
+- selected NIST package
+
+====================================================================
+24. ACCEPTANCE TESTS
+====================================================================
+
+Test A:
+Create new organization and select only CMMC Level 1 Self-Assessment.
+Controls Library shows only CMMC L1 requirements.
+
+Test B:
+Create new organization and select NIST SP 800-171 Rev. 2.
+Controls/Requirements Library shows Rev. 2 requirements.
+
+Test C:
+Create new organization and select NIST SP 800-171 Rev. 3.
+Library shows Rev. 3 requirements and families, not the old fixed 110 CMMC L2 list.
+
+Test D:
+Create new organization and select DFARS 252.204-7012.
+App shows DFARS obligations page, required artifacts, and evidence tracking.
+
+Test E:
+Create new organization and select NIST Rev. 2 + DFARS 7012.
+App shows NIST requirements and DFARS obligations together.
+
+Test F:
+Evidence can be linked to multiple packages/requirements.
+
+Test G:
+Dashboard package badges reflect selected packages.
+
+Test H:
+Reports available reflect selected packages.
+
+Test I:
+Existing VTCCORP.US production data is not changed.
+
+Test J:
+No C3PAO export package is recreated.
+
+Test K:
+Package selection does not duplicate global controls or corrupt existing evidence mappings.
+
+Test L:
+User can add a package to an existing organization only after dry-run and confirmation.
+
+Test M:
+Crosswalk page shows mappings between selected packages where available.
+
+====================================================================
+25. FINAL REQUIREMENT
+====================================================================
+
+Before making changes, provide an implementation plan and data migration plan.
+
+Do not run any production migration automatically.
+
+The first implementation should focus on:
+1. Data model
+2. Package library
+3. Create Organization package selection
+4. Controls/Requirements Library filtering by package
+5. New package-aware dashboard labels
+6. Safe migration layer for existing orgs
+
+Do not alter existing production data without explicit approval.
