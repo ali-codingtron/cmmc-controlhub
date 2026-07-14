@@ -645,7 +645,9 @@ async function seedComplianceFrameworkHelpArticles() {
 
 async function seedCrosswalkRequirements() {
   // Check per-package so new packages can be seeded even if others already exist
-  const [cmmcL2Count, nistR2Count, nistR3Count, dfars7012Count] = await Promise.all([
+  const [cmmcL1Count, cmmcL2Count, nistR2Count, nistR3Count, dfars7012Count, farCount] = await Promise.all([
+    db.select({ cnt: count() }).from(complianceRequirementsTable)
+      .where(eq(complianceRequirementsTable.packageId, "pkg-cmmc-l1-self")),
     db.select({ cnt: count() }).from(complianceRequirementsTable)
       .where(eq(complianceRequirementsTable.packageId, "pkg-cmmc-l2-self")),
     db.select({ cnt: count() }).from(complianceRequirementsTable)
@@ -654,13 +656,17 @@ async function seedCrosswalkRequirements() {
       .where(eq(complianceRequirementsTable.packageId, "pkg-nist-800-171-r3")),
     db.select({ cnt: count() }).from(complianceRequirementsTable)
       .where(eq(complianceRequirementsTable.packageId, "pkg-dfars-7012")),
+    db.select({ cnt: count() }).from(complianceRequirementsTable)
+      .where(eq(complianceRequirementsTable.packageId, "pkg-far-52-204-21")),
   ]);
 
+  const needCmmcL1 = Number(cmmcL1Count[0].cnt) === 0;
   const needCmmcL2 = Number(cmmcL2Count[0].cnt) === 0;
   const needNistR2 = Number(nistR2Count[0].cnt) === 0;
   const needNistR3 = Number(nistR3Count[0].cnt) === 0;
   const needDfars7012 = Number(dfars7012Count[0].cnt) === 0;
-  const nothingToDo = !needCmmcL2 && !needNistR2 && !needNistR3 && !needDfars7012;
+  const needFar = Number(farCount[0].cnt) === 0;
+  const nothingToDo = !needCmmcL1 && !needCmmcL2 && !needNistR2 && !needNistR3 && !needDfars7012 && !needFar;
   if (nothingToDo) return;
 
   // Read active controls to derive requirements
@@ -683,6 +689,45 @@ async function seedCrosswalkRequirements() {
   const cmmcReqMap: Record<string, string> = {};
   const nistReqMap: Record<string, string> = {};
   const nistR3ReqMap: Record<string, string> = {};
+
+  // L1 controls: the 17 basic cyber hygiene practices (level = "L1")
+  const l1Controls = controls.filter(c => c.level === "L1");
+
+  // --- CMMC L1 requirements (17 Level 1 practices for pkg-cmmc-l1-self) ---
+  if (needCmmcL1) {
+    for (let i = 0; i < l1Controls.length; i++) {
+      const c = l1Controls[i];
+      await db.insert(complianceRequirementsTable).values({
+        id: randomUUID(),
+        packageId: "pkg-cmmc-l1-self",
+        requirementId: c.controlId,
+        title: c.title,
+        level: "L1",
+        sortOrder: i + 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).onConflictDoNothing();
+    }
+  }
+
+  // --- FAR 52.204-21 requirements (15 basic safeguarding practices, mapped to L1 controls) ---
+  // FAR 52.204-21's 15 safeguarding requirements align closely with CMMC L1 practices;
+  // we use the 17 L1 controls as the in-scope set so package filtering works correctly.
+  if (needFar) {
+    for (let i = 0; i < l1Controls.length; i++) {
+      const c = l1Controls[i];
+      await db.insert(complianceRequirementsTable).values({
+        id: randomUUID(),
+        packageId: "pkg-far-52-204-21",
+        requirementId: c.controlId,
+        title: c.title,
+        level: "L1",
+        sortOrder: i + 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).onConflictDoNothing();
+    }
+  }
 
   // --- CMMC L2 requirements ---
   if (needCmmcL2) {

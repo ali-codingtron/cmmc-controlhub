@@ -12,8 +12,9 @@ import {
   complianceRequirementsTable,
   documentsTable,
   controlAssessmentsTable,
+  controlsTable,
 } from "@workspace/db";
-import { eq, and, asc, inArray, count, or } from "drizzle-orm";
+import { eq, and, asc, inArray, count, or, like, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 import { randomUUID } from "crypto";
@@ -642,23 +643,42 @@ router.get("/admin/orgs-package-status", requireAuth, async (req, res) => {
       .where(inArray(controlAssessmentsTable.organizationId, orgIds))
       .groupBy(controlAssessmentsTable.organizationId),
 
-    // Current controls in scope: count distinct controls matched from compliance_requirements
-    // for each org's active framework packages (CMMC/FAR/NIST)
+    // Distinct controls in scope per org — join to controlsTable to resolve requirement IDs
+    // to actual control rows, then count DISTINCT to avoid double-counting when CMMC L2 + NIST R2
+    // both have requirements that map to the same 110 controls.
     db
-      .select({
+      .selectDistinct({
         organizationId: organizationPackagesTable.organizationId,
-        cnt: count(complianceRequirementsTable.id),
+        controlDbId: controlsTable.id,
       })
       .from(organizationPackagesTable)
       .innerJoin(compliancePackagesTable, eq(organizationPackagesTable.packageId, compliancePackagesTable.id))
       .innerJoin(complianceRequirementsTable, eq(complianceRequirementsTable.packageId, compliancePackagesTable.id))
+      .innerJoin(
+        controlsTable,
+        or(
+          // CMMC (L1/L2) and FAR packages: requirementId matches controlsTable.controlId
+          and(
+            or(
+              like(compliancePackagesTable.packageKey, "CMMC_%"),
+              eq(compliancePackagesTable.packageKey, "FAR_52_204_21")
+            ),
+            eq(controlsTable.controlId, complianceRequirementsTable.requirementId)
+          ),
+          // NIST 800-171 packages: requirementId matches controlsTable.nistRef
+          and(
+            like(compliancePackagesTable.packageKey, "NIST_800_171_%"),
+            sql`${controlsTable.nistRef} = ${complianceRequirementsTable.requirementId}`
+          )
+        )
+      )
       .where(
         and(
           inArray(organizationPackagesTable.organizationId, orgIds),
-          eq(organizationPackagesTable.isActive, true)
+          eq(organizationPackagesTable.isActive, true),
+          eq(controlsTable.isActive, true)
         )
-      )
-      .groupBy(organizationPackagesTable.organizationId),
+      ),
   ]);
 
   const pkgByOrg: Record<string, typeof allPackages> = {};
@@ -672,9 +692,11 @@ router.get("/admin/orgs-package-status", requireAuth, async (req, res) => {
     if (r.organizationId) assessedByOrg[r.organizationId] = Number(r.cnt);
   }
 
+  // packageControlCounts is now an array of (organizationId, controlDbId) distinct pairs.
+  // Group and count in JS — each entry is already de-duplicated by SELECT DISTINCT.
   const packageControlCountByOrg: Record<string, number> = {};
   for (const r of packageControlCounts) {
-    packageControlCountByOrg[r.organizationId] = Number(r.cnt);
+    packageControlCountByOrg[r.organizationId] = (packageControlCountByOrg[r.organizationId] ?? 0) + 1;
   }
 
   const result = orgs.map((org) => {
