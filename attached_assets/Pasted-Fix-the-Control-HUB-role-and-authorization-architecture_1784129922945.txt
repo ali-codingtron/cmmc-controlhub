@@ -1,0 +1,774 @@
+Fix the Control HUB role and authorization architecture.
+
+Current issue:
+Control HUB currently has two competing role sources:
+
+1. A global/legacy role selected when the user is initially created.
+2. An organization-specific role assigned later under Edit User > Organization Access.
+
+Example:
+
+User:
+JoeTest
+
+Legacy/global role:
+IT Contributor
+
+Organization assignments:
+- APEX Solutions — Compliance Manager
+- Carme Tech — Organization Admin
+
+Observed behavior:
+- When JoeTest selects APEX Solutions and attempts to generate a document, the app says the user must be a Compliance Manager, even though JoeTest is a Compliance Manager for APEX Solutions.
+- When JoeTest selects Carme Tech, Organization Admin functionality works correctly.
+
+Likely cause:
+The document-generation API or authorization middleware is checking User.role / globalRole instead of the user’s organization-specific membership role.
+
+Goal:
+Use organization-specific roles as the authoritative role for every organization-scoped action.
+
+Do not change or delete production users, passwords, organization memberships, evidence, documents, controls, or other organization data.
+
+====================================================================
+1. INSPECT THE CURRENT AUTHORIZATION MODEL
+====================================================================
+
+Before making changes, inspect:
+
+- User model
+- global role / role field
+- organization membership model
+- user-to-organization relationship
+- active organization handling
+- session/JWT contents
+- document-generation authorization check
+- frontend permission checks
+- backend authorization middleware
+- all places that directly compare role strings
+
+Provide a diagnostic summary showing:
+
+- where the initial Create User role is stored
+- where organization-specific roles are stored
+- which role document generation currently checks
+- which role each major API route currently checks
+- whether roles are cached in sessions or JWTs
+- whether organization switching refreshes the effective role
+
+Do not change production data during this diagnostic.
+
+====================================================================
+2. SEPARATE PLATFORM ROLES FROM ORGANIZATION ROLES
+====================================================================
+
+Use two clearly separate concepts.
+
+Platform role:
+
+platform_role
+
+Allowed values:
+- NONE
+- GLOBAL_ADMIN
+
+Organization membership role:
+
+organization_role
+
+Allowed values:
+- ORGANIZATION_ADMIN
+- COMPLIANCE_MANAGER
+- IT_CONTRIBUTOR
+- REVIEWER
+- EXECUTIVE_VIEWER
+- ASSESSOR_READ_ONLY
+- DEMO_VIEWER if needed
+
+Do not use normal organization roles as global platform roles.
+
+Do not store IT Contributor, Compliance Manager, Reviewer, or Organization Admin as a platform-wide role.
+
+Global Admin is the only normal platform-wide role.
+
+The break-glass system administrator should remain a Global Admin.
+
+====================================================================
+3. REMOVE GLOBAL ADMIN FROM ORGANIZATION ROLE OPTIONS
+====================================================================
+
+The current Organization Access role dropdown includes Global Admin.
+
+Remove Global Admin from organization membership role options.
+
+Global Admin is a platform-level assignment and must not be assigned separately inside one organization.
+
+Organization role dropdown should contain only:
+
+- Organization Admin
+- Compliance Manager
+- IT Contributor
+- Reviewer
+- Executive Viewer
+- Assessor Read-Only
+
+Only a Global Admin should be able to assign another platform-level Global Admin.
+
+====================================================================
+4. CHANGE CREATE USER AND INVITE USER WORKFLOWS
+====================================================================
+
+The current Create User form asks for a single Role before any organization is selected. This is confusing and creates authorization conflicts.
+
+Update Create User and Invite User to use the same organization-access workflow.
+
+New Create User structure:
+
+User Information:
+- Full Name
+- Email
+- Password or invitation workflow
+- Title
+- Department
+
+Platform Access:
+- Platform Role
+
+Options:
+- No Platform Role
+- Global Admin
+
+Default:
+No Platform Role
+
+Only show Global Admin as an option to existing Global Admin users.
+
+Organization Access:
+Allow adding one or more rows:
+
+- Organization
+- Role for that organization
+- Membership status
+
+Example:
+
+APEX Solutions | Compliance Manager | Active
+Carme Tech | Organization Admin | Active
+
+Require at least one organization assignment unless the user is a Global Admin.
+
+Do not ask for a generic global IT Contributor, Compliance Manager, Reviewer, or Organization Admin role.
+
+====================================================================
+5. USE ONE ORGANIZATION MEMBERSHIP RECORD PER USER/ORGANIZATION
+====================================================================
+
+Enforce a unique relationship:
+
+user_id + organization_id
+
+A user should have one active role per organization.
+
+Do not create duplicate organization membership rows for the same user and organization.
+
+When an administrator changes a user’s role:
+- update the existing organization membership
+- do not create a second membership
+- record the previous and new roles in the audit trail
+
+====================================================================
+6. CENTRALIZE PERMISSION CHECKING
+====================================================================
+
+Create one centralized backend authorization service.
+
+Example:
+
+authorizeOrganizationAction(
+  userId,
+  organizationId,
+  permission
+)
+
+Authorization order:
+
+1. Load authenticated user.
+2. If user.platform_role = GLOBAL_ADMIN:
+   - allow according to Global Admin permissions.
+3. Otherwise:
+   - load the active OrganizationMembership for userId + organizationId.
+4. Confirm membership exists and is Active.
+5. Resolve the organization role.
+6. Resolve permissions from the centralized permission matrix.
+7. Allow or deny the requested action.
+
+Do not use User.role or globalRole for organization-scoped permissions except GLOBAL_ADMIN.
+
+Do not trust a role value sent by the frontend.
+
+Do not rely only on hiding buttons.
+
+Backend API routes must enforce authorization.
+
+====================================================================
+7. CREATE A CENTRAL PERMISSION MATRIX
+====================================================================
+
+Use capabilities instead of scattered hardcoded role-name comparisons.
+
+Example permissions:
+
+- dashboard.view
+- controls.view
+- controls.edit
+- evidence.view
+- evidence.upload
+- evidence.edit
+- evidence.approve
+- evidence.delete
+- evidence.download
+- evidence.bulk_download
+- documents.view
+- documents.upload
+- documents.generate
+- documents.edit
+- documents.approve
+- documents.delete
+- documents.download
+- documents.bulk_download
+- monitoring.view
+- monitoring.update
+- poam.view
+- poam.create
+- poam.edit
+- poam.close
+- ssp.view
+- ssp.edit
+- reports.view
+- reports.generate
+- roadmap.view
+- roadmap.update
+- preassessment.view
+- preassessment.run
+
+At minimum, define document-generation access as:
+
+GLOBAL_ADMIN:
+- documents.generate = true
+
+ORGANIZATION_ADMIN:
+- documents.generate = true
+
+COMPLIANCE_MANAGER:
+- documents.generate = true
+
+IT_CONTRIBUTOR:
+- documents.generate = false unless explicitly granted later
+
+REVIEWER:
+- documents.generate = false
+
+EXECUTIVE_VIEWER:
+- documents.generate = false
+
+ASSESSOR_READ_ONLY:
+- documents.generate = false
+
+Do not implement document generation as:
+
+user.role === "Compliance Manager"
+
+Instead implement:
+
+authorizeOrganizationAction(
+  user.id,
+  selectedOrganization.id,
+  "documents.generate"
+)
+
+====================================================================
+8. FIX DOCUMENT GENERATION SPECIFICALLY
+====================================================================
+
+Inspect every document generation endpoint and page.
+
+The selected organization must be included in the authorization check.
+
+Correct behavior:
+
+When JoeTest selects APEX Solutions:
+- organizationId = APEX Solutions ID
+- membership role = Compliance Manager
+- documents.generate permission = true
+- document generation is allowed
+
+When JoeTest selects Carme Tech:
+- organizationId = Carme Tech ID
+- membership role = Organization Admin
+- documents.generate permission = true
+- document generation is allowed
+
+If JoeTest selects an organization where the membership role is IT Contributor:
+- documents.generate permission = false
+- generation is denied with a clear message
+
+Use error message:
+
+“You do not have permission to generate documents for this organization. Your current organization role is IT Contributor.”
+
+Do not say:
+“You must be a Compliance Manager”
+
+because Organization Admin and Global Admin may also have permission.
+
+====================================================================
+9. AUTHORIZE AGAINST THE RECORD’S ORGANIZATION
+====================================================================
+
+For every organization-scoped object, authorize using the organization that owns the object.
+
+Examples:
+
+Document generation:
+- use target organization_id
+
+Evidence edit:
+- use evidence.organization_id
+
+Control update:
+- use organization_control.organization_id
+
+POA&M update:
+- use poam.organization_id
+
+SSP edit:
+- use ssp.organization_id
+
+Do not authorize only from a client-side active organization selector.
+
+Verify that the object belongs to the organization before performing the action.
+
+This prevents cross-organization access by changing a URL or request payload.
+
+====================================================================
+10. ACTIVE ORGANIZATION CONTEXT
+====================================================================
+
+When a user switches organizations:
+
+- update active organization ID
+- resolve the user’s role for that organization
+- resolve effective permissions
+- refresh the UI permission context
+
+Add endpoint or context similar to:
+
+GET /api/auth/organization-context/:organizationId
+
+Return:
+
+- organization ID
+- organization name
+- effective role
+- effective permissions
+- membership status
+- platform role
+
+Example:
+
+{
+  "organizationId": "...",
+  "organizationName": "APEX Solutions",
+  "effectiveRole": "Compliance Manager",
+  "platformRole": "None",
+  "permissions": [
+    "documents.view",
+    "documents.generate",
+    "documents.edit",
+    "evidence.upload"
+  ]
+}
+
+The frontend may use this to show/hide controls, but the backend must still enforce permissions independently.
+
+====================================================================
+11. DO NOT CACHE A STALE ROLE IN THE SESSION
+====================================================================
+
+Check whether the login session or JWT stores one fixed role.
+
+If it does, this causes incorrect behavior for users with different roles across organizations.
+
+Do not store only:
+
+role = IT Contributor
+
+in a session and use it for every organization.
+
+Preferred:
+- query active organization membership during authorization
+
+If permission caching is required:
+- cache per organization
+- use a short expiration
+- include an authorization version
+- invalidate cache after role or membership changes
+
+When an administrator changes a user’s organization role:
+- revoke or refresh affected sessions
+- increment an authorization version
+- make the new role effective immediately
+
+JoeTest should not need to retain an old IT Contributor permission after being assigned Compliance Manager in APEX Solutions.
+
+====================================================================
+12. UPDATE USERS & ROLES PAGE
+====================================================================
+
+The current table column “Global Role” is misleading because it shows organization-style roles such as IT Contributor.
+
+Rename:
+
+Global Role
+
+To:
+
+Platform Role
+
+Only show:
+- Global Admin
+- —
+
+Add a separate column:
+
+Organization Access
+
+Show summarized badges:
+
+APEX Solutions — Compliance Manager
+Carme Tech — Organization Admin
+
+If there are multiple organizations:
+- show the first two
+- show “+X more”
+- allow expansion
+
+Add a user detail section:
+
+Effective Access by Organization
+
+Columns:
+- Organization
+- Organization Role
+- Membership Status
+- Key Permissions
+- Last Updated
+
+Example:
+
+APEX Solutions
+Compliance Manager
+Active
+Generate Documents, Upload Evidence, Manage Monitoring, Manage POA&M
+
+Carme Tech
+Organization Admin
+Active
+Full Organization Administration
+
+====================================================================
+13. DISPLAY THE CURRENT ORGANIZATION ROLE
+====================================================================
+
+In the sidebar or user menu, show the user’s effective role for the currently selected organization.
+
+Example:
+
+APEX Solutions
+Compliance Manager
+
+When switched:
+
+Carme Tech
+Organization Admin
+
+This helps users understand why certain actions are available or unavailable.
+
+For Global Admin:
+
+APEX Solutions
+Global Admin
+
+====================================================================
+14. ADD AN EFFECTIVE PERMISSION DIAGNOSTIC
+====================================================================
+
+Add Global Admin-only diagnostic under Edit User:
+
+Effective Permissions
+
+Select organization:
+[APEX Solutions]
+
+Display:
+- effective role
+- platform role
+- organization role
+- permissions allowed
+- permissions denied
+- reason/source
+
+Example:
+
+Effective role:
+Compliance Manager
+
+Source:
+Organization Membership
+
+documents.generate:
+Allowed
+
+This will make future permission issues easier to troubleshoot.
+
+Do not expose this diagnostic to normal users.
+
+====================================================================
+15. PRESERVE EXISTING PRODUCTION DATA
+====================================================================
+
+Do not automatically delete or overwrite current role assignments.
+
+Do not:
+- delete users
+- change passwords
+- remove organization memberships
+- change existing organization roles
+- modify evidence/documents/controls
+- change Global Admin accounts
+
+Add new fields/tables only if necessary.
+
+Existing organization-specific roles should remain authoritative.
+
+The legacy global role field may be deprecated but must not be deleted until migration is verified.
+
+====================================================================
+16. LEGACY ROLE COMPATIBILITY
+====================================================================
+
+Create a safe transition plan.
+
+Authorization resolution:
+
+1. Global Admin platform role
+2. Active organization membership role
+3. Temporary legacy-role fallback only if no organization role exists and existing access would otherwise break
+
+If legacy fallback is used:
+- log a warning
+- show the account in a migration report
+- do not grant access to organizations the user is not assigned to
+
+Add admin report:
+
+Legacy Role Migration
+
+Show:
+- user
+- legacy role
+- organization memberships
+- organization roles
+- conflicts
+- recommended correction
+
+For users such as JoeTest:
+- organization membership must win over the legacy IT Contributor role
+
+Do not automatically rewrite production user data without a dry run and confirmation.
+
+====================================================================
+17. ADD MIGRATION DRY RUN
+====================================================================
+
+Before changing production role data, generate a dry-run report.
+
+Show:
+
+- total users
+- users with Global Admin platform access
+- users with legacy non-global role
+- users with organization memberships
+- users with different roles across organizations
+- users with no organization membership
+- duplicate membership records
+- role conflicts
+- users relying on legacy fallback
+
+For JoeTest, dry run should show:
+
+Legacy role:
+IT Contributor
+
+APEX Solutions:
+Compliance Manager
+
+Carme Tech:
+Organization Admin
+
+Resolution:
+Use organization-specific membership role
+
+No data should be changed during dry run.
+
+====================================================================
+18. AUDIT LOGGING
+====================================================================
+
+Log:
+
+- platform role assigned
+- platform role removed
+- organization access added
+- organization role changed
+- organization access removed
+- membership activated/deactivated
+- effective permission denied
+- effective permission granted for sensitive action
+- session permissions refreshed
+
+For role changes include:
+- acting admin
+- target user
+- organization
+- previous role
+- new role
+- timestamp
+
+====================================================================
+19. FIX ALL ORGANIZATION-SCOPED FEATURES
+====================================================================
+
+Audit authorization checks for:
+
+- Dashboard
+- Controls
+- Evidence
+- Bulk Upload
+- Evidence Approval
+- Bulk Download
+- Documentation
+- Generate Document
+- Template Library
+- SSP
+- Monitoring Tracker
+- POA&M
+- Implementation Roadmap
+- Pre-Assessment
+- Reports
+- Framework Crosswalk
+- Contract Requirements
+
+Replace direct checks such as:
+
+user.role === "Compliance Manager"
+
+with centralized capability checks using the target organization ID.
+
+====================================================================
+20. ACCEPTANCE TESTS
+====================================================================
+
+Test A — JoeTest in APEX Solutions:
+
+Account:
+JoeTest
+
+Legacy role:
+IT Contributor
+
+Organization membership:
+APEX Solutions — Compliance Manager
+
+Expected:
+- can generate documents
+- can manage permitted evidence/documents
+- receives Compliance Manager permissions
+- does not receive only IT Contributor permissions
+
+Test B — JoeTest in Carme Tech:
+
+Organization membership:
+Carme Tech — Organization Admin
+
+Expected:
+- receives Organization Admin permissions
+- can perform organization administration allowed by that role
+
+Test C — No Role Leakage:
+
+JoeTest’s Organization Admin role in Carme Tech must not grant Organization Admin permissions in APEX Solutions.
+
+Test D — IT Contributor:
+
+Assign JoeTest as IT Contributor in a third organization.
+
+Expected:
+- can perform IT Contributor actions
+- cannot generate documents if that permission is not assigned
+
+Test E — Global Admin:
+
+Global Admin can access every organization and all organization actions.
+
+Test F — Assessor:
+
+Assessor Read-Only can view/download allowed content but cannot generate or modify documents.
+
+Test G — Direct API:
+
+Send a document-generation request for an organization where the user has no membership.
+
+Expected:
+HTTP 403
+
+Test H — Role Change:
+
+Change APEX Solutions role from IT Contributor to Compliance Manager.
+
+Expected:
+- permission is effective immediately
+- document generation becomes available
+- stale session role does not continue blocking access
+
+Test I — UI:
+
+Users & Roles page shows:
+- Platform Role
+- organization-specific role assignments
+- effective access by organization
+
+Test J — Production Safety:
+
+No existing users, passwords, organization memberships, evidence, documents, or controls are lost or overwritten.
+
+====================================================================
+21. MOST IMPORTANT RULE
+====================================================================
+
+For every organization-scoped action:
+
+Effective permissions must be based on:
+
+authenticated user
++
+target organization
++
+active organization membership role
++
+central permission matrix
+
+The initial legacy User.role value must not override a valid organization-specific role.
+
+For JoeTest in APEX Solutions, Compliance Manager must be the effective role.
+For JoeTest in Carme Tech, Organization Admin must be the effective role.

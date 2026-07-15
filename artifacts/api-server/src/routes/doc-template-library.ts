@@ -36,8 +36,9 @@ function requireAdmin(req: any, res: any, next: any) {
 }
 
 function canGenerateDocs(req: any) {
-  const role = req.authUser?.role;
-  return ["admin", "compliance_manager"].includes(role);
+  if (req.authUser?.role === "admin") return true;
+  const effectiveRole = req.orgRole ?? req.authUser?.role;
+  return ["global_admin", "org_admin", "compliance_manager"].includes(effectiveRole);
 }
 
 // ── GET /api/doc-templates/library ───────────────────────────────────────────
@@ -367,7 +368,7 @@ router.post("/admin/doc-templates/import", requireAuth, requireAdmin, async (req
 
 // ── POST /api/doc-templates/generate ─────────────────────────────────────────
 router.post("/doc-templates/generate", requireAuth, requireOrg, async (req, res): Promise<void> => {
-  if (!canGenerateDocs(req)) return void res.status(403).json({ error: "Compliance Manager or Admin access required" });
+  if (!canGenerateDocs(req)) return void res.status(403).json({ error: `Your current organization role does not have permission to generate documents. Required: Compliance Manager, Organization Admin, or Global Admin. Your current role: ${req.orgRole ?? req.authUser?.role ?? "unknown"}.` });
 
   const orgId = (req as any).orgId!;
   const actorId = (req as any).authUser?.id;

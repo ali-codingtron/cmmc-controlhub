@@ -35,6 +35,8 @@ declare global {
     interface Request {
       authUser?: AuthUser;
       orgId?: string;
+      /** Org-specific role resolved by requireOrg middleware — use this for all org-scoped permission checks. */
+      orgRole?: string;
       isBreakGlass?: boolean;
     }
   }
@@ -136,9 +138,13 @@ export function requireRole(...roles: string[]) {
   };
 }
 
-/** Blocks the assessor role from performing any write operation. */
+/**
+ * Blocks assessors from performing write operations.
+ * Uses req.orgRole (org-specific) when set, falls back to global role.
+ */
 export function requireNotAssessor(req: Request, res: Response, next: NextFunction) {
-  if (req.authUser?.role === "assessor") {
+  const effectiveRole = req.orgRole ?? req.authUser?.role;
+  if (effectiveRole === "assessor") {
     res.status(403).json({ error: "Assessors cannot perform write operations" });
     return;
   }

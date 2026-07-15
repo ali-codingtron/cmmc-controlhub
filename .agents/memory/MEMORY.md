@@ -9,3 +9,4 @@
 - [db lib zod/v4 vs drizzle-zod](db-lib-zod-v4-drizzle-zod.md) — wrong zod import in schema files silently blanks @workspace/db's dist via noEmitOnError, cascading fake errors everywhere.
 - [e2e testing with seeded credentials](e2e-testing-seeded-creds.md) — seeded passwords/MFA state in replit.md drift after prior sessions; verify via curl login before trusting docs, and per-user MFA opt-in overrides a "disabled" global enforcement mode.
 - [Express 5 typecheck patterns](express5-typecheck-patterns.md) — req.params cast, async void handlers, inArray enum, archiver ESM import, logAudit metadata fields.
+- [Org-role auth architecture](org-role-auth.md) — users.role = global JWT role; organization_users.role = org-specific role; always use req.orgRole (set by requireOrg) for permission checks.

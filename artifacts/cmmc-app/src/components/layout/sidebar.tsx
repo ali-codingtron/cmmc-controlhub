@@ -174,8 +174,10 @@ export function Sidebar() {
   const [roadmapExpanded, setRoadmapExpanded] = useState(isRoadmapActive);
   const isAdmin = user?.role === "admin";
   const { isDemoMode } = useDemoMode();
-  const canRunAssessment = user?.role === "admin" || user?.role === "compliance_manager" || user?.role === "reviewer";
-  const canViewRoadmap = user?.role === "admin" || user?.role === "compliance_manager" || user?.role === "reviewer";
+  // Use org-specific role for feature gating; fall back to global role for backward compat
+  const effectiveOrgRole = isAdmin ? "admin" : (activeOrg?.role ?? user?.role ?? "");
+  const canRunAssessment = isAdmin || ["compliance_manager", "reviewer", "org_admin"].includes(effectiveOrgRole);
+  const canViewRoadmap = isAdmin || ["compliance_manager", "reviewer", "org_admin"].includes(effectiveOrgRole);
   const isPreAssessmentActive = location.startsWith("/pre-assessment");
   const [preAssessmentExpanded, setPreAssessmentExpanded] = useState(isPreAssessmentActive);
 
@@ -444,7 +446,9 @@ export function Sidebar() {
         <div className="flex items-center justify-between">
           <div className="flex flex-col overflow-hidden">
             <span className="text-sm font-medium truncate">{user?.name}</span>
-            <span className="text-xs text-sidebar-foreground/60 truncate capitalize">{user?.role?.replace("_", " ")}</span>
+            <span className="text-xs text-sidebar-foreground/60 truncate capitalize">
+              {isAdmin ? "Global Admin" : (effectiveOrgRole.replace(/_/g, " ") || user?.role?.replace(/_/g, " "))}
+            </span>
           </div>
           <button
             onClick={() => logout()}

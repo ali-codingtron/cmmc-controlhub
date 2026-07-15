@@ -1,4 +1,5 @@
 import { createContext, useContext, useState } from "react";
+import { useOrg } from "@/context/OrgContext";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGetMe, useLogin, useLogout } from "@workspace/api-client-react";
 import type { User, LoginBody } from "@workspace/api-client-react";
@@ -94,8 +95,15 @@ export function useAuth() {
   return context;
 }
 
-/** Returns true when the current user has the assessor role (read-only). */
+/**
+ * Returns true when the user's effective role for the active organization is Assessor Read-Only.
+ * Uses the org-specific membership role when available; falls back to global role.
+ * Global admins are never treated as assessors.
+ */
 export function useIsAssessor() {
   const { user } = useAuth();
-  return user?.role === "assessor";
+  const { activeOrg } = useOrg();
+  if (user?.role === "admin") return false;
+  const effectiveRole = activeOrg?.role ?? user?.role;
+  return effectiveRole === "assessor";
 }

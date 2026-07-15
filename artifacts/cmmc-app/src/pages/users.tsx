@@ -109,7 +109,6 @@ const GLOBAL_ROLES = [
 ] as const;
 
 const ORG_ROLES = [
-  { value: "global_admin", label: "Global Admin" },
   { value: "org_admin", label: "Organization Admin" },
   { value: "compliance_manager", label: "Compliance Manager" },
   { value: "it_contributor", label: "IT Contributor" },
@@ -1562,7 +1561,7 @@ export default function Users() {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
-                  <TableHead>Global Role</TableHead>
+                  <TableHead>Platform Role</TableHead>
                   <TableHead>Title / Dept</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>MFA</TableHead>

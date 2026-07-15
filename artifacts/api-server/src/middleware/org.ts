@@ -3,19 +3,11 @@ import { db, organizationUsersTable, organizationsTable } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 
 export async function requireOrg(req: Request, res: Response, next: NextFunction) {
-  // Assessors are read-only across the entire application
-  if (
-    req.authUser?.role === "assessor" &&
-    ["POST", "PATCH", "PUT", "DELETE"].includes(req.method)
-  ) {
-    res.status(403).json({ error: "Assessors cannot perform write operations" });
-    return;
-  }
-
   const orgId = req.headers["x-organization-id"] as string | undefined;
 
   if (!orgId) {
     if (req.authUser?.role === "admin") {
+      req.orgRole = "admin";
       next();
       return;
     }
@@ -34,14 +26,17 @@ export async function requireOrg(req: Request, res: Response, next: NextFunction
     return;
   }
 
+  // Global admins bypass membership check
   if (req.authUser?.role === "admin") {
     req.orgId = orgId;
+    req.orgRole = "admin";
     next();
     return;
   }
 
+  // Resolve org-specific membership role
   const [membership] = await db
-    .select({ id: organizationUsersTable.id })
+    .select({ id: organizationUsersTable.id, role: organizationUsersTable.role })
     .from(organizationUsersTable)
     .where(
       and(
@@ -58,5 +53,16 @@ export async function requireOrg(req: Request, res: Response, next: NextFunction
   }
 
   req.orgId = orgId;
+  req.orgRole = membership.role;
+
+  // Assessors are read-only — enforce using the org-specific role
+  if (
+    req.orgRole === "assessor" &&
+    ["POST", "PATCH", "PUT", "DELETE"].includes(req.method)
+  ) {
+    res.status(403).json({ error: "Assessors cannot perform write operations" });
+    return;
+  }
+
   next();
 }
