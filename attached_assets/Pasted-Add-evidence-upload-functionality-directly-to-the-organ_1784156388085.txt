@@ -1,0 +1,706 @@
+Add evidence upload functionality directly to the organization-level Evidence Repository.
+
+Current situation:
+
+* The Evidence Repository currently has Bulk Download but no Upload Evidence action.
+* A user must open an individual control and use its Evidence tab to upload evidence.
+* The control-level uploader automatically links the file to the current control.
+* I need the Evidence Repository uploader to support linking one uploaded artifact to multiple controls at the same time.
+
+Goal:
+From Evidence Repository, an authorized user should be able to:
+
+* upload one evidence file
+* bulk upload multiple files
+* select multiple linked controls or requirements
+* store one physical file and one evidence record
+* display that same evidence under every selected control’s Evidence tab
+* preview and download it from either location
+
+Do not create duplicate evidence records or duplicate physical files for each selected control.
+
+====================================================================
+
+1. ADD UPLOAD ACTIONS TO EVIDENCE REPOSITORY
+    ====================================================================
+
+On the Evidence Repository page, add these actions beside Bulk Download:
+
+* Upload Evidence
+* Bulk Upload
+
+Recommended header layout:
+
+Upload Evidence | Bulk Upload | Bulk Download
+
+Upload Evidence:
+
+* uploads one evidence record
+
+Bulk Upload:
+
+* uploads multiple files in one operation
+
+Use the same visual style and underlying upload service currently used by:
+
+Controls > Control Detail > Evidence > Add Evidence / Bulk Upload
+
+Do not build a completely separate uploader with different validation or storage behavior.
+
+====================================================================
+2. SINGLE EVIDENCE UPLOAD FORM
+
+When the user clicks Upload Evidence, open a professional modal or full-page form.
+
+Fields:
+
+Required:
+
+* File
+* Title
+* Evidence Type
+* Status
+* Linked Controls / Requirements
+
+Optional:
+
+* Description
+* Collection Date
+* Expiration / Review Date
+* Owner
+* Assessor Summary
+* Internal Notes
+* Tags
+* Primary Control / Requirement
+
+Evidence statuses:
+
+* Draft
+* Pending Review
+* Approved
+* Active
+* Assessor Ready
+* Stale
+* Archived
+
+Default:
+Draft
+
+Use the organization currently selected in the sidebar.
+
+The user must not be able to upload into another organization by changing the request payload.
+
+====================================================================
+3. MULTI-CONTROL SELECTION
+
+The Linked Controls / Requirements field must support selecting multiple records.
+
+Use a searchable multi-select control.
+
+Allow search by:
+
+* Control ID
+* Requirement ID
+* Title
+* Security Domain / Family
+* Framework
+* Package
+* Level
+
+Add filters within the selector:
+
+* Framework / Package
+* Security Domain / Family
+* Level
+* CMMC / NIST / DFARS package, where applicable
+
+Selected controls should display as removable chips.
+
+Example:
+
+AC.L1-3.1.1 — Authorized Access Control
+IA.L2-3.5.3 — Multifactor Authentication
+CA.L2-3.12.3 — Security Control Monitoring
+
+Allow one selected item to be designated as:
+
+Primary Control
+
+The primary control should be used for:
+
+* default security domain
+* default level
+* exported filename conventions
+* primary display grouping
+
+All selected controls must still appear in the evidence metadata and mappings.
+
+====================================================================
+4. PACKAGE-AWARE REQUIREMENT SELECTION
+
+Because Control HUB now supports multiple packages, the selector should display only controls and requirements assigned to the current organization.
+
+Examples:
+
+* CMMC controls
+* NIST SP 800-171 requirements
+* NIST SP 800-171A assessment objectives, if evidence linking is supported
+* DFARS obligations
+
+Clearly label each option with a package badge.
+
+Example:
+
+[CMMC L2] AC.L2-3.1.3 — CUI Flow Control
+
+[NIST R2] 3.1.3 — Control CUI Flow
+
+[DFARS 7012] Cyber Incident Reporting Process
+
+Do not display unrelated packages that are not active for the organization.
+
+If equivalent requirements use a shared canonical requirement, do not create duplicate links unnecessarily.
+
+====================================================================
+5. EVIDENCE CONTROL-MAPPING MODEL
+
+Use a many-to-many relationship.
+
+One Evidence record may support many controls or requirements.
+
+One control or requirement may have many Evidence records.
+
+Use or update a mapping table similar to:
+
+EvidenceRequirementMap
+
+* id
+* evidence_id
+* requirement_id
+* organization_id
+* is_primary
+* relationship_type
+* linked_by
+* linked_at
+
+Relationship types:
+
+* Direct Evidence
+* Supporting Evidence
+* Reference
+* Shared Evidence
+
+Enforce uniqueness:
+
+evidence_id + requirement_id
+
+Do not create duplicate mapping rows.
+
+Do not copy the evidence file for each linked control.
+
+====================================================================
+6. EXPECTED DISPLAY AFTER UPLOAD
+
+After successful upload, the evidence must appear in:
+
+1. Evidence Repository
+2. Evidence Detail page
+3. Evidence tab of every selected control or requirement
+
+Example:
+
+A file linked to:
+
+* AC.L1-3.1.1
+* AC.L1-3.1.2
+* IA.L1-3.5.1
+
+must appear in all three corresponding Evidence tabs.
+
+The Evidence Repository Linked Controls column should display:
+
+* the primary control
+* additional control count
+
+Example:
+
+AC.L1-3.1.1 +2
+
+Hovering or opening the record should show the full list.
+
+Do not create three Evidence records.
+
+====================================================================
+7. CONTROL EVIDENCE COUNTS
+
+After upload:
+
+* refresh the Evidence Repository count
+* refresh the evidence count on every linked control
+* refresh dashboard evidence metrics if already derived from repository data
+
+Do not double-count one evidence record in the organization-wide Evidence Repository total just because it is linked to multiple controls.
+
+Organization-wide total:
+Count unique Evidence records.
+
+Control-level evidence count:
+Count Evidence records mapped to that control.
+
+====================================================================
+8. SECURITY DOMAIN AND LEVEL LOGIC
+
+Do not assume every evidence record has only one security domain when it supports multiple controls.
+
+Store:
+
+* primary domain from the primary control
+* all linked domains derived from all mappings
+
+Evidence Repository display can show:
+
+* primary domain
+* ●	additional domains if applicable
+
+Example:
+
+AC + IA
+
+Do not duplicate the evidence record by domain.
+
+====================================================================
+9. BULK UPLOAD FROM EVIDENCE REPOSITORY
+
+Add Bulk Upload using the same working control-level bulk uploader, but extend it for multi-control mapping.
+
+Step 1 — Select Files:
+
+* drag and drop
+* browse files
+* multiple files allowed
+
+Step 2 — Default Metadata:
+
+* Evidence Type
+* Status
+* Collection Date
+* Expiration / Review Date
+* Description
+* Assessor Summary
+* Internal Notes
+* Tags
+* Owner
+* Linked Controls / Requirements
+
+Default linked controls should be applied to all selected files.
+
+Step 3 — Per-File Review:
+For each file allow editing:
+
+* Title
+* Evidence Type
+* Status
+* Linked Controls / Requirements
+* Primary Control
+* Collection Date
+* Expiration Date
+* Description
+
+Step 4 — Review and Upload:
+Show:
+
+* file count
+* unique controls selected
+* mappings that will be created
+* files with missing required metadata
+* duplicates detected
+* estimated upload size
+
+Step 5 — Results:
+Show:
+
+* files uploaded successfully
+* mappings created
+* failed files
+* skipped duplicates
+* errors
+
+Do not fail the entire batch because one file fails.
+
+====================================================================
+10. FILE STORAGE AND VALIDATION
+
+Use the existing production Evidence storage implementation.
+
+Each uploaded Evidence record must store:
+
+* organization ID
+* original filename
+* stored filename
+* storage/object key
+* MIME type
+* extension
+* size
+* checksum if supported
+* uploaded by
+* uploaded timestamp
+
+Validate:
+
+* allowed extension
+* MIME type
+* maximum size
+* malware scan if available
+* filename safety
+* file upload success
+
+Do not create an Evidence record if file storage fails.
+
+Do not store production evidence only on an ephemeral application filesystem.
+
+====================================================================
+11. SUPPORTED FILE TYPES
+
+Use the existing Evidence allowlist.
+
+At minimum support:
+
+* PDF
+* DOCX
+* XLSX
+* CSV
+* TXT
+* LOG
+* JSON
+* PNG
+* JPG / JPEG
+* WebP
+
+Do not allow executable or active-content file types unless explicitly approved.
+
+Block:
+
+* EXE
+* DLL
+* MSI
+* BAT
+* CMD
+* PS1
+* JS
+* HTML
+* PHP
+
+====================================================================
+12. PREVIEW AND DOWNLOAD
+
+Evidence uploaded through the repository must use the same preview and download implementation as evidence uploaded through a control.
+
+Verify:
+
+* image preview
+* PDF preview
+* TXT / CSV preview
+* DOCX preview if supported
+* XLSX preview if supported
+* fallback download for unsupported previews
+
+Preview and download must work from:
+
+* Evidence Repository
+* Evidence Detail
+* every linked Control Evidence tab
+
+Do not create separate storage paths or file-serving logic for repository uploads.
+
+====================================================================
+13. DOCUMENT-LIKE EVIDENCE
+
+If an uploaded evidence type is document-oriented, such as:
+
+* Policy
+* Procedure
+* Report
+* Log
+* Form
+* Access Review
+* Approval Record
+* Training Record
+* Risk Record
+* SSP
+* Contract
+
+continue using the existing All Documents behavior.
+
+Do not create a separate standalone Document record unless that is already the intended architecture.
+
+Do not duplicate the file.
+
+This request is primarily an Evidence Repository enhancement.
+
+====================================================================
+14. PERMISSIONS
+
+Use organization-specific capabilities.
+
+Suggested permissions:
+
+* evidence.view
+* evidence.upload
+* evidence.bulk_upload
+* evidence.edit
+* evidence.approve
+* evidence.download
+* evidence.link_controls
+
+Roles with evidence.upload should see Upload Evidence.
+
+Roles with evidence.bulk_upload should see Bulk Upload.
+
+Assessor Read-Only:
+
+* may view, preview, and download permitted evidence
+* may not upload
+* may not change linked controls
+
+Executive Viewer:
+
+* follow existing permission policy
+
+Do not rely only on hiding buttons.
+Backend routes must enforce authorization for the selected organization.
+
+====================================================================
+15. USER EXPERIENCE
+
+The repository Upload Evidence form should feel similar to the control-level Evidence upload experience.
+
+Add helper text:
+
+“Upload evidence once and link it to every control or requirement it supports.”
+
+For Linked Controls / Requirements add helper text:
+
+“Select all requirements supported by this artifact. The file will appear under each selected requirement without being duplicated.”
+
+If no control is selected, either:
+
+Option A — Require at least one linked control or requirement.
+
+Preferred default:
+Require at least one link.
+
+Or, if unlinked evidence is allowed:
+
+Option B — Require the user to explicitly choose:
+“Save as Unmapped Evidence”
+
+Do not silently create unlinked evidence.
+
+====================================================================
+16. DUPLICATE DETECTION
+
+Before upload, check for potential duplicates using:
+
+* checksum
+* original filename
+* file size
+* organization ID
+* recent upload date
+
+If a likely duplicate exists, show:
+
+“Possible duplicate evidence found.”
+
+Options:
+
+* Link Existing Evidence to Additional Controls
+* Upload as New Version
+* Upload as Separate Evidence
+* Cancel
+
+Preferred:
+Allow linking the existing Evidence record to additional controls without uploading another physical file.
+
+====================================================================
+17. EVIDENCE DETAIL LINK MANAGEMENT
+
+On Evidence Detail, authorized users should be able to manage linked controls.
+
+Section:
+Linked Controls / Requirements
+
+Actions:
+
+* Add Link
+* Remove Link
+* Set Primary
+* Open Control
+
+Removing a link must:
+
+* remove only the mapping
+* not delete the Evidence record
+* not delete the physical file
+* preserve mappings to other controls
+
+If removing the final link:
+
+* warn the user that the evidence will become unmapped
+* require confirmation or prevent it based on policy
+
+====================================================================
+18. AUDIT LOGGING
+
+Log:
+
+* evidence uploaded
+* bulk upload started
+* bulk upload completed
+* upload failed
+* evidence linked to control
+* evidence unlinked from control
+* primary control changed
+* existing evidence reused
+* duplicate detected
+* evidence previewed
+* evidence downloaded
+
+Include:
+
+* user
+* organization
+* evidence ID
+* control/requirement IDs
+* action
+* timestamp
+* success/failure
+
+====================================================================
+19. DO NOT REDESIGN OTHER MODULES
+
+This request is focused on:
+
+* Evidence Repository upload
+* Evidence Repository bulk upload
+* multi-control linking
+* shared evidence mappings
+
+Do not redesign:
+
+* Documentation
+* SSP
+* Monitoring Tracker
+* POA&M
+* Implementation Roadmap
+* Pre-Assessment
+* Framework Crosswalk
+* Dashboard
+* Reports
+* user-role architecture
+
+It is acceptable for newly linked evidence to appear automatically under existing control Evidence tabs because that is the intended evidence mapping behavior.
+
+Do not change the visual design of the rest of the Control Detail page.
+
+====================================================================
+20. PRODUCTION DATA SAFETY
+
+Do not:
+
+* delete existing Evidence
+* change existing Evidence statuses
+* remove existing mappings
+* duplicate existing files
+* modify other organizations
+* re-seed production data
+* overwrite storage keys
+* create duplicate control records
+
+If a database change is required:
+
+* add new nullable fields or mapping tables safely
+* provide a dry-run impact summary
+* preserve all existing Evidence records and links
+
+====================================================================
+21. ACCEPTANCE TESTS
+
+Test A:
+Open Evidence Repository.
+
+Expected:
+
+* Upload Evidence button is visible to authorized user
+* Bulk Upload button is visible to authorized user
+* Bulk Download remains available
+
+Test B:
+Upload one PDF and select three controls.
+
+Expected:
+
+* one Evidence record is created
+* one file is stored
+* three mapping records are created
+* Evidence appears in all three control Evidence tabs
+
+Test C:
+Open Evidence Repository.
+
+Expected:
+
+* the file appears once
+* Linked Controls shows the primary control and additional count
+
+Test D:
+Open Evidence Detail.
+
+Expected:
+
+* all linked controls are visible
+* Preview works
+* Download works
+
+Test E:
+Remove one control link.
+
+Expected:
+
+* Evidence disappears from only that control
+* remains under the other controls
+* file is not deleted
+
+Test F:
+Bulk upload five files with two default controls.
+
+Expected:
+
+* each file can inherit the two controls
+* per-file controls can be changed before upload
+* successful files appear in repository and linked control tabs
+
+Test G:
+Upload a duplicate file.
+
+Expected:
+
+* app offers to link the existing record to additional controls
+* it does not silently create another physical file
+
+Test H:
+Assessor Read-Only user opens Evidence Repository.
+
+Expected:
+
+* no Upload Evidence or Bulk Upload buttons
+* preview/download remain available where permitted
+
+Test I:
+No existing production Evidence records, mappings, or files are deleted or overwritten.
+
+====================================================================
+22. MOST IMPORTANT RULE
+
+Evidence uploaded from the organization-level Evidence Repository must use the same Evidence model, storage, preview, download, and control-mapping logic as evidence uploaded from an individual control.
+
+The repository uploader differs only because it allows the user to select multiple controls or requirements at once.
