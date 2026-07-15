@@ -1745,4 +1745,37 @@ router.post("/automation/run-doc-checks", requireAuth, requireOrg, async (req, r
   });
 });
 
+// ── Delete a document ──────────────────────────────────────────────────────
+router.delete("/documents/:id", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
+  const docId = req.params.id as string;
+
+  const [doc] = await db
+    .select({ id: documentsTable.id, title: documentsTable.title, fileKey: documentsTable.fileKey, organizationId: documentsTable.organizationId })
+    .from(documentsTable)
+    .where(and(eq(documentsTable.id, docId), orgId ? eq(documentsTable.organizationId, orgId) : undefined))
+    .limit(1);
+
+  if (!doc) { res.status(404).json({ error: "Not found" }); return; }
+
+  await logAudit(req, "deleted", "document", docId, { entityLabel: doc.title });
+
+  await db.delete(documentControlMapsTable).where(eq(documentControlMapsTable.documentId, docId));
+  await db.delete(documentReviewsTable).where(eq(documentReviewsTable.documentId, docId));
+  await db.delete(documentVersionsTable).where(eq(documentVersionsTable.documentId, docId));
+  await db.delete(documentsTable).where(eq(documentsTable.id, docId));
+
+  if (doc.fileKey && isGcsKey(doc.fileKey)) {
+    const parts = doc.fileKey.replace(/^\/objects\//, "").split("/");
+    const privateDir = objectStorageService.getPrivateObjectDir();
+    const dirParts = privateDir.startsWith("/") ? privateDir.split("/").filter(Boolean) : privateDir.split("/").filter(Boolean);
+    const bucketName = dirParts[0];
+    const prefix = dirParts.slice(1).join("/");
+    const objectName = prefix ? `${prefix}/${parts.join("/")}` : parts.join("/");
+    objectStorageClient.bucket(bucketName).file(objectName).delete().catch(() => {});
+  }
+
+  res.json({ id: docId, deleted: true });
+});
+
 export default router;
