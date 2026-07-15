@@ -5,8 +5,6 @@ import {
   useSubmitDocumentForReview,
   useApproveDocument,
   useRejectDocument,
-  useActivateDocument,
-  useArchiveDocument,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import {
-  ArrowLeft, Edit, Save, X, CheckCircle2, XCircle, Send, Play, Archive, Clock, History,
+  ArrowLeft, Edit, Save, X, CheckCircle2, XCircle, Send, Clock, History,
   Download, Eye, AlertCircle, FileIcon,
 } from "lucide-react";
 import { useOrg } from "@/context/OrgContext";
@@ -188,7 +186,7 @@ export default function DocumentDetail({ id }: { id: string }) {
   const [editBody, setEditBody] = useState("");
   const [editTitle, setEditTitle] = useState("");
 
-  const [reviewDialog, setReviewDialog] = useState<"submit" | "approve" | "reject" | "activate" | "archive" | null>(null);
+  const [reviewDialog, setReviewDialog] = useState<"submit" | "approve" | "reject" | null>(null);
   const [dialogNotes, setDialogNotes] = useState("");
   const [reviewerId, setReviewerId] = useState("");
 
@@ -196,10 +194,8 @@ export default function DocumentDetail({ id }: { id: string }) {
   const { mutate: submitReview, isPending: isSubmitting } = useSubmitDocumentForReview();
   const { mutate: approveDoc, isPending: isApproving } = useApproveDocument();
   const { mutate: rejectDoc, isPending: isRejecting } = useRejectDocument();
-  const { mutate: activateDoc, isPending: isActivating } = useActivateDocument();
-  const { mutate: archiveDoc, isPending: isArchiving } = useArchiveDocument();
 
-  const isActionPending = isUpdating || isSubmitting || isApproving || isRejecting || isActivating || isArchiving;
+  const isActionPending = isUpdating || isSubmitting || isApproving || isRejecting;
 
   const startEdit = () => {
     setEditBody((doc as any)?.body ?? "");
@@ -240,10 +236,6 @@ export default function DocumentDetail({ id }: { id: string }) {
       approveDoc({ id, data: { notes: dialogNotes } }, { onSuccess, onError });
     } else if (action === "reject") {
       rejectDoc({ id, data: { rejectionNotes: dialogNotes } }, { onSuccess, onError });
-    } else if (action === "activate") {
-      activateDoc({ id, data: { notes: dialogNotes } }, { onSuccess, onError });
-    } else if (action === "archive") {
-      archiveDoc({ id, data: { notes: dialogNotes } }, { onSuccess, onError });
     }
   };
 
@@ -271,8 +263,6 @@ export default function DocumentDetail({ id }: { id: string }) {
   const canEdit = ["draft", "needs_update"].includes(status);
   const canSubmit = ["draft", "needs_update"].includes(status);
   const canApprove = status === "pending_review";
-  const canActivate = status === "approved";
-  const canArchive = ["active", "approved", "needs_update"].includes(status);
 
   const fileKey = (doc as any).fileKey as string | null | undefined;
   const fileName = (doc as any).fileName as string | null | undefined;
@@ -349,18 +339,6 @@ export default function DocumentDetail({ id }: { id: string }) {
                     Approve
                   </Button>
                 </>
-              )}
-              {canActivate && (
-                <Button size="sm" onClick={() => setReviewDialog("activate")}>
-                  <Play className="h-3.5 w-3.5 mr-1" />
-                  Make Current
-                </Button>
-              )}
-              {canArchive && (
-                <Button variant="ghost" size="sm" onClick={() => setReviewDialog("archive")}>
-                  <Archive className="h-3.5 w-3.5 mr-1" />
-                  Archive
-                </Button>
               )}
             </>
           )}
@@ -443,12 +421,6 @@ export default function DocumentDetail({ id }: { id: string }) {
                 <div>
                   <span className="text-muted-foreground">Approved</span>
                   <p className="font-medium">{new Date(doc.approvedAt).toLocaleDateString()}</p>
-                </div>
-              )}
-              {doc.activatedAt && (
-                <div>
-                  <span className="text-muted-foreground">Made Current</span>
-                  <p className="font-medium">{new Date(doc.activatedAt).toLocaleDateString()}</p>
                 </div>
               )}
             </CardContent>
@@ -563,8 +535,6 @@ export default function DocumentDetail({ id }: { id: string }) {
               {reviewDialog === "submit" && "Submit for Review"}
               {reviewDialog === "approve" && "Approve Document"}
               {reviewDialog === "reject" && "Reject Document"}
-              {reviewDialog === "activate" && "Make Current"}
-              {reviewDialog === "archive" && "Archive Document"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-4">
@@ -587,7 +557,6 @@ export default function DocumentDetail({ id }: { id: string }) {
                 placeholder={
                   reviewDialog === "reject" ? "Provide reason for rejection..." :
                   reviewDialog === "approve" ? "Approval notes..." :
-                  reviewDialog === "activate" ? "Notes for making this version current..." :
                   "Notes..."
                 }
                 className="mt-1.5"
@@ -604,9 +573,7 @@ export default function DocumentDetail({ id }: { id: string }) {
                 {isActionPending ? "Processing..." : (
                   reviewDialog === "submit" ? "Submit" :
                   reviewDialog === "approve" ? "Approve" :
-                  reviewDialog === "reject" ? "Reject" :
-                  reviewDialog === "activate" ? "Make Current" :
-                  "Archive"
+                  "Reject"
                 )}
               </Button>
             </div>
