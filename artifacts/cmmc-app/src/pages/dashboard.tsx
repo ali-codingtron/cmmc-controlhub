@@ -5,6 +5,7 @@ import {
   useListOrgPackages,
 } from "@workspace/api-client-react";
 import { useOrg } from "@/context/OrgContext";
+import { useIsAssessor } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Link } from "wouter";
@@ -192,6 +193,7 @@ function SkeletonDashboard() {
 
 export default function Dashboard() {
   const { activeOrg, isLoading: orgLoading } = useOrg();
+  const isAssessor = useIsAssessor();
   const queryClient = useQueryClient();
   const { data: summary, isLoading: summaryLoading } = useGetDashboardSummary({
     query: { enabled: !!activeOrg } as any,
@@ -567,45 +569,47 @@ export default function Dashboard() {
         </Link>
       )}
 
-      {/* ── Implementation Roadmap tile ──────────────────────────── */}
-      <Link href="/roadmap" className="block">
-        <Card className="border border-border/60 shadow-sm hover:shadow-md transition-shadow">
-          <CardContent className="p-4 flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Map className="h-5 w-5 text-primary" />
+      {/* ── Implementation Roadmap tile — hidden for assessors ──── */}
+      {!isAssessor && (
+        <Link href="/roadmap" className="block">
+          <Card className="border border-border/60 shadow-sm hover:shadow-md transition-shadow">
+            <CardContent className="p-4 flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-3 shrink-0">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Map className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Implementation Roadmap
+                  </p>
+                  <p className="text-sm font-bold">
+                    {roadmapComplete} of {roadmapTotal} priority actions complete
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  Implementation Roadmap
-                </p>
-                <p className="text-sm font-bold">
-                  {roadmapComplete} of {roadmapTotal} priority actions complete
-                </p>
+              <div className="flex-1 min-w-40">
+                <Progress value={roadmapPct} className="h-1.5" indicatorClassName={getProgressColor(roadmapPct)} />
               </div>
-            </div>
-            <div className="flex-1 min-w-40">
-              <Progress value={roadmapPct} className="h-1.5" indicatorClassName={getProgressColor(roadmapPct)} />
-            </div>
-            <div className="flex items-center gap-4 text-xs text-muted-foreground shrink-0">
-              {roadmapInProgress > 0 && (
-                <span className="flex items-center gap-1 text-amber-700">
-                  <CircleDot className="h-3.5 w-3.5" /> {roadmapInProgress} in progress
+              <div className="flex items-center gap-4 text-xs text-muted-foreground shrink-0">
+                {roadmapInProgress > 0 && (
+                  <span className="flex items-center gap-1 text-amber-700">
+                    <CircleDot className="h-3.5 w-3.5" /> {roadmapInProgress} in progress
+                  </span>
+                )}
+                {roadmapBlocked > 0 && (
+                  <span className="flex items-center gap-1 text-red-700">
+                    <AlertTriangle className="h-3.5 w-3.5" /> {roadmapBlocked} blocked
+                  </span>
+                )}
+                <span className="flex items-center gap-1 font-medium text-primary">
+                  {roadmapComplete > 0 || roadmapInProgress > 0 ? "Continue Roadmap" : "Start Roadmap"}
+                  <ArrowRight className="h-3.5 w-3.5" />
                 </span>
-              )}
-              {roadmapBlocked > 0 && (
-                <span className="flex items-center gap-1 text-red-700">
-                  <AlertTriangle className="h-3.5 w-3.5" /> {roadmapBlocked} blocked
-                </span>
-              )}
-              <span className="flex items-center gap-1 font-medium text-primary">
-                {roadmapComplete > 0 || roadmapInProgress > 0 ? "Continue Roadmap" : "Start Roadmap"}
-                <ArrowRight className="h-3.5 w-3.5" />
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-      </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+      )}
 
       {/* ── Middle: Domain Readiness + Recent Activity ──────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
