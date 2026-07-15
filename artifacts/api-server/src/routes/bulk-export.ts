@@ -571,7 +571,7 @@ router.post(
       `attachment; filename="${zipRootName}.zip"`
     );
 
-    const archive = (archiver as any)("zip", { zlib: { level: 6 } }) as import("archiver").Archiver;
+    const archive = ((archiver as any).default ?? archiver)("zip", { zlib: { level: 6 } }) as import("archiver").Archiver;
     archive.pipe(res);
 
     interface FileEntry {

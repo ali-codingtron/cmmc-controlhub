@@ -334,7 +334,7 @@ router.post(
       res.setHeader("Content-Disposition", `attachment; filename="${zipName}"`);
       res.writeHead(200);
 
-      const arc = (archiver as any)("zip", { zlib: { level: 6 } }) as import("archiver").Archiver;
+      const arc = ((archiver as any).default ?? archiver)("zip", { zlib: { level: 6 } }) as import("archiver").Archiver;
       arc.pipe(res);
       res.on("close", () => { if (!res.writableEnded) arc.abort(); });
       arc.on("error", (err: Error) => {
