@@ -1,0 +1,722 @@
+Improve the Framework Crosswalk so it becomes a practical framework comparison, evidence-reuse, and gap-analysis workspace.
+
+The current page correctly shows 110 equivalent mappings between:
+
+- CMMC Level 2 Self-Assessment
+- NIST SP 800-171 Revision 2
+
+Keep the current mapping data. Do not alter or recreate existing production controls, statuses, evidence, documents, SSP narratives, monitoring records, POA&M records, or organization package selections.
+
+The current table is technically correct, but it does not yet explain what the mappings mean operationally.
+
+Goal:
+The Framework Crosswalk should tell users:
+
+- whether packages are fully aligned
+- whether duplicate work is required
+- which implementation records can be reused
+- which evidence and documents can be reused
+- which requirements have gaps
+- which requirements are new, changed, split, merged, or retired
+- what work is needed when adding another package
+- how assessment objectives and DFARS obligations relate to requirements
+
+====================================================================
+1. ADD A CROSSWALK SUMMARY AT THE TOP
+====================================================================
+
+Add a prominent summary section above the mapping table.
+
+For the current CMMC Level 2 and NIST SP 800-171 Revision 2 comparison, show:
+
+Package A:
+CMMC Level 2 Self-Assessment
+
+Package B:
+NIST SP 800-171 Revision 2
+
+Summary cards:
+- 110 total mappings
+- 110 equivalent
+- 0 partial mappings
+- 0 new target requirements
+- 0 unmapped requirements
+- 100% implementation reuse
+- 100% evidence reuse potential
+
+Add a success callout:
+
+“Full alignment detected”
+
+Supporting text:
+
+“CMMC Level 2 and NIST SP 800-171 Revision 2 use the same 110 security requirements. Control HUB should maintain one implementation record and reuse the same evidence, documents, SSP narrative, monitoring records, and POA&M mappings across both packages.”
+
+Do not create duplicate work or duplicate organization statuses for these equivalent requirements.
+
+====================================================================
+2. MOVE THE EXPLANATION TO THE TOP
+====================================================================
+
+The “About the framework crosswalk” explanation currently appears at the bottom of the page.
+
+Move a concise overview near the page title.
+
+Use:
+
+“What is a framework crosswalk?”
+
+“A framework crosswalk shows how requirements from one compliance package relate to requirements in another. It helps identify equivalent requirements, reusable evidence, changed requirements, and additional work.”
+
+Add a “Learn more” expandable panel for detailed relationship definitions.
+
+====================================================================
+3. USE PACKAGE A / PACKAGE B COMPARISON CONTROLS
+====================================================================
+
+Replace or supplement “All Sources” and “All Targets” with clearer comparison selectors:
+
+Compare Package A:
+[package dropdown]
+
+To Package B:
+[package dropdown]
+
+Add:
+- Swap Packages button
+- Compare button
+- Reset button
+
+Only show packages assigned to the active organization by default.
+
+Allow Global Admins to optionally compare any enabled packages.
+
+====================================================================
+4. ADD MULTIPLE CROSSWALK VIEWS
+====================================================================
+
+Add tabs or view selector:
+
+- Summary
+- Requirement Mappings
+- Gaps & Changes
+- Evidence Reuse
+- Assessment Objectives
+- Contract Obligations
+
+Summary:
+Shows package-level coverage and recommendations.
+
+Requirement Mappings:
+Shows the current row-by-row table.
+
+Gaps & Changes:
+Shows only requirements requiring additional work.
+
+Evidence Reuse:
+Shows evidence/document reuse between packages.
+
+Assessment Objectives:
+Shows NIST SP 800-171A objectives where applicable.
+
+Contract Obligations:
+Shows DFARS obligations mapped to requirements and artifacts.
+
+Only show tabs relevant to the selected packages.
+
+====================================================================
+5. IMPROVE RELATIONSHIP TYPES
+====================================================================
+
+Support relationship types beyond:
+
+- Equivalent
+- Subset
+- Superset
+- Related
+
+Add:
+
+- Equivalent
+- Direct Mapping
+- Partial Mapping
+- Split Into Multiple Requirements
+- Merged From Multiple Requirements
+- Modified Requirement
+- New in Target Package
+- Removed / Retired in Target Package
+- Reorganized / Moved
+- Supports
+- Assessment Objective For
+- Contract Obligation Supported By
+- No Mapping
+
+Each relationship should support:
+- direction
+- explanation
+- mapping rationale
+- coverage percentage if applicable
+- official/curated/custom source
+- source version
+- reviewed date
+- reviewed by
+
+====================================================================
+6. REPLACE THE NOTES COLUMN WITH A USEFUL IMPACT COLUMN
+====================================================================
+
+The current Notes column repeats statements such as:
+
+“AC.L1-3.1.1 ≡ NIST 800-171 Rev. 2 §3.1.1”
+
+That information is already visible in the source and target columns.
+
+Replace the default Notes display with:
+
+Implementation Impact
+
+Example values:
+- No additional work
+- Same implementation reused
+- Same evidence reused
+- Additional evidence required
+- Narrative update required
+- New requirement
+- Requirement retired
+- Manual review required
+- DFARS process requirement
+- Assessment objectives incomplete
+
+Keep technical mapping notes inside the row detail drawer.
+
+====================================================================
+7. MAKE ROWS CLICKABLE
+====================================================================
+
+Clicking a mapping row should open a side drawer or detail page.
+
+The detail view should show:
+
+A. Source Requirement
+- package
+- version
+- requirement ID
+- title
+- requirement text
+- organization status
+- implementation narrative
+
+B. Target Requirement
+- package
+- version
+- requirement ID
+- title
+- requirement text
+- organization status
+- implementation narrative
+
+C. Mapping
+- relationship type
+- rationale
+- official mapping source
+- mapping confidence
+- reviewed date
+
+D. Reuse Analysis
+- implementation narrative reusable yes/no
+- SSP narrative reusable yes/no
+- evidence reusable yes/no
+- documents reusable yes/no
+- monitoring reusable yes/no
+- POA&M reusable yes/no
+
+E. Readiness
+- source status
+- target status
+- evidence coverage
+- document coverage
+- assessment-objective coverage
+- gaps
+
+F. Actions
+- Open Source Requirement
+- Open Target Requirement
+- View Shared Evidence
+- View Shared Documents
+- Create Gap Action
+- Add to Implementation Roadmap
+- Export Mapping Detail
+
+====================================================================
+8. USE ONE LOGICAL REQUIREMENT FOR TRUE EQUIVALENTS
+====================================================================
+
+For true one-to-one equivalent requirements, particularly CMMC Level 2 and NIST SP 800-171 Revision 2:
+
+- maintain one canonical logical requirement
+- show multiple package aliases/badges
+- maintain one organization implementation status
+- maintain one implementation narrative
+- maintain one SSP narrative
+- reuse linked evidence
+- reuse linked documents
+- reuse monitoring records
+- reuse POA&M records
+
+Do not create separate implementation records that can drift out of sync.
+
+Example:
+
+Canonical Requirement:
+3.1.1 — Authorized Access Control
+
+Package References:
+- CMMC: AC.L1-3.1.1
+- NIST SP 800-171 Rev. 2: 3.1.1
+
+Organization Status:
+Implemented
+
+Evidence:
+shared across both package references
+
+If the current database already has separate records:
+- do not automatically merge them
+- create a mapping/view layer first
+- run a dry-run consistency report
+- flag status or narrative differences
+- require approval before any data consolidation
+
+====================================================================
+9. ADD A STATUS CONSISTENCY CHECK
+====================================================================
+
+For equivalent requirements, compare:
+
+- implementation status
+- implementation narrative
+- SSP narrative
+- evidence count
+- approved evidence count
+- document count
+- monitoring count
+- POA&M count
+
+If values differ, show:
+
+“Mapping consistency issue”
+
+Examples:
+- CMMC status = Implemented
+- NIST status = Not Started
+
+or:
+- CMMC has 6 evidence files
+- NIST has 0 evidence files
+
+Add admin-only action:
+Review Mapping Consistency
+
+Do not automatically overwrite either side without approval.
+
+====================================================================
+10. ADD AN “ACTION REQUIRED ONLY” FILTER
+====================================================================
+
+Add quick filters:
+
+- Show All
+- Equivalent / No Additional Work
+- Action Required
+- New Requirements
+- Partial Mappings
+- Unmapped
+- Status Mismatches
+- Evidence Gaps
+- Document Gaps
+- Assessment Objective Gaps
+
+For the current CMMC Level 2 / NIST Revision 2 comparison:
+
+Action Required should normally show 0 rows unless organization data is inconsistent.
+
+====================================================================
+11. ADD GROUPING OPTIONS
+====================================================================
+
+Allow rows to be grouped by:
+
+- security family/domain
+- relationship type
+- source package
+- target package
+- readiness status
+- action required
+
+Add family summary rows:
+
+Example:
+
+Access Control
+- 22 mappings
+- 22 equivalent
+- 0 gaps
+- 100% evidence reuse
+
+====================================================================
+12. ADD EVIDENCE REUSE VIEW
+====================================================================
+
+Create an Evidence Reuse tab.
+
+Show:
+
+- source requirement
+- target requirement
+- evidence title
+- evidence type
+- evidence status
+- linked packages
+- reusable yes/no
+- additional target-specific evidence needed
+- reason
+
+Summary:
+- total evidence records
+- reusable records
+- package-specific records
+- missing target evidence
+
+For equivalent CMMC L2 / NIST Rev. 2 requirements:
+Evidence should normally be reusable.
+
+Do not duplicate physical files.
+
+Use one evidence record with multiple package/requirement mappings.
+
+====================================================================
+13. ADD DOCUMENT REUSE
+====================================================================
+
+The Evidence Reuse view should also support Documents.
+
+Show:
+- policies
+- procedures
+- SSP documents
+- review logs
+- reports
+- approval records
+- inventories
+- risk records
+
+Indicate:
+- reusable across packages
+- package-specific
+- missing
+- expired
+- pending review
+
+====================================================================
+14. ADD NIST REVISION 2 TO REVISION 3 TRANSITION VIEW
+====================================================================
+
+When comparing:
+
+NIST SP 800-171 Revision 2
+to
+NIST SP 800-171 Revision 3
+
+Use the official NIST transition/change-analysis mapping data.
+
+Support:
+- one-to-one mappings
+- one-to-many mappings
+- many-to-one mappings
+- changed requirements
+- new Revision 3 requirements
+- retired/reorganized Revision 2 requirements
+- family changes
+- organization-defined parameters
+- implementation narrative updates
+- evidence updates
+- SSP updates
+
+Add summary cards:
+- unchanged/directly mapped
+- modified
+- split
+- merged
+- new in Rev. 3
+- retired/reorganized
+- manual review required
+
+Add action:
+Generate Rev. 2 to Rev. 3 Transition Plan
+
+The transition plan should create suggested roadmap actions but should not automatically change production statuses.
+
+====================================================================
+15. ADD NIST SP 800-171A ASSESSMENT OBJECTIVES
+====================================================================
+
+When an 800-171A package is selected:
+
+Do not represent assessment objectives as equivalent controls.
+
+Show hierarchy:
+
+Security Requirement
+  → Assessment Objective
+  → Assessment Method
+  → Evidence / Interview / Test
+  → Result
+
+Assessment objective fields:
+- objective ID
+- objective text
+- method
+- expected evidence
+- result
+- assessor notes
+- linked evidence
+- validation status
+
+Results:
+- Met
+- Not Met
+- Partially Met
+- Not Assessed
+- Not Applicable
+
+Add objective coverage summary:
+- total objectives
+- assessed
+- met
+- not met
+- partial
+- not assessed
+
+Do not let objective results automatically overwrite control status without review.
+
+====================================================================
+16. ADD DFARS OBLIGATION MAPPINGS
+====================================================================
+
+DFARS clauses should not appear as equivalent controls.
+
+For DFARS packages, use:
+
+Contract Obligation
+  → Related Security Requirements
+  → Required Process
+  → Required Documents
+  → Required Evidence
+  → Readiness Status
+
+Examples of relationship labels:
+- Obligation Supported By
+- Requires Evidence From
+- Requires Process
+- Requires Document
+- Flowdown Requirement
+- Incident Reporting Requirement
+- Assessment Requirement
+
+DFARS obligation detail should show:
+- clause number
+- obligation summary
+- linked NIST/CMMC requirements
+- required artifacts
+- required procedures
+- responsible owner
+- readiness status
+- evidence/documents
+- gaps
+
+====================================================================
+17. ADD PACKAGE IMPACT ANALYSIS
+====================================================================
+
+When a user considers adding another package to an organization, provide:
+
+Package Impact Preview
+
+Show:
+- existing packages
+- proposed package
+- total unique new requirements
+- equivalent requirements
+- reusable evidence
+- reusable documents
+- new evidence required
+- new documents required
+- SSP updates required
+- monitoring changes
+- roadmap actions suggested
+- estimated effort
+
+This should be a dry run.
+
+Do not modify the organization until the user confirms package addition.
+
+====================================================================
+18. ADD CROSSWALK REPORTS
+====================================================================
+
+Add export options:
+
+- Crosswalk Summary PDF
+- Crosswalk Detail XLSX
+- Gap & Change Report PDF
+- Evidence Reuse XLSX
+- Rev. 2 to Rev. 3 Transition Report
+- DFARS Obligation Coverage Report
+- Assessment Objective Coverage Report
+
+Do not create CSV exports.
+
+Reports should include:
+- organization
+- selected packages
+- package versions
+- mapping source
+- generated date
+- summary metrics
+- detailed mappings
+- gaps
+- recommended actions
+
+====================================================================
+19. ADD MAPPING PROVENANCE
+====================================================================
+
+Every mapping should identify its source.
+
+Source types:
+- Official
+- Control HUB Curated
+- Organization Custom
+- User Entered
+
+Fields:
+- source publication
+- source URL/reference
+- source version
+- imported date
+- reviewed date
+- reviewed by
+- confidence
+- notes
+
+Use an “Official” badge for mappings imported from authoritative sources.
+
+Do not allow normal users to edit official mappings.
+
+Allow Global Admin to create organization-specific custom mappings without changing the global official mapping.
+
+====================================================================
+20. IMPROVE PAGE NAVIGATION AND PLACEMENT
+====================================================================
+
+Rename the page:
+
+Framework Crosswalk & Gap Analysis
+
+or:
+
+Package Crosswalk
+
+Add helper subtitle:
+
+“Compare selected compliance packages, reuse implementation work, and identify additional requirements.”
+
+Consider placing it under:
+
+Controls & Requirements
+  - Library
+  - Framework Crosswalk
+  - Coverage Matrix
+
+If only one package is assigned to an organization:
+- hide or disable the crosswalk page
+- show:
+  “Assign at least two packages to compare framework requirements.”
+
+====================================================================
+21. PRODUCTION DATA SAFETY
+====================================================================
+
+Do not modify existing production data as part of this UI improvement.
+
+Do not:
+- change organization package selections
+- change control statuses
+- overwrite narratives
+- relink evidence
+- duplicate evidence
+- merge requirements automatically
+- delete mappings
+- alter VTCCORP.US data
+
+Allowed:
+- add new read-only summary calculations
+- add mapping detail views
+- add nullable provenance fields
+- add new gap-analysis tables
+- add dry-run reports
+- add crosswalk exports
+
+Before any data consolidation or status synchronization:
+- provide dry-run
+- show affected records
+- require explicit confirmation
+
+====================================================================
+22. ACCEPTANCE TESTS
+====================================================================
+
+Test A:
+Compare CMMC Level 2 Self-Assessment to NIST SP 800-171 Rev. 2.
+
+Expected:
+- 110 mappings
+- 110 equivalent
+- 0 partial
+- 0 unmapped
+- full alignment callout
+- no duplicate-work recommendation
+
+Test B:
+Equivalent mappings show shared implementation/evidence reuse.
+
+Test C:
+Click a mapping row.
+Detail drawer shows source, target, rationale, readiness, and reusable artifacts.
+
+Test D:
+Action Required filter shows only actual consistency or evidence gaps.
+
+Test E:
+Compare NIST Rev. 2 to NIST Rev. 3.
+Page supports modified, split, merged, new, and retired relationships.
+
+Test F:
+Compare NIST requirement to 800-171A.
+Assessment objectives appear as child objectives, not equivalent controls.
+
+Test G:
+View DFARS crosswalk.
+DFARS items appear as obligations mapped to requirements and artifacts, not equivalent controls.
+
+Test H:
+Evidence Reuse tab shows shared evidence without duplicating files.
+
+Test I:
+Adding a package uses Package Impact Preview before changing organization data.
+
+Test J:
+Crosswalk exports are available as PDF/XLSX, not CSV.
+
+Test K:
+No existing VTCCORP.US production data is changed.

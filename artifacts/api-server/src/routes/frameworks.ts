@@ -13,6 +13,7 @@ import {
   documentsTable,
   controlAssessmentsTable,
   controlsTable,
+  domainsTable,
 } from "@workspace/db";
 import { eq, and, asc, inArray, count, or, like, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
@@ -558,23 +559,68 @@ router.get("/crosswalk", requireAuth, requireOrg, async (req, res) => {
     return;
   }
 
+  // Enrich with control assessment status, narrative, and domain
+  const controlData = await db
+    .select({
+      id: controlsTable.id,
+      controlId: controlsTable.controlId,
+      nistRef: controlsTable.nistRef,
+      status: controlAssessmentsTable.status,
+      narrative: controlAssessmentsTable.implementationNarrative,
+      domainName: domainsTable.name,
+    })
+    .from(controlsTable)
+    .innerJoin(domainsTable, eq(domainsTable.id, controlsTable.domainId))
+    .leftJoin(
+      controlAssessmentsTable,
+      and(
+        eq(controlAssessmentsTable.controlId, controlsTable.id),
+        eq(controlAssessmentsTable.organizationId, orgId)
+      )
+    )
+    .where(eq(controlsTable.isActive, true));
+
+  const controlByKey: Record<string, {
+    controlId: string;
+    status: string | null;
+    narrative: string | null;
+    domain: string;
+  }> = {};
+  for (const c of controlData) {
+    const info = { controlId: c.id, status: c.status ?? null, narrative: c.narrative ?? null, domain: c.domainName ?? "" };
+    if (c.controlId) controlByKey[c.controlId] = info;
+    if (c.nistRef) controlByKey[c.nistRef] = info;
+  }
+
   const result = crosswalkRows.map((cw) => {
     const src = reqMap[cw.sourceRequirementId];
     const tgt = reqMap[cw.targetRequirementId];
     const srcPkg = src ? pkgMap[src.packageId] : undefined;
     const tgtPkg = tgt ? pkgMap[tgt.packageId] : undefined;
+    const srcInfo = controlByKey[src?.requirementKey ?? ""];
+    const tgtInfo = controlByKey[tgt?.requirementKey ?? ""];
     return {
       id: cw.id,
       sourceRequirementId: cw.sourceRequirementId,
       sourceKey: src?.requirementKey ?? cw.sourceRequirementId,
       sourceTitle: src?.title ?? "",
       sourcePackageName: srcPkg?.name ?? "",
+      sourcePackageId: src?.packageId ?? "",
       sourceFramework: srcPkg?.frameworkShortName ?? "",
+      sourceControlId: srcInfo?.controlId ?? null,
+      sourceStatus: srcInfo?.status ?? null,
+      sourceNarrative: srcInfo?.narrative ?? null,
+      sourceDomain: srcInfo?.domain ?? "",
       targetRequirementId: cw.targetRequirementId,
       targetKey: tgt?.requirementKey ?? cw.targetRequirementId,
       targetTitle: tgt?.title ?? "",
       targetPackageName: tgtPkg?.name ?? "",
+      targetPackageId: tgt?.packageId ?? "",
       targetFramework: tgtPkg?.frameworkShortName ?? "",
+      targetControlId: tgtInfo?.controlId ?? null,
+      targetStatus: tgtInfo?.status ?? null,
+      targetNarrative: tgtInfo?.narrative ?? null,
+      targetDomain: tgtInfo?.domain ?? "",
       relationshipType: cw.relationshipType,
       notes: cw.notes,
     };
