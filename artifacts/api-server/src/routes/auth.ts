@@ -1,6 +1,6 @@
 import { Router } from "express";
 import bcrypt from 'bcryptjs';
-import { db, usersTable, auditLogsTable, organizationUsersTable, securitySettingsTable, passwordResetTokensTable, breakGlassSessionsTable } from "@workspace/db";
+import { db, usersTable, auditLogsTable, organizationUsersTable, organizationsTable, securitySettingsTable, passwordResetTokensTable, breakGlassSessionsTable } from "@workspace/db";
 import { eq, sql, and, isNull } from "drizzle-orm";
 import {
   getMicrosoftSsoConfig,
@@ -30,6 +30,7 @@ import { signMfaStateToken, verifyMfaStateToken } from "../lib/mfa-jwt";
 import { randomUUID } from "crypto";
 import { logger } from "../lib/logger";
 import { sendPasswordResetEmail, getAppBaseUrl, sendBreakGlassLoginAlert } from "../lib/email";
+import { getOrgPermissions } from "../lib/permissions";
 import {
   generateResetToken,
   hashResetToken,
@@ -1623,6 +1624,78 @@ router.get("/auth/microsoft/callback", async (req, res) => {
 
   const jwtToken = signToken({ id: user.id, name: user.name, email: user.email, role: user.role });
   res.redirect(`${frontendBase}/login?sso_token=${encodeURIComponent(jwtToken)}`);
+});
+
+// ── GET /auth/organization-context/:organizationId ───────────────────────────
+// Returns the requesting user's (or a specified user's) effective role and
+// permission list for the given organization. Admin can pass ?userId=<id>.
+router.get("/auth/organization-context/:organizationId", requireAuth, async (req, res): Promise<void> => {
+  const { organizationId } = req.params as { organizationId: string };
+  const isGlobalAdmin = req.authUser?.role === "admin";
+
+  const targetUserIdParam = req.query.userId as string | undefined;
+  if (targetUserIdParam && !isGlobalAdmin) {
+    res.status(403).json({ error: "Only global admins can inspect other users' permissions" });
+    return;
+  }
+  const userId = targetUserIdParam ?? req.authUser!.id;
+
+  const [org] = await db
+    .select({ id: organizationsTable.id, name: organizationsTable.name })
+    .from(organizationsTable)
+    .where(eq(organizationsTable.id, organizationId))
+    .limit(1);
+
+  if (!org) {
+    res.status(404).json({ error: "Organization not found" });
+    return;
+  }
+
+  // Determine if target user is a global admin
+  const [targetUser] = await db
+    .select({ role: usersTable.role })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+
+  if (targetUser?.role === "admin") {
+    res.json({
+      organizationId,
+      organizationName: org.name,
+      userId,
+      effectiveRole: "admin",
+      platformRole: "global_admin",
+      membershipStatus: "global_admin",
+      permissions: getOrgPermissions("admin"),
+    });
+    return;
+  }
+
+  const [membership] = await db
+    .select({ role: organizationUsersTable.role, status: organizationUsersTable.status })
+    .from(organizationUsersTable)
+    .where(
+      and(
+        eq(organizationUsersTable.userId, userId),
+        eq(organizationUsersTable.organizationId, organizationId),
+      ),
+    )
+    .limit(1);
+
+  if (!membership) {
+    res.status(404).json({ error: "User has no membership in this organization" });
+    return;
+  }
+
+  res.json({
+    organizationId,
+    organizationName: org.name,
+    userId,
+    effectiveRole: membership.role,
+    platformRole: "none",
+    membershipStatus: membership.status,
+    permissions: getOrgPermissions(membership.role),
+  });
 });
 
 export default router;

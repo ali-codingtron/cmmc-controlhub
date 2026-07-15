@@ -120,6 +120,71 @@ router.post("/users", requireAuth, requireRole("admin"), async (req, res) => {
   res.status(201).json(created);
 });
 
+// ── Migration dry-run report ─────────────────────────────────────────────────
+router.get("/users/migration-report", requireAuth, requireRole("admin"), async (req, res) => {
+  const allUsers = await db
+    .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, role: usersTable.role, isActive: usersTable.isActive })
+    .from(usersTable)
+    .orderBy(usersTable.name);
+
+  const allMemberships = await db
+    .select({
+      userId: organizationUsersTable.userId,
+      organizationId: organizationUsersTable.organizationId,
+      orgName: organizationsTable.name,
+      role: organizationUsersTable.role,
+      status: organizationUsersTable.status,
+    })
+    .from(organizationUsersTable)
+    .leftJoin(organizationsTable, eq(organizationUsersTable.organizationId, organizationsTable.id));
+
+  const membershipMap: Record<string, typeof allMemberships> = {};
+  for (const m of allMemberships) {
+    if (!membershipMap[m.userId]) membershipMap[m.userId] = [];
+    membershipMap[m.userId].push(m);
+  }
+
+  const legacyNonAdminRoles = ["compliance_manager", "it_contributor", "reviewer", "executive_viewer", "assessor"];
+
+  const report = {
+    summary: {
+      totalUsers: allUsers.length,
+      globalAdmins: allUsers.filter(u => u.role === "admin").length,
+      usersWithLegacyNonGlobalRole: allUsers.filter(u => legacyNonAdminRoles.includes(u.role)).length,
+      usersWithOrgMemberships: allUsers.filter(u => (membershipMap[u.id] ?? []).length > 0).length,
+      usersWithNoMembership: allUsers.filter(u => u.role !== "admin" && (membershipMap[u.id] ?? []).length === 0).length,
+    },
+    users: allUsers.map(u => {
+      const memberships = (membershipMap[u.id] ?? []).map(m => ({
+        orgId: m.organizationId,
+        orgName: m.orgName ?? m.organizationId,
+        role: m.role,
+        status: m.status,
+      }));
+      const hasLegacyRole = legacyNonAdminRoles.includes(u.role);
+      const hasMemberships = memberships.length > 0;
+      return {
+        userId: u.id,
+        userName: u.name,
+        email: u.email,
+        legacyRole: u.role,
+        isGlobalAdmin: u.role === "admin",
+        isActive: u.isActive,
+        orgMemberships: memberships,
+        hasLegacyRoleConflict: hasLegacyRole && hasMemberships,
+        noOrgAccess: u.role !== "admin" && !hasMemberships,
+        resolution: u.role === "admin"
+          ? "Global Admin — no changes needed"
+          : hasMemberships
+            ? `Org membership role overrides legacy "${u.role}" — no action needed`
+            : `No org access — assign this user to at least one organization`,
+      };
+    }),
+  };
+
+  res.json(report);
+});
+
 // ── Get user ─────────────────────────────────────────────────────────────────
 router.get("/users/:id", requireAuth, async (req, res) => {
   const [user] = await db

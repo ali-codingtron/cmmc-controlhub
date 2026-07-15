@@ -489,7 +489,7 @@ router.post(
     };
 
     const isServerSideScope = exportScope === "allApproved" || exportScope === "entireOrg";
-    const isAssessor = user.role === "assessor";
+    const isAssessor = (req.orgRole ?? user.role) === "assessor";
 
     // Assessors are always restricted to assessor-visible statuses
     const effectiveStatusFilters: string[] | undefined = isAssessor

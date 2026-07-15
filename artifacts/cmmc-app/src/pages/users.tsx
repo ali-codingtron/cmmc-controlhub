@@ -123,8 +123,14 @@ const ORG_STATUSES = [
   { value: "suspended", label: "Suspended" },
 ] as const;
 
+const PLATFORM_ROLES = [
+  { value: "none", label: "No Platform Role" },
+  { value: "admin", label: "Global Admin" },
+] as const;
+
 function globalRoleLabel(role: string) {
-  return GLOBAL_ROLES.find((r) => r.value === role)?.label ?? role;
+  if (role === "admin") return "Global Admin";
+  return "—";
 }
 
 function orgRoleLabel(role: string) {
@@ -214,25 +220,25 @@ function UserForm({
       )}
 
       <div className="space-y-1.5">
-        <Label htmlFor="uf-role">
-          Role <span className="text-red-500">*</span>
-        </Label>
+        <Label htmlFor="uf-platform-role">Platform Role</Label>
         <Select
-          value={data.role}
-          onValueChange={(v) => onChange("role", v)}
+          value={data.role === "admin" ? "admin" : "none"}
+          onValueChange={(v) => onChange("role", v === "admin" ? "admin" : "it_contributor")}
         >
-          <SelectTrigger id="uf-role" className={errors.role ? "border-red-500" : ""}>
-            <SelectValue placeholder="Select role…" />
+          <SelectTrigger id="uf-platform-role">
+            <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {GLOBAL_ROLES.map((r) => (
+            {PLATFORM_ROLES.map((r) => (
               <SelectItem key={r.value} value={r.value}>
                 {r.label}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        {errors.role && <p className="text-xs text-red-500">{errors.role}</p>}
+        <p className="text-xs text-muted-foreground">
+          Global Admin has unrestricted access across all organizations. For all other users, access is controlled by organization-specific roles.
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -622,7 +628,6 @@ function InviteDialog({ open, onClose, onInvited, emailConfigured }: InviteDialo
     if (!form.email.trim()) errs.email = "Email is required";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
       errs.email = "Invalid email address";
-    if (!form.role) errs.role = "Role is required";
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -704,22 +709,25 @@ function InviteDialog({ open, onClose, onInvited, emailConfigured }: InviteDialo
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="inv-role">
-                Role <span className="text-red-500">*</span>
-              </Label>
-              <Select value={form.role} onValueChange={(v) => setField("role", v)}>
-                <SelectTrigger id="inv-role" className={errors.role ? "border-red-500" : ""}>
-                  <SelectValue placeholder="Select role…" />
+              <Label htmlFor="inv-platform-role">Platform Role</Label>
+              <Select
+                value={form.role === "admin" ? "admin" : "none"}
+                onValueChange={(v) => setField("role", v === "admin" ? "admin" : "it_contributor")}
+              >
+                <SelectTrigger id="inv-platform-role">
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {GLOBAL_ROLES.map((r) => (
+                  {PLATFORM_ROLES.map((r) => (
                     <SelectItem key={r.value} value={r.value}>
                       {r.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {errors.role && <p className="text-xs text-red-500">{errors.role}</p>}
+              <p className="text-xs text-muted-foreground">
+                Global Admin has unrestricted access. For org-specific roles, configure Organization Access below.
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -872,8 +880,10 @@ function CreateUserDialog({ open, onClose, onCreated }: CreateUserDialogProps) {
   const { toast } = useToast();
   const [form, setForm] = useState<UserFormData>(EMPTY_CREATE);
   const [errors, setErrors] = useState<Partial<Record<keyof UserFormData, string>>>({});
+  const [pendingOrgs, setPendingOrgs] = useState<PendingOrgMembership[]>([]);
 
   const createMutation = useCreateUser();
+  const addOrgMutation = useAddUserToOrg();
 
   const setField = (field: keyof UserFormData, value: string) => {
     setForm((f) => ({ ...f, [field]: value }));
@@ -888,7 +898,6 @@ function CreateUserDialog({ open, onClose, onCreated }: CreateUserDialogProps) {
       errs.email = "Invalid email address";
     if (!form.password) errs.password = "Password is required";
     else if (form.password.length < 8) errs.password = "Password must be at least 8 characters";
-    if (!form.role) errs.role = "Role is required";
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -896,13 +905,14 @@ function CreateUserDialog({ open, onClose, onCreated }: CreateUserDialogProps) {
   const handleClose = () => {
     setForm(EMPTY_CREATE);
     setErrors({});
+    setPendingOrgs([]);
     onClose();
   };
 
   const handleSubmit = async () => {
     if (!validate()) return;
     try {
-      await createMutation.mutateAsync({
+      const created = await createMutation.mutateAsync({
         data: {
           name: form.name.trim(),
           email: form.email.trim(),
@@ -912,6 +922,16 @@ function CreateUserDialog({ open, onClose, onCreated }: CreateUserDialogProps) {
           department: form.department || undefined,
         },
       });
+      for (const m of pendingOrgs) {
+        try {
+          await addOrgMutation.mutateAsync({
+            id: (created as any).id,
+            data: { organizationId: m.orgId, role: m.role as any, status: m.status as any },
+          });
+        } catch {
+          // Non-fatal: user was created; org membership can be assigned from Edit dialog
+        }
+      }
       toast({ title: `${form.name.trim()} created successfully` });
       handleClose();
       onCreated();
@@ -927,7 +947,7 @@ function CreateUserDialog({ open, onClose, onCreated }: CreateUserDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserPlus className="h-5 w-5 text-primary" />
@@ -938,9 +958,25 @@ function CreateUserDialog({ open, onClose, onCreated }: CreateUserDialogProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <UserForm data={form} onChange={setField} isEdit={false} errors={errors} />
+        <div className="overflow-y-auto flex-1 min-h-0 py-2 space-y-5">
+          <UserForm data={form} onChange={setField} isEdit={false} errors={errors} />
 
-        <DialogFooter>
+          <div className="rounded-md border p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold">Organization Access</h3>
+              {pendingOrgs.length > 0 && (
+                <Badge variant="secondary" className="text-xs h-5">{pendingOrgs.length}</Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Optionally grant this user access to one or more organizations immediately. You can also assign organizations later from the Edit dialog.
+            </p>
+            <OrgAccessBuilder value={pendingOrgs} onChange={setPendingOrgs} />
+          </div>
+        </div>
+
+        <DialogFooter className="shrink-0">
           <Button variant="outline" onClick={handleClose} disabled={createMutation.isPending}>
             Cancel
           </Button>
@@ -951,6 +987,268 @@ function CreateUserDialog({ open, onClose, onCreated }: CreateUserDialogProps) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─── User Org Summary (table cell badge) ──────────────────────────────────────
+
+function UserOrgSummary({ userId }: { userId: string }) {
+  const { data: memberships = [], isLoading } = useGetUserOrgs(userId);
+
+  if (isLoading) {
+    return <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />;
+  }
+  if (memberships.length === 0) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+
+  const shown = memberships.slice(0, 2);
+  const extra = memberships.length - shown.length;
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {shown.map((m) => (
+        <Badge key={m.membershipId} variant="outline" className="text-[10px] font-normal max-w-[180px] truncate">
+          {m.organizationName} — {orgRoleLabel(m.role)}
+        </Badge>
+      ))}
+      {extra > 0 && (
+        <Badge variant="secondary" className="text-[10px]">+{extra} more</Badge>
+      )}
+    </div>
+  );
+}
+
+// ─── Effective Permissions Panel (EditDialog Permissions tab) ─────────────────
+
+const DIAGNOSTIC_PERMISSIONS = [
+  "documents.generate", "documents.edit", "documents.approve", "documents.delete",
+  "evidence.approve", "evidence.edit", "evidence.delete",
+  "controls.edit",
+  "poam.create", "poam.edit", "poam.close",
+  "tasks.create", "tasks.edit",
+  "roadmap.view", "roadmap.update",
+  "monitoring.update",
+  "users.manage", "org.admin",
+  "reports.generate", "preassessment.run", "ssp.edit",
+];
+
+interface OrgContext {
+  organizationId: string;
+  organizationName: string;
+  userId: string;
+  effectiveRole: string;
+  platformRole: string;
+  membershipStatus: string;
+  permissions: string[];
+}
+
+function EffectivePermissionsPanel({ userId }: { userId: string }) {
+  const { data: allOrgs = [] } = useListOrganizations({ query: { queryKey: ["organizations-perm"] } as any });
+  const [selectedOrgId, setSelectedOrgId] = useState<string>("");
+
+  const { data: context, isLoading: ctxLoading } = useQuery({
+    queryKey: ["org-context-diagnostic", userId, selectedOrgId],
+    queryFn: async (): Promise<OrgContext | null> => {
+      if (!selectedOrgId) return null;
+      const token = localStorage.getItem("auth_token");
+      const r = await fetch(`/api/auth/organization-context/${selectedOrgId}?userId=${userId}`, {
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
+      if (!r.ok) return null;
+      return r.json();
+    },
+    enabled: !!selectedOrgId,
+  });
+
+  const permSet = new Set(context?.permissions ?? []);
+
+  return (
+    <div className="space-y-4 py-2">
+      <div className="space-y-1.5">
+        <Label>Select Organization</Label>
+        <Select value={selectedOrgId} onValueChange={setSelectedOrgId}>
+          <SelectTrigger>
+            <SelectValue placeholder="Choose an organization to inspect…" />
+          </SelectTrigger>
+          <SelectContent>
+            {allOrgs.map((o) => (
+              <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {ctxLoading && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+        </div>
+      )}
+
+      {!selectedOrgId && !ctxLoading && (
+        <p className="text-sm text-muted-foreground">Select an organization above to inspect the effective permissions for this user.</p>
+      )}
+
+      {context && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-md border p-3">
+              <div className="text-xs text-muted-foreground mb-1">Effective Role</div>
+              <div className="text-sm font-medium capitalize">{context.effectiveRole.replace(/_/g, " ")}</div>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="text-xs text-muted-foreground mb-1">Platform Role</div>
+              <div className="text-sm font-medium">{context.platformRole === "global_admin" ? "Global Admin" : "None"}</div>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="text-xs text-muted-foreground mb-1">Membership Status</div>
+              <div className="text-sm font-medium capitalize">{context.membershipStatus.replace(/_/g, " ")}</div>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Permission Matrix</div>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+              {DIAGNOSTIC_PERMISSIONS.map((p) => (
+                <div key={p} className="flex items-center gap-2 text-xs py-0.5">
+                  {permSet.has(p) ? (
+                    <Check className="h-3 w-3 text-green-600 shrink-0" />
+                  ) : (
+                    <X className="h-3 w-3 text-red-400 shrink-0" />
+                  )}
+                  <span className={permSet.has(p) ? "text-foreground" : "text-muted-foreground"}>{p}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Migration Report Card ────────────────────────────────────────────────────
+
+interface MigrationSummary {
+  summary: {
+    totalUsers: number;
+    globalAdmins: number;
+    usersWithLegacyNonGlobalRole: number;
+    usersWithOrgMemberships: number;
+    usersWithNoMembership: number;
+  };
+  users: Array<{
+    userId: string;
+    userName: string;
+    email: string;
+    legacyRole: string;
+    isGlobalAdmin: boolean;
+    isActive: boolean;
+    orgMemberships: Array<{ orgId: string; orgName: string; role: string; status: string }>;
+    hasLegacyRoleConflict: boolean;
+    noOrgAccess: boolean;
+    resolution: string;
+  }>;
+}
+
+function MigrationReportCard() {
+  const [expanded, setExpanded] = useState(false);
+
+  const { data: report, isLoading } = useQuery<MigrationSummary>({
+    queryKey: ["migration-report"],
+    queryFn: async () => {
+      const token = localStorage.getItem("auth_token");
+      const r = await fetch("/api/users/migration-report", {
+        headers: { Authorization: `Bearer ${token ?? ""}` },
+      });
+      if (!r.ok) throw new Error("Failed to load report");
+      return r.json();
+    },
+    enabled: expanded,
+  });
+
+  const attentionUsers = report?.users.filter((u) => u.hasLegacyRoleConflict || u.noOrgAccess) ?? [];
+
+  return (
+    <Card className="border-amber-200 bg-amber-50/40">
+      <CardHeader className="pb-2 pt-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+            <CardTitle className="text-sm font-semibold">Legacy Role Migration Report</CardTitle>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setExpanded((v) => !v)} className="text-xs h-7">
+            {expanded ? "Hide" : "View Report"}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">
+          Shows users still relying on legacy platform roles. Only Global Admin is a valid platform-level role; all other access is org-specific.
+        </p>
+      </CardHeader>
+      {expanded && (
+        <CardContent className="pt-0 pb-4">
+          {isLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+              <Loader2 className="h-4 w-4 animate-spin" /> Analyzing user roles…
+            </div>
+          ) : report ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-5 gap-2 text-center">
+                {[
+                  { label: "Total Users", value: report.summary.totalUsers },
+                  { label: "Global Admins", value: report.summary.globalAdmins },
+                  { label: "Legacy Roles", value: report.summary.usersWithLegacyNonGlobalRole },
+                  { label: "Have Org Access", value: report.summary.usersWithOrgMemberships },
+                  { label: "No Org Access", value: report.summary.usersWithNoMembership },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-md border bg-white p-2">
+                    <div className="text-lg font-bold">{item.value}</div>
+                    <div className="text-[10px] text-muted-foreground leading-tight">{item.label}</div>
+                  </div>
+                ))}
+              </div>
+              {attentionUsers.length === 0 ? (
+                <div className="flex items-center gap-2 text-sm text-green-700">
+                  <Check className="h-4 w-4 text-green-600" />
+                  All users are either Global Admins or have org-specific role assignments — no action needed.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Users Requiring Attention</div>
+                  {attentionUsers.map((u) => (
+                    <div key={u.userId} className="flex items-start gap-3 rounded-md border bg-white p-3 text-sm">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium">{u.userName}</div>
+                        <div className="text-xs text-muted-foreground">{u.email}</div>
+                        <div className="mt-1 flex flex-wrap gap-1 items-center">
+                          <span className="text-xs text-muted-foreground">Legacy:</span>
+                          <Badge variant="outline" className="text-[10px]">{u.legacyRole}</Badge>
+                        </div>
+                        {u.orgMemberships.length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {u.orgMemberships.map((m) => (
+                              <Badge key={m.orgId} variant="secondary" className="text-[10px]">
+                                {m.orgName} — {m.role}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className={cn(
+                        "text-[10px] rounded px-2 py-1 shrink-0 font-medium",
+                        u.noOrgAccess ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700",
+                      )}>
+                        {u.noOrgAccess ? "Needs org access" : "Overridden by org role"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null}
+        </CardContent>
+      )}
+    </Card>
   );
 }
 
@@ -974,6 +1272,8 @@ interface EditDialogProps {
 
 function EditDialog({ user, open, onClose, onSuccess }: EditDialogProps) {
   const { toast } = useToast();
+  const { user: authUser } = useAuth();
+  const isAdmin = authUser?.role === "admin";
 
   const [form, setForm] = useState<UserFormData>(() =>
     user
@@ -988,7 +1288,7 @@ function EditDialog({ user, open, onClose, onSuccess }: EditDialogProps) {
       : EMPTY_FORM
   );
   const [errors, setErrors] = useState<Partial<Record<keyof UserFormData, string>>>({});
-  const [activeTab, setActiveTab] = useState<"details" | "orgs">("details");
+  const [activeTab, setActiveTab] = useState<"details" | "orgs" | "permissions">("details");
 
   const updateMutation = useUpdateUser();
 
@@ -1003,7 +1303,6 @@ function EditDialog({ user, open, onClose, onSuccess }: EditDialogProps) {
     if (!form.email.trim()) errs.email = "Email is required";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
       errs.email = "Invalid email address";
-    if (!form.role) errs.role = "Role is required";
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -1065,6 +1364,20 @@ function EditDialog({ user, open, onClose, onSuccess }: EditDialogProps) {
             <Building2 className="h-3.5 w-3.5" />
             Organization Access
           </button>
+          {isAdmin && (
+            <button
+              onClick={() => setActiveTab("permissions")}
+              className={cn(
+                "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5",
+                activeTab === "permissions"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Effective Permissions
+            </button>
+          )}
         </div>
 
         <div className="py-2 overflow-y-auto flex-1 min-h-0">
@@ -1073,6 +1386,9 @@ function EditDialog({ user, open, onClose, onSuccess }: EditDialogProps) {
           )}
           {activeTab === "orgs" && user && (
             <OrgMembershipsPanel userId={user.id} />
+          )}
+          {activeTab === "permissions" && user && isAdmin && (
+            <EffectivePermissionsPanel userId={user.id} />
           )}
         </div>
 
@@ -1528,6 +1844,9 @@ export default function Users() {
         <InviteUrlBanner url={pendingInviteUrl} onDismiss={() => setPendingInviteUrl(null)} />
       )}
 
+      {/* Legacy Role Migration Report — admin only */}
+      {isAdmin && <MigrationReportCard />}
+
       {/* Search */}
       <div className="flex gap-3 items-center">
         <Input
@@ -1562,6 +1881,7 @@ export default function Users() {
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Platform Role</TableHead>
+                  <TableHead>Organization Access</TableHead>
                   <TableHead>Title / Dept</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>MFA</TableHead>
@@ -1598,6 +1918,9 @@ export default function Users() {
                       <Badge variant="outline" className="text-xs font-normal">
                         {globalRoleLabel(u.role)}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="py-2">
+                      <UserOrgSummary userId={u.id} />
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {u.title || "—"}
