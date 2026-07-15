@@ -334,7 +334,16 @@ export default function DocumentsList() {
         <div>
           <h1 className="text-3xl font-bold">All Documents</h1>
           <p className="text-muted-foreground mt-1">
-            {allDocs.length} item{allDocs.length !== 1 ? "s" : ""} — uploaded documents and evidence
+            {(() => {
+              const uploaded = allDocs.filter(d => d.sourceType === "document" && (d as any).sourceSubtype !== "generated").length;
+              const generated = allDocs.filter(d => d.sourceType === "document" && (d as any).sourceSubtype === "generated").length;
+              const evidence = allDocs.filter(d => d.sourceType === "evidence").length;
+              const parts = [`${uploaded} uploaded`];
+              if (generated > 0) parts.push(`${generated} generated`);
+              parts.push(`${evidence} evidence`);
+              parts.push(`${allDocs.length} total`);
+              return parts.join(" · ");
+            })()}
           </p>
         </div>
         <div className="flex gap-2">
@@ -401,8 +410,8 @@ export default function DocumentsList() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Sources</SelectItem>
-                <SelectItem value="document">Uploaded Document</SelectItem>
-                <SelectItem value="evidence">Uploaded Evidence</SelectItem>
+                <SelectItem value="document">Documents Only</SelectItem>
+                <SelectItem value="evidence">Evidence Only</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -551,10 +560,15 @@ export default function DocumentsList() {
                             <UploadCloud className="h-3 w-3 mr-1" />
                             Evidence
                           </Badge>
+                        ) : (doc as any).sourceSubtype === "generated" ? (
+                          <Badge className="bg-violet-50 text-violet-700 border border-violet-200 text-xs whitespace-nowrap">
+                            <FileText className="h-3 w-3 mr-1" />
+                            Generated
+                          </Badge>
                         ) : (
                           <Badge className="bg-slate-50 text-slate-700 border border-slate-200 text-xs whitespace-nowrap">
                             <FileText className="h-3 w-3 mr-1" />
-                            Document
+                            Uploaded
                           </Badge>
                         )}
                       </TableCell>

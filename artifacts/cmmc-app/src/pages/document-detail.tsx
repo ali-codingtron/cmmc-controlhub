@@ -8,7 +8,6 @@ import {
   useActivateDocument,
   useArchiveDocument,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,8 +18,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import {
-  ArrowLeft, Edit, Save, X, CheckCircle2, XCircle, Send, Play, Archive, Clock, History
+  ArrowLeft, Edit, Save, X, CheckCircle2, XCircle, Send, Play, Archive, Clock, History,
+  Download, Eye, AlertCircle, FileIcon,
 } from "lucide-react";
+import { useOrg } from "@/context/OrgContext";
 
 const DOC_STATUS_COLORS: Record<string, string> = {
   draft: "bg-gray-100 text-gray-700",
@@ -33,9 +34,154 @@ const DOC_STATUS_COLORS: Record<string, string> = {
   archived: "bg-slate-100 text-slate-700",
 };
 
+function DocFileCard({ docId, fileKey, fileName, fileSize }: {
+  docId: string;
+  fileKey: string;
+  fileName?: string | null;
+  fileSize?: string | null;
+}) {
+  const { activeOrg } = useOrg();
+  const { toast } = useToast();
+  const [loadState, setLoadState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  const ext = (fileName ?? fileKey).split(".").pop()?.toLowerCase() ?? "";
+  const isLegacyKey = !fileKey.startsWith("/objects/");
+  const isImage = ["png", "jpg", "jpeg", "webp", "gif", "svg"].includes(ext);
+  const isPdf = ext === "pdf";
+  const isPreviewable = (isImage || isPdf) && !isLegacyKey;
+
+  const FILE_ICONS: Record<string, string> = {
+    pdf: "📄", docx: "📝", doc: "📝", xlsx: "📊", xls: "📊",
+    png: "🖼️", jpg: "🖼️", jpeg: "🖼️", gif: "🖼️", webp: "🖼️",
+    csv: "📊", txt: "📃", log: "📃", json: "📃",
+  };
+  const icon = FILE_ICONS[ext] ?? "📁";
+
+  const sizeLabel = fileSize
+    ? Number(fileSize) > 1024 * 1024
+      ? `${(Number(fileSize) / 1024 / 1024).toFixed(1)} MB`
+      : `${(Number(fileSize) / 1024).toFixed(0)} KB`
+    : null;
+
+  const getHeaders = () => ({
+    Authorization: `Bearer ${localStorage.getItem("auth_token")}`,
+    ...(activeOrg?.id ? { "X-Organization-ID": activeOrg.id } : {}),
+  });
+
+  const handlePreview = async () => {
+    setPreviewOpen(true);
+    if (blobUrl) return;
+    setLoadState("loading");
+    try {
+      const res = await fetch(`/api/documents/${docId}/preview`, { headers: getHeaders() });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Preview failed");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      setBlobUrl(url);
+      setLoadState("ready");
+    } catch (err: any) {
+      setLoadState("error");
+      toast({ title: err.message ?? "Failed to load preview", variant: "destructive" });
+      setPreviewOpen(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    try {
+      const res = await fetch(`/api/documents/${docId}/download`, { headers: getHeaders() });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Download failed");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName ?? "document";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast({ title: err.message ?? "Download failed", variant: "destructive" });
+    }
+  };
+
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Attached File</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-start gap-3 mb-4">
+            <span className="text-3xl leading-none shrink-0">{icon}</span>
+            <div className="min-w-0 flex-1">
+              <p className="font-medium text-sm truncate">{fileName ?? fileKey}</p>
+              <div className="flex items-center gap-2 mt-0.5">
+                {ext && <span className="text-xs text-muted-foreground uppercase font-mono">{ext}</span>}
+                {sizeLabel && <span className="text-xs text-muted-foreground">{sizeLabel}</span>}
+              </div>
+            </div>
+          </div>
+          {isLegacyKey && (
+            <div className="flex items-start gap-2 mb-4 p-3 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+              <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span>This file was uploaded before cloud storage migration and may no longer be accessible. Re-upload the file to restore access.</span>
+            </div>
+          )}
+          <div className="flex gap-2">
+            {isPreviewable && (
+              <Button variant="outline" size="sm" onClick={handlePreview} disabled={loadState === "loading"}>
+                <Eye className="h-3.5 w-3.5 mr-1.5" />
+                {loadState === "loading" ? "Loading…" : "Preview"}
+              </Button>
+            )}
+            {!isLegacyKey && (
+              <Button variant="outline" size="sm" onClick={handleDownload}>
+                <Download className="h-3.5 w-3.5 mr-1.5" />
+                Download
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0">
+          <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
+            <span className="font-medium text-sm truncate">{fileName ?? fileKey}</span>
+            <Button variant="ghost" size="icon" onClick={() => setPreviewOpen(false)} className="shrink-0 h-7 w-7">
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex-1 overflow-hidden min-h-0">
+            {loadState === "ready" && blobUrl && (
+              isImage ? (
+                <div className="h-full overflow-auto flex items-center justify-center p-4">
+                  <img src={blobUrl} alt={fileName ?? "Document"} className="max-w-full max-h-full object-contain" />
+                </div>
+              ) : (
+                <iframe src={blobUrl} className="w-full h-[75vh] border-0" title={fileName ?? "PDF"} />
+              )
+            )}
+            {loadState === "loading" && (
+              <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">
+                Loading preview…
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 export default function DocumentDetail({ id }: { id: string }) {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
   const { data: doc, isLoading, refetch } = useGetDocument(id);
 
   const [editing, setEditing] = useState(false);
@@ -128,6 +274,14 @@ export default function DocumentDetail({ id }: { id: string }) {
   const canActivate = status === "approved";
   const canArchive = ["active", "approved", "needs_update"].includes(status);
 
+  const fileKey = (doc as any).fileKey as string | null | undefined;
+  const fileName = (doc as any).fileName as string | null | undefined;
+  const fileSize = (doc as any).fileSize as string | null | undefined;
+  const body = (doc as any).body as string | null | undefined;
+  const linkedControlDetails = (doc as any).linkedControlDetails as {
+    id: string; label: string; title: string; domainName: string | null; level: string | null;
+  }[] | undefined;
+
   return (
     <div className="space-y-6 max-w-4xl">
       <div className="flex items-start justify-between gap-4">
@@ -199,7 +353,7 @@ export default function DocumentDetail({ id }: { id: string }) {
               {canActivate && (
                 <Button size="sm" onClick={() => setReviewDialog("activate")}>
                   <Play className="h-3.5 w-3.5 mr-1" />
-                  Activate
+                  Make Current
                 </Button>
               )}
               {canArchive && (
@@ -215,26 +369,48 @@ export default function DocumentDetail({ id }: { id: string }) {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-2 space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Document Body</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {editing ? (
+          {editing ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Document Body</CardTitle>
+              </CardHeader>
+              <CardContent>
                 <Textarea
                   value={editBody}
                   onChange={(e) => setEditBody(e.target.value)}
-                  className="min-h-[500px] font-mono text-sm"
+                  className="min-h-[400px] font-mono text-sm"
                 />
-              ) : (
+              </CardContent>
+            </Card>
+          ) : fileKey ? (
+            <DocFileCard docId={id} fileKey={fileKey} fileName={fileName} fileSize={fileSize} />
+          ) : body ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Document Body</CardTitle>
+              </CardHeader>
+              <CardContent>
                 <div className="prose prose-sm max-w-none">
-                  <pre className="whitespace-pre-wrap text-sm font-sans leading-relaxed">
-                    {(doc as any).body}
-                  </pre>
+                  <pre className="whitespace-pre-wrap text-sm font-sans leading-relaxed">{body}</pre>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Document Content</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col items-center py-8 text-center text-muted-foreground">
+                  <FileIcon className="h-10 w-10 mb-3 opacity-25" />
+                  <p className="text-sm font-medium">No content attached</p>
+                  <p className="text-xs mt-1 max-w-xs text-muted-foreground">
+                    This document has no file or body text. Use "Add Document" to create a new one with an uploaded file, or click Edit to add body text.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         <div className="space-y-4">
@@ -271,29 +447,52 @@ export default function DocumentDetail({ id }: { id: string }) {
               )}
               {doc.activatedAt && (
                 <div>
-                  <span className="text-muted-foreground">Activated</span>
+                  <span className="text-muted-foreground">Made Current</span>
                   <p className="font-medium">{new Date(doc.activatedAt).toLocaleDateString()}</p>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {doc.linkedControlIds?.length > 0 && (
+          {linkedControlDetails && linkedControlDetails.length > 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Linked Controls</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {linkedControlDetails.map((c) => (
+                    <Link key={c.id} href={`/controls/${c.id}`}>
+                      <div className="flex items-start gap-2 p-2 rounded hover:bg-muted/50 cursor-pointer group">
+                        <Badge variant="secondary" className="text-xs shrink-0 font-mono mt-0.5">{c.label}</Badge>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium group-hover:text-primary truncate">{c.title}</p>
+                          {c.domainName && (
+                            <p className="text-xs text-muted-foreground truncate">{c.domainName}</p>
+                          )}
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ) : (doc as any).linkedControlIds?.length > 0 ? (
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm">Linked Controls</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-1">
-                  {doc.linkedControlLabels?.map((label, i) => (
-                    <Link key={i} href={`/controls/${doc.linkedControlIds[i]}`}>
+                  {(doc as any).linkedControlLabels?.map((label: string, i: number) => (
+                    <Link key={i} href={`/controls/${(doc as any).linkedControlIds[i]}`}>
                       <Badge variant="secondary" className="text-xs cursor-pointer hover:bg-secondary/80">{label}</Badge>
                     </Link>
                   ))}
                 </div>
               </CardContent>
             </Card>
-          )}
+          ) : null}
 
           {(doc as any).rejectionNotes && (
             <Card className="border-red-200">
@@ -364,7 +563,7 @@ export default function DocumentDetail({ id }: { id: string }) {
               {reviewDialog === "submit" && "Submit for Review"}
               {reviewDialog === "approve" && "Approve Document"}
               {reviewDialog === "reject" && "Reject Document"}
-              {reviewDialog === "activate" && "Activate Document"}
+              {reviewDialog === "activate" && "Make Current"}
               {reviewDialog === "archive" && "Archive Document"}
             </DialogTitle>
           </DialogHeader>
@@ -388,7 +587,7 @@ export default function DocumentDetail({ id }: { id: string }) {
                 placeholder={
                   reviewDialog === "reject" ? "Provide reason for rejection..." :
                   reviewDialog === "approve" ? "Approval notes..." :
-                  reviewDialog === "activate" ? "Activation notes..." :
+                  reviewDialog === "activate" ? "Notes for making this version current..." :
                   "Notes..."
                 }
                 className="mt-1.5"
@@ -406,7 +605,7 @@ export default function DocumentDetail({ id }: { id: string }) {
                   reviewDialog === "submit" ? "Submit" :
                   reviewDialog === "approve" ? "Approve" :
                   reviewDialog === "reject" ? "Reject" :
-                  reviewDialog === "activate" ? "Activate" :
+                  reviewDialog === "activate" ? "Make Current" :
                   "Archive"
                 )}
               </Button>

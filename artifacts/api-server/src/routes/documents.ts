@@ -20,7 +20,7 @@ import {
   evidenceControlLinksTable,
   tasksTable,
 } from "@workspace/db";
-import { eq, and, desc, ilike, or, inArray, lte, gte, isNull } from "drizzle-orm";
+import { eq, and, desc, ilike, or, inArray, lte, gte, isNull, isNotNull, sql } from "drizzle-orm";
 import { requireAuth, requireNotAssessor } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 import { logAudit } from "../lib/audit";
@@ -106,6 +106,22 @@ async function enrichDocument(doc: typeof documentsTable.$inferSelect & {
 }) {
   const labels = await getControlLabels((doc as any).linkedControlIds ?? []);
   return { ...doc, linkedControlLabels: labels };
+}
+
+async function getControlDetails(ids: string[]) {
+  if (!ids.length) return [];
+  const rows = await db
+    .select({
+      id: controlsTable.id,
+      label: controlsTable.controlId,
+      title: controlsTable.title,
+      level: controlsTable.level,
+      domainName: domainsTable.name,
+    })
+    .from(controlsTable)
+    .leftJoin(domainsTable, eq(domainsTable.id, controlsTable.domainId))
+    .where(inArray(controlsTable.id, ids));
+  return rows;
 }
 
 // ─── DOCUMENT TEMPLATES ─────────────────────────────────────────────────────
@@ -397,6 +413,48 @@ router.post(
   }
 );
 
+// ── Preview Document file (stream with inline Content-Disposition) ────────────
+router.get("/documents/:id/preview", requireAuth, requireOrg, async (req, res) => {
+  const [doc] = await db
+    .select({ fileKey: documentsTable.fileKey, fileName: documentsTable.fileName, organizationId: documentsTable.organizationId })
+    .from(documentsTable)
+    .where(eq(documentsTable.id, req.params.id as string))
+    .limit(1);
+
+  if (!doc || doc.organizationId !== req.orgId) {
+    res.status(404).json({ error: "Not found" }); return;
+  }
+  if (!doc.fileKey) {
+    res.status(404).json({ error: "No file attached to this document" }); return;
+  }
+  if (!isGcsKey(doc.fileKey)) {
+    res.status(410).json({ error: "File stored on legacy local disk and cannot be previewed. Please re-upload the file." }); return;
+  }
+
+  const ext = path.extname(doc.fileName ?? doc.fileKey).toLowerCase();
+  const MIME_MAP: Record<string, string> = {
+    ".pdf": "application/pdf",
+    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+    ".webp": "image/webp", ".gif": "image/gif", ".svg": "image/svg+xml",
+    ".txt": "text/plain", ".csv": "text/csv", ".json": "application/json",
+    ".log": "text/plain", ".yaml": "text/yaml", ".yml": "text/yaml",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  };
+  const contentType = MIME_MAP[ext] ?? "application/octet-stream";
+  res.setHeader("Content-Type", contentType);
+  res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(doc.fileName ?? "document")}"`);
+
+  try {
+    const file = await objectStorageService.getObjectEntityFile(doc.fileKey);
+    const nodeStream = file.createReadStream();
+    nodeStream.on("error", () => { if (!res.headersSent) res.status(404).end(); });
+    nodeStream.pipe(res);
+  } catch {
+    if (!res.headersSent) res.status(404).json({ error: "File not found in storage" });
+  }
+});
+
 // ── Download Document file ────────────────────────────────────────────────────
 router.get("/documents/:id/download", requireAuth, requireOrg, async (req, res) => {
   const [doc] = await db
@@ -434,6 +492,43 @@ router.get("/documents/:id/download", requireAuth, requireOrg, async (req, res) 
   }
 });
 
+router.get("/documents/stats", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId!;
+  const [docStats] = await db
+    .select({
+      total: sql<string>`COUNT(*)`,
+      uploaded: sql<string>`COUNT(*) FILTER (WHERE ${documentsTable.fileKey} IS NOT NULL)`,
+      generated: sql<string>`COUNT(*) FILTER (WHERE ${documentsTable.templateId} IS NOT NULL)`,
+    })
+    .from(documentsTable)
+    .where(and(
+      eq(documentsTable.organizationId, orgId),
+      eq(documentsTable.isCurrentVersion, true),
+      isNull(documentsTable.deletedAt),
+    ));
+  const [evidStats] = await db
+    .select({ count: sql<string>`COUNT(*)` })
+    .from(evidenceItemsTable)
+    .where(and(
+      eq(evidenceItemsTable.organizationId, orgId),
+      isNull(evidenceItemsTable.deletedAt),
+      eq(evidenceItemsTable.isCurrentVersion, true),
+      inArray(evidenceItemsTable.evidenceType, DOCUMENT_LIKE_EVIDENCE_TYPES as unknown as any),
+    ));
+  const total = Number(docStats?.total ?? 0);
+  const uploaded = Number(docStats?.uploaded ?? 0);
+  const generated = Number(docStats?.generated ?? 0);
+  const evid = Number(evidStats?.count ?? 0);
+  res.json({
+    uploadedDocuments: uploaded,
+    generatedDocuments: generated,
+    bodyDocuments: total - uploaded - generated,
+    totalDocuments: total,
+    evidenceItems: evid,
+    grandTotal: total + evid,
+  });
+});
+
 router.get("/documents/all", requireAuth, requireOrg, async (req, res) => {
   const { search, type, status, domain, controlId, sourceType } = req.query as Record<string, string>;
   const orgId = req.orgId;
@@ -453,6 +548,9 @@ router.get("/documents/all", requireAuth, requireOrg, async (req, res) => {
       expiresAt: documentsTable.expiresAt,
       createdAt: documentsTable.createdAt,
       updatedAt: documentsTable.updatedAt,
+      fileKey: documentsTable.fileKey,
+      fileName: documentsTable.fileName,
+      templateId: documentsTable.templateId,
     })
     .from(documentsTable)
     .leftJoin(usersTable, eq(usersTable.id, documentsTable.ownerId))
@@ -609,8 +707,9 @@ router.get("/documents/all", requireAuth, requireOrg, async (req, res) => {
       linkedControls: links.map((l) => ({ id: l.controlId, label: l.controlLabel })),
       domains: buildDomains(links),
       cmmcLevels,
-      fileKey: null as string | null,
-      fileName: null as string | null,
+      fileKey: doc.fileKey ?? null,
+      fileName: doc.fileName ?? null,
+      sourceSubtype: doc.fileKey ? "uploaded" : doc.templateId ? "generated" : "document",
     };
   }).filter(Boolean);
 
@@ -974,6 +1073,10 @@ router.get("/documents/:id", requireAuth, requireOrg, async (req, res) => {
       previousVersionId: documentsTable.previousVersionId,
       createdAt: documentsTable.createdAt,
       updatedAt: documentsTable.updatedAt,
+      fileKey: documentsTable.fileKey,
+      fileName: documentsTable.fileName,
+      fileSize: documentsTable.fileSize,
+      organizationId: documentsTable.organizationId,
     })
     .from(documentsTable)
     .leftJoin(usersTable, eq(usersTable.id, documentsTable.ownerId))
@@ -987,7 +1090,7 @@ router.get("/documents/:id", requireAuth, requireOrg, async (req, res) => {
     .from(documentControlMapsTable)
     .where(eq(documentControlMapsTable.documentId, doc.id));
   const linkedControlIds = controlMapRows.map((m) => m.controlId);
-  const labels = await getControlLabels(linkedControlIds);
+  const controlDetails = await getControlDetails(linkedControlIds);
 
   const [versions, reviews] = await Promise.all([
     db.select({
@@ -1019,7 +1122,16 @@ router.get("/documents/:id", requireAuth, requireOrg, async (req, res) => {
       .orderBy(desc(documentReviewsTable.reviewedAt)),
   ]);
 
-  res.json({ ...doc, linkedControlIds, linkedControlLabels: labels, versionHistory: versions, reviews });
+  const sourceSubtype = doc.fileKey ? "uploaded" : doc.templateId ? "generated" : doc.body?.trim() ? "body" : "empty";
+  res.json({
+    ...doc,
+    linkedControlIds,
+    linkedControlLabels: controlDetails.map((c) => c.label),
+    linkedControlDetails: controlDetails,
+    sourceSubtype,
+    versionHistory: versions,
+    reviews,
+  });
 });
 
 router.patch("/documents/:id", requireAuth, requireOrg, async (req, res) => {

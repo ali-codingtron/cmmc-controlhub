@@ -1,0 +1,707 @@
+Fix ONLY the Control HUB Documentation module in production.
+
+Scope of this request:
+
+- Documentation > Overview
+- Documentation > All Documents
+- Documentation > Add Document
+- Document Detail page
+- Document upload, preview, download, metadata, status, and linked-control display
+- Documentation counts and filters
+
+Do NOT modify any other application section.
+
+Specifically, do NOT change:
+
+- Evidence Repository
+- Control Detail pages
+- Controls Library
+- Framework Crosswalk
+- SSP
+- Monitoring Tracker
+- POA&M
+- Implementation Roadmap
+- Pre-Assessment
+- Reports
+- Users or permissions
+- Dashboard
+- Bulk evidence download
+- production evidence records
+- control mappings outside the Documentation module
+
+Do not add a Documents tab to the Control Detail page as part of this request.
+
+The goal is to make the Documentation module work correctly and clearly on its own.
+
+====================================================================
+1. CURRENT DOCUMENTATION ISSUES
+====================================================================
+
+Current production problems:
+
+1. When a file is uploaded through Documentation > Add Document, the Document record is created, but the uploaded file does not display correctly on the Document Detail page.
+
+2. The Document Detail page displays an empty or unusable “Document Body” area instead of showing the uploaded file.
+
+3. Uploaded documents do not consistently provide working:
+   - Preview
+   - View File
+   - Download File
+
+4. The purpose of the “Activate” button is unclear.
+
+5. A document can be linked to one or more controls, but the Documentation module does not clearly explain or display those links.
+
+6. The All Documents count does not match the Evidence Repository count, which creates confusion.
+
+7. All Documents combines standalone uploaded documents and evidence-derived document records, but the page does not clearly explain the sources.
+
+====================================================================
+2. PRODUCTION DATA SAFETY
+====================================================================
+
+This is a production-safe UI and query fix.
+
+Do not:
+
+- delete any Document record
+- delete any Evidence record
+- change existing document statuses
+- change existing evidence statuses
+- change existing linked controls
+- change ownership
+- change organization IDs
+- rename original uploaded files
+- overwrite storage keys
+- duplicate uploaded files
+- merge Document and Evidence records
+- create duplicate Evidence records from Documents
+- modify VTCCORP.US controls or control pages
+- modify any other organization data
+
+Before applying changes, provide a read-only diagnostic summary showing:
+
+- total standalone uploaded Documents for VTCCORP.US
+- total generated Documents
+- total evidence-derived document records
+- total displayed in All Documents
+- Documents with a storage key
+- Documents without a storage key
+- Documents with an uploaded file
+- Documents with body text only
+- Documents with missing files
+- Documents linked to controls
+
+Do not modify records during the diagnostic.
+
+====================================================================
+3. DEFINE WHAT ALL DOCUMENTS CONTAINS
+====================================================================
+
+Documentation > All Documents should display three document-oriented record sources:
+
+1. Uploaded Documents
+   Files uploaded directly through Documentation > Add Document.
+
+2. Generated Documents
+   Documents generated from the Template Library.
+
+3. Document-Like Evidence
+   Evidence records whose types are document-oriented, such as:
+   - Policy
+   - Procedure
+   - Report
+   - Log
+   - Form
+   - Approval Record
+   - Access Review
+   - Training Record
+   - Risk Record
+   - Incident Record
+   - Checklist
+   - Plan
+   - Contract
+   - System Security Plan
+
+Do not include every screenshot or technical artifact in All Documents.
+
+Do not change the Evidence Repository query or count.
+
+====================================================================
+4. FIX THE ALL DOCUMENTS COUNT
+====================================================================
+
+The All Documents total should not be expected to equal the Evidence Repository total.
+
+Update the All Documents page header to clearly explain its total.
+
+Instead of:
+
+“822 items — uploaded documents and evidence”
+
+Use:
+
+“822 document-oriented records”
+
+Below it, show a breakdown such as:
+
+- Uploaded Documents: 2
+- Generated Documents: 0
+- Document-Like Evidence: 820
+- Total Document Records: 822
+
+Add an information tooltip:
+
+“Evidence Repository contains every evidence artifact. All Documents contains uploaded documents, generated documents, and evidence records that function as formal documents. Screenshots and other non-document evidence may not appear here.”
+
+All totals must be calculated from the same server-side queries used to populate the table.
+
+Do not hardcode the counts.
+
+====================================================================
+5. STANDARDIZE SOURCE LABELS
+====================================================================
+
+Update the Source column.
+
+Allowed source labels:
+
+- Uploaded Document
+- Generated Document
+- Evidence
+- SSP Document
+- Report Export
+
+Examples:
+
+Lazarus C3PAO Signed Contract:
+Source = Uploaded Document
+
+VTC CUI Device Staging Procedure:
+Source = Uploaded Document
+
+VTC-IMS-QP026 System Security Plan, when stored as evidence:
+Source = Evidence
+
+Use distinct, readable source badges.
+
+====================================================================
+6. FIX ADD DOCUMENT WORKFLOW
+====================================================================
+
+Update Documentation > Add Document so an uploaded file is treated as a real file-backed Document.
+
+Required fields:
+
+- Title
+- Document Type
+- Status
+- File
+- Description
+- Linked Controls
+- Owner
+- Effective Date
+- Next Review Date
+- Version
+- Notes
+
+The uploaded Document must store:
+
+- organization ID
+- storage key/object key
+- original filename
+- stored filename
+- MIME type
+- file extension
+- file size
+- uploaded by
+- uploaded date
+- checksum if already supported
+
+Upload behavior:
+
+1. Validate file.
+2. Upload file to the same persistent private object storage used by production files.
+3. Confirm storage upload succeeded.
+4. Create the Document record.
+5. Save metadata and linked controls.
+6. Return the user to the Document Detail page.
+
+Do not create an empty Document record if the file upload fails.
+
+Do not store production files only on an ephemeral server filesystem.
+
+====================================================================
+7. FIX DOCUMENT DETAIL PAGE
+====================================================================
+
+The Document Detail page must detect whether the record is:
+
+- Uploaded File
+- Generated Document
+- Text/Body Document
+- Evidence-Derived Document
+
+For an Uploaded File, show:
+
+Uploaded File
+
+- Original filename
+- File type
+- File size
+- Uploaded date
+- Uploaded by
+
+Actions:
+
+- Preview
+- View File
+- Download File
+
+Show an inline preview where supported:
+
+- PDF
+- PNG/JPG/WebP
+- TXT
+- CSV
+- DOCX, if the existing Office preview service supports it
+- XLSX, if the existing Office preview service supports it
+
+For unsupported formats, show:
+
+“Preview is not available for this file type. Download the original file to review it.”
+
+Do not display a large empty “Document Body” section for a file-backed Document.
+
+Instead show:
+
+“This document is stored as an uploaded file. Use Preview or Download to review the original document.”
+
+For a Generated Document:
+
+Show:
+
+- formatted generated document body
+- version
+- DOCX download
+- PDF download
+
+For a Text/Body Document:
+
+Show the formatted body content.
+
+For an Evidence-Derived Document:
+
+Continue using the existing evidence file and metadata without copying or duplicating the file.
+
+====================================================================
+8. USE A SHARED DOCUMENT FILE VIEWER
+====================================================================
+
+Inside the Documentation module, create or reuse a consistent file viewer.
+
+It must:
+
+- verify authenticated user
+- verify organization access
+- verify document view/download permission
+- locate the correct storage key
+- return a secure preview/download response
+- log the view/download action
+
+Do not use public storage URLs.
+
+Do not expose raw storage paths.
+
+Do not modify the Evidence Repository UI as part of this request.
+
+The shared file service may reuse existing backend file utilities, but this request must not change Evidence pages or Evidence behavior.
+
+====================================================================
+9. FIX LINKED CONTROLS DISPLAY WITHIN DOCUMENTATION
+====================================================================
+
+Keep linked controls visible on the Document Detail page.
+
+Show a clear section:
+
+Linked Controls
+
+For each linked control, show:
+
+- Control ID
+- Control title
+- Domain
+- Level
+- Relationship type, if available
+
+Relationship types:
+
+- Governing Document
+- Supporting Document
+- Reference
+- Supporting Evidence
+
+The control chips may remain clickable.
+
+For this phase, clicking a control may open the existing Control page normally.
+
+Do not change the Control page or add a Documents tab as part of this request.
+
+Add helper text:
+
+“This document is associated with the controls listed below. Control-page document display is outside the scope of this Documentation-only update.”
+
+====================================================================
+10. CLARIFY OR REMOVE THE ACTIVATE BUTTON
+====================================================================
+
+Inspect whether the Active status is actually used inside the Documentation module for:
+
+- current authoritative version
+- document coverage
+- Gap Analysis
+- version control
+- expiration/review tracking
+- Template Library generated documents
+
+If Active has a meaningful purpose:
+
+Rename:
+
+Activate
+
+To:
+
+Make Current
+
+Add tooltip:
+
+“Make this the current authoritative version of the document.”
+
+Add confirmation:
+
+“Make this document the current authoritative version?”
+
+If another current version exists:
+
+- mark the previous version Superseded
+- retain the previous version
+- do not delete it
+- preserve version history
+
+Only show Make Current when the Document is Approved and the user has permission.
+
+If Active is not used for any meaningful Documentation workflow:
+
+- hide the Activate button from the UI
+- leave existing database status values unchanged
+- do not run a status migration
+- use Approved as the normal usable status
+
+Before choosing either approach, report what currently depends on Active.
+
+====================================================================
+11. DOCUMENT STATUS HELP
+====================================================================
+
+Add a tooltip or help panel explaining Document statuses:
+
+Draft:
+Document is being prepared.
+
+Pending Review:
+Document is waiting for review.
+
+Approved:
+Document has been reviewed and approved.
+
+Active / Current:
+Document is the current authoritative version.
+
+Needs Update:
+Document requires revision.
+
+Superseded:
+A newer version replaced it.
+
+Archived:
+Document is retained for historical reference.
+
+Only display statuses that the current Documentation implementation actually supports.
+
+====================================================================
+12. IMPROVE ALL DOCUMENTS TABLE
+====================================================================
+
+Keep the All Documents table, but make it clearer.
+
+Columns:
+
+- Title
+- Type
+- Status
+- Linked Controls
+- Security Domain
+- Level
+- Owner
+- Effective Date
+- Next Review
+- Source
+- Actions
+
+Filters:
+
+- Search
+- Type
+- Status
+- Domain
+- Source
+- Linked Control
+- Owner
+- Review Status
+
+Search should match:
+
+- title
+- original filename
+- document type
+- linked control ID
+- description
+- version
+
+Add actions:
+
+- View
+- Preview
+- Download
+- Edit
+- Archive, if permitted
+
+Do not change Evidence Repository filters or table.
+
+====================================================================
+13. FIX EXISTING PRODUCTION DOCUMENT DISPLAY
+====================================================================
+
+Test and repair the UI behavior for these existing production records:
+
+1. Lazarus C3PAO Signed Contract
+2. VTC CUI Device Staging Procedure
+
+Expected behavior:
+
+- Document Detail page opens
+- original filename is displayed
+- file type and size are displayed
+- Preview works where supported
+- Download works
+- linked controls are displayed
+- no empty Document Body area is shown
+
+If the file exists and only the UI/query is wrong:
+
+- fix the UI/query
+- do not modify the Document record
+
+If the file storage key is missing:
+
+- report it as requiring manual re-upload
+- do not fabricate a file
+- do not delete the metadata record
+
+====================================================================
+14. ADD A DOCUMENT FILE HEALTH CHECK FOR DEVELOPMENT
+====================================================================
+
+Create a development/admin-only diagnostic script, not a new visible production module.
+
+Command:
+
+pnpm diagnose:documents --organization=VTCCORP.US
+
+The script should report:
+
+- Document ID
+- Title
+- Source
+- Content mode
+- Original filename
+- Storage key present yes/no
+- File exists yes/no
+- MIME type
+- File size
+- Linked controls count
+- Preview endpoint result
+- Download endpoint result
+- Issue
+
+Issue values:
+
+- Healthy
+- Missing File
+- Missing Storage Key
+- Invalid MIME Type
+- Metadata Only
+- Empty Body
+- Preview Failure
+- Download Failure
+
+Do not repair or delete records automatically.
+
+====================================================================
+15. DO NOT CHANGE OTHER MODULES
+====================================================================
+
+This requirement is strict.
+
+Do not modify:
+
+- Evidence Repository page
+- Evidence Detail page
+- Controls Library
+- Control Detail tabs
+- Control evidence counts
+- Framework Crosswalk
+- Dashboard
+- SSP
+- POA&M
+- Monitoring Tracker
+- Implementation Roadmap
+- Pre-Assessment
+- Reports
+- User management
+- Roles or permissions architecture
+- organization package selection
+
+Do not create a new Documents tab on Controls.
+
+Do not make Documents automatically become Evidence.
+
+Do not duplicate files between Documents and Evidence.
+
+====================================================================
+16. DOCUMENTATION PERMISSIONS ONLY
+====================================================================
+
+Use the existing organization-specific permission model.
+
+Relevant permissions:
+
+- documents.view
+- documents.upload
+- documents.edit
+- documents.approve
+- documents.make_current
+- documents.download
+- documents.archive
+- documents.link_controls
+
+Do not redesign the entire role system as part of this request.
+
+Assessor Read-Only behavior within Documentation:
+
+- may view permitted Documents
+- may preview
+- may download
+- may not upload
+- may not edit
+- may not change status
+- may not archive
+- may not relink controls
+
+Backend must enforce these permissions.
+
+====================================================================
+17. AUDIT LOGGING FOR DOCUMENTS
+====================================================================
+
+Log Documentation actions:
+
+- document uploaded
+- document viewed
+- document previewed
+- document downloaded
+- document edited
+- document linked to control
+- document unlinked from control
+- document approved
+- document made current
+- document superseded
+- document archived
+- document file missing
+
+Do not change audit logging for other modules.
+
+====================================================================
+18. ACCEPTANCE TESTS
+====================================================================
+
+Test A:
+Upload a PDF through Documentation > Add Document.
+
+Expected:
+- record is created
+- file is stored
+- Document Detail page opens
+- PDF preview works
+- Download works
+
+Test B:
+Upload a DOCX through Documentation > Add Document.
+
+Expected:
+- original filename/type/size displayed
+- preview works if supported
+- otherwise clear download fallback appears
+- Download works
+
+Test C:
+Open Lazarus C3PAO Signed Contract.
+
+Expected:
+- actual uploaded file is visible
+- Preview/Download works
+- no empty Document Body panel
+
+Test D:
+Open VTC CUI Device Staging Procedure.
+
+Expected:
+- actual uploaded file is visible
+- linked control is displayed
+- Preview/Download works
+
+Test E:
+All Documents page shows an accurate breakdown:
+
+- Uploaded Documents
+- Generated Documents
+- Document-Like Evidence
+- Total
+
+Test F:
+The page explains why the All Documents count differs from the Evidence Repository count.
+
+Test G:
+Activate is either:
+- renamed Make Current with a clear purpose
+or
+- hidden if it has no meaningful Documentation dependency
+
+Test H:
+No Evidence records are created or modified when uploading a Document.
+
+Test I:
+No other application module changes.
+
+Test J:
+No production records are deleted, duplicated, remapped, or overwritten.
+
+====================================================================
+19. FINAL SCOPE RULE
+====================================================================
+
+Only fix the Documentation module.
+
+Do not expand this work into a redesign of Evidence, Controls, SSP, Monitoring, POA&M, Reports, or any other application section.
