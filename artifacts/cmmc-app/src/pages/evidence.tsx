@@ -77,9 +77,12 @@ import {
   ChevronDown,
   Pencil,
   Package,
+  Files,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BulkDownloadWizard } from "@/components/bulk-export/BulkDownloadWizard";
+import { EvidenceUploadModal } from "@/components/evidence/EvidenceUploadModal";
+import { EvidenceBulkUploadModal } from "@/components/evidence/EvidenceBulkUploadModal";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -400,6 +403,10 @@ export default function Evidence() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [previewItem, setPreviewItem] = useState<EvidenceItem | null>(null);
 
+  // Upload modals
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showBulkUploadModal, setShowBulkUploadModal] = useState(false);
+
   // Bulk selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showWizard, setShowWizard] = useState(false);
@@ -588,9 +595,19 @@ export default function Evidence() {
             All evidence items for this organization
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setShowWizard(true)}>
-            <Package className="mr-2 h-4 w-4" /> Bulk Download
+        <div className="flex gap-2 flex-wrap">
+          {!isAssessor && (
+            <>
+              <Button onClick={() => setShowUploadModal(true)} className="gap-1.5">
+                <Plus className="h-4 w-4" /> Upload Evidence
+              </Button>
+              <Button variant="outline" onClick={() => setShowBulkUploadModal(true)} className="gap-1.5">
+                <Files className="h-4 w-4" /> Bulk Upload
+              </Button>
+            </>
+          )}
+          <Button variant="outline" onClick={() => setShowWizard(true)} className="gap-1.5">
+            <Package className="h-4 w-4" /> Bulk Download
           </Button>
         </div>
       </div>
@@ -792,7 +809,9 @@ export default function Evidence() {
                 </p>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Upload evidence from a control's Evidence tab.
+                  {!isAssessor
+                    ? "Use the Upload Evidence button above or upload from a control's Evidence tab."
+                    : "No evidence has been uploaded yet."}
                 </p>
               )}
             </div>
@@ -882,36 +901,37 @@ export default function Evidence() {
                         <StatusBadge status={item.status} />
                       </TableCell>
 
-                      {/* Linked Controls badges */}
+                      {/* Linked Controls — primary +N format */}
                       <TableCell className="align-top">
-                        {(item.linkedControls ?? []).length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {(item.linkedControls ?? []).slice(0, 4).map((c) => (
+                        {(item.linkedControls ?? []).length > 0 ? (() => {
+                          const controls = item.linkedControls ?? [];
+                          const primary = (controls as any[]).find((c: any) => c.isPrimary) ?? controls[0];
+                          const additionalCount = controls.length - 1;
+                          return (
+                            <div className="flex items-center gap-1 flex-wrap">
                               <Badge
-                                key={c.id}
                                 variant="outline"
                                 className={cn(
                                   "text-[10px] font-mono px-1.5 py-0 cursor-pointer transition-colors",
-                                  selectedControlIds.includes(c.id) && "bg-primary/10 border-primary/40"
+                                  selectedControlIds.includes((primary as any).id) && "bg-primary/10 border-primary/40"
                                 )}
                                 onClick={() => {
+                                  const cid = (primary as any).id;
                                   setSelectedControlIds((prev) =>
-                                    prev.includes(c.id)
-                                      ? prev.filter((id) => id !== c.id)
-                                      : [...prev, c.id]
+                                    prev.includes(cid) ? prev.filter((id) => id !== cid) : [...prev, cid]
                                   );
                                 }}
                               >
-                                {c.label}
+                                {(primary as any).label}
                               </Badge>
-                            ))}
-                            {(item.linkedControls ?? []).length > 4 && (
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                                +{(item.linkedControls ?? []).length - 4}
-                              </Badge>
-                            )}
-                          </div>
-                        ) : (
+                              {additionalCount > 0 && (
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                                  +{additionalCount}
+                                </Badge>
+                              )}
+                            </div>
+                          );
+                        })() : (
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </TableCell>
@@ -1101,6 +1121,26 @@ export default function Evidence() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Upload Evidence Modal */}
+      <EvidenceUploadModal
+        open={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
+        onSaved={() => {
+          setShowUploadModal(false);
+          invalidate();
+        }}
+      />
+
+      {/* Bulk Upload Modal */}
+      <EvidenceBulkUploadModal
+        open={showBulkUploadModal}
+        onClose={() => setShowBulkUploadModal(false)}
+        onSaved={() => {
+          setShowBulkUploadModal(false);
+          invalidate();
+        }}
+      />
 
       {/* Evidence Preview Modal */}
       <EvidencePreviewModal

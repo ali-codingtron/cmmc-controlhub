@@ -96,6 +96,8 @@ export const evidenceControlLinksTable = pgTable("evidence_control_links", {
     .notNull()
     .references(() => controlsTable.id),
   objectiveText: text("objective_text"),
+  isPrimary: boolean("is_primary").notNull().default(false),
+  relationshipType: text("relationship_type"),
   linkedAt: timestamp("linked_at").notNull().defaultNow(),
   linkedById: text("linked_by_id").references(() => usersTable.id),
 });

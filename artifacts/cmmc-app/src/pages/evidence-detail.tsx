@@ -4,6 +4,7 @@ import {
   useGetEvidence,
   useGetEvidenceAuditLog,
   getGetEvidenceQueryKey,
+  useListControls,
 } from "@workspace/api-client-react";
 import { useOrg } from "@/context/OrgContext";
 import { useIsAssessor } from "@/lib/auth";
@@ -44,7 +45,25 @@ import {
   Link2,
   Calendar,
   FileText,
+  Star,
+  Plus,
+  X,
+  Check,
+  ChevronDown,
 } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { EvidenceFileViewer } from "@/components/evidence/EvidenceFileViewer";
 
 const EVIDENCE_TYPES = [
@@ -137,6 +156,14 @@ export default function EvidenceDetail({ id }: { id: string }) {
   const [showPreview, setShowPreview] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Linked controls management
+  const [addLinkOpen, setAddLinkOpen] = useState(false);
+  const [addingControl, setAddingControl] = useState(false);
+  const [removingControlId, setRemovingControlId] = useState<string | null>(null);
+  const [settingPrimaryId, setSettingPrimaryId] = useState<string | null>(null);
+
+  const { data: allControls = [] } = useListControls({});
+
   // Form state — seeded from evidence once loaded
   const [form, setForm] = useState<{
     title: string;
@@ -167,6 +194,71 @@ export default function EvidenceDetail({ id }: { id: string }) {
     setForm((f) => (f ? { ...f, [k]: v } : f));
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getGetEvidenceQueryKey(id) });
+
+  const handleAddLink = async (controlId: string) => {
+    setAddingControl(true);
+    try {
+      const linkedIds: string[] = ((evidence as any)?.linkedControlIds ?? []) as string[];
+      const isPrimary = linkedIds.length === 0;
+      const res = await fetch(`/api/evidence/${id}/controls`, {
+        method: "POST",
+        headers: apiHeaders(activeOrg?.id),
+        body: JSON.stringify({ controlId, isPrimary }),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.error ?? "Failed to add link");
+      }
+      toast({ title: "Control linked" });
+      invalidate();
+      setAddLinkOpen(false);
+    } catch (err: any) {
+      toast({ title: "Link failed", description: err.message, variant: "destructive" });
+    } finally {
+      setAddingControl(false);
+    }
+  };
+
+  const handleRemoveLink = async (controlId: string) => {
+    const linkedIds: string[] = ((evidence as any)?.linkedControlIds ?? []) as string[];
+    if (linkedIds.length <= 1) {
+      const confirmed = window.confirm(
+        "This is the only linked control. Removing it will leave the evidence unmapped. Continue?"
+      );
+      if (!confirmed) return;
+    }
+    setRemovingControlId(controlId);
+    try {
+      const res = await fetch(`/api/evidence/${id}/controls/${controlId}`, {
+        method: "DELETE",
+        headers: apiHeaders(activeOrg?.id),
+      });
+      if (!res.ok) throw new Error("Failed to remove link");
+      toast({ title: "Control unlinked" });
+      invalidate();
+    } catch {
+      toast({ title: "Error", description: "Could not remove link", variant: "destructive" });
+    } finally {
+      setRemovingControlId(null);
+    }
+  };
+
+  const handleSetPrimary = async (controlId: string) => {
+    setSettingPrimaryId(controlId);
+    try {
+      const res = await fetch(`/api/evidence/${id}/controls/${controlId}/primary`, {
+        method: "PATCH",
+        headers: apiHeaders(activeOrg?.id),
+      });
+      if (!res.ok) throw new Error("Failed to set primary");
+      toast({ title: "Primary control updated" });
+      invalidate();
+    } catch {
+      toast({ title: "Error", description: "Could not update primary control", variant: "destructive" });
+    } finally {
+      setSettingPrimaryId(null);
+    }
+  };
 
   const handleSave = async () => {
     if (!form) return;
@@ -495,25 +587,117 @@ export default function EvidenceDetail({ id }: { id: string }) {
             </>
           )}
 
-          {/* Linked Controls */}
+          {/* Linked Controls — interactive */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Link2 className="h-4 w-4" />
-                Linked Controls
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Link2 className="h-4 w-4" />
+                  Linked Controls
+                </CardTitle>
+                {!isAssessor && (
+                  <Popover open={addLinkOpen} onOpenChange={setAddLinkOpen}>
+                    <PopoverTrigger asChild>
+                      <Button size="sm" variant="outline" className="h-7 gap-1 text-xs">
+                        <Plus className="h-3 w-3" />
+                        Add Link
+                        <ChevronDown className="h-3 w-3" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0 w-[22rem]" align="end">
+                      <Command>
+                        <CommandInput placeholder="Search controls…" />
+                        <CommandList className="max-h-[260px]">
+                          <CommandEmpty>No controls found.</CommandEmpty>
+                          <CommandGroup>
+                            {(allControls as any[])
+                              .filter((c: any) => !(ev?.linkedControlIds ?? []).includes(c.id))
+                              .map((c: any) => (
+                                <CommandItem
+                                  key={c.id}
+                                  value={`${c.controlId} ${c.title ?? ""}`}
+                                  onSelect={() => handleAddLink(c.id)}
+                                  disabled={addingControl}
+                                  className="gap-2 cursor-pointer"
+                                >
+                                  <span className="font-mono text-xs font-semibold text-primary">{c.controlId}</span>
+                                  {c.title && (
+                                    <span className="text-xs text-muted-foreground truncate flex-1">{c.title}</span>
+                                  )}
+                                </CommandItem>
+                              ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
-              {ev.linkedControlLabels && ev.linkedControlLabels.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {ev.linkedControlLabels.map((label: string) => (
-                    <Badge key={label} variant="outline" className="font-mono text-xs">
-                      {label}
-                    </Badge>
+              {(ev?.linkedControls ?? []).length > 0 ? (
+                <div className="space-y-2">
+                  {(ev.linkedControls as any[]).map((ctrl: any) => (
+                    <div
+                      key={ctrl.id}
+                      className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
+                    >
+                      {ctrl.isPrimary && (
+                        <Star className="h-3.5 w-3.5 fill-primary text-primary shrink-0" />
+                      )}
+                      <Link
+                        href={`/controls/${ctrl.id}`}
+                        className="font-mono font-semibold text-primary hover:underline shrink-0 text-xs"
+                      >
+                        {ctrl.label}
+                      </Link>
+                      {ctrl.title && (
+                        <span className="text-xs text-muted-foreground truncate flex-1">{ctrl.title}</span>
+                      )}
+                      {ctrl.isPrimary && (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">Primary</Badge>
+                      )}
+                      {!isAssessor && (
+                        <div className="flex items-center gap-1 ml-auto shrink-0">
+                          {!ctrl.isPrimary && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-[10px] gap-1 text-muted-foreground hover:text-primary"
+                              onClick={() => handleSetPrimary(ctrl.id)}
+                              disabled={settingPrimaryId === ctrl.id}
+                              title="Set as primary control"
+                            >
+                              <Star className="h-2.5 w-2.5" />
+                              {settingPrimaryId === ctrl.id ? "…" : "Set Primary"}
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0 text-muted-foreground hover:text-red-500"
+                            onClick={() => handleRemoveLink(ctrl.id)}
+                            disabled={removingControlId === ctrl.id}
+                            title="Remove link"
+                          >
+                            {removingControlId === ctrl.id ? (
+                              <span className="text-[10px]">…</span>
+                            ) : (
+                              <X className="h-3 w-3" />
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">No controls linked</p>
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">No controls linked to this evidence.</p>
+                  {!isAssessor && (
+                    <p className="text-xs text-muted-foreground">Use the Add Link button above to link a CMMC control.</p>
+                  )}
+                </div>
               )}
             </CardContent>
           </Card>

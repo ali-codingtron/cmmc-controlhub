@@ -140,6 +140,7 @@ interface LinkedControlInfo {
   domainName: string;
   domainCode: string;
   level: string;
+  isPrimary: boolean;
 }
 
 // Helper: fetch linked controls for a list of evidence IDs and attach enriched info
@@ -149,9 +150,11 @@ async function attachLinkedControls<T extends { id: string }>(items: T[]): Promi
   linkedControls: LinkedControlInfo[];
   domains: Array<{ name: string; code: string }>;
   cmmcLevels: string[];
+  primaryControlId: string | null;
+  primaryControlLabel: string | null;
 })[]> {
   if (items.length === 0) {
-    return items.map(i => ({ ...i, linkedControlIds: [], linkedControlLabels: [], linkedControls: [], domains: [], cmmcLevels: [] }));
+    return items.map(i => ({ ...i, linkedControlIds: [], linkedControlLabels: [], linkedControls: [], domains: [], cmmcLevels: [], primaryControlId: null, primaryControlLabel: null }));
   }
 
   const ids = items.map(i => i.id);
@@ -162,6 +165,7 @@ async function attachLinkedControls<T extends { id: string }>(items: T[]): Promi
       controlLabel: controlsTable.controlId,
       level: controlsTable.level,
       domainName: domainsTable.name,
+      isPrimary: evidenceControlLinksTable.isPrimary,
     })
     .from(evidenceControlLinksTable)
     .innerJoin(controlsTable, eq(controlsTable.id, evidenceControlLinksTable.controlId))
@@ -177,7 +181,7 @@ async function attachLinkedControls<T extends { id: string }>(items: T[]): Promi
     const entry = linkMap.get(l.evidenceId)!;
     entry.ids.push(l.controlId);
     entry.labels.push(label);
-    entry.controls.push({ id: l.controlId, label, domainName: l.domainName ?? "", domainCode, level: l.level ?? "" });
+    entry.controls.push({ id: l.controlId, label, domainName: l.domainName ?? "", domainCode, level: l.level ?? "", isPrimary: l.isPrimary ?? false });
   }
 
   return items.map(i => {
@@ -186,6 +190,8 @@ async function attachLinkedControls<T extends { id: string }>(items: T[]): Promi
       new Map(entry.controls.map(c => [c.domainCode, { name: c.domainName, code: c.domainCode }])).values()
     );
     const uniqueLevels = [...new Set(entry.controls.map(c => c.level).filter(Boolean))];
+    // Primary control: the one marked isPrimary, or fall back to first in list
+    const primary = entry.controls.find(c => c.isPrimary) ?? entry.controls[0] ?? null;
     return {
       ...i,
       linkedControlIds: entry.ids,
@@ -193,6 +199,8 @@ async function attachLinkedControls<T extends { id: string }>(items: T[]): Promi
       linkedControls: entry.controls,
       domains: uniqueDomains,
       cmmcLevels: uniqueLevels,
+      primaryControlId: primary?.id ?? null,
+      primaryControlLabel: primary?.label ?? null,
     };
   });
 }
@@ -298,7 +306,7 @@ router.post(
   requireOrg,
   upload.single("file"),
   async (req, res) => {
-    const { title, description, evidenceType, controlIds, collectedAt, expiresAt, assessorSummary, internalNotes, tags: rawTags, status: rawStatus } = req.body;
+    const { title, description, evidenceType, controlIds, primaryControlId, collectedAt, expiresAt, assessorSummary, internalNotes, tags: rawTags, status: rawStatus } = req.body;
 
     if (!title) {
       res.status(400).json({ error: "title is required" });
@@ -376,12 +384,18 @@ router.post(
       }
     })();
 
+    // Determine which control is primary
+    const parsedPrimaryControlId: string | null = typeof primaryControlId === "string" && primaryControlId
+      ? primaryControlId
+      : parsedControlIds[0] ?? null;
+
     if (parsedControlIds.length > 0) {
       await db.insert(evidenceControlLinksTable).values(
         parsedControlIds.map((cid: string) => ({
           id: randomUUID(),
           evidenceId: id,
           controlId: cid,
+          isPrimary: cid === parsedPrimaryControlId,
           linkedAt: new Date(),
           linkedById: req.authUser!.id,
         }))
@@ -468,6 +482,43 @@ router.post("/evidence", requireAuth, requireOrg, async (req, res) => {
   res.status(201).json(enriched[0]);
 });
 
+// ── Duplicate detection ────────────────────────────────────────────────────
+// Must be registered BEFORE /evidence/:id to avoid route conflicts
+router.get("/evidence/check-duplicate", requireAuth, requireOrg, async (req, res) => {
+  const { filename, size } = req.query as Record<string, string>;
+  const orgId = req.orgId;
+
+  if (!filename) {
+    res.status(400).json({ error: "filename is required" });
+    return;
+  }
+
+  const conditions: ReturnType<typeof and>[] = [
+    ilike(evidenceItemsTable.fileName, filename),
+    orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined,
+    sql`deleted_at IS NULL`,
+  ].filter(Boolean) as ReturnType<typeof and>[];
+
+  if (size) {
+    conditions.push(eq(evidenceItemsTable.fileSize, parseInt(size, 10)) as any);
+  }
+
+  const matches = await db
+    .select({
+      id: evidenceItemsTable.id,
+      title: evidenceItemsTable.title,
+      fileName: evidenceItemsTable.fileName,
+      fileSize: evidenceItemsTable.fileSize,
+      status: evidenceItemsTable.status,
+      createdAt: evidenceItemsTable.createdAt,
+    })
+    .from(evidenceItemsTable)
+    .where(and(...conditions))
+    .limit(5);
+
+  res.json({ matches });
+});
+
 // ── Get single evidence item ───────────────────────────────────────────────
 router.get("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
   const orgId = req.orgId;
@@ -494,16 +545,27 @@ router.get("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
       controlId: evidenceControlLinksTable.controlId,
       controlLabel: controlsTable.controlId,
       controlTitle: controlsTable.title,
+      isPrimary: evidenceControlLinksTable.isPrimary,
     })
     .from(evidenceControlLinksTable)
     .innerJoin(controlsTable, eq(controlsTable.id, evidenceControlLinksTable.controlId))
     .where(eq(evidenceControlLinksTable.evidenceId, req.params.id as string));
+
+  const primaryLink = links.find((l) => l.isPrimary) ?? links[0] ?? null;
 
   res.json({
     ...item,
     linkedControlIds: links.map((l) => l.controlId),
     linkedControlLabels: links.map((l) => l.controlLabel),
     linkedControlFullLabels: links.map((l) => `${l.controlLabel}: ${l.controlTitle}`),
+    linkedControls: links.map((l) => ({
+      id: l.controlId,
+      label: l.controlLabel,
+      title: l.controlTitle,
+      isPrimary: l.isPrimary ?? false,
+    })),
+    primaryControlId: primaryLink?.controlId ?? null,
+    primaryControlLabel: primaryLink?.controlLabel ?? null,
   });
 });
 
@@ -894,28 +956,45 @@ router.delete("/evidence/:id", requireAuth, requireOrg, async (req, res) => {
 // ── Unlink evidence from a specific control ────────────────────────────────
 router.delete("/evidence/:id/controls/:controlId", requireAuth, requireOrg, async (req, res) => {
   const orgId = req.orgId;
+  const evidenceId = req.params.id as string;
+  const controlId = req.params.controlId as string;
 
   const [item] = await db
     .select({ id: evidenceItemsTable.id, title: evidenceItemsTable.title })
     .from(evidenceItemsTable)
-    .where(and(eq(evidenceItemsTable.id, req.params.id as string), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined))
+    .where(and(eq(evidenceItemsTable.id, evidenceId), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined))
     .limit(1);
 
   if (!item) { res.status(404).json({ error: "Not found" }); return; }
 
   await db.delete(evidenceControlLinksTable).where(
     and(
-      eq(evidenceControlLinksTable.evidenceId, req.params.id as string),
-      eq(evidenceControlLinksTable.controlId, req.params.controlId as string)
+      eq(evidenceControlLinksTable.evidenceId, evidenceId),
+      eq(evidenceControlLinksTable.controlId, controlId)
     )
   );
 
-  await logAudit(req, "link_removed", "evidence", req.params.id as string, {
+  // If the deleted link was primary, auto-promote the first remaining link
+  const remaining = await db
+    .select({ id: evidenceControlLinksTable.id, isPrimary: evidenceControlLinksTable.isPrimary })
+    .from(evidenceControlLinksTable)
+    .where(eq(evidenceControlLinksTable.evidenceId, evidenceId))
+    .limit(10);
+
+  const hasPrimary = remaining.some((r) => r.isPrimary);
+  if (!hasPrimary && remaining.length > 0) {
+    await db
+      .update(evidenceControlLinksTable)
+      .set({ isPrimary: true })
+      .where(eq(evidenceControlLinksTable.id, remaining[0].id));
+  }
+
+  await logAudit(req, "link_removed", "evidence", evidenceId, {
     entityLabel: item.title,
-    newValue: `Removed from control ${req.params.controlId as string}`,
+    newValue: `Removed from control ${controlId}`,
   });
 
-  res.json({ id: req.params.id as string, unlinkedControlId: req.params.controlId as string });
+  res.json({ id: evidenceId, unlinkedControlId: controlId });
 });
 
 // ── Status transitions ─────────────────────────────────────────────────────
@@ -948,12 +1027,110 @@ router.post("/evidence/:id/reject", requireAuth, requireOrg, async (req, res) =>
   res.json({ id: req.params.id as string, status: "rejected" });
 });
 
-// ── Link controls ──────────────────────────────────────────────────────────
+// ── Add a single control link ──────────────────────────────────────────────
+router.post("/evidence/:id/controls", requireAuth, requireOrg, async (req, res) => {
+  const { controlId, isPrimary, relationshipType } = req.body;
+  const evidenceId = req.params.id as string;
+  const orgId = req.orgId;
+
+  if (!controlId) { res.status(400).json({ error: "controlId is required" }); return; }
+
+  const [item] = await db
+    .select({ id: evidenceItemsTable.id, title: evidenceItemsTable.title })
+    .from(evidenceItemsTable)
+    .where(and(eq(evidenceItemsTable.id, evidenceId), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined))
+    .limit(1);
+
+  if (!item) { res.status(404).json({ error: "Not found" }); return; }
+
+  // Check if already linked
+  const [existing] = await db
+    .select({ id: evidenceControlLinksTable.id })
+    .from(evidenceControlLinksTable)
+    .where(and(eq(evidenceControlLinksTable.evidenceId, evidenceId), eq(evidenceControlLinksTable.controlId, controlId)))
+    .limit(1);
+
+  if (existing) {
+    res.status(409).json({ error: "Already linked to this control" });
+    return;
+  }
+
+  // If marking as primary, clear existing primary first
+  if (isPrimary) {
+    await db
+      .update(evidenceControlLinksTable)
+      .set({ isPrimary: false })
+      .where(eq(evidenceControlLinksTable.evidenceId, evidenceId));
+  }
+
+  await db.insert(evidenceControlLinksTable).values({
+    id: randomUUID(),
+    evidenceId,
+    controlId,
+    isPrimary: isPrimary ?? false,
+    relationshipType: relationshipType ?? null,
+    linkedAt: new Date(),
+    linkedById: req.authUser!.id,
+  });
+
+  await logAudit(req, "link_added", "evidence", evidenceId, {
+    entityLabel: item.title,
+    newValue: controlId,
+  });
+
+  res.status(201).json({ evidenceId, controlId, isPrimary: isPrimary ?? false });
+});
+
+// ── Set primary control ────────────────────────────────────────────────────
+router.patch("/evidence/:id/controls/:controlId/primary", requireAuth, requireOrg, async (req, res) => {
+  const evidenceId = req.params.id as string;
+  const controlId = req.params.controlId as string;
+  const orgId = req.orgId;
+
+  const [item] = await db
+    .select({ id: evidenceItemsTable.id, title: evidenceItemsTable.title })
+    .from(evidenceItemsTable)
+    .where(and(eq(evidenceItemsTable.id, evidenceId), orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined))
+    .limit(1);
+
+  if (!item) { res.status(404).json({ error: "Not found" }); return; }
+
+  // Clear all primary flags for this evidence
+  await db
+    .update(evidenceControlLinksTable)
+    .set({ isPrimary: false })
+    .where(eq(evidenceControlLinksTable.evidenceId, evidenceId));
+
+  // Set the new primary
+  await db
+    .update(evidenceControlLinksTable)
+    .set({ isPrimary: true })
+    .where(
+      and(
+        eq(evidenceControlLinksTable.evidenceId, evidenceId),
+        eq(evidenceControlLinksTable.controlId, controlId)
+      )
+    );
+
+  await logAudit(req, "primary_control_changed", "evidence", evidenceId, {
+    entityLabel: item.title,
+    newValue: controlId,
+  });
+
+  res.json({ evidenceId, primaryControlId: controlId });
+});
+
+// ── Link controls (batch) ──────────────────────────────────────────────────
 router.post("/evidence/:id/link-controls", requireAuth, requireOrg, async (req, res) => {
-  const { controlIds } = req.body;
+  const { controlIds, primaryControlId } = req.body;
   if (!Array.isArray(controlIds)) { res.status(400).json({ error: "controlIds must be an array" }); return; }
 
-  const existing = await db.select({ controlId: evidenceControlLinksTable.controlId }).from(evidenceControlLinksTable).where(eq(evidenceControlLinksTable.evidenceId, req.params.id as string));
+  const evidenceId = req.params.id as string;
+
+  const existing = await db
+    .select({ controlId: evidenceControlLinksTable.controlId })
+    .from(evidenceControlLinksTable)
+    .where(eq(evidenceControlLinksTable.evidenceId, evidenceId));
   const existingIds = new Set(existing.map((l) => l.controlId));
   const newIds = controlIds.filter((id: string) => !existingIds.has(id));
 
@@ -961,16 +1138,34 @@ router.post("/evidence/:id/link-controls", requireAuth, requireOrg, async (req, 
     await db.insert(evidenceControlLinksTable).values(
       newIds.map((cid: string) => ({
         id: randomUUID(),
-        evidenceId: req.params.id as string,
+        evidenceId,
         controlId: cid,
+        isPrimary: cid === primaryControlId,
         linkedAt: new Date(),
         linkedById: req.authUser!.id,
       }))
     );
   }
 
-  await logAudit(req, "link_added", "evidence", req.params.id as string, { newValue: controlIds });
-  res.json({ id: req.params.id as string, linkedControlIds: controlIds });
+  // If a primaryControlId is specified and already linked, update it
+  if (primaryControlId && existingIds.has(primaryControlId)) {
+    await db
+      .update(evidenceControlLinksTable)
+      .set({ isPrimary: false })
+      .where(eq(evidenceControlLinksTable.evidenceId, evidenceId));
+    await db
+      .update(evidenceControlLinksTable)
+      .set({ isPrimary: true })
+      .where(
+        and(
+          eq(evidenceControlLinksTable.evidenceId, evidenceId),
+          eq(evidenceControlLinksTable.controlId, primaryControlId)
+        )
+      );
+  }
+
+  await logAudit(req, "link_added", "evidence", evidenceId, { newValue: controlIds });
+  res.json({ id: evidenceId, linkedControlIds: controlIds });
 });
 
 // ── Audit log ─────────────────────────────────────────────────────────────
