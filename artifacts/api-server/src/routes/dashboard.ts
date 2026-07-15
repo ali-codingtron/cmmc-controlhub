@@ -14,8 +14,12 @@ import {
   documentsTable,
   roadmapActionsTable,
   orgRoadmapProgressTable,
+  dfarsObligationsTable,
+  dfarsObligationStatusTable,
+  organizationPackagesTable,
+  compliancePackagesTable,
 } from "@workspace/db";
-import { eq, and, or, count, lte, gte, desc, sql, isNotNull } from "drizzle-orm";
+import { eq, and, or, count, lte, gte, desc, sql, isNotNull, inArray, like } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 
@@ -254,6 +258,46 @@ router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
       )
     );
 
+  // DFARS obligation coverage — only populated when org has active DFARS packages
+  let dfarsTotal = 0, dfarsCompliant = 0, dfarsGap = 0, dfarsInProgress = 0;
+  if (orgId) {
+    const dfarsPackageIds = await db
+      .select({ packageId: organizationPackagesTable.packageId })
+      .from(organizationPackagesTable)
+      .innerJoin(compliancePackagesTable, eq(organizationPackagesTable.packageId, compliancePackagesTable.id))
+      .where(and(
+        eq(organizationPackagesTable.organizationId, orgId),
+        eq(organizationPackagesTable.isActive, true),
+        like(compliancePackagesTable.packageKey, "DFARS_%")
+      ));
+
+    if (dfarsPackageIds.length > 0) {
+      const pkgIds = dfarsPackageIds.map(p => p.packageId);
+
+      const [dfarsCountRow] = await db
+        .select({ cnt: count() })
+        .from(dfarsObligationsTable)
+        .where(inArray(dfarsObligationsTable.packageId, pkgIds));
+
+      const dfarsStatusRows = await db
+        .select({ status: dfarsObligationStatusTable.status, cnt: count() })
+        .from(dfarsObligationStatusTable)
+        .innerJoin(dfarsObligationsTable, eq(dfarsObligationStatusTable.obligationId, dfarsObligationsTable.id))
+        .where(and(
+          eq(dfarsObligationStatusTable.organizationId, orgId),
+          inArray(dfarsObligationsTable.packageId, pkgIds)
+        ))
+        .groupBy(dfarsObligationStatusTable.status);
+
+      dfarsTotal = Number(dfarsCountRow?.cnt ?? 0);
+      for (const row of dfarsStatusRows) {
+        if (row.status === "compliant") dfarsCompliant = Number(row.cnt);
+        else if (row.status === "gap") dfarsGap = Number(row.cnt);
+        else if (row.status === "in_progress") dfarsInProgress = Number(row.cnt);
+      }
+    }
+  }
+
   res.json({
     overallReadinessPercent: totalControls > 0 ? Math.round((implemented / totalControls) * 100) : 0,
     l1ReadinessPercent: l1Total > 0 ? Math.round((l1Implemented / l1Total) * 100) : 0,
@@ -287,6 +331,10 @@ router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
     roadmapCompleteActions: Number(roadmapCompleteStats?.total ?? 0),
     roadmapInProgressActions: Number(roadmapInProgressStats?.total ?? 0),
     roadmapBlockedActions: Number(roadmapBlockedStats?.total ?? 0),
+    dfarsTotal,
+    dfarsCompliant,
+    dfarsGap,
+    dfarsInProgress,
   });
 });
 

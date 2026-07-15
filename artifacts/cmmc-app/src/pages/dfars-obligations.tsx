@@ -78,6 +78,74 @@ function FlagBadge({ active, label }: { active: boolean; label: string }) {
   );
 }
 
+function NotesCell({
+  obligationId,
+  orgId,
+  currentNotes,
+  onSaved,
+}: {
+  obligationId: string;
+  orgId: string;
+  currentNotes: string | null;
+  onSaved: (notes: string | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(currentNotes ?? "");
+
+  const save = useCallback(async () => {
+    const token = localStorage.getItem("auth_token");
+    await fetch(`/api/dfars-obligations/${obligationId}/tracking`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        "X-Organization-ID": orgId,
+      },
+      body: JSON.stringify({ notes: value }),
+    });
+    onSaved(value || null);
+    setEditing(false);
+  }, [obligationId, orgId, value, onSaved]);
+
+  if (editing) {
+    return (
+      <div className="space-y-2">
+        <textarea
+          autoFocus
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Escape") { setEditing(false); setValue(currentNotes ?? ""); } }}
+          className="w-full text-sm border border-border rounded-md px-3 py-2 min-h-[80px] resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 bg-background"
+          placeholder="Add compliance notes..."
+        />
+        <div className="flex gap-2">
+          <Button size="sm" className="h-7 text-xs" onClick={save}>
+            <Check className="h-3 w-3 mr-1" />
+            Save
+          </Button>
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditing(false); setValue(currentNotes ?? ""); }}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => { setValue(currentNotes ?? ""); setEditing(true); }}
+      className="group w-full text-left flex items-start gap-2"
+    >
+      {currentNotes ? (
+        <span className="text-sm text-muted-foreground">{currentNotes}</span>
+      ) : (
+        <span className="text-sm text-muted-foreground/40 italic">Add notes...</span>
+      )}
+      <Pencil className="h-3 w-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5" />
+    </button>
+  );
+}
+
 function OwnerCell({
   obligationId,
   orgId,
@@ -265,12 +333,15 @@ function ObligationRow({
                   </ul>
                 </div>
               )}
-              {obligation.notes && (
-                <div className="md:col-span-2">
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Notes</div>
-                  <p className="text-sm text-muted-foreground">{obligation.notes}</p>
-                </div>
-              )}
+              <div className="md:col-span-2">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Notes</div>
+                <NotesCell
+                  obligationId={obligation.id}
+                  orgId={orgId}
+                  currentNotes={obligation.notes}
+                  onSaved={(notes) => onTrackingUpdate(obligation.id, { notes })}
+                />
+              </div>
             </div>
           </TableCell>
         </TableRow>

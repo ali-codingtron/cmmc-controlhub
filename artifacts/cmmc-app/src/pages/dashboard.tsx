@@ -36,6 +36,7 @@ import {
   Calendar,
   Shield,
   Map,
+  ClipboardList,
 } from "lucide-react";
 
 function relativeTime(ts: string | Date | null | undefined): string {
@@ -242,6 +243,11 @@ export default function Dashboard() {
   const monitoringCurrent = (summary as any).monitoringCurrent ?? 0;
   const monitoringTotal = summary.monitoringTotal ?? 0;
   const overduePoams = summary.overduePoams ?? 0;
+  const dfarsTotal = (summary as any).dfarsTotal ?? 0;
+  const dfarsCompliant = (summary as any).dfarsCompliant ?? 0;
+  const dfarsGap = (summary as any).dfarsGap ?? 0;
+  const dfarsInProgress = (summary as any).dfarsInProgress ?? 0;
+  const hasDfars = activePkgs.some(p => (p as any).frameworkShortName === "DFARS");
   const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
   const lastActivity = recentActivity?.[0]?.timestamp;
 
@@ -515,6 +521,51 @@ export default function Dashboard() {
         </KpiCard>
 
       </div>
+
+      {/* ── DFARS Obligations Coverage (conditional) ─────────────── */}
+      {hasDfars && dfarsTotal > 0 && (
+        <Link href="/dfars-obligations" className="block">
+          <Card className="border border-amber-200 bg-amber-50/40 dark:border-amber-800 dark:bg-amber-950/20 shadow-sm hover:shadow-md transition-shadow">
+            <CardContent className="p-4 flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-3 shrink-0">
+                <div className="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
+                  <ClipboardList className="h-5 w-5 text-amber-700 dark:text-amber-300" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">DFARS Obligations</p>
+                  <p className="text-sm font-bold">
+                    {dfarsCompliant} of {dfarsTotal} obligations compliant
+                  </p>
+                </div>
+              </div>
+              <div className="flex-1 min-w-40">
+                <Progress
+                  value={dfarsTotal > 0 ? Math.round((dfarsCompliant / dfarsTotal) * 100) : 0}
+                  className="h-1.5"
+                  indicatorClassName="bg-amber-500"
+                />
+              </div>
+              <div className="flex items-center gap-4 text-xs shrink-0">
+                {dfarsGap > 0 && (
+                  <span className="flex items-center gap-1 text-red-700">
+                    <AlertTriangle className="h-3.5 w-3.5" /> {dfarsGap} gap{dfarsGap !== 1 ? "s" : ""}
+                  </span>
+                )}
+                {dfarsInProgress > 0 && (
+                  <span className="flex items-center gap-1 text-amber-700">
+                    <CircleDot className="h-3.5 w-3.5" /> {dfarsInProgress} in progress
+                  </span>
+                )}
+                {dfarsGap === 0 && dfarsInProgress === 0 && (
+                  <span className="flex items-center gap-1 text-emerald-700">
+                    <CircleCheck className="h-3.5 w-3.5" /> No gaps identified
+                  </span>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+      )}
 
       {/* ── Implementation Roadmap tile ──────────────────────────── */}
       <Link href="/roadmap" className="block">
