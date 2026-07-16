@@ -1446,7 +1446,7 @@ export default function ControlDetail({ id }: { id: string }) {
           <TabsTrigger value="monitoring">Monitoring</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
           <TabsTrigger value="ssp">SSP</TabsTrigger>
-          <TabsTrigger value="roadmap">Roadmap</TabsTrigger>
+          {!isAssessor && <TabsTrigger value="roadmap">Roadmap</TabsTrigger>}
         </TabsList>
 
         {/* ── Implementation Tab ── */}

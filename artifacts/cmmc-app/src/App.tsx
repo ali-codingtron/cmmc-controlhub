@@ -114,6 +114,16 @@ function AdminOnly({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function RoadmapOnly({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const { activeOrg } = useOrg();
+  const isAdmin = user?.role === "admin";
+  const effectiveOrgRole = isAdmin ? "admin" : (activeOrg?.role ?? user?.role ?? "");
+  const canView = isAdmin || ["compliance_manager", "reviewer", "org_admin"].includes(effectiveOrgRole);
+  if (!canView) return <Redirect to="/" />;
+  return <>{children}</>;
+}
+
 function AppRoutes() {
   return (
     <Switch>
@@ -209,12 +219,16 @@ function AppRoutes() {
               <Route path="/reports/audit" component={ReportsAudit} />
               <Route path="/reports/ssp" component={ReportsSsp} />
               <Route path="/roadmap">
-                {() => <RoadmapActions />}
+                {() => <RoadmapOnly><RoadmapActions /></RoadmapOnly>}
               </Route>
-              <Route path="/roadmap/coverage" component={RoadmapCoverage} />
-              <Route path="/roadmap/progress" component={RoadmapProgress} />
+              <Route path="/roadmap/coverage">
+                {() => <RoadmapOnly><RoadmapCoverage /></RoadmapOnly>}
+              </Route>
+              <Route path="/roadmap/progress">
+                {() => <RoadmapOnly><RoadmapProgress /></RoadmapOnly>}
+              </Route>
               <Route path="/roadmap/:id">
-                {(params: { id: string }) => <RoadmapActionDetail id={params.id} />}
+                {(params: { id: string }) => <RoadmapOnly><RoadmapActionDetail id={params.id} /></RoadmapOnly>}
               </Route>
               <Route path="/pre-assessment">
                 {() => <Redirect to="/pre-assessment/history" />}
