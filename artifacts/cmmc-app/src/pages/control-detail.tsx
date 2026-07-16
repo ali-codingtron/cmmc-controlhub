@@ -1505,7 +1505,7 @@ export default function ControlDetail({ id }: { id: string }) {
             <CardContent className="space-y-4">
               <div>
                 <Label>Implementation Status</Label>
-                <Select value={statusValue} onValueChange={(v) => setStatus(v)}>
+                <Select value={statusValue} onValueChange={(v) => setStatus(v)} disabled={isAssessor}>
                   <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
@@ -1524,6 +1524,7 @@ export default function ControlDetail({ id }: { id: string }) {
                   value={narrativeValue}
                   onChange={(e) => setNarrative(e.target.value)}
                   placeholder="Describe how this control is implemented in your environment. Include relevant system names, processes, and references to policies or procedures."
+                  readOnly={isAssessor}
                 />
               </div>
 
