@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useListControls, getListEvidenceQueryKey } from "@workspace/api-client-react";
 import { useOrg } from "@/context/OrgContext";
 import { useQueryClient } from "@tanstack/react-query";
@@ -97,6 +97,8 @@ export function EvidenceBulkUploadModal({ open, onClose, onSaved }: EvidenceBulk
   const [rows, setRows] = useState<BulkFileRow[]>([]);
   const [uploading, setUploading] = useState(false);
   const [allDone, setAllDone] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounter = useRef(0);
 
   const setDefault = <K extends keyof typeof defaults>(k: K, v: typeof defaults[K]) =>
     setDefaults((d) => ({ ...d, [k]: v }));
@@ -116,8 +118,7 @@ export function EvidenceBulkUploadModal({ open, onClose, onSaved }: EvidenceBulk
     level: c.level,
   }));
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
+  const addFiles = useCallback((files: File[]) => {
     if (!files.length) return;
     setRows((prev) => {
       const existing = new Set(prev.map((r) => r.file.name));
@@ -138,7 +139,41 @@ export function EvidenceBulkUploadModal({ open, onClose, onSaved }: EvidenceBulk
         }));
       return [...prev, ...newRows];
     });
+  }, [defaults]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    addFiles(Array.from(e.target.files ?? []));
     e.target.value = "";
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current += 1;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current -= 1;
+    if (dragCounter.current === 0) setIsDragging(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current = 0;
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    addFiles(files);
   };
 
   const applyDefaults = () => {
@@ -317,12 +352,23 @@ export function EvidenceBulkUploadModal({ open, onClose, onSaved }: EvidenceBulk
             </div>
           </div>
 
-          {/* File picker */}
+          {/* File picker / drop zone */}
           <div>
-            <label className="flex items-center justify-center gap-2 w-full border-2 border-dashed rounded-lg p-4 cursor-pointer transition-colors border-muted-foreground/30 hover:border-primary/40 hover:bg-muted/40 text-sm text-muted-foreground">
+            <label
+              className={cn(
+                "flex items-center justify-center gap-2 w-full border-2 border-dashed rounded-lg p-4 cursor-pointer transition-colors text-sm",
+                isDragging
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-muted-foreground/30 hover:border-primary/40 hover:bg-muted/40 text-muted-foreground"
+              )}
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+            >
               <input type="file" multiple className="sr-only" onChange={handleFileChange} />
               <Files className="h-4 w-4" />
-              Click to add files (or drag and drop)
+              {isDragging ? "Drop files here…" : "Click to add files (or drag and drop)"}
             </label>
           </div>
 
