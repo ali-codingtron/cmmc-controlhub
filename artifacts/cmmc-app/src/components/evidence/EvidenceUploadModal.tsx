@@ -25,6 +25,13 @@ import { useToast } from "@/hooks/use-toast";
 import { Paperclip, AlertTriangle, Link2, Plus, Upload } from "lucide-react";
 import { ControlMultiSelect } from "./ControlMultiSelect";
 
+const EVIDENCE_STATUSES = [
+  { value: "draft", label: "Draft" },
+  { value: "pending_review", label: "Pending Review" },
+  { value: "approved", label: "Approved" },
+  { value: "assessor_ready", label: "Assessor Ready" },
+];
+
 const EVIDENCE_TYPES = [
   { value: "policy", label: "Policy" },
   { value: "procedure", label: "Procedure" },
@@ -76,6 +83,7 @@ export function EvidenceUploadModal({ open, onClose, onSaved }: EvidenceUploadMo
     title: "",
     description: "",
     evidenceType: "",
+    status: "draft",
     collectedAt: "",
     expiresAt: "",
     assessorSummary: "",
@@ -94,7 +102,7 @@ export function EvidenceUploadModal({ open, onClose, onSaved }: EvidenceUploadMo
     setForm((f) => ({ ...f, [k]: v }));
 
   const resetForm = () => {
-    setForm({ title: "", description: "", evidenceType: "", collectedAt: "", expiresAt: "", assessorSummary: "", internalNotes: "" });
+    setForm({ title: "", description: "", evidenceType: "", status: "draft", collectedAt: "", expiresAt: "", assessorSummary: "", internalNotes: "" });
     setFile(null);
     setSelectedControlIds([]);
     setPrimaryControlId(null);
@@ -143,6 +151,7 @@ export function EvidenceUploadModal({ open, onClose, onSaved }: EvidenceUploadMo
       const fd = new FormData();
       fd.append("title", form.title);
       fd.append("evidenceType", form.evidenceType);
+      fd.append("status", form.status);
       if (form.description) fd.append("description", form.description);
       if (form.collectedAt) fd.append("collectedAt", form.collectedAt);
       if (form.expiresAt) fd.append("expiresAt", form.expiresAt);
@@ -311,19 +320,34 @@ export function EvidenceUploadModal({ open, onClose, onSaved }: EvidenceUploadMo
             />
           </div>
 
-          {/* Evidence Type */}
-          <div>
-            <Label>Evidence Type <span className="text-red-500">*</span></Label>
-            <Select value={form.evidenceType} onValueChange={set("evidenceType")}>
-              <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Select type…" />
-              </SelectTrigger>
-              <SelectContent>
-                {EVIDENCE_TYPES.map((t) => (
-                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {/* Evidence Type + Status row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Evidence Type <span className="text-red-500">*</span></Label>
+              <Select value={form.evidenceType} onValueChange={set("evidenceType")}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Select type…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {EVIDENCE_TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Status</Label>
+              <Select value={form.status} onValueChange={set("status")}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EVIDENCE_STATUSES.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* File */}
