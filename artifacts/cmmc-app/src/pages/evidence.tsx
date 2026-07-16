@@ -78,6 +78,9 @@ import {
   Pencil,
   Package,
   Files,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BulkDownloadWizard } from "@/components/bulk-export/BulkDownloadWizard";
@@ -378,6 +381,40 @@ function SingleOwnerCombobox({ users, selected, onChange }: SingleOwnerComboboxP
   );
 }
 
+// ─── Sortable column header ───────────────────────────────────────────────────
+
+type SortDir = "asc" | "desc";
+
+function SortableHead({
+  col,
+  label,
+  sortKey,
+  sortDir,
+  onSort,
+  className,
+}: {
+  col: string;
+  label: string;
+  sortKey: string;
+  sortDir: SortDir;
+  onSort: (col: string) => void;
+  className?: string;
+}) {
+  const active = sortKey === col;
+  const Icon = active ? (sortDir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+  return (
+    <TableHead
+      className={cn("cursor-pointer select-none whitespace-nowrap", className)}
+      onClick={() => onSort(col)}
+    >
+      <div className="flex items-center gap-1">
+        {label}
+        <Icon className={cn("h-3 w-3 shrink-0", active ? "text-primary" : "opacity-30")} />
+      </div>
+    </TableHead>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function Evidence() {
@@ -402,6 +439,15 @@ export default function Evidence() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [previewItem, setPreviewItem] = useState<EvidenceItem | null>(null);
+
+  // Sort state
+  const [sortKey, setSortKey] = useState<string>("createdAt");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const handleSort = (col: string) => {
+    if (sortKey === col) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(col); setSortDir("asc"); }
+  };
 
   // Upload modals
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -489,8 +535,43 @@ export default function Evidence() {
       items = items.filter((item) => item.ownerId === selectedOwnerId);
     }
 
+    // Sorting
+    items = [...items].sort((a, b) => {
+      let av: string | number = "";
+      let bv: string | number = "";
+      switch (sortKey) {
+        case "title":
+          av = (a.title ?? "").toLowerCase();
+          bv = (b.title ?? "").toLowerCase();
+          break;
+        case "evidenceType":
+          av = (a.evidenceType ?? "").toLowerCase();
+          bv = (b.evidenceType ?? "").toLowerCase();
+          break;
+        case "status":
+          av = (a.status ?? "").toLowerCase();
+          bv = (b.status ?? "").toLowerCase();
+          break;
+        case "createdAt":
+          av = a.createdAt ? new Date(a.createdAt as string).getTime() : 0;
+          bv = b.createdAt ? new Date(b.createdAt as string).getTime() : 0;
+          break;
+        case "expiresAt":
+          av = a.expiresAt ? new Date(a.expiresAt as string).getTime() : 0;
+          bv = b.expiresAt ? new Date(b.expiresAt as string).getTime() : 0;
+          break;
+        case "owner":
+          av = ((a as any).ownerName ?? "").toLowerCase();
+          bv = ((b as any).ownerName ?? "").toLowerCase();
+          break;
+      }
+      if (av < bv) return sortDir === "asc" ? -1 : 1;
+      if (av > bv) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+
     return items;
-  }, [evidenceRaw, search, filterDomain, filterLevel, selectedControlIds, selectedOwnerId]);
+  }, [evidenceRaw, search, filterDomain, filterLevel, selectedControlIds, selectedOwnerId, sortKey, sortDir]);
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) setSelectedIds(new Set(evidence.map((i) => i.id)));
@@ -828,15 +909,15 @@ export default function Evidence() {
                         aria-label="Select all"
                       />
                     </TableHead>
-                    <TableHead className="min-w-[200px]">Title</TableHead>
-                    <TableHead className="whitespace-nowrap">Type</TableHead>
-                    <TableHead>Status</TableHead>
+                    <SortableHead col="title" label="Title" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="min-w-[200px]" />
+                    <SortableHead col="evidenceType" label="Type" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <SortableHead col="status" label="Status" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <TableHead className="min-w-[160px]">Linked Controls</TableHead>
                     <TableHead className="whitespace-nowrap">Security Domain</TableHead>
                     <TableHead>Level</TableHead>
-                    <TableHead className="whitespace-nowrap">Owner</TableHead>
-                    <TableHead className="whitespace-nowrap">Uploaded</TableHead>
-                    <TableHead className="whitespace-nowrap">Expires</TableHead>
+                    <SortableHead col="owner" label="Owner" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <SortableHead col="createdAt" label="Uploaded" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                    <SortableHead col="expiresAt" label="Expires" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                     <TableHead className="w-[52px]" />
                   </TableRow>
                 </TableHeader>
