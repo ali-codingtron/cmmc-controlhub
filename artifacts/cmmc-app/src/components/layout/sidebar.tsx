@@ -306,40 +306,44 @@ export function Sidebar() {
             </>
           )}
 
-          {/* Documentation section */}
-          <button
-            onClick={() => setDocsExpanded((v) => !v)}
-            className={cn(
-              "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
-              isDocsActive
-                ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-            )}
-          >
-            <BookOpen className="h-4 w-4 shrink-0" />
-            <span className="flex-1 text-left">Documentation</span>
-            <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", docsExpanded && "rotate-90")} />
-          </button>
-          {docsExpanded && (
-            <div className="ml-3 pl-3 border-l border-sidebar-border space-y-0.5">
-              {documentationItems.map((item) => {
-                const isActive = location === item.href || (item.href !== "/documents" && location.startsWith(item.href));
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "flex items-center px-3 py-1.5 rounded-md text-xs transition-colors",
-                      isActive
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                        : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                    )}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </div>
+          {/* Documentation section — global admins only */}
+          {isAdmin && (
+            <>
+              <button
+                onClick={() => setDocsExpanded((v) => !v)}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                  isDocsActive
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                )}
+              >
+                <BookOpen className="h-4 w-4 shrink-0" />
+                <span className="flex-1 text-left">Documentation</span>
+                <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", docsExpanded && "rotate-90")} />
+              </button>
+              {docsExpanded && (
+                <div className="ml-3 pl-3 border-l border-sidebar-border space-y-0.5">
+                  {documentationItems.map((item) => {
+                    const isActive = location === item.href || (item.href !== "/documents" && location.startsWith(item.href));
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={cn(
+                          "flex items-center px-3 py-1.5 rounded-md text-xs transition-colors",
+                          isActive
+                            ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                            : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                        )}
+                      >
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
 
           {/* SSP section */}

@@ -108,6 +108,12 @@ function Guard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function AdminOnly({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (user?.role !== "admin") return <Redirect to="/" />;
+  return <>{children}</>;
+}
+
 function AppRoutes() {
   return (
     <Switch>
@@ -152,21 +158,35 @@ function AppRoutes() {
               <Route path="/organizations" component={Organizations} />
               <Route path="/security" component={SecurityCenter} />
               <Route path="/admin/roadmap-backfill" component={AdminRoadmapBackfill} />
-              <Route path="/documents" component={Documents} />
-              <Route path="/documents/list" component={DocumentsList} />
-              <Route path="/documents/templates" component={DocTemplateLibrary} />
-              <Route path="/documents/templates/:id">
-                {(params: { id: string }) => <DocTemplateDetail id={params.id} />}
+              <Route path="/documents">
+                {() => <AdminOnly><Documents /></AdminOnly>}
               </Route>
-              <Route path="/documents/generate" component={DocGenerate} />
-              <Route path="/documents/logs" component={DocumentLogs} />
-              <Route path="/documents/checklists" component={DocumentChecklists} />
-              <Route path="/documents/missing" component={DocumentsMissing} />
+              <Route path="/documents/list">
+                {() => <AdminOnly><DocumentsList /></AdminOnly>}
+              </Route>
+              <Route path="/documents/templates">
+                {() => <AdminOnly><DocTemplateLibrary /></AdminOnly>}
+              </Route>
+              <Route path="/documents/templates/:id">
+                {(params: { id: string }) => <AdminOnly><DocTemplateDetail id={params.id} /></AdminOnly>}
+              </Route>
+              <Route path="/documents/generate">
+                {() => <AdminOnly><DocGenerate /></AdminOnly>}
+              </Route>
+              <Route path="/documents/logs">
+                {() => <AdminOnly><DocumentLogs /></AdminOnly>}
+              </Route>
+              <Route path="/documents/checklists">
+                {() => <AdminOnly><DocumentChecklists /></AdminOnly>}
+              </Route>
+              <Route path="/documents/missing">
+                {() => <AdminOnly><DocumentsMissing /></AdminOnly>}
+              </Route>
               <Route path="/documents/logs/:id">
-                {(params: { id: string }) => <DocumentLogDetail id={params.id} />}
+                {(params: { id: string }) => <AdminOnly><DocumentLogDetail id={params.id} /></AdminOnly>}
               </Route>
               <Route path="/documents/:id">
-                {(params: { id: string }) => <DocumentDetail id={params.id} />}
+                {(params: { id: string }) => <AdminOnly><DocumentDetail id={params.id} /></AdminOnly>}
               </Route>
               <Route path="/ssp">
                 {() => <Redirect to="/ssp/overview" />}
