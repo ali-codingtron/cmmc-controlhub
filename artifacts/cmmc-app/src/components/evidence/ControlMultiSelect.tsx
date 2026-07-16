@@ -113,7 +113,12 @@ export function ControlMultiSelect({
           </Button>
         </PopoverTrigger>
         <PopoverContent className="p-0 w-[28rem]" align="start">
-          <Command>
+          <Command filter={(value, search) => {
+            if (!search) return 1;
+            const q = search.toLowerCase();
+            const v = value.toLowerCase();
+            return v.includes(q) ? 1 : 0;
+          }}>
             <CommandInput placeholder="Search controls by ID or name…" />
             <CommandList className="max-h-[280px]">
               <CommandEmpty>No controls found.</CommandEmpty>

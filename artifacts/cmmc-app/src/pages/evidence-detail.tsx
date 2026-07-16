@@ -605,7 +605,12 @@ export default function EvidenceDetail({ id }: { id: string }) {
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="p-0 w-[22rem]" align="end">
-                      <Command>
+                      <Command filter={(value, search) => {
+                        if (!search) return 1;
+                        const q = search.toLowerCase();
+                        const v = value.toLowerCase();
+                        return v.includes(q) ? 1 : 0;
+                      }}>
                         <CommandInput placeholder="Search controls…" />
                         <CommandList className="max-h-[260px]">
                           <CommandEmpty>No controls found.</CommandEmpty>
