@@ -26,6 +26,7 @@ import exportRouter from "./export";
 import bulkExportRouter from "./bulk-export";
 import seedApexFilesRouter from "./seed-apex-files";
 import frameworksRouter from "./frameworks";
+import evidenceBulkImportRouter from "./evidence-bulk-import";
 
 const router: IRouter = Router();
 
@@ -56,5 +57,6 @@ router.use(exportRouter);
 router.use(bulkExportRouter);
 router.use(seedApexFilesRouter);
 router.use(frameworksRouter);
+router.use(evidenceBulkImportRouter);
 
 export default router;

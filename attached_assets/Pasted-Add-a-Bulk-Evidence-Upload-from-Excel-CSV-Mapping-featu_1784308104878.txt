@@ -1,0 +1,130 @@
+Add a Bulk Evidence Upload from Excel/CSV Mapping feature.
+
+Goal:
+Users should be able to upload a ZIP containing evidence files plus an Excel or CSV mapping file. The mapping file tells Control HUB which files should be linked to which controls/requirements.
+
+Use this workflow instead of trying to auto-detect every control with AI.
+
+Feature name:
+Bulk Evidence Upload from Mapping File
+
+Upload package:
+- evidence files
+- optional folders/subfolders
+- Excel mapping file
+- CSV mapping file if supported
+
+The app should support the attached template:
+
+Control_HUB_Bulk_Evidence_Upload_Template.xlsx
+
+Primary sheet:
+Evidence_Upload_Map
+
+Required columns:
+- File Name
+- Evidence Title
+- Evidence Type
+- Status
+- Linked Controls / Requirements
+
+Optional columns:
+- Folder Path
+- Collection Date
+- Review / Expiration Date
+- Primary Control / Requirement
+- Relationship Type
+- Framework / Package
+- Security Domain
+- Owner
+- Description / What This Demonstrates
+- Assessor Summary
+- Internal Notes
+- Tags
+- Duplicate Handling
+- Existing Evidence ID
+- Importer Notes
+
+Also support optional normalized sheet:
+
+File_Control_Map
+
+Columns:
+- File Name
+- Folder Path
+- Control / Requirement ID
+- Relationship Type
+- Is Primary
+- Framework / Package
+- Notes
+
+Import rules:
+1. Match File Name + Folder Path to files in the uploaded ZIP.
+2. Create one Evidence record per file.
+3. Store one physical file only.
+4. Link that evidence record to every control listed in Linked Controls / Requirements.
+5. Multiple controls should be separated by semicolon.
+   Example:
+   AC.L1-3.1.1; AC.L1-3.1.2; IA.L1-3.5.1
+6. Do not create duplicate evidence records for each control.
+7. After import, the evidence should appear:
+   - once in Evidence Repository
+   - under every linked control’s Evidence tab
+8. If a file is missing from the ZIP, show it in an import error report.
+9. If a control ID is invalid, show it in an import error report.
+10. Let the user preview the import before finalizing.
+
+Add import preview screen:
+- total rows
+- files matched
+- files missing
+- controls matched
+- invalid controls
+- evidence records to create
+- mappings to create
+- duplicate filenames
+- warnings/errors
+
+Do not import until the user confirms.
+
+Add result summary:
+- evidence created
+- files uploaded
+- control mappings created
+- skipped files
+- failed rows
+- downloadable import error report
+
+Do not modify existing production evidence unless the user explicitly selects duplicate handling options.
+
+Default duplicate handling:
+Create New
+
+If duplicate handling says:
+Link Existing
+- do not upload another file
+- link the existing Evidence record to the listed controls
+
+If duplicate handling says:
+Skip Duplicate
+- skip the row and report it
+
+If duplicate handling says:
+Supersede Existing
+- do not implement yet unless evidence versioning is already available
+- show warning that supersede/versioning is not enabled
+
+This feature must respect organization-specific permissions:
+- evidence.upload
+- evidence.bulk_upload
+- evidence.link_controls
+
+Assessor Read-Only users cannot use this upload feature.
+
+Acceptance tests:
+1. Upload ZIP + Excel template.
+2. One file linked to three controls appears under all three controls.
+3. Evidence Repository shows the file once.
+4. Missing files are reported.
+5. Invalid control IDs are reported.
+6. No production evidence is overwritten.

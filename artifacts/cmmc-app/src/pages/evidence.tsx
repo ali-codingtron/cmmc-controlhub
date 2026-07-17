@@ -81,11 +81,13 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
+  FileSpreadsheet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BulkDownloadWizard } from "@/components/bulk-export/BulkDownloadWizard";
 import { EvidenceUploadModal } from "@/components/evidence/EvidenceUploadModal";
 import { EvidenceBulkUploadModal } from "@/components/evidence/EvidenceBulkUploadModal";
+import { EvidenceMappingImportModal } from "@/components/evidence/EvidenceMappingImportModal";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -455,6 +457,7 @@ export default function Evidence() {
   // Upload modals
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showBulkUploadModal, setShowBulkUploadModal] = useState(false);
+  const [showMappingImportModal, setShowMappingImportModal] = useState(false);
 
   // Bulk selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -716,6 +719,9 @@ export default function Evidence() {
               </Button>
               <Button variant="outline" onClick={() => setShowBulkUploadModal(true)} className="gap-1.5">
                 <Files className="h-4 w-4" /> Bulk Upload
+              </Button>
+              <Button variant="outline" onClick={() => setShowMappingImportModal(true)} className="gap-1.5">
+                <FileSpreadsheet className="h-4 w-4" /> Mapping Import
               </Button>
             </>
           )}
@@ -1300,6 +1306,16 @@ export default function Evidence() {
         onClose={() => setShowBulkUploadModal(false)}
         onSaved={() => {
           setShowBulkUploadModal(false);
+          invalidate();
+        }}
+      />
+
+      {/* Mapping Import Modal */}
+      <EvidenceMappingImportModal
+        open={showMappingImportModal}
+        onClose={() => setShowMappingImportModal(false)}
+        onImported={() => {
+          setShowMappingImportModal(false);
           invalidate();
         }}
       />
