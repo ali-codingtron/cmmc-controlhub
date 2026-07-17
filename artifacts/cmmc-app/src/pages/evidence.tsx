@@ -438,6 +438,9 @@ export default function Evidence() {
 
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [bulkDeleteProgress, setBulkDeleteProgress] = useState<{ done: number; total: number } | null>(null);
   const [previewItem, setPreviewItem] = useState<EvidenceItem | null>(null);
 
   // Sort state
@@ -639,6 +642,35 @@ export default function Evidence() {
     } finally {
       setIsDeleting(false);
     }
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    setIsBulkDeleting(true);
+    setBulkDeleteProgress({ done: 0, total: ids.length });
+    let failed = 0;
+    for (let i = 0; i < ids.length; i++) {
+      try {
+        const res = await fetch(`/api/evidence/${ids[i]}`, {
+          method: "DELETE",
+          headers: apiHeaders(activeOrg?.id),
+        });
+        if (!res.ok) failed++;
+      } catch {
+        failed++;
+      }
+      setBulkDeleteProgress({ done: i + 1, total: ids.length });
+    }
+    setIsBulkDeleting(false);
+    setBulkDeleteProgress(null);
+    setShowBulkDeleteConfirm(false);
+    setSelectedIds(new Set());
+    invalidate();
+    toast({
+      title: failed === 0 ? "Deleted successfully" : `Deleted with ${failed} error${failed !== 1 ? "s" : ""}`,
+      description: `${ids.length - failed} of ${ids.length} item${ids.length !== 1 ? "s" : ""} deleted.`,
+      variant: failed > 0 ? "destructive" : "default",
+    });
   };
 
   const handleDownload = async (item: EvidenceItem) => {
@@ -857,6 +889,16 @@ export default function Evidence() {
               <Package className="h-3.5 w-3.5 mr-1.5" />
               Download ZIP
             </Button>
+            {!isAssessor && (
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => setShowBulkDeleteConfirm(true)}
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                Delete Selected
+              </Button>
+            )}
             <Button
               size="sm"
               variant="ghost"
@@ -1169,6 +1211,45 @@ export default function Evidence() {
           )}
         </CardContent>
       </Card>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <Dialog open={showBulkDeleteConfirm} onOpenChange={(o) => { if (!isBulkDeleting) setShowBulkDeleteConfirm(o); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Permanently Delete {selectedIds.size} Item{selectedIds.size !== 1 ? "s" : ""}?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            This will permanently delete{" "}
+            <span className="font-medium text-foreground">{selectedIds.size} evidence item{selectedIds.size !== 1 ? "s" : ""}</span>
+            , remove all their control links, and delete all uploaded files. This cannot be undone.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            To preserve the audit trail, use <strong>Archive</strong> on individual items instead.
+          </p>
+          {bulkDeleteProgress && (
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Deleting…</span>
+                <span>{bulkDeleteProgress.done} / {bulkDeleteProgress.total}</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full bg-destructive transition-all"
+                  style={{ width: `${(bulkDeleteProgress.done / bulkDeleteProgress.total) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowBulkDeleteConfirm(false)} disabled={isBulkDeleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleBulkDelete} disabled={isBulkDeleting}>
+              {isBulkDeleting ? "Deleting…" : `Delete ${selectedIds.size} Item${selectedIds.size !== 1 ? "s" : ""}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
