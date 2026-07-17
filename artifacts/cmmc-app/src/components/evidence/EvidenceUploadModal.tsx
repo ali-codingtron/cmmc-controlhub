@@ -22,7 +22,20 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Paperclip, AlertTriangle, Link2, Plus, Upload } from "lucide-react";
+import {
+  Paperclip,
+  AlertTriangle,
+  Link2,
+  Plus,
+  Upload,
+  Sparkles,
+  Loader2,
+  ShieldOff,
+  ChevronDown,
+  ChevronUp,
+  CheckCircle2,
+  Circle,
+} from "lucide-react";
 import { ControlMultiSelect } from "./ControlMultiSelect";
 
 const EVIDENCE_STATUSES = [
@@ -70,6 +83,38 @@ interface EvidenceUploadModalProps {
 
 type DuplicateAction = "link" | "upload_new" | null;
 
+// ── Smart Mapping types ────────────────────────────────────────────────────
+
+interface SmartSuggestion {
+  controlDbId: string;
+  controlId: string;
+  title: string;
+  domainName: string | null;
+  level: string | null;
+  confidence: number;
+  confidenceLabel: string;
+  matchReason: string;
+  matchedTerms: string[];
+  recommendedRelationshipType: string;
+  isPreselected: boolean;
+}
+
+interface SmartMapResult {
+  processingLabel: string;
+  externalAIEnabled: boolean;
+  extractionNote?: string;
+  suggestions: SmartSuggestion[];
+}
+
+const CONFIDENCE_STYLES: Record<string, { badge: string; border: string; dot: string }> = {
+  "Exact Match":       { badge: "bg-emerald-100 text-emerald-800 border-emerald-200", border: "border-emerald-200 bg-emerald-50/40", dot: "bg-emerald-500" },
+  "High Confidence":   { badge: "bg-blue-100 text-blue-800 border-blue-200",         border: "border-blue-200 bg-blue-50/40",       dot: "bg-blue-500"    },
+  "Medium Confidence": { badge: "bg-amber-100 text-amber-800 border-amber-200",       border: "border-amber-200 bg-amber-50/30",     dot: "bg-amber-500"   },
+  "Low Confidence":    { badge: "bg-slate-100 text-slate-700 border-slate-200",       border: "border-slate-200 bg-slate-50/30",     dot: "bg-slate-400"   },
+};
+
+// ── Component ──────────────────────────────────────────────────────────────
+
 export function EvidenceUploadModal({ open, onClose, onSaved }: EvidenceUploadModalProps) {
   const { activeOrg } = useOrg();
   const { toast } = useToast();
@@ -96,6 +141,13 @@ export function EvidenceUploadModal({ open, onClose, onSaved }: EvidenceUploadMo
   const [duplicateAction, setDuplicateAction] = useState<DuplicateAction>(null);
   const [linkingExisting, setLinkingExisting] = useState(false);
 
+  // Smart mapping state
+  const [suggesting, setSuggesting] = useState(false);
+  const [smartResult, setSmartResult] = useState<SmartMapResult | null>(null);
+  const [smartError, setSmartError] = useState<string | null>(null);
+  const [checkedSuggestions, setCheckedSuggestions] = useState<Set<string>>(new Set());
+  const [smartPanelOpen, setSmartPanelOpen] = useState(false);
+
   const { data: controls = [] } = useListControls({});
 
   const set = (k: keyof typeof form) => (v: string) =>
@@ -109,6 +161,11 @@ export function EvidenceUploadModal({ open, onClose, onSaved }: EvidenceUploadMo
     setDuplicates([]);
     setShowDuplicatePrompt(false);
     setDuplicateAction(null);
+    setSmartResult(null);
+    setSmartError(null);
+    setSuggesting(false);
+    setCheckedSuggestions(new Set());
+    setSmartPanelOpen(false);
   };
 
   const handleClose = () => {
@@ -128,18 +185,91 @@ export function EvidenceUploadModal({ open, onClose, onSaved }: EvidenceUploadMo
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] ?? null;
     setFile(f);
+    // Clear previous smart suggestions when file changes
+    setSmartResult(null);
+    setSmartError(null);
+    setCheckedSuggestions(new Set());
+    setSmartPanelOpen(false);
     if (f && !form.title) {
       set("title")(f.name.replace(/\.[^/.]+$/, ""));
     }
   };
 
+  // ── Smart mapping ────────────────────────────────────────────────────────
+  const runSmartMapping = async () => {
+    if (!file) return;
+    setSuggesting(true);
+    setSmartError(null);
+    setSmartResult(null);
+    setSmartPanelOpen(true);
+
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      if (form.evidenceType) fd.append("evidenceType", form.evidenceType);
+
+      const res = await fetch("/api/evidence/smart-map", {
+        method: "POST",
+        headers: apiHeaders(),
+        body: fd,
+      });
+
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error((e as any).error ?? "Analysis failed");
+      }
+
+      const data: SmartMapResult = await res.json();
+      setSmartResult(data);
+
+      // Pre-check suggestions that are Exact Match or High Confidence
+      const preChecked = new Set(
+        data.suggestions
+          .filter((s) => s.isPreselected)
+          .map((s) => s.controlDbId)
+      );
+      setCheckedSuggestions(preChecked);
+    } catch (err: any) {
+      setSmartError(err.message ?? "Could not analyze file");
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  const toggleSuggestion = (id: string) => {
+    setCheckedSuggestions((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const applyCheckedSuggestions = () => {
+    if (!smartResult) return;
+    const toAdd = smartResult.suggestions
+      .filter((s) => checkedSuggestions.has(s.controlDbId))
+      .map((s) => s.controlDbId)
+      .filter((id) => !selectedControlIds.includes(id));
+
+    const next = [...selectedControlIds, ...toAdd];
+    setSelectedControlIds(next);
+    if (next.length > 0 && !primaryControlId) {
+      setPrimaryControlId(next[0]);
+    }
+
+    toast({ title: `Applied ${toAdd.length} suggested control${toAdd.length !== 1 ? "s" : ""}` });
+    setSmartPanelOpen(false);
+  };
+
+  // ── Upload ───────────────────────────────────────────────────────────────
   const checkDuplicate = async (f: File): Promise<DuplicateMatch[]> => {
     try {
       const params = new URLSearchParams({ filename: f.name, size: String(f.size) });
       const res = await fetch(`/api/evidence/check-duplicate?${params}`, { headers: apiHeaders() });
       if (!res.ok) return [];
       const data = await res.json();
-      return data.matches ?? [];
+      return (data as any).matches ?? [];
     } catch {
       return [];
     }
@@ -168,7 +298,7 @@ export function EvidenceUploadModal({ open, onClose, onSaved }: EvidenceUploadMo
       });
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
-        throw new Error(e.error ?? "Upload failed");
+        throw new Error((e as any).error ?? "Upload failed");
       }
       toast({ title: "Evidence uploaded successfully" });
       queryClient.invalidateQueries({ queryKey: getListEvidenceQueryKey() });
@@ -219,7 +349,6 @@ export function EvidenceUploadModal({ open, onClose, onSaved }: EvidenceUploadMo
       return;
     }
 
-    // Duplicate check
     const matches = await checkDuplicate(file);
     if (matches.length > 0) {
       setDuplicates(matches);
@@ -238,6 +367,7 @@ export function EvidenceUploadModal({ open, onClose, onSaved }: EvidenceUploadMo
     level: c.level,
   }));
 
+  // ── Duplicate prompt ─────────────────────────────────────────────────────
   if (showDuplicatePrompt) {
     return (
       <Dialog open={open} onOpenChange={() => { setShowDuplicatePrompt(false); }}>
@@ -298,6 +428,18 @@ export function EvidenceUploadModal({ open, onClose, onSaved }: EvidenceUploadMo
     );
   }
 
+  // ── Group suggestions by confidence tier ─────────────────────────────────
+  const suggestionGroups = smartResult
+    ? (["Exact Match", "High Confidence", "Medium Confidence", "Low Confidence"] as const).map((label) => ({
+        label,
+        items: smartResult.suggestions.filter((s) => s.confidenceLabel === label),
+      })).filter((g) => g.items.length > 0)
+    : [];
+
+  const checkedCount = checkedSuggestions.size;
+  const alreadyLinkedIds = new Set(selectedControlIds);
+
+  // ── Main modal ───────────────────────────────────────────────────────────
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
@@ -378,6 +520,203 @@ export function EvidenceUploadModal({ open, onClose, onSaved }: EvidenceUploadMo
               </button>
             )}
           </div>
+
+          {/* ── Smart Evidence Mapping panel ─────────────────────────────── */}
+          {file && (
+            <div className="rounded-lg border border-dashed border-primary/30 bg-muted/20 p-3">
+              {/* Header row */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-medium">Smart Evidence Mapping</span>
+                  {/* Processing mode badges */}
+                  <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium bg-emerald-50 border-emerald-200 text-emerald-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    Local Analysis
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium bg-slate-50 border-slate-200 text-slate-600">
+                    <ShieldOff className="h-2.5 w-2.5" />
+                    External AI: Off
+                  </span>
+                </div>
+
+                {/* Suggest / collapse button */}
+                {!suggesting && !smartResult && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={runSmartMapping}
+                    className="h-7 text-xs gap-1.5"
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    Suggest Controls
+                  </Button>
+                )}
+                {smartResult && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setSmartPanelOpen((v) => !v)}
+                    className="h-7 text-xs gap-1"
+                  >
+                    {smartPanelOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    {smartPanelOpen ? "Collapse" : "Show suggestions"}
+                  </Button>
+                )}
+              </div>
+
+              {/* Analyzing… */}
+              {suggesting && (
+                <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  <span>Processing: Local Control HUB Analysis…</span>
+                </div>
+              )}
+
+              {/* Error */}
+              {smartError && !suggesting && (
+                <div className="mt-2 flex items-center gap-2 text-sm text-destructive">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  {smartError}
+                  <button
+                    type="button"
+                    className="ml-auto text-xs underline hover:no-underline text-muted-foreground"
+                    onClick={runSmartMapping}
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+
+              {/* Results */}
+              {smartResult && smartPanelOpen && (
+                <div className="mt-3 space-y-2">
+                  {/* Disclaimer */}
+                  <p className="text-[11px] text-muted-foreground italic border-b pb-2">
+                    Smart Evidence Mapping provides control-linking recommendations. The organization remains responsible for confirming that each artifact supports the selected requirement.
+                  </p>
+
+                  {smartResult.extractionNote && (
+                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                      {smartResult.extractionNote}
+                    </p>
+                  )}
+
+                  {suggestionGroups.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No strong control matches found. Please select controls manually.</p>
+                  ) : (
+                    <>
+                      {/* Per-group display */}
+                      {suggestionGroups.map((group) => {
+                        const styles = CONFIDENCE_STYLES[group.label] ?? CONFIDENCE_STYLES["Low Confidence"];
+                        return (
+                          <div key={group.label} className="space-y-1.5">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{group.label}</p>
+                            {group.items.map((s) => {
+                              const isChecked = checkedSuggestions.has(s.controlDbId);
+                              const alreadyLinked = alreadyLinkedIds.has(s.controlDbId);
+                              return (
+                                <button
+                                  key={s.controlDbId}
+                                  type="button"
+                                  disabled={alreadyLinked}
+                                  onClick={() => !alreadyLinked && toggleSuggestion(s.controlDbId)}
+                                  className={`w-full text-left rounded-md border px-3 py-2 transition-colors ${alreadyLinked ? "opacity-50 cursor-not-allowed bg-muted/30 border-muted" : isChecked ? styles.border + " ring-1 ring-primary/30" : "border-border hover:border-muted-foreground/40 bg-card"}`}
+                                >
+                                  <div className="flex items-start gap-2">
+                                    <div className="mt-0.5 shrink-0">
+                                      {alreadyLinked ? (
+                                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                      ) : isChecked ? (
+                                        <CheckCircle2 className="h-4 w-4 text-primary" />
+                                      ) : (
+                                        <Circle className="h-4 w-4 text-muted-foreground" />
+                                      )}
+                                    </div>
+                                    <div className="flex-1 min-w-0 space-y-0.5">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-xs font-mono font-semibold">{s.controlId}</span>
+                                        <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${styles.badge}`}>
+                                          <span className={`h-1 w-1 rounded-full ${styles.dot}`} />
+                                          {s.confidenceLabel} · {s.confidence}%
+                                        </span>
+                                        {alreadyLinked && (
+                                          <span className="text-[10px] text-emerald-600 font-medium">Already selected</span>
+                                        )}
+                                      </div>
+                                      <p className="text-xs text-muted-foreground line-clamp-1">{s.title}</p>
+                                      <p className="text-[11px] text-muted-foreground/70 line-clamp-1">{s.matchReason}</p>
+                                    </div>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+
+                      {/* Apply button */}
+                      <div className="flex items-center justify-between pt-1 border-t">
+                        <p className="text-[11px] text-muted-foreground">
+                          {checkedCount} suggestion{checkedCount !== 1 ? "s" : ""} selected
+                        </p>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-xs"
+                            onClick={() => setSmartPanelOpen(false)}
+                          >
+                            Dismiss
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-7 text-xs gap-1"
+                            onClick={applyCheckedSuggestions}
+                            disabled={checkedCount === 0}
+                          >
+                            <Plus className="h-3 w-3" />
+                            Apply {checkedCount > 0 ? checkedCount : ""} to Controls
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Re-analyze */}
+                  <button
+                    type="button"
+                    className="text-[11px] text-muted-foreground hover:text-primary underline"
+                    onClick={runSmartMapping}
+                  >
+                    Re-analyze file
+                  </button>
+                </div>
+              )}
+
+              {/* Collapsed summary after analysis */}
+              {smartResult && !smartPanelOpen && !suggesting && (
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  {smartResult.suggestions.length} suggestion{smartResult.suggestions.length !== 1 ? "s" : ""} found
+                  {smartResult.suggestions.filter((s) => s.confidenceLabel === "Exact Match").length > 0
+                    ? ` · ${smartResult.suggestions.filter((s) => s.confidenceLabel === "Exact Match").length} exact match`
+                    : ""}
+                  {" · "}
+                  <button
+                    type="button"
+                    className="underline hover:no-underline"
+                    onClick={() => setSmartPanelOpen(true)}
+                  >
+                    View
+                  </button>
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Controls */}
           <div>

@@ -11,3 +11,4 @@
 - [Documents module file viewer](documents-file-viewer.md) — Document detail page, preview endpoint, fileKey was missing from select, legacy key handling, document_control_maps has no relationship_type.
 - [Express 5 typecheck patterns](express5-typecheck-patterns.md) — req.params cast, async void handlers, inArray enum, archiver ESM import, logAudit metadata fields.
 - [Org-role auth architecture](org-role-auth.md) — users.role = global JWT role; organization_users.role = org-specific role; always use req.orgRole (set by requireOrg) for permission checks.
+- [Smart Evidence Mapping](smart-evidence-mapping.md) — local-only analysis engine (no external AI); controlsTable needs LEFT JOIN domainsTable for domain name; confidence tiers + scoring rules.

@@ -1,0 +1,888 @@
+Create a Smart Evidence Mapping engine for Control HUB.
+
+Purpose:
+
+When a user uploads evidence, Control HUB should analyze the file and recommend the controls, requirements, assessment objectives, or contract obligations that the artifact most likely supports.
+
+After the user confirms the suggested mappings:
+
+- create one Evidence record
+- store one physical file
+- create one mapping for every confirmed control
+- display the evidence automatically under every linked control’s Evidence tab
+
+Do not create duplicate evidence records or duplicate physical files for each linked control.
+
+Do not automatically change a control’s implementation status.
+
+Do not automatically approve evidence.
+
+====================================================================
+1. FEATURE NAME AND ROLLOUT MODES
+====================================================================
+
+Feature name:
+
+Smart Evidence Mapping
+
+Add these configurable modes:
+
+- Disabled
+- Shadow Mode
+- Suggestion Mode
+- Auto-Link Exact Matches
+- Auto-Link High-Confidence Matches
+
+Production defaults:
+
+- Shadow Mode = Enabled
+- Suggestion Mode = Enabled after testing
+- Auto-Link Exact Matches = Disabled initially
+- Auto-Link High-Confidence Matches = Disabled initially
+- External AI Processing = Disabled
+
+Definitions:
+
+Shadow Mode:
+Analyze files and save suggestions, but do not display or create mappings.
+
+Suggestion Mode:
+Show recommendations and require user confirmation.
+
+Auto-Link Exact Matches:
+Automatically link only deterministic, exact control-ID matches.
+
+Auto-Link High-Confidence Matches:
+Automatically link approved high-confidence classifications after the feature has been validated.
+
+====================================================================
+2. APPLY SMART MAPPING TO THESE WORKFLOWS
+====================================================================
+
+Add Smart Evidence Mapping to:
+
+- Evidence Repository > Upload Evidence
+- Evidence Repository > Bulk Upload
+- Control Detail > Evidence > Add Evidence
+- Control Detail > Evidence > Bulk Upload
+- Import Existing Evidence
+- Evidence Detail > Analyze / Reanalyze
+
+For an upload started from an individual control:
+
+- keep the current control selected
+- analyze the file for additional controls
+- never remove the current control automatically
+
+For an upload started from Evidence Repository:
+
+- analyze the file
+- recommend all likely controls
+- allow the user to review and confirm
+
+====================================================================
+3. CREATE CONTROL EVIDENCE PROFILES
+====================================================================
+
+Create a reusable evidence profile for every active control or requirement.
+
+Model:
+
+RequirementEvidenceProfile
+- id
+- requirement_id
+- organization_scope or global
+- expected_evidence_title
+- evidence_type
+- description
+- keywords
+- filename_patterns
+- expected_content_terms
+- systems_or_portals
+- preferred_file_types
+- suggested_filename
+- document_types
+- frequency
+- required_or_optional
+- created_at
+- updated_at
+
+Populate these profiles using existing Control HUB data:
+
+- control requirement text
+- implementation guidance
+- Configure-tab evidence requirements
+- Configure-tab suggested filenames
+- document template mappings
+- Implementation Roadmap evidence requirements
+- Monitoring Tracker evidence-to-retain fields
+- existing approved evidence titles
+- existing manually confirmed control mappings
+
+Do not require administrators to reenter information already stored elsewhere in Control HUB.
+
+====================================================================
+4. ANALYSIS PIPELINE
+====================================================================
+
+When a file is selected:
+
+Stage 1 — Temporary File Processing
+
+- place the file in temporary private storage
+- validate extension
+- validate MIME type
+- validate file size
+- calculate SHA-256 hash
+- preserve original filename
+- do not create the final Evidence record yet
+
+Stage 2 — Metadata Extraction
+
+Collect:
+
+- filename
+- normalized filename
+- title
+- extension
+- MIME type
+- user-selected evidence type
+- description
+- tags
+- organization
+- active frameworks/packages
+- manually selected controls
+
+Stage 3 — Content Extraction
+
+Extract relevant content based on file type.
+
+PDF:
+- text
+- headings
+- tables
+- page titles
+- control IDs
+- dates
+
+DOCX:
+- headings
+- paragraphs
+- tables
+- document metadata
+
+XLSX:
+- worksheet names
+- column headers
+- representative rows
+- report titles
+
+CSV:
+- headers
+- representative rows
+
+TXT / LOG / JSON:
+- text
+- key names
+- representative entries
+
+Images:
+- OCR or an approved vision-processing provider
+- visible portal names
+- policy names
+- control IDs
+- report headings
+- relevant labels
+
+Do not send raw files to an external AI provider unless External AI Processing is explicitly enabled for the organization.
+
+Stage 4 — Candidate Generation
+
+Only evaluate requirements assigned to the active organization.
+
+Candidate sources:
+
+- exact control-ID matches
+- filename rules
+- metadata rules
+- evidence-profile keyword matches
+- semantic similarity
+- existing confirmed mappings
+- framework crosswalks
+- AI classifier output
+
+Stage 5 — Candidate Ranking
+
+Return the top five candidates.
+
+Each candidate must include:
+
+- requirement ID
+- title
+- framework/package
+- domain/family
+- confidence score
+- confidence label
+- recommended relationship type
+- short mapping reason
+- exact terms or profile that matched
+
+====================================================================
+5. DETERMINISTIC RULES FIRST
+====================================================================
+
+Always run rule-based mapping before semantic AI classification.
+
+Recognize formats such as:
+
+- AC.L1-3.1.1
+- AC.L2-3.1.3
+- AC-3.1.1
+- AC_L1_3_1_1
+- IA-3.5.3
+- SI-3.14.7
+- 3.1.1
+- R-05
+
+Mapping priority:
+
+1. Exact full control ID in filename
+2. Exact full control ID in extracted content
+3. Exact NIST requirement with unambiguous package context
+4. Known Control HUB filename pattern
+5. Expected-evidence profile match
+6. Semantic/content classification
+7. Existing approved mapping examples
+
+Do not let semantic AI override an exact control ID without displaying a conflict warning.
+
+====================================================================
+6. CONFIDENCE CATEGORIES
+====================================================================
+
+Use:
+
+Exact Match:
+Deterministic control-ID or approved rule match
+
+High Confidence:
+90% to 99%
+
+Medium Confidence:
+70% to 89%
+
+Low Confidence:
+Below 70%
+
+Initial behavior:
+
+Exact Match:
+- preselect
+- require final confirmation
+
+High Confidence:
+- preselect as Suggested
+- require confirmation
+
+Medium Confidence:
+- display but leave unselected
+
+Low Confidence:
+- place under Possible Matches
+- do not select
+
+No Match:
+- require manual selection or explicit Unmapped Review decision
+
+Never silently link a Medium- or Low-confidence result.
+
+====================================================================
+7. USER REVIEW SCREEN
+====================================================================
+
+Before completing the upload, show:
+
+Smart Evidence Mapping Results
+
+File Summary:
+- filename
+- evidence title
+- evidence type
+- preview
+- extracted document title
+- detected systems/portals
+
+Suggested Mappings:
+
+For every candidate show:
+
+- checkbox
+- requirement ID
+- requirement title
+- package badge
+- domain/family
+- confidence percentage
+- confidence label
+- mapping reason
+- relationship type
+- Set as Primary option
+
+Actions:
+
+- Confirm and Upload
+- Add Another Control
+- Remove Suggestion
+- Review Extracted Content
+- Save for Unmapped Review
+- Cancel
+
+Helper text:
+
+“Control HUB has suggested likely control mappings. Review them before saving. One evidence file can support multiple controls without being duplicated.”
+
+====================================================================
+8. CENTRAL MANY-TO-MANY MAPPING
+====================================================================
+
+Use one central mapping relationship.
+
+Model:
+
+EvidenceRequirementMap
+- id
+- organization_id
+- evidence_id
+- requirement_id
+- is_primary
+- relationship_type
+- mapping_source
+- confidence_score
+- mapping_reason
+- confirmed_by
+- confirmed_at
+- created_at
+- updated_at
+
+Relationship types:
+
+- Direct Evidence
+- Supporting Evidence
+- Shared Evidence
+- Reference
+
+Mapping sources:
+
+- User Selected
+- Exact Control ID
+- Filename Rule
+- Evidence Profile
+- Content Analysis
+- Semantic Analysis
+- AI Suggested
+- Auto-Accepted
+- Admin Corrected
+- Bulk Import Mapping
+
+Enforce uniqueness:
+
+organization_id + evidence_id + requirement_id
+
+====================================================================
+9. FINAL PLACEMENT
+====================================================================
+
+After confirmation:
+
+1. Store the final file in persistent private storage.
+2. Create one Evidence record.
+3. Create one mapping row per confirmed control.
+4. Set one mapping as primary.
+5. Commit file, Evidence record, and mappings transactionally.
+6. Refresh Evidence Repository.
+7. Refresh every linked control’s evidence count.
+8. Display the evidence under every linked control’s existing Evidence tab.
+
+Example:
+
+File:
+Quarterly_User_Access_Review.xlsx
+
+Confirmed controls:
+- AC.L1-3.1.1
+- AC.L1-3.1.2
+- IA.L1-3.5.1
+
+Expected result:
+
+- one stored file
+- one Evidence record
+- three mapping rows
+- one Evidence Repository row
+- evidence visible under all three controls
+- organization-wide evidence count increases by one
+- each linked control evidence count increases by one
+
+====================================================================
+10. CROSSWALK-AWARE BEHAVIOR
+====================================================================
+
+If an organization has equivalent packages, such as:
+
+- CMMC Level 2
+- NIST SP 800-171 Revision 2
+
+use the canonical logical requirement where available.
+
+Display both package aliases without forcing duplicate control selection.
+
+Example:
+
+Supports:
+
+[CMMC] AC.L1-3.1.1
+[NIST R2] 3.1.1
+
+Store:
+One canonical mapping where the architecture permits.
+
+For partial mappings:
+
+- show related target requirements as optional suggestions
+- require explicit user confirmation
+
+For DFARS:
+
+- treat mappings as contract obligations
+- do not label them equivalent controls
+
+====================================================================
+11. BULK UPLOAD
+====================================================================
+
+Add an Analyze & Map step to Bulk Upload.
+
+For every file show:
+
+- filename
+- top candidate
+- other candidates
+- confidence
+- selected controls
+- mapping status
+- review action
+
+Mapping statuses:
+
+- Exact Match
+- High Confidence
+- Review Needed
+- No Match
+- User Confirmed
+
+Bulk actions:
+
+- Accept All Exact Matches
+- Accept All High-Confidence Suggestions
+- Apply Selected Controls to Selected Files
+- Review Uncertain Files
+- Exclude Selected Files
+- Save Selected Files for Unmapped Review
+
+Do not fail the entire batch because one file cannot be classified.
+
+====================================================================
+12. UNMAPPED REVIEW
+====================================================================
+
+Add a filter or queue:
+
+Evidence Repository > Unmapped Review
+
+Show:
+
+- filename
+- title
+- type
+- uploaded by
+- upload date
+- candidate controls
+- confidence
+- reason
+- status
+
+Actions:
+
+- Review Suggestions
+- Add Controls
+- Set Primary Control
+- Mark Not Control-Specific
+- Archive
+
+Do not silently create artifacts named UNLINKED.
+
+Saving unmapped evidence must require an explicit user choice and reason.
+
+====================================================================
+13. USE EXISTING MAPPED EVIDENCE AS LABELED EXAMPLES
+====================================================================
+
+Create an internal, organization-isolated mapping index from confirmed evidence.
+
+Use only:
+
+- approved evidence
+- current evidence
+- manually confirmed mappings
+- administrator-approved examples
+
+Index:
+
+- filename patterns
+- titles
+- evidence types
+- extracted terms
+- associated controls
+- framework/package context
+
+Do not fine-tune or train an external public model using production evidence.
+
+Do not allow mappings from one customer organization to expose file content or sensitive terms to another organization.
+
+Global patterns may be created only from sanitized, administrator-approved metadata.
+
+====================================================================
+14. SHADOW MODE AND ACCURACY TESTING
+====================================================================
+
+Before enabling automatic linking:
+
+Run Smart Mapping in Shadow Mode.
+
+Test first with:
+
+1. APEX Solutions synthetic data
+2. CarmeTechnology demo/test data
+3. VTCCORP.US only after test accuracy is reviewed
+
+Shadow Mode must:
+
+- analyze files
+- generate suggestions
+- compare against existing mappings
+- not change any mapping
+- not alter evidence records
+- not change control counts
+
+Measure:
+
+- top-1 accuracy
+- top-3 accuracy
+- exact-match precision
+- high-confidence precision
+- false-positive rate
+- unmapped rate
+- accuracy by evidence type
+- accuracy by control family
+- accuracy by framework
+
+Do not enable high-confidence auto-linking until:
+
+- precision is reviewed by a Global Admin
+- false-positive rate is acceptable
+- production safety is approved
+
+====================================================================
+15. SMART MAPPING SETTINGS
+====================================================================
+
+Add:
+
+Settings > Evidence Mapping
+
+Visible to Global Admin / Organization Admin as appropriate.
+
+Settings:
+
+- Smart Mapping Enabled
+- Processing Mode
+- Shadow Mode
+- Exact Match Auto-Link
+- High-Confidence Auto-Link
+- Minimum Confidence
+- Maximum Suggestions
+- External AI Enabled
+- Unmapped Evidence Allowed
+- Require Final User Confirmation
+
+Processing Modes:
+
+- Filename Rules Only
+- Local Content Analysis
+- Approved Private AI
+- External AI Opt-In
+
+Default:
+
+- Smart Mapping Enabled = false until tested
+- Shadow Mode = true
+- Filename Rules = enabled
+- Local Content Analysis = enabled if available
+- External AI = false
+- Exact Auto-Link = false
+- High-Confidence Auto-Link = false
+- Require Confirmation = true
+
+====================================================================
+16. SECURITY REQUIREMENTS
+====================================================================
+
+Evidence may contain CUI or other sensitive contract information.
+
+Default security requirements:
+
+- private persistent storage
+- temporary private staging
+- organization isolation
+- no public file URLs
+- no raw file contents in application logs
+- no external AI processing by default
+- no provider training on evidence
+- no cross-organization data reuse
+- encryption in transit
+- encryption at rest
+- cleanup of temporary files
+- audit logging
+
+If an external AI provider is enabled:
+
+- require explicit organization approval
+- record provider name
+- record deployment/region
+- record retention configuration
+- record authorization date
+- record responsible approver
+- show a CUI-processing warning
+- include the provider in the organization’s service-provider inventory
+- do not enable globally by accident
+
+====================================================================
+17. ANALYSIS PROVENANCE
+====================================================================
+
+Store for each suggestion:
+
+- mapping engine version
+- extraction provider/version
+- rule set version
+- AI model/deployment identifier
+- analysis timestamp
+- confidence score
+- mapping reason
+- user confirmation decision
+- confirmed by
+- confirmed date
+
+Add disclaimer:
+
+“Smart Evidence Mapping provides control-linking recommendations. The organization remains responsible for confirming that each artifact supports the selected requirement.”
+
+====================================================================
+18. USER FEEDBACK
+====================================================================
+
+When a user accepts or rejects a mapping, store the decision.
+
+Store:
+
+- suggested control
+- confidence
+- accepted/rejected
+- manually selected controls
+- evidence type
+- filename pattern
+- organization
+- reason if provided
+
+Use these decisions to improve organization-specific suggestions.
+
+Do not automatically change global rules based on a single user’s decision.
+
+====================================================================
+19. PERMISSIONS
+====================================================================
+
+Use organization-specific permissions:
+
+- evidence.upload
+- evidence.bulk_upload
+- evidence.analyze
+- evidence.confirm_mapping
+- evidence.link_controls
+- evidence.review_unmapped
+- evidence.configure_ai_mapping
+
+Assessor Read-Only:
+
+- can view confirmed mappings
+- cannot analyze
+- cannot confirm
+- cannot change links
+
+Backend authorization is required.
+
+====================================================================
+20. AUDIT LOGGING
+====================================================================
+
+Log:
+
+- analysis started
+- analysis completed
+- suggestions generated
+- exact match found
+- mapping accepted
+- mapping rejected
+- mapping manually added
+- evidence saved for unmapped review
+- evidence linked to controls
+- analysis failed
+- auto-link occurred
+- mapping corrected
+
+Include:
+
+- user
+- organization
+- evidence ID
+- candidate requirement IDs
+- accepted requirement IDs
+- confidence values
+- mapping method
+- timestamp
+- success/failure
+
+Do not log full file contents.
+
+====================================================================
+21. PRODUCTION DATA SAFETY
+====================================================================
+
+Do not:
+
+- change existing evidence mappings
+- change evidence statuses
+- change control statuses
+- remove existing links
+- overwrite files
+- duplicate physical files
+- modify unrelated organizations
+- automatically backfill production evidence
+- automatically send evidence to an external model
+
+Safe initial implementation:
+
+- new nullable analysis fields
+- evidence-profile library
+- suggestion table
+- Shadow Mode
+- mapping-review UI
+- existing mapping table used only after confirmation
+
+====================================================================
+22. ACCEPTANCE TESTS
+====================================================================
+
+Test A — Exact Control ID:
+
+Upload:
+
+AC.L1-3.1.1__User_Access_Review.xlsx
+
+Expected:
+
+- AC.L1-3.1.1 shown as Exact Match
+- user confirms
+- evidence appears under that control
+
+Test B — Semantic Match:
+
+Upload:
+
+MFA_Registration_Report.xlsx
+
+Expected:
+
+- IA.L2-3.5.3 is the strongest suggestion
+- reason references MFA registration evidence profile
+- user can select additional related controls
+
+Test C — Multiple Controls:
+
+Confirm three mappings.
+
+Expected:
+
+- one Evidence record
+- one physical file
+- three mappings
+- evidence visible under all three control Evidence tabs
+
+Test D — Ambiguous File:
+
+Upload:
+
+Security_Report.pdf
+
+Expected:
+
+- low or medium-confidence suggestions
+- no automatic control link
+- user must review
+
+Test E — Bulk Upload:
+
+Upload twenty evidence files.
+
+Expected:
+
+- each receives candidate mappings
+- exact matches can be accepted in bulk
+- uncertain files can be reviewed separately
+
+Test F — Unmapped:
+
+Upload a file with no reliable match.
+
+Expected:
+
+- user must map manually, exclude it, or explicitly save it for Unmapped Review
+
+Test G — Shadow Mode:
+
+Run against APEX Solutions.
+
+Expected:
+
+- suggestions generated
+- existing mappings unchanged
+- accuracy report available
+
+Test H — External Processing:
+
+External AI disabled.
+
+Expected:
+
+- no raw evidence leaves the configured local/private processing boundary
+
+Test I — Crosswalk:
+
+CMMC L2 and NIST Rev. 2 selected.
+
+Expected:
+
+- equivalent aliases display without duplicate evidence files or duplicate work
+
+Test J — Production Safety:
+
+No existing VTCCORP.US evidence, mappings, statuses, files, or controls are changed automatically.

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Eye, EyeOff, User, KeyRound, Shield, Mail, AlertTriangle, CheckCircle2, Send, Package, ChevronRight } from "lucide-react";
+import { Eye, EyeOff, User, KeyRound, Shield, Mail, AlertTriangle, CheckCircle2, Send, Package, ChevronRight, Sparkles, ShieldOff } from "lucide-react";
 import { Link } from "wouter";
 
 function apiFetch(path: string, opts?: RequestInit) {
@@ -386,6 +386,53 @@ function EmailSettingsCard() {
   );
 }
 
+function SmartMappingCard() {
+  const settings = [
+    { label: "Smart Evidence Mapping", value: "Enabled", ok: true },
+    { label: "Processing Mode", value: "Local Content Analysis", ok: true },
+    { label: "External AI Processing", value: "Off", ok: false, isOff: true },
+    { label: "Require User Confirmation", value: "On", ok: true },
+    { label: "Auto-Link High Confidence", value: "Off", ok: false, isOff: true },
+  ];
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-primary" />
+          <CardTitle>Smart Evidence Mapping</CardTitle>
+        </div>
+        <CardDescription>
+          Control HUB analyzes uploaded evidence locally to suggest relevant CMMC controls.
+          No evidence data is sent to external AI services.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="rounded-md border divide-y">
+          {settings.map((s) => (
+            <div key={s.label} className="flex items-center justify-between px-3 py-2.5">
+              <span className="text-sm text-muted-foreground">{s.label}</span>
+              <span className={`inline-flex items-center gap-1.5 text-sm font-medium ${s.isOff ? "text-slate-500" : "text-emerald-700"}`}>
+                {s.isOff ? (
+                  <ShieldOff className="h-3.5 w-3.5 text-slate-400" />
+                ) : (
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                )}
+                {s.value}
+              </span>
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] text-muted-foreground italic">
+          Smart Evidence Mapping provides control-linking recommendations. The organization remains
+          responsible for confirming that each artifact supports the selected requirement.
+          Any future external AI integration requires explicit administrator approval.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Settings() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
@@ -400,6 +447,7 @@ export default function Settings() {
       <ProfileCard />
       <ChangePasswordCard />
       <SecurityInfoCard />
+      <SmartMappingCard />
 
       <Card>
         <CardHeader>

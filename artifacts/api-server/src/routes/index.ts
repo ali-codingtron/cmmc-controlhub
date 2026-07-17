@@ -27,6 +27,7 @@ import bulkExportRouter from "./bulk-export";
 import seedApexFilesRouter from "./seed-apex-files";
 import frameworksRouter from "./frameworks";
 import evidenceBulkImportRouter from "./evidence-bulk-import";
+import evidenceSmartMapRouter from "./evidence-smart-map";
 
 const router: IRouter = Router();
 
@@ -58,5 +59,6 @@ router.use(bulkExportRouter);
 router.use(seedApexFilesRouter);
 router.use(frameworksRouter);
 router.use(evidenceBulkImportRouter);
+router.use(evidenceSmartMapRouter);
 
 export default router;
