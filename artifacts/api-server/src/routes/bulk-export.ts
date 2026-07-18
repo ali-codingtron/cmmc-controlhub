@@ -123,6 +123,19 @@ function buildExportFilename(item: BulkItem, usedNames: Map<string, number>): st
   return `${base}_${String(count).padStart(2, "0")}${ext}`;
 }
 
+function buildOriginalFilename(item: BulkItem, usedNames: Map<string, number>): string {
+  // Use the stored original filename; fall back to sanitised title
+  const rawName = item.fileName ?? (sanitizePart(item.title, 80) + ".bin");
+  const ext = path.extname(rawName);
+  const stem = rawName.slice(0, rawName.length - ext.length) || "file";
+
+  const key = rawName.toLowerCase();
+  const count = usedNames.get(key) ?? 0;
+  usedNames.set(key, count + 1);
+  if (count === 0) return rawName;
+  return `${stem}_${String(count).padStart(2, "0")}${ext}`;
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface LinkedControl {
   id: string;
@@ -472,6 +485,7 @@ router.post(
       includeControlMapping = true,
       includeHashManifest = false,
       exportDescription = "Bulk Download",
+      filenaming = "descriptive",
     } = req.body as {
       scope?: "selected" | "filtered" | "allApproved" | "entireOrg" | "custom";
       evidenceIds?: string[];
@@ -486,7 +500,13 @@ router.post(
       includeControlMapping?: boolean;
       includeHashManifest?: boolean;
       exportDescription?: string;
+      filenaming?: "descriptive" | "original";
     };
+
+    const nameFile = (item: BulkItem, usedNames: Map<string, number>) =>
+      filenaming === "original"
+        ? buildOriginalFilename(item, usedNames)
+        : buildExportFilename(item, usedNames);
 
     const isServerSideScope = exportScope === "allApproved" || exportScope === "entireOrg";
     const isAssessor = (req.orgRole ?? user.role) === "assessor";
@@ -653,7 +673,7 @@ router.post(
       }
 
       if (!includeFiles) {
-        const exportName = buildExportFilename(item, getUsedNames("_global"));
+        const exportName = nameFile(item, getUsedNames("_global"));
         const paths = getFilePaths(item, exportName);
         fileEntries.push({
           item, exportName, buffer: null, size: 0, sha256: null,
@@ -677,7 +697,7 @@ router.post(
       }
 
       const sha256 = crypto.createHash("sha256").update(buf).digest("hex");
-      const exportName = buildExportFilename(item, getUsedNames("_global"));
+      const exportName = nameFile(item, getUsedNames("_global"));
       const paths = getFilePaths(item, exportName);
 
       fileEntries.push({

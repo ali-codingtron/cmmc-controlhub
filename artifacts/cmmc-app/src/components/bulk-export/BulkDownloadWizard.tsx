@@ -32,6 +32,7 @@ import { useToast } from "@/hooks/use-toast";
 
 type ZipStructure = "flat" | "byDomain" | "byControl" | "byType";
 type ExportScope = "selected" | "filtered" | "allApproved" | "entireOrg";
+type FileNaming = "descriptive" | "original";
 
 export interface BulkDownloadWizardProps {
   open: boolean;
@@ -174,6 +175,7 @@ export function BulkDownloadWizard({
   const [statusFilters, setStatusFilters] = useState<string[]>(["approved", "active", "assessor_ready"]);
   const [includeUnmapped, setIncludeUnmapped] = useState(false);
   const [structure, setStructure] = useState<ZipStructure>("byDomain");
+  const [filenaming, setFilenaming] = useState<FileNaming>("descriptive");
   const [includeManifest, setIncludeManifest] = useState(true);
   const [includeControlMapping, setIncludeControlMapping] = useState(true);
   const [includeHashManifest, setIncludeHashManifest] = useState(false);
@@ -235,6 +237,7 @@ export function BulkDownloadWizard({
       statusFilters,
       includeUnmapped,
       structure,
+      filenaming,
       includeFiles: true,
       includeManifest,
       includeControlMapping,
@@ -483,11 +486,27 @@ export function BulkDownloadWizard({
   // ── Step 3: Structure ─────────────────────────────────────────────────────
 
   function Step3() {
+    const namingOptions: { value: FileNaming; label: string; description: string; example: string }[] = [
+      {
+        value: "descriptive",
+        label: "Descriptive (control + type + date)",
+        description: "Encodes the primary control ID, artifact type, and collection date into every filename.",
+        example: "AC.L1-3.1.1__Policy__Access_Control_Policy__2024-01-15.pdf",
+      },
+      {
+        value: "original",
+        label: "Original filename",
+        description: "Keeps the filename exactly as uploaded. Control numbers appear in the manifest spreadsheets.",
+        example: "Access_Control_Policy_v2.pdf",
+      },
+    ];
+
     return (
-      <div className="space-y-3">
-        <p className="text-sm text-muted-foreground mb-4">
-          Choose how files are organized inside the ZIP.
-        </p>
+      <div className="space-y-6">
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Choose how files are organized inside the ZIP.
+          </p>
         {STRUCTURE_OPTIONS.map((opt) => (
           <label
             key={opt.value}
@@ -530,6 +549,49 @@ export function BulkDownloadWizard({
             </div>
           </label>
         ))}
+        </div>
+
+        {/* File naming section */}
+        <div className="space-y-3">
+          <div>
+            <p className="text-sm font-semibold">File naming</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Control numbers always appear in the manifest spreadsheets regardless of this setting.
+            </p>
+          </div>
+          {namingOptions.map((opt) => (
+            <label
+              key={opt.value}
+              className={cn(
+                "flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all",
+                filenaming === opt.value
+                  ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                  : "border-border hover:bg-muted/30"
+              )}
+            >
+              <input
+                type="radio"
+                name="filenaming"
+                value={opt.value}
+                checked={filenaming === opt.value}
+                onChange={() => setFilenaming(opt.value)}
+                className="accent-primary mt-1"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold">{opt.label}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{opt.description}</p>
+                <code className={cn(
+                  "mt-1.5 block text-[10px] font-mono px-2 py-1 rounded-md truncate",
+                  filenaming === opt.value
+                    ? "bg-primary/8 text-primary/80"
+                    : "bg-muted/40 text-muted-foreground"
+                )}>
+                  {opt.example}
+                </code>
+              </div>
+            </label>
+          ))}
+        </div>
       </div>
     );
   }
@@ -552,6 +614,7 @@ export function BulkDownloadWizard({
       ["Content", [includeEvidence && "Evidence", includeDocs && "Documents"].filter(Boolean).join(" + ") || "None"],
       ["Unmapped items", includeUnmapped ? "Included → 00_Unmapped_Needs_Review/" : "Excluded (listed in Export_Issues.xlsx)"],
       ["ZIP structure", structureLabel],
+      ["File naming", filenaming === "original" ? "Original filename (controls in manifest)" : "Descriptive (control + type + date)"],
       ["Manifests", [includeManifest && "File_Index", includeControlMapping && "Control_Mapping", includeHashManifest && "Hash_Manifest"].filter(Boolean).join(", ") || "Export_Issues + Summary only"],
     ];
 
