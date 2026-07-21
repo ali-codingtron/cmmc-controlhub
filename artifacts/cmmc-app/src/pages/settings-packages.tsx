@@ -35,6 +35,7 @@ function fwBadgeColor(shortName?: string | null): string {
     case "CMMC": return "bg-purple-50 text-purple-700 border-purple-200";
     case "NIST 800-171":
     case "NIST 800-171A": return "bg-blue-50 text-blue-700 border-blue-200";
+    case "NIST 800-53": return "bg-indigo-50 text-indigo-700 border-indigo-200";
     case "DFARS": return "bg-amber-50 text-amber-700 border-amber-200";
     case "FAR": return "bg-slate-50 text-slate-600 border-slate-200";
     default: return "bg-slate-100 text-slate-600 border-slate-200";

@@ -23,6 +23,13 @@ export const COMPLIANCE_FRAMEWORKS = [
     issuingBody: "National Institute of Standards and Technology (NIST)",
   },
   {
+    id: "fw-nist-800-53",
+    name: "NIST SP 800-53",
+    shortName: "NIST 800-53",
+    description: "Security and Privacy Controls for Information Systems and Organizations. The foundational NIST control catalog from which NIST SP 800-171 was derived.",
+    issuingBody: "National Institute of Standards and Technology (NIST)",
+  },
+  {
     id: "fw-dfars",
     name: "Defense Federal Acquisition Regulation Supplement",
     shortName: "DFARS",
@@ -125,6 +132,36 @@ export const COMPLIANCE_PACKAGES = [
     sourceReference: "NIST SP 800-171A Rev. 3 (May 2024)",
     controlCount: 270,
     sortOrder: 60,
+  },
+
+  // ── NIST SP 800-53 ───────────────────────────────────────────────────────
+  {
+    id: "pkg-nist-800-53-r5",
+    frameworkId: "fw-nist-800-53",
+    packageKey: "NIST_800_53_R5",
+    name: "NIST SP 800-53 Rev. 5",
+    version: "Rev. 5",
+    description:
+      "Security and Privacy Controls for Information Systems and Organizations. Over 1,000 controls across 20 families covering the full range of federal security and privacy requirements. Current edition — supersedes Rev. 4.",
+    packageType: "control_framework" as const,
+    effectiveDate: "2020-09-23",
+    sourceReference: "NIST SP 800-53 Rev. 5 (September 2020)",
+    controlCount: 1000,
+    sortOrder: 62,
+  },
+  {
+    id: "pkg-nist-800-53-r4",
+    frameworkId: "fw-nist-800-53",
+    packageKey: "NIST_800_53_R4",
+    name: "NIST SP 800-53 Rev. 4",
+    version: "Rev. 4",
+    description:
+      "Security and Privacy Controls for Federal Information Systems and Organizations. The source control catalog referenced in NIST SP 800-171 Rev. 2 Appendix D for mapping CUI requirements to their 800-53 origins.",
+    packageType: "control_framework" as const,
+    effectiveDate: "2013-04-30",
+    sourceReference: "NIST SP 800-53 Rev. 4 (April 2013)",
+    controlCount: 853,
+    sortOrder: 64,
   },
 
   // ── DFARS ─────────────────────────────────────────────────────────────────

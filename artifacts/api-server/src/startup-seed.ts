@@ -567,12 +567,9 @@ async function seedOrgPackages() {
 }
 
 async function seedComplianceFrameworks() {
-  const [{ value: existing }] = await db
-    .select({ value: count() })
-    .from(complianceFrameworksTable);
-  if (existing > 0) return;
-
-  logger.info("Seeding compliance frameworks and packages...");
+  // Use per-row upserts so new frameworks/packages added to the data file
+  // are picked up on the next server start even when the table already has data.
+  logger.info("Seeding compliance frameworks and packages (incremental)...");
 
   for (const fw of COMPLIANCE_FRAMEWORKS) {
     await db
