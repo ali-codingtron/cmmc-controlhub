@@ -338,11 +338,36 @@ router.post("/ssp/:id/parse", requireAuth, requireOrg, async (req, res): Promise
   ]);
 
   const controlMap = new Map(allControls.map((c) => [c.controlId, c.id]));
+
+  // Normalized fallback: "DOMAIN-REQ" → canonical DB control ID
+  // e.g. "AC-3.1.1" → "AC.L1-3.1.1"
+  // This handles SSPs that label all controls as L2 even when some are L1 in the DB.
+  const normKey = (ref: string): string | null => {
+    const nm = ref.match(/^([A-Z]{2,4})\.L[12]-(\d+\.\d+\.\d+)$/);
+    return nm ? `${nm[1]}-${nm[2]}` : null;
+  };
+  const domainReqMap = new Map<string, string>(); // "AC-3.1.1" → "AC.L1-3.1.1"
+  for (const [controlId] of controlMap.entries()) {
+    const key = normKey(controlId);
+    if (key) domainReqMap.set(key, controlId);
+  }
+
+  // Re-map any parsed ref whose level tag doesn't match the DB to its canonical form
+  const normalizedMappings = controlMappings.map((m) => {
+    if (controlMap.has(m.controlRef)) return m;
+    const key = normKey(m.controlRef);
+    if (key) {
+      const canonical = domainReqMap.get(key);
+      if (canonical) return { ...m, controlRef: canonical };
+    }
+    return m;
+  });
+
   // Map of controlRef → existing DB row for this SSP
   const existingMap = new Map(existingMappings.map((m) => [m.controlRef, m]));
 
   const seenRefs = new Set<string>();
-  const validMappings = controlMappings.filter((m) => {
+  const validMappings = normalizedMappings.filter((m) => {
     if (!controlMap.has(m.controlRef)) return false;
     if (seenRefs.has(m.controlRef)) return false;
     seenRefs.add(m.controlRef);
