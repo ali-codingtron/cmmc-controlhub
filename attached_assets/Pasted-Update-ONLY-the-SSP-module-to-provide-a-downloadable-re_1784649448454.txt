@@ -1,0 +1,406 @@
+Update ONLY the SSP module to provide a downloadable reusable SSP template.
+
+I am adding this file to the Replit project:
+
+assets/templates/ssp/Control_HUB_CMMC_L2_NIST_800-171_SSP_Template.docx
+
+Template display name:
+
+CMMC Level 2 / NIST SP 800-171 SSP Template
+
+The template is a reusable Microsoft Word document based on a complete, professionally formatted System Security Plan. It contains organization placeholders, all 110 NIST SP 800-171 Rev. 2 requirements, requirement-level implementation and evidence fields, DFARS status sections, and the NIST SP 800-171A assessment-objective checklist.
+
+====================================================================
+1. STRICT SCOPE
+====================================================================
+
+Change only the SSP module.
+
+Do not modify:
+
+- existing SSP records
+- uploaded SSP files
+- SSP control mappings
+- SSP implementation narratives
+- control statuses
+- Evidence records
+- linked controls
+- Documents
+- Monitoring Tracker
+- POA&M
+- Reports
+- Dashboard
+- users or roles
+- organization framework assignments
+- any VTCCORP.US production data
+
+This is a read-only template-download feature.
+
+It must not migrate, replace, update, or overwrite an organization’s existing SSP.
+
+====================================================================
+2. ADD SSP TEMPLATE DOWNLOAD
+====================================================================
+
+On the SSP Overview page, add a professional card:
+
+Title:
+
+Start with the Control HUB SSP Template
+
+Description:
+
+“Download a reusable CMMC Level 2 and NIST SP 800-171 System Security Plan. The template includes system-boundary sections, security architecture, all 110 requirement narratives, evidence and test fields, DFARS status tracking, and NIST SP 800-171A assessment objectives.”
+
+Template details:
+
+- Framework: CMMC Level 2
+- Security Requirements: NIST SP 800-171 Rev. 2
+- Assessment Procedures: NIST SP 800-171A
+- Contract Support: DFARS
+- Format: Microsoft Word DOCX
+- Template Version: 1.0
+- Organization-Specific Assertions: None
+- Editable: Yes
+
+Primary button:
+
+Download SSP Template
+
+Optional secondary button:
+
+View Template Contents
+
+Do not add a “Generate SSP” feature as part of this request.
+
+Do not change the existing SSP upload or parsing workflow.
+
+====================================================================
+3. BUTTON PLACEMENT
+====================================================================
+
+Place the Download SSP Template action in one or both of these locations:
+
+A. SSP Overview page header, near the existing SSP actions
+
+B. A clearly visible “SSP Resources” card on the SSP Overview page
+
+Recommended header actions:
+
+- Download SSP Template
+- Upload SSP
+- Export Current SSP, if that action already exists
+
+Do not bury the template in Settings or the Documentation Template Library.
+
+This template belongs in the SSP module.
+
+====================================================================
+4. SECURE DOWNLOAD ROUTE
+====================================================================
+
+Create a server-side route similar to:
+
+GET /api/ssp/templates/cmmc-l2-nist-r2/download
+
+The route should:
+
+1. Require an authenticated Control HUB session.
+2. Confirm the user has access to at least one organization or is a Global Admin.
+3. Require the existing SSP view permission.
+4. Locate the template from the server-side template asset folder.
+5. Stream the original DOCX file to the browser.
+6. Record an audit event.
+7. Return a clear error if the template is unavailable.
+
+Use this response content type:
+
+application/vnd.openxmlformats-officedocument.wordprocessingml.document
+
+Use this download filename:
+
+Control_HUB_CMMC_L2_NIST_800-171_SSP_Template.docx
+
+Use:
+
+Content-Disposition: attachment
+
+Do not expose the server’s physical file path.
+
+Do not create an unauthenticated public file URL.
+
+====================================================================
+5. TEMPLATE STORAGE
+====================================================================
+
+Treat the template as a global, read-only application asset.
+
+Recommended path:
+
+assets/templates/ssp/Control_HUB_CMMC_L2_NIST_800-171_SSP_Template.docx
+
+Alternative:
+
+private/templates/ssp/Control_HUB_CMMC_L2_NIST_800-171_SSP_Template.docx
+
+Do not store it as an organization Evidence record.
+
+Do not count it in:
+
+- Evidence totals
+- SSP totals
+- document totals
+- control evidence counts
+- dashboard readiness calculations
+
+Downloading the template must not create a database record.
+
+====================================================================
+6. TEMPLATE CONTENT SUMMARY
+====================================================================
+
+The optional View Template Contents modal should explain that the template contains:
+
+- Cover page and document-control table
+- Revision history
+- Reference authorities
+- Table of contents
+- Purpose, authority, and status
+- Organization and system overview
+- Assessment scope and system boundary
+- CUI lifecycle and handling rules
+- Security architecture
+- Roles and responsibilities
+- Security requirement implementation summary
+- DFARS compliance status
+- Not Applicable rationale section
+- POA&M and risk-treatment section
+- External services and customer responsibilities
+- Continuous monitoring and evidence management
+- Incident response and external reporting
+- SSP maintenance and approval
+- All 110 NIST SP 800-171 Rev. 2 requirements
+- NIST SP 800-53 source-control mappings
+- Implementation narrative fields
+- Evidence and test-expectation fields
+- Assessment attachment register
+- NIST SP 800-171A “Determine if” objective checklist
+
+Add this notice:
+
+“The template contains no compliance assertion. Each organization must replace the placeholders, document its actual implementation, identify supporting evidence, complete status determinations, and obtain the required approval.”
+
+====================================================================
+7. TEMPLATE PLACEHOLDERS
+====================================================================
+
+The template uses double-brace placeholders such as:
+
+{{ORGANIZATION_NAME}}
+{{ORGANIZATION_LEGAL_NAME}}
+{{DOCUMENT_NUMBER}}
+{{REVISION_NUMBER}}
+{{REVISION_DATE}}
+{{CAGE_CODE}}
+{{UEI}}
+{{PRIMARY_LOCATION}}
+{{SYSTEM_ENCLAVE_NAME}}
+{{SYSTEM_OWNER_NAME}}
+{{SECURITY_OFFICER_NAME}}
+{{COMPLIANCE_REVIEWER_NAME}}
+{{ASSESSMENT_TARGET}}
+{{CUI_OPERATIONAL_STATUS}}
+
+It also contains requirement-specific fields such as:
+
+{{AC_L2_3_1_1_IMPLEMENTATION_NARRATIVE}}
+{{AC_L2_3_1_1_EVIDENCE_TEST_EXPECTATIONS}}
+
+Do not replace these placeholders during a simple template download.
+
+The user is downloading a neutral, reusable Word template.
+
+Automated organization-data substitution can be implemented later as a separate “Create SSP from Template” feature.
+
+====================================================================
+8. HELP TEXT
+====================================================================
+
+Under the Download SSP Template button, show:
+
+“Download the editable Word template, replace the organization placeholders, complete the implementation and evidence sections, and upload the completed SSP through the existing SSP upload workflow.”
+
+Add a small warning:
+
+“Do not mark a requirement Met or Not Applicable unless the status is supported by the organization’s actual implementation, scope, rationale, and evidence.”
+
+====================================================================
+9. ROLE ACCESS
+====================================================================
+
+Allow users with the existing SSP view permission to download the template.
+
+Recommended:
+
+- Global Admin: allowed
+- Organization Admin: allowed
+- Compliance Manager: allowed
+- IT Contributor: allowed if SSP view is granted
+- Reviewer: allowed if SSP view is granted
+- Executive Viewer: allowed if SSP view is granted
+- Assessor Read-Only: allowed if SSP view/download is granted
+- Demo Viewer: use existing demo-download policy
+
+Do not create a new role system for this feature.
+
+Backend authorization must enforce access.
+
+====================================================================
+10. AUDIT LOGGING
+====================================================================
+
+Create an audit event:
+
+SSP Template Downloaded
+
+Record:
+
+- user
+- platform role
+- organization context, if one is selected
+- template name
+- template version
+- filename
+- timestamp
+- IP address
+- user agent
+- success or failure
+
+Do not log the document contents.
+
+====================================================================
+11. ERROR HANDLING
+====================================================================
+
+If the template file is unavailable, show:
+
+“The SSP template is temporarily unavailable. Contact your Control HUB administrator.”
+
+Do not expose:
+
+- server paths
+- stack traces
+- object-storage keys
+- framework internals
+
+The existing SSP module must continue to work if the template file cannot be downloaded.
+
+====================================================================
+12. VISUAL DESIGN
+====================================================================
+
+Use the current Control HUB visual style.
+
+The SSP template card should include:
+
+- Word document icon
+- template name
+- framework badges
+- short description
+- last template update
+- Download SSP Template button
+
+Suggested badges:
+
+CMMC L2
+NIST 800-171 R2
+NIST 800-171A
+DFARS
+DOCX
+
+Keep the design compact and professional.
+
+====================================================================
+13. ACCEPTANCE TESTS
+====================================================================
+
+Test A:
+
+Open SSP Overview.
+
+Expected:
+
+A visible Download SSP Template option is available.
+
+Test B:
+
+Click Download SSP Template.
+
+Expected:
+
+Control_HUB_CMMC_L2_NIST_800-171_SSP_Template.docx downloads successfully.
+
+Test C:
+
+Open the downloaded Word file.
+
+Expected:
+
+- file opens successfully
+- formatting is retained
+- cover page is present
+- organization placeholders are present
+- all 110 requirements are present
+- NIST SP 800-171A objective checklist is present
+- status boxes are blank
+- no VTC-specific data is present
+
+Test D:
+
+Download the template while VTCCORP.US is selected.
+
+Expected:
+
+The neutral template downloads.
+No VTCCORP.US information is inserted.
+No VTCCORP.US record is modified.
+
+Test E:
+
+Download as Assessor Read-Only with SSP download permission.
+
+Expected:
+
+Download succeeds without providing edit access to the production SSP.
+
+Test F:
+
+Review database counts before and after download.
+
+Expected:
+
+No Evidence, SSP, control, document, POA&M, monitoring, or organization record is created or changed.
+
+Test G:
+
+Temporarily remove or rename the server template asset.
+
+Expected:
+
+A clear error appears, and the existing SSP functionality remains operational.
+
+====================================================================
+14. MOST IMPORTANT RULE
+====================================================================
+
+The Download SSP Template button serves a neutral, reusable DOCX asset.
+
+It must not:
+
+- alter an existing SSP
+- create an SSP record
+- create Evidence
+- change control mappings
+- prefill production organization data
+- assert compliance
+- change any production record
