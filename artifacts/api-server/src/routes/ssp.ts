@@ -407,18 +407,61 @@ router.post("/ssp/:id/parse", requireAuth, requireOrg, async (req, res): Promise
     );
   }
 
+  // Gap-fill: For CMMC L2 all 110 controls are required — ensure every control
+  // from the controls table has a mapping row. Any control not found by the
+  // parser and not already in the DB gets a placeholder with an empty narrative
+  // so the user can fill it in via the Control Mapping UI.
+  const nowMapped = new Set([...existingMap.keys(), ...seenRefs]);
+  const gapFillRows: { controlId: string; dbId: string }[] = [];
+  for (const [controlId, dbId] of controlMap.entries()) {
+    if (!nowMapped.has(controlId)) {
+      gapFillRows.push({ controlId, dbId });
+    }
+  }
+
+  if (gapFillRows.length > 0) {
+    await db.insert(sspControlMappingsTable).values(
+      gapFillRows.map((g) => ({
+        id: randomUUID(),
+        sspDocumentId: id,
+        organizationId: orgId,
+        controlRef: g.controlId,
+        controlDbId: g.dbId,
+        implementationNarrative: "",
+        policyReference: null,
+        sspStatus: "planned",
+        sourceSection: null,
+        isEdited: false,
+      }))
+    );
+  }
+
+  req.log.info(
+    {
+      sspId: id,
+      parsedFound: validMappings.length,
+      inserted: toInsert.length,
+      refreshed: toUpdate.length,
+      preserved: validMappings.length - toInsert.length - toUpdate.length,
+      gapFilled: gapFillRows.length,
+      gapFilledRefs: gapFillRows.map((g) => g.controlId),
+    },
+    "SSP parse complete"
+  );
+
   await db
     .update(sspDocumentsTable)
     .set({ extractedAt: new Date(), updatedAt: new Date() })
     .where(eq(sspDocumentsTable.id, id));
 
-  const totalMappings = existingMappings.length + toInsert.length;
+  const totalMappings = existingMappings.length + toInsert.length + gapFillRows.length;
   res.json({
     sectionsCount: sections.length,
     mappingsCount: totalMappings,
     added: toInsert.length,
     refreshed: toUpdate.length,
     preserved: validMappings.length - toInsert.length - toUpdate.length,
+    gapFilled: gapFillRows.length,
   });
 });
 
