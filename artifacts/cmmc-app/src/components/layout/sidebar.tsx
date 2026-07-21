@@ -302,8 +302,8 @@ export function Sidebar() {
             </>
           )}
 
-          {/* Documentation section — global admins only */}
-          {isAdmin && (
+          {/* Documentation section */}
+          {(isAdmin || !!activeOrg) && (
             <>
               <button
                 onClick={() => setDocsExpanded((v) => !v)}
