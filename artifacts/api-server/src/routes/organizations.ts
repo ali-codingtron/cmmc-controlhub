@@ -250,6 +250,8 @@ router.patch("/organizations/:id", requireAuth, requireAdmin, async (req, res) =
     name, legalName, shortName, cageCode, uei, industry,
     primaryContact, organizationAddress, assessmentScope,
     cmmcTargetLevel, notes, isActive,
+    systemName, systemOwner, securityOfficer, itAdministrator,
+    defaultClassification, documentNumberPrefix,
   } = req.body;
 
   await db
@@ -267,11 +269,80 @@ router.patch("/organizations/:id", requireAuth, requireAdmin, async (req, res) =
       cmmcTargetLevel: cmmcTargetLevel ?? existing.cmmcTargetLevel,
       notes: notes !== undefined ? notes : existing.notes,
       isActive: isActive !== undefined ? isActive : existing.isActive,
+      systemName: systemName !== undefined ? systemName : existing.systemName,
+      systemOwner: systemOwner !== undefined ? systemOwner : existing.systemOwner,
+      securityOfficer: securityOfficer !== undefined ? securityOfficer : existing.securityOfficer,
+      itAdministrator: itAdministrator !== undefined ? itAdministrator : existing.itAdministrator,
+      defaultClassification: defaultClassification !== undefined ? defaultClassification : existing.defaultClassification,
+      documentNumberPrefix: documentNumberPrefix !== undefined ? documentNumberPrefix : existing.documentNumberPrefix,
       updatedAt: new Date(),
     })
     .where(eq(organizationsTable.id, req.params.id as string));
 
   const [updated] = await db.select().from(organizationsTable).where(eq(organizationsTable.id, req.params.id as string)).limit(1);
+  res.json(updated);
+});
+
+// PATCH /api/organizations/:id/profile — org admins and compliance managers can update doc profile fields
+router.patch("/organizations/:id/profile", requireAuth, async (req: any, res: any): Promise<void> => {
+  const orgId = req.params.id as string;
+
+  const [existing] = await db
+    .select()
+    .from(organizationsTable)
+    .where(eq(organizationsTable.id, orgId))
+    .limit(1);
+
+  if (!existing) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  // Allow: global admin OR org member with org_admin/compliance_manager role
+  if (req.authUser?.role !== "admin") {
+    const [membership] = await db
+      .select({ role: organizationUsersTable.role })
+      .from(organizationUsersTable)
+      .where(
+        and(
+          eq(organizationUsersTable.organizationId, orgId),
+          eq(organizationUsersTable.userId, req.authUser!.id),
+          eq(organizationUsersTable.status, "active")
+        )
+      )
+      .limit(1);
+
+    if (!membership || !["global_admin", "org_admin", "compliance_manager"].includes(membership.role)) {
+      res.status(403).json({ error: "Only org admins and compliance managers can update the document profile" });
+      return;
+    }
+  }
+
+  const {
+    legalName, organizationAddress, cageCode, uei,
+    assessmentScope, systemName, systemOwner, securityOfficer,
+    itAdministrator, defaultClassification, documentNumberPrefix,
+  } = req.body;
+
+  await db
+    .update(organizationsTable)
+    .set({
+      legalName: legalName !== undefined ? legalName : existing.legalName,
+      organizationAddress: organizationAddress !== undefined ? organizationAddress : existing.organizationAddress,
+      cageCode: cageCode !== undefined ? cageCode : existing.cageCode,
+      uei: uei !== undefined ? uei : existing.uei,
+      assessmentScope: assessmentScope !== undefined ? assessmentScope : existing.assessmentScope,
+      systemName: systemName !== undefined ? systemName : existing.systemName,
+      systemOwner: systemOwner !== undefined ? systemOwner : existing.systemOwner,
+      securityOfficer: securityOfficer !== undefined ? securityOfficer : existing.securityOfficer,
+      itAdministrator: itAdministrator !== undefined ? itAdministrator : existing.itAdministrator,
+      defaultClassification: defaultClassification !== undefined ? defaultClassification : existing.defaultClassification,
+      documentNumberPrefix: documentNumberPrefix !== undefined ? documentNumberPrefix : existing.documentNumberPrefix,
+      updatedAt: new Date(),
+    })
+    .where(eq(organizationsTable.id, orgId));
+
+  const [updated] = await db.select().from(organizationsTable).where(eq(organizationsTable.id, orgId)).limit(1);
   res.json(updated);
 });
 

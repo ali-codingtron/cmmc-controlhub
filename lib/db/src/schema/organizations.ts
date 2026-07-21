@@ -46,6 +46,12 @@ export const organizationsTable = pgTable("organizations", {
   ),
   organizationAddress: text("organization_address"),
   assessmentScope: text("assessment_scope"),
+  systemName: text("system_name"),
+  systemOwner: text("system_owner"),
+  securityOfficer: text("security_officer"),
+  itAdministrator: text("it_administrator"),
+  defaultClassification: text("default_classification"),
+  documentNumberPrefix: text("document_number_prefix"),
   cmmcTargetLevel: cmmcTargetLevelEnum("cmmc_target_level")
     .notNull()
     .default("L2"),

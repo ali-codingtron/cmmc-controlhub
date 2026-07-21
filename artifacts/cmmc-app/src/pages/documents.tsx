@@ -1,19 +1,30 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import {
   FileText, Library, Wand2, ChevronRight, BookOpen,
   ClipboardList, ShieldCheck, BarChart3, Table2,
   FileQuestion, Network, ScrollText, CheckCircle2,
-  Clock, AlertCircle, Layers, Building2, User,
-  CalendarDays, Download, Eye, ExternalLink, Loader2,
-  FileStack, TrendingUp,
+  Clock, AlertCircle, Layers, Building2,
+  CalendarDays, Download, ExternalLink, Loader2,
+  FileStack, TrendingUp, Pencil,
 } from "lucide-react";
 import { useOrg } from "@/context/OrgContext";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 function authHeaders(orgId?: string): Record<string, string> {
@@ -137,51 +148,186 @@ const WORKFLOW_STEPS = [
     n: 1,
     icon: <Library className="h-5 w-5" />,
     title: "Select a Template",
-    description: "Choose the type of controlled document you need from the library of 67+ CMMC L2 templates.",
+    description: "Choose from 67+ CMMC L2 templates across 9 document categories.",
   },
   {
     n: 2,
     icon: <Building2 className="h-5 w-5" />,
     title: "Confirm Organization Information",
-    description: "Review your organization details, responsible roles, document number, version, and approval information.",
+    description: "Review org details, responsible roles, document number, version, and approver.",
   },
   {
     n: 3,
-    icon: <Eye className="h-5 w-5" />,
-    title: "Review & Preview",
+    icon: <CheckCircle2 className="h-5 w-5" />,
+    title: "Review & Auto-Fill",
     description: "Complete any missing fields and inspect the formatted document before generation.",
   },
   {
     n: 4,
-    icon: <CheckCircle2 className="h-5 w-5" />,
-    title: "Generate & Link to Controls",
-    description: "Create professional DOCX and PDF outputs and automatically link the generated document to the relevant CMMC controls.",
+    icon: <FileStack className="h-5 w-5" />,
+    title: "Generate & Link",
+    description: "Create professional DOCX/PDF outputs and link automatically to CMMC controls.",
   },
 ];
 
 // ── DOCUMENT PROFILE FIELDS ─────────────────────────────────────────────────────
 
-const PROFILE_FIELDS = [
-  { key: "name", label: "Organization Name" },
-  { key: "legalName", label: "Legal Name" },
-  { key: "address", label: "Address" },
-  { key: "cageCode", label: "CAGE Code" },
-  { key: "uei", label: "UEI" },
-  { key: "systemName", label: "System Name" },
-  { key: "cmmcScopeName", label: "CMMC / NIST Scope Name" },
-  { key: "systemOwner", label: "System Owner" },
-  { key: "securityOfficer", label: "Security Officer" },
-  { key: "itAdministrator", label: "IT Administrator" },
-  { key: "defaultClassification", label: "Default Classification" },
-  { key: "documentNumberPrefix", label: "Document Number Prefix" },
+interface ProfileField {
+  key: string;
+  label: string;
+  placeholder?: string;
+  readOnly?: boolean;
+  section: string;
+}
+
+const PROFILE_FIELDS: ProfileField[] = [
+  { key: "name", label: "Organization Name", readOnly: true, section: "identity" },
+  { key: "legalName", label: "Legal Name", placeholder: "Full legal entity name", section: "identity" },
+  { key: "organizationAddress", label: "Address", placeholder: "Street, City, State, ZIP", section: "identity" },
+  { key: "cageCode", label: "CAGE Code", placeholder: "5-character CAGE code", section: "identity" },
+  { key: "uei", label: "UEI", placeholder: "Unique Entity Identifier (12 chars)", section: "identity" },
+  { key: "systemName", label: "System Name", placeholder: "e.g. Carme Tech CUI System", section: "system" },
+  { key: "assessmentScope", label: "CMMC / NIST Scope Name", placeholder: "e.g. Carme Tech CUI Environment", section: "system" },
+  { key: "systemOwner", label: "System Owner", placeholder: "Name and title", section: "roles" },
+  { key: "securityOfficer", label: "Security Officer (ISSO)", placeholder: "Name and title", section: "roles" },
+  { key: "itAdministrator", label: "IT Administrator", placeholder: "Name and title", section: "roles" },
+  { key: "defaultClassification", label: "Default Classification", placeholder: "e.g. Internal Use Only — CUI", section: "defaults" },
+  { key: "documentNumberPrefix", label: "Document Number Prefix", placeholder: "e.g. ACME or CT", section: "defaults" },
 ];
+
+const SECTION_LABELS: Record<string, string> = {
+  identity: "Organization Identity",
+  system: "CUI System Information",
+  roles: "Responsible Roles",
+  defaults: "Document Defaults",
+};
+
+// ── DOC PROFILE DIALOG ─────────────────────────────────────────────────────────
+
+function DocumentProfileDialog({
+  open,
+  onClose,
+  orgId,
+  fullOrg,
+  onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  orgId: string;
+  fullOrg: Record<string, any> | null;
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    for (const f of PROFILE_FIELDS) {
+      initial[f.key] = (fullOrg?.[f.key] as string) ?? "";
+    }
+    return initial;
+  });
+
+  // Re-initialize form when fullOrg changes
+  const [initialized, setInitialized] = useState(false);
+  if (fullOrg && !initialized) {
+    const initial: Record<string, string> = {};
+    for (const f of PROFILE_FIELDS) {
+      initial[f.key] = (fullOrg[f.key] as string) ?? "";
+    }
+    setForm(initial);
+    setInitialized(true);
+  }
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const body: Record<string, string | null> = {};
+      for (const f of PROFILE_FIELDS) {
+        if (!f.readOnly) body[f.key] = form[f.key] || null;
+      }
+      const r = await fetch(`/api/organizations/${orgId}/profile`, {
+        method: "PATCH",
+        headers: { ...authHeaders(orgId), "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error((await r.json()).error ?? "Save failed");
+      toast({ title: "Document profile saved" });
+      onSaved();
+      onClose();
+    } catch (e: any) {
+      toast({ title: "Save failed", description: e.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const sections = ["identity", "system", "roles", "defaults"];
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Organization Document Profile</DialogTitle>
+          <DialogDescription>
+            These values auto-fill every generated document. Complete as many fields as possible
+            to reduce manual entry during document generation.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6 py-2">
+          {sections.map((section) => {
+            const fields = PROFILE_FIELDS.filter((f) => f.section === section);
+            return (
+              <div key={section}>
+                <h3 className="text-sm font-semibold text-foreground mb-3 pb-1.5 border-b">
+                  {SECTION_LABELS[section]}
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {fields.map((f) => (
+                    <div key={f.key} className={cn("space-y-1", f.key === "organizationAddress" && "sm:col-span-2")}>
+                      <Label htmlFor={`profile-${f.key}`} className="text-xs font-medium">
+                        {f.label}
+                        {f.readOnly && (
+                          <span className="ml-1.5 text-[10px] text-muted-foreground font-normal">(managed in Organizations)</span>
+                        )}
+                      </Label>
+                      <Input
+                        id={`profile-${f.key}`}
+                        value={form[f.key] ?? ""}
+                        onChange={(e) => setForm((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                        placeholder={f.placeholder}
+                        disabled={f.readOnly || saving}
+                        className={cn("text-sm", f.readOnly && "bg-muted text-muted-foreground")}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />Saving…</> : "Save Profile"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 // ── MAIN PAGE ───────────────────────────────────────────────────────────────────
 
 export default function DocumentationCenter() {
   const { activeOrg } = useOrg();
   const orgId = activeOrg?.id;
+  const queryClient = useQueryClient();
   const [expandProfile, setExpandProfile] = useState(false);
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery({
     queryKey: ["doc-template-library-list"],
@@ -196,7 +342,7 @@ export default function DocumentationCenter() {
   const { data: recentDocs = [], isLoading: recentLoading } = useQuery({
     queryKey: ["recent-generated-docs", orgId],
     queryFn: async () => {
-      const r = await fetch("/api/documents?limit=10&generated=true", { headers: authHeaders(orgId) });
+      const r = await fetch("/api/documents", { headers: authHeaders(orgId) });
       if (!r.ok) return [];
       const all = await r.json() as any[];
       return all.filter((d: any) => d.templateId).slice(0, 10);
@@ -214,6 +360,16 @@ export default function DocumentationCenter() {
     enabled: !!orgId,
   });
 
+  const { data: fullOrg, refetch: refetchFullOrg } = useQuery({
+    queryKey: ["org-full-profile", orgId],
+    queryFn: async () => {
+      const r = await fetch(`/api/organizations/${orgId}`, { headers: authHeaders(orgId) });
+      if (!r.ok) return null;
+      return r.json() as Promise<Record<string, any>>;
+    },
+    enabled: !!orgId,
+  });
+
   const templateCount = templates.length;
   const totalDocs = docStats?.totalDocuments ?? 0;
   const totalDraft = docStats?.totalDraft ?? 0;
@@ -227,17 +383,35 @@ export default function DocumentationCenter() {
     catCounts.set(cat, (catCounts.get(cat) ?? 0) + 1);
   }
 
-  // Organization document profile completion
-  const org = activeOrg as any;
+  // Organization document profile completion (uses full org data)
   const profileFieldValues = PROFILE_FIELDS.map((f) => ({
     ...f,
-    value: org?.[f.key] ?? null,
+    value: (fullOrg?.[f.key] as string) ?? null,
   }));
-  const filledCount = profileFieldValues.filter((f) => f.value).length;
-  const profilePct = PROFILE_FIELDS.length > 0 ? Math.round((filledCount / PROFILE_FIELDS.length) * 100) : 0;
+  const editableFields = profileFieldValues.filter((f) => !f.readOnly);
+  const filledCount = editableFields.filter((f) => f.value).length;
+  const profilePct = editableFields.length > 0
+    ? Math.round((filledCount / editableFields.length) * 100)
+    : 0;
+
+  const displayFields = expandProfile ? profileFieldValues : profileFieldValues.slice(0, 6);
 
   return (
     <div className="space-y-8">
+      {/* Profile dialog */}
+      {orgId && (
+        <DocumentProfileDialog
+          open={profileDialogOpen}
+          onClose={() => setProfileDialogOpen(false)}
+          orgId={orgId}
+          fullOrg={fullOrg ?? null}
+          onSaved={() => {
+            refetchFullOrg();
+            queryClient.invalidateQueries({ queryKey: ["org-full-profile", orgId] });
+          }}
+        />
+      )}
+
       {/* ── PAGE HEADER ────────────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
@@ -301,11 +475,16 @@ export default function DocumentationCenter() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
           { label: "Available Templates", value: templateCount, icon: Library, color: "text-blue-600 bg-blue-50" },
-          { label: "Generated This Month", value: recentDocs.filter((d: any) => {
-            const created = new Date(d.createdAt);
-            const now = new Date();
-            return created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear();
-          }).length, icon: TrendingUp, color: "text-emerald-600 bg-emerald-50" },
+          {
+            label: "Generated This Month",
+            value: recentDocs.filter((d: any) => {
+              const created = new Date(d.createdAt);
+              const now = new Date();
+              return created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear();
+            }).length,
+            icon: TrendingUp,
+            color: "text-emerald-600 bg-emerald-50",
+          },
           { label: "Draft Documents", value: totalDraft, icon: FileText, color: "text-gray-600 bg-gray-50" },
           { label: "Pending Review", value: totalPending, icon: Clock, color: "text-amber-600 bg-amber-50" },
           { label: "Approved / Active", value: totalApproved, icon: CheckCircle2, color: "text-green-600 bg-green-50" },
@@ -421,7 +600,7 @@ export default function DocumentationCenter() {
               />
             </CardHeader>
             <CardContent className="space-y-1.5">
-              {(expandProfile ? profileFieldValues : profileFieldValues.slice(0, 6)).map((f) => (
+              {displayFields.map((f) => (
                 <div key={f.key} className="flex items-center justify-between gap-2 text-xs py-0.5">
                   <span className="text-muted-foreground shrink-0">{f.label}</span>
                   {f.value ? (
@@ -443,11 +622,14 @@ export default function DocumentationCenter() {
                 </button>
               )}
               <div className="pt-2">
-                <Button size="sm" variant="outline" className="w-full text-xs" asChild>
-                  <Link href="/settings">
-                    <User className="h-3.5 w-3.5 mr-1.5" />
-                    Complete Document Profile
-                  </Link>
+                <Button
+                  size="sm"
+                  variant={profilePct < 100 ? "default" : "outline"}
+                  className="w-full text-xs"
+                  onClick={() => setProfileDialogOpen(true)}
+                >
+                  <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                  {profilePct === 0 ? "Complete Document Profile" : profilePct < 100 ? "Finish Document Profile" : "Edit Document Profile"}
                 </Button>
               </div>
             </CardContent>
