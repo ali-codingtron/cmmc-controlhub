@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -57,14 +57,37 @@ function artifactColor(label: string | null): string {
   return TYPE_COLORS[base] ?? TYPE_COLORS[label] ?? "bg-slate-100 text-slate-700 border-slate-200";
 }
 
+const CATEGORY_TYPE_MAP: Record<string, string> = {
+  policy: "Policy",
+  procedure: "Procedure",
+  standard: "Standard",
+  plan: "Plan",
+  assessment: "Assessment",
+  matrix: "Matrix",
+  form: "Form",
+  architecture: "Architecture",
+  ssp: "SSP",
+};
+
 export default function DocTemplateLibrary() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [location] = useLocation();
+
+  const urlType = new URLSearchParams(location.split("?")[1] ?? "").get("type") ?? "";
+  const initialArtifactType = CATEGORY_TYPE_MAP[urlType] ?? "all";
+
   const [search, setSearch] = useState("");
-  const [artifactType, setArtifactType] = useState("all");
+  const [artifactType, setArtifactType] = useState(initialArtifactType);
   const [family, setFamily] = useState("all");
   const [controlRef, setControlRef] = useState("");
   const [importLoading, setImportLoading] = useState(false);
+
+  useEffect(() => {
+    const t = new URLSearchParams(location.split("?")[1] ?? "").get("type") ?? "";
+    const mapped = CATEGORY_TYPE_MAP[t] ?? "all";
+    setArtifactType(mapped);
+  }, [location]);
 
   const { data: templates, isLoading, refetch } = useQuery<TemplateRow[]>({
     queryKey: ["doc-template-library", search, artifactType, family, controlRef],

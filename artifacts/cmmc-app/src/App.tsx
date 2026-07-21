@@ -30,12 +30,7 @@ import Users from "@/pages/users";
 import Settings from "@/pages/settings";
 import SettingsPackages from "@/pages/settings-packages";
 import Documents from "@/pages/documents";
-import DocumentsList from "@/pages/documents-list";
-import DocumentLogs from "@/pages/documents-logs";
-import DocumentChecklists from "@/pages/documents-checklists";
-import DocumentsMissing from "@/pages/documents-missing";
 import DocumentDetail from "@/pages/document-detail";
-import DocumentLogDetail from "@/pages/document-log-detail";
 import Organizations from "@/pages/organizations";
 import SecurityCenter from "@/pages/security-center";
 import AdminRoadmapBackfill from "@/pages/admin-roadmap-backfill";
@@ -171,9 +166,6 @@ function AppRoutes() {
               <Route path="/documents">
                 {() => <AdminOnly><Documents /></AdminOnly>}
               </Route>
-              <Route path="/documents/list">
-                {() => <AdminOnly><DocumentsList /></AdminOnly>}
-              </Route>
               <Route path="/documents/templates">
                 {() => <AdminOnly><DocTemplateLibrary /></AdminOnly>}
               </Route>
@@ -183,17 +175,20 @@ function AppRoutes() {
               <Route path="/documents/generate">
                 {() => <AdminOnly><DocGenerate /></AdminOnly>}
               </Route>
+              <Route path="/documents/list">
+                {() => <Redirect to="/documents" />}
+              </Route>
               <Route path="/documents/logs">
-                {() => <AdminOnly><DocumentLogs /></AdminOnly>}
+                {() => <Redirect to="/documents" />}
               </Route>
               <Route path="/documents/checklists">
-                {() => <AdminOnly><DocumentChecklists /></AdminOnly>}
+                {() => <Redirect to="/documents" />}
               </Route>
               <Route path="/documents/missing">
-                {() => <AdminOnly><DocumentsMissing /></AdminOnly>}
+                {() => <Redirect to="/documents" />}
               </Route>
               <Route path="/documents/logs/:id">
-                {(params: { id: string }) => <AdminOnly><DocumentLogDetail id={params.id} /></AdminOnly>}
+                {() => <Redirect to="/documents" />}
               </Route>
               <Route path="/documents/:id">
                 {(params: { id: string }) => <AdminOnly><DocumentDetail id={params.id} /></AdminOnly>}
