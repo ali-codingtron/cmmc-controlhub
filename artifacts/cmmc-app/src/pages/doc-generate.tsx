@@ -60,7 +60,7 @@ export default function DocGenerate() {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const urlParams = new URLSearchParams(location.split("?")[1] ?? "");
+  const urlParams = new URLSearchParams(window.location.search);
   const preselectedTemplateId = urlParams.get("templateId") ?? "";
 
   const [step, setStep] = useState<Step>(preselectedTemplateId ? 2 : 1);
@@ -212,7 +212,7 @@ export default function DocGenerate() {
                 <SelectTrigger>
                   <SelectValue placeholder="Select a template…" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-72 overflow-y-auto">
                   {(templates ?? []).map((t: any) => (
                     <SelectItem key={t.id} value={t.id}>
                       <span className="font-mono text-xs mr-2 text-muted-foreground">{t.sourceTemplateId}</span>
