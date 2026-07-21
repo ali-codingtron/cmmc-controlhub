@@ -15,8 +15,11 @@ import {
   domainsTable,
   documentsTable,
   documentControlMapsTable,
+  documentEvidenceMapsTable,
   organizationsTable,
   auditLogsTable,
+  evidenceItemsTable,
+  evidenceControlLinksTable,
 } from "@workspace/db";
 import { eq, and, or, ilike, inArray, isNotNull, asc, desc } from "drizzle-orm";
 import { requireAuth, requireNotAssessor } from "../lib/auth";
@@ -406,23 +409,105 @@ router.post("/doc-templates/generate", requireAuth, requireOrg, async (req, res)
   const now = new Date();
   const effectiveDate = effectiveDateStr ? new Date(effectiveDateStr) : now;
   const reviewDate = reviewDateStr ? new Date(reviewDateStr) : new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
+  const currentQuarter = `Q${Math.ceil((now.getMonth() + 1) / 3)} ${now.getFullYear()}`;
+
+  const orgAny = org as any;
+  const securityOfficer = orgAny.securityOfficer ?? "Information System Security Officer (ISSO)";
+  const systemOwner = orgAny.systemOwner ?? "System Owner";
+  const itAdmin = orgAny.itAdministrator ?? "IT Administrator";
+  const classification = orgAny.defaultClassification ?? "Internal Use Only — CUI";
+  const docPrefix = orgAny.documentNumberPrefix ?? (org.shortName ?? org.name.substring(0, 4).toUpperCase());
 
   const defaults: Record<string, string> = {
+    // Organization identity
     "{{ORGANIZATION_NAME}}": org.name,
-    "{{SYSTEM_NAME}}": (org as any).systemName ?? org.name,
-    "{{CMMC_SCOPE_NAME}}": (org as any).cmmcScope ?? `${org.name} CUI Environment`,
+    "{{SYSTEM_NAME}}": orgAny.systemName ?? org.name,
+    "{{CMMC_SCOPE_NAME}}": orgAny.assessmentScope ?? `${org.name} CUI Environment`,
+    "{{ASSESSMENT_SCOPE}}": orgAny.assessmentScope ?? `${org.name} CUI Environment`,
+    "{{CLASSIFICATION}}": classification,
+    "{{DOCUMENT_NUMBER_PREFIX}}": docPrefix,
+    // Responsible roles
     "{{DOCUMENT_OWNER}}": "Compliance Manager",
-    "{{APPROVER_NAME}}": "System Owner",
+    "{{POLICY_OWNER}}": "Compliance Manager",
+    "{{PROCEDURE_OWNER}}": "IT Administrator",
+    "{{APPROVER_NAME}}": systemOwner,
     "{{APPROVER_TITLE}}": "System Owner",
-    "{{EFFECTIVE_DATE}}": effectiveDate.toLocaleDateString("en-US"),
-    "{{REVIEW_DATE}}": reviewDate.toLocaleDateString("en-US"),
-    "{{VERSION}}": "1.0",
-    "{{CLASSIFICATION}}": "Internal Use Only — CUI",
+    "{{SECURITY_OFFICER}}": securityOfficer,
     "{{SECURITY_OFFICER_TITLE}}": "Information System Security Officer (ISSO)",
+    "{{SYSTEM_OWNER}}": systemOwner,
     "{{SYSTEM_OWNER_TITLE}}": "System Owner",
+    "{{IT_ADMIN}}": itAdmin,
     "{{IT_ADMIN_TITLE}}": "IT Administrator",
+    "{{IT_ADMINISTRATOR}}": itAdmin,
     "{{HR_OWNER_TITLE}}": "Human Resources Manager",
     "{{FACILITY_OWNER_TITLE}}": "Facility Manager",
+    "{{REVIEWER_NAME}}": securityOfficer,
+    "{{VERIFIER_NAME}}": itAdmin,
+    "{{PERFORMED_BY}}": securityOfficer,
+    // Dates
+    "{{EFFECTIVE_DATE}}": effectiveDate.toLocaleDateString("en-US"),
+    "{{REVIEW_DATE}}": reviewDate.toLocaleDateString("en-US"),
+    "{{APPROVAL_DATE}}": effectiveDate.toLocaleDateString("en-US"),
+    "{{VERIFICATION_DATE}}": now.toLocaleDateString("en-US"),
+    "{{SCAN_DATE}}": now.toLocaleDateString("en-US"),
+    "{{VERSION}}": "1.0",
+    // Retention & periods
+    "{{EVIDENCE_RETENTION_PERIOD}}": "3 years",
+    "{{RECORD_RETENTION}}": "3 years",
+    "{{TRAINING_RECORD_RETENTION}}": "3 years",
+    "{{LOG_RETENTION_DAYS}}": "1095",
+    "{{FULL_BACKUP_RETENTION}}": "90 days",
+    "{{BACKUP_RETENTION}}": "90 days",
+    // Frequencies
+    "{{REMOTE_ACCESS_REVIEW_FREQUENCY}}": "Quarterly",
+    "{{LOG_REVIEW_FREQUENCY}}": "Weekly",
+    "{{VULN_SCAN_FREQUENCY}}": "Monthly",
+    "{{REVIEW_PERIOD}}": currentQuarter,
+    "{{SCAN_PERIOD}}": currentQuarter,
+    "{{REVIEW_MONTH}}": now.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+    "{{PERIOD_START}}": new Date(now.getFullYear(), 0, 1).toLocaleDateString("en-US"),
+    "{{PERIOD_END}}": now.toLocaleDateString("en-US"),
+    "{{ANNUAL_TRAINING_DEADLINE}}": "December 31",
+    // Account & access control thresholds
+    "{{INACTIVE_ACCOUNT_DAYS}}": "90",
+    "{{LOCKOUT_ATTEMPTS}}": "5",
+    "{{LOCKOUT_DURATION}}": "30 minutes",
+    // Vulnerability management thresholds
+    "{{CRITICAL_VULN_DAYS}}": "30",
+    "{{CRITICAL_DAYS}}": "30",
+    "{{HIGH_DAYS}}": "60",
+    "{{MEDIUM_DAYS}}": "90",
+    "{{LOW_DAYS}}": "180",
+    // Incident response
+    "{{INCIDENT_REPORT_HOURS}}": "72",
+    "{{POST_INCIDENT_DAYS}}": "30",
+    "{{POST_INCIDENT_REVIEW_DAYS}}": "30",
+    "{{INCIDENT_CONTACT}}": orgAny.primaryContact ?? securityOfficer,
+    // Training
+    "{{TRAINING_SYSTEM}}": "[Training Management System]",
+    // Tools & infrastructure
+    "{{SCAN_TOOL}}": "[Vulnerability Scanner]",
+    "{{SCAN_REVIEWER}}": securityOfficer,
+    "{{BACKUP_LOCATION}}": "[Backup Storage Location]",
+    "{{BACKUP_TIME}}": "02:00 AM UTC",
+    "{{ALERT_CONTACT}}": orgAny.primaryContact ?? itAdmin,
+    "{{SYSTEMS_REVIEWED}}": orgAny.systemName ?? org.name,
+    // Review / audit report defaults
+    "{{ANOMALIES_NOTED}}": "None",
+    "{{INCIDENT_COUNT}}": "0",
+    "{{RECOMMENDATIONS}}": "Continue existing controls",
+    "{{TOTAL_ACCOUNTS}}": "[Number]",
+    "{{ACCOUNTS_REMOVED}}": "0",
+    "{{ACCOUNTS_MODIFIED}}": "0",
+    "{{FINDINGS_AND_ACTIONS}}": "No findings requiring immediate action.",
+    "{{FAILED_BACKUP_COUNT}}": "0",
+    "{{FAILURE_RESOLUTION}}": "N/A",
+    "{{RESTORED_ITEMS}}": "N/A",
+    "{{RESTORE_NOTES}}": "N/A",
+    "{{STORAGE_USED}}": "[Current storage used]",
+    "{{STORAGE_REMAINING_DAYS}}": "[Estimated days remaining]",
+    "{{NEW_FINDINGS}}": "0",
+    "{{OVERDUE_ITEMS}}": "0",
   };
 
   const mergedValues = { ...defaults, ...(placeholderValues ?? {}) };
@@ -470,6 +555,50 @@ router.post("/doc-templates/generate", requireAuth, requireOrg, async (req, res)
     await db.insert(documentControlMapsTable).values({ id: randomUUID(), documentId: docId, controlId: cid });
   }
 
+  // Map doc type → evidence type
+  const docTypeToEvidenceType = (dt: string): string => {
+    const map: Record<string, string> = {
+      policy: "policy",
+      procedure: "procedure",
+      log: "log",
+      report: "report",
+      assessment: "report",
+    };
+    return map[dt] ?? "other";
+  };
+
+  // Create a matching evidence item so the document appears in Evidence Repository
+  const evidenceId = randomUUID();
+  await db.insert(evidenceItemsTable).values({
+    id: evidenceId,
+    organizationId: orgId,
+    title: docTitle,
+    description: `Generated from template: ${template.title} (${template.sourceTemplateId ?? template.id})`,
+    evidenceType: docTypeToEvidenceType(template.docType) as any,
+    status: "draft",
+    fileKey: null as any,
+    fileName: null as any,
+    version: "1.0",
+    tags: [template.family ?? "", template.artifactTypeLabel ?? ""].filter(Boolean),
+    sourceSystem: "document_generator",
+    confidentialityLevel: classification,
+    ownerId: actorId,
+    collectedAt: now,
+    reviewDueDate: reviewDate,
+    internalNotes: docId,
+    isCurrentVersion: true,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  // Link evidence to same controls
+  for (const cid of controlIds) {
+    await db.insert(evidenceControlLinksTable).values({ id: randomUUID(), evidenceId, controlId: cid });
+  }
+
+  // Link document → evidence via join table
+  await db.insert(documentEvidenceMapsTable).values({ id: randomUUID(), documentId: docId, evidenceId });
+
   // Audit log
   await db.insert(auditLogsTable).values({
     id: randomUUID(), organizationId: orgId, userId: actorId, userName: actorName,
@@ -480,6 +609,7 @@ router.post("/doc-templates/generate", requireAuth, requireOrg, async (req, res)
 
   res.json({
     documentId: docId,
+    evidenceId,
     title: docTitle,
     status: "draft",
     templateId,
