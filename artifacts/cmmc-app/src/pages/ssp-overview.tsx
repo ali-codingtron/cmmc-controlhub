@@ -1,22 +1,30 @@
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrg } from "@/context/OrgContext";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Link } from "wouter";
 import {
   FileText,
   ShieldCheck,
   CheckCircle2,
-  AlertCircle,
   BookOpen,
   ClipboardList,
   ExternalLink,
   Loader2,
   Upload,
   RefreshCw,
-  Calendar,
+  Download,
+  FileDown,
+  AlertTriangle,
 } from "lucide-react";
 
 interface SspDocument {
@@ -62,6 +70,229 @@ function apiHeaders(orgId?: string) {
     Authorization: `Bearer ${token}`,
     ...(orgId ? { "X-Organization-ID": orgId } : {}),
   };
+}
+
+const TEMPLATE_SECTIONS = [
+  "Cover page and document-control table",
+  "Revision history",
+  "Reference authorities",
+  "Table of contents",
+  "Purpose, authority, and status",
+  "Organization and system overview",
+  "Assessment scope and system boundary",
+  "CUI lifecycle and handling rules",
+  "Security architecture",
+  "Roles and responsibilities",
+  "Security requirement implementation summary",
+  "DFARS compliance status",
+  "Not Applicable rationale section",
+  "POA&M and risk-treatment section",
+  "External services and customer responsibilities",
+  "Continuous monitoring and evidence management",
+  "Incident response and external reporting",
+  "SSP maintenance and approval",
+  "All 110 NIST SP 800-171 Rev. 2 requirements",
+  "NIST SP 800-53 source-control mappings",
+  "Implementation narrative fields",
+  "Evidence and test-expectation fields",
+  "Assessment attachment register",
+  'NIST SP 800-171A "Determine if" objective checklist',
+];
+
+function TemplateContentsDialog({
+  open,
+  onClose,
+  onDownload,
+  downloading,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onDownload: () => void;
+  downloading: boolean;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileDown className="h-5 w-5 text-blue-600" />
+            CMMC L2 / NIST SP 800-171 SSP Template
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 text-sm">
+          <div className="flex flex-wrap gap-1.5">
+            {["CMMC L2", "NIST 800-171 R2", "NIST 800-171A", "DFARS", "DOCX"].map((b) => (
+              <Badge key={b} variant="secondary" className="text-xs">{b}</Badge>
+            ))}
+          </div>
+
+          <p className="text-muted-foreground">
+            This template contains the following sections:
+          </p>
+
+          <ul className="space-y-1.5">
+            {TEMPLATE_SECTIONS.map((s) => (
+              <li key={s} className="flex items-start gap-2 text-sm">
+                <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 text-green-500 flex-shrink-0" />
+                <span>{s}</span>
+              </li>
+            ))}
+          </ul>
+
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-800 text-xs space-y-1">
+            <p className="font-medium">Important notice</p>
+            <p>
+              The template contains no compliance assertion. Each organization must
+              replace the placeholders, document its actual implementation, identify
+              supporting evidence, complete status determinations, and obtain the
+              required approval.
+            </p>
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <Button onClick={onDownload} disabled={downloading} className="flex-1">
+              {downloading ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4 mr-2" />
+              )}
+              Download SSP Template
+            </Button>
+            <Button variant="outline" onClick={onClose}>
+              Close
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SspResourcesCard() {
+  const { activeOrg } = useOrg();
+  const { toast } = useToast();
+  const [downloading, setDownloading] = useState(false);
+  const [contentsOpen, setContentsOpen] = useState(false);
+
+  async function handleDownload() {
+    setDownloading(true);
+    try {
+      const r = await fetch("/api/ssp/templates/cmmc-l2-nist-r2/download", {
+        headers: apiHeaders(activeOrg?.id),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(
+          (err as { error?: string }).error ||
+            "The SSP template is temporarily unavailable. Contact your Control HUB administrator."
+        );
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "Control_HUB_CMMC_L2_NIST_800-171_SSP_Template.docx";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast({
+        title: "Template downloaded",
+        description: "CMMC L2 / NIST SP 800-171 SSP Template",
+      });
+    } catch (e: unknown) {
+      toast({
+        title: "Download failed",
+        description:
+          e instanceof Error
+            ? e.message
+            : "The SSP template is temporarily unavailable. Contact your Control HUB administrator.",
+        variant: "destructive",
+      });
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  return (
+    <>
+      <TemplateContentsDialog
+        open={contentsOpen}
+        onClose={() => setContentsOpen(false)}
+        onDownload={handleDownload}
+        downloading={downloading}
+      />
+
+      <Card className="border-blue-200 bg-gradient-to-br from-blue-50/60 to-white">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <div className="p-1.5 bg-blue-100 rounded-md">
+              <FileDown className="h-4 w-4 text-blue-700" />
+            </div>
+            Start with the Control HUB SSP Template
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Download a reusable CMMC Level 2 and NIST SP 800-171 System Security Plan. The
+            template includes system-boundary sections, security architecture, all 110
+            requirement narratives, evidence and test fields, DFARS status tracking, and
+            NIST SP 800-171A assessment objectives.
+          </p>
+
+          <div className="flex flex-wrap gap-1.5">
+            {["CMMC L2", "NIST 800-171 R2", "NIST 800-171A", "DFARS", "DOCX"].map((b) => (
+              <Badge key={b} variant="secondary" className="text-xs">{b}</Badge>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground py-1">
+            <span><span className="font-medium text-foreground">Framework:</span> CMMC Level 2</span>
+            <span><span className="font-medium text-foreground">Format:</span> Microsoft Word DOCX</span>
+            <span><span className="font-medium text-foreground">Requirements:</span> NIST SP 800-171 Rev. 2</span>
+            <span><span className="font-medium text-foreground">Version:</span> 1.0</span>
+            <span><span className="font-medium text-foreground">Procedures:</span> NIST SP 800-171A</span>
+            <span><span className="font-medium text-foreground">Editable:</span> Yes</span>
+            <span><span className="font-medium text-foreground">Contract:</span> DFARS</span>
+            <span><span className="font-medium text-foreground">Org Assertions:</span> None</span>
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <Button onClick={handleDownload} disabled={downloading} size="sm">
+              {downloading ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5 mr-1.5" />
+              )}
+              Download SSP Template
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setContentsOpen(true)}
+            >
+              View Template Contents
+            </Button>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Download the editable Word template, replace the organization placeholders,
+            complete the implementation and evidence sections, and upload the completed SSP
+            through the existing SSP upload workflow.
+          </p>
+
+          <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50/80 px-3 py-2 text-amber-800 text-xs">
+            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+            <span>
+              Do not mark a requirement Met or Not Applicable unless the status is supported
+              by the organization's actual implementation, scope, rationale, and evidence.
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  );
 }
 
 export default function SspOverview() {
@@ -124,8 +355,9 @@ export default function SspOverview() {
           <h1 className="text-2xl font-bold">SSP Overview</h1>
           <p className="text-muted-foreground text-sm mt-1">System Security Plan dashboard</p>
         </div>
+
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-20 text-center">
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <FileText className="h-14 w-14 text-muted-foreground/25 mb-4" />
             <p className="font-semibold text-lg">No SSP document yet</p>
             <p className="text-sm text-muted-foreground mt-1 mb-6">
@@ -139,6 +371,8 @@ export default function SspOverview() {
             </Link>
           </CardContent>
         </Card>
+
+        <SspResourcesCard />
       </div>
     );
   }
@@ -152,34 +386,36 @@ export default function SspOverview() {
           <h1 className="text-2xl font-bold">SSP Overview</h1>
           <p className="text-muted-foreground text-sm mt-1">System Security Plan dashboard</p>
         </div>
-        {primary.extractedAt ? (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => parseMutation.mutate(primary.id)}
-            disabled={parseMutation.isPending}
-          >
-            {parseMutation.isPending ? (
-              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-            ) : (
-              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-            )}
-            Re-parse
-          </Button>
-        ) : primary.fileKey ? (
-          <Button
-            size="sm"
-            onClick={() => parseMutation.mutate(primary.id)}
-            disabled={parseMutation.isPending}
-          >
-            {parseMutation.isPending ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-2" />
-            )}
-            Parse Document
-          </Button>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {primary.extractedAt ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => parseMutation.mutate(primary.id)}
+              disabled={parseMutation.isPending}
+            >
+              {parseMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+              )}
+              Re-parse
+            </Button>
+          ) : primary.fileKey ? (
+            <Button
+              size="sm"
+              onClick={() => parseMutation.mutate(primary.id)}
+              disabled={parseMutation.isPending}
+            >
+              {parseMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Parse Document
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {/* ── Document Info ── */}
@@ -289,6 +525,9 @@ export default function SspOverview() {
         <QuickLink href="/ssp/mappings" icon={ShieldCheck} label="Control Mappings" description="Manage control implementation narratives" />
         <QuickLink href="/ssp/export" icon={FileText} label="Export SSP" description="Download updated DOCX with all edits" />
       </div>
+
+      {/* ── SSP Resources ── */}
+      <SspResourcesCard />
     </div>
   );
 }

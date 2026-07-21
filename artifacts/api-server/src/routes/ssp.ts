@@ -1,12 +1,13 @@
 import { Router } from "express";
 import multer from "multer";
 import path from "path";
-import { unlink, readFile } from "fs/promises";
+import { unlink, readFile, access as fsAccess } from "fs/promises";
 import { createReadStream } from "fs";
 import { db, sspDocumentsTable, sspSectionsTable, sspControlMappingsTable, controlsTable, controlAssessmentsTable, evidenceControlLinksTable, evidenceItemsTable } from "@workspace/db";
 import { eq, and, desc, count, isNotNull, isNull, sql, ne } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
+import { logAudit } from "../lib/audit";
 import { randomUUID } from "crypto";
 import { parseSSPDocument } from "../lib/ssp-parser";
 import { generateSSPDocx } from "../lib/ssp-export";
@@ -265,6 +266,51 @@ router.post("/ssp", requireAuth, requireOrg, upload.single("file"), async (req, 
     .returning();
 
   res.status(201).json(created);
+});
+
+// ── SSP Template Download (global, auth-only, no org required) ───────────────
+router.get("/ssp/templates/cmmc-l2-nist-r2/download", requireAuth, async (req, res): Promise<void> => {
+  const TEMPLATE_FILENAME = "Control_HUB_CMMC_L2_NIST_800-171_SSP_Template.docx";
+  const templatePath = path.resolve(
+    __dirname,
+    "data",
+    "templates",
+    "ssp",
+    TEMPLATE_FILENAME
+  );
+
+  // Verify file exists before logging or streaming
+  try {
+    await fsAccess(templatePath);
+  } catch {
+    req.log.warn("SSP template file not found at expected path");
+    await logAudit(req, "ssp_template_downloaded", "ssp_template", "cmmc-l2-nist-r2", {
+      entityLabel: "CMMC Level 2 / NIST SP 800-171 SSP Template",
+      newValue: { success: false, filename: TEMPLATE_FILENAME, version: "1.0" },
+    });
+    res.status(503).json({
+      error: "The SSP template is temporarily unavailable. Contact your Control HUB administrator.",
+    });
+    return;
+  }
+
+  await logAudit(req, "ssp_template_downloaded", "ssp_template", "cmmc-l2-nist-r2", {
+    entityLabel: "CMMC Level 2 / NIST SP 800-171 SSP Template",
+    newValue: {
+      success: true,
+      filename: TEMPLATE_FILENAME,
+      version: "1.0",
+      templateName: "CMMC Level 2 / NIST SP 800-171 SSP Template",
+    },
+  });
+
+  res.setHeader(
+    "Content-Type",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  );
+  res.setHeader("Content-Disposition", `attachment; filename="${TEMPLATE_FILENAME}"`);
+
+  createReadStream(templatePath).pipe(res);
 });
 
 // ── SSP stats for overview ────────────────────────────────────────────────────

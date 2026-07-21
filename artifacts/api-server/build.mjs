@@ -128,6 +128,14 @@ async function copyDataFiles(distDir) {
     path.resolve(artifactDir, "src/data/cmmc-controls.json"),
     path.resolve(dataDir, "cmmc-controls.json")
   );
+  // Copy static template assets (read-only files served by download routes)
+  const templatesDestDir = path.resolve(dataDir, "templates");
+  await mkdir(templatesDestDir, { recursive: true });
+  await cp(
+    path.resolve(artifactDir, "src/data/templates"),
+    templatesDestDir,
+    { recursive: true }
+  );
 }
 
 buildAll()
