@@ -96,6 +96,9 @@ function extractControlMappings(html: string): ParsedControlMapping[] {
   const mappings = new Map<string, ParsedControlMapping>();
 
   // Strategy 1: Table-based extraction
+  // Scans every cell in every row looking for a control ID (not just cell 0),
+  // then treats the remaining cells as the narrative. Maps the control even if
+  // the narrative is empty — the user can fill it in after import.
   const tableRe = /<table[\s\S]*?<\/table>/gi;
   let tbl: RegExpExecArray | null;
   tableRe.lastIndex = 0;
@@ -116,38 +119,39 @@ function extractControlMappings(html: string): ParsedControlMapping[] {
         cells.push(stripHtml(cell[1]).trim());
       }
 
-      if (cells.length < 2) continue;
+      if (cells.length < 1) continue;
 
-      const firstCell = cells[0];
-      const ctrlMatch = firstCell.match(CMMC_CONTROL_RE);
-      if (!ctrlMatch) continue;
+      // Find which cell holds the control reference (usually 0 but scan up to 3)
+      let controlRef: string | null = null;
+      let ctrlCellIdx = -1;
+      for (let ci = 0; ci < Math.min(cells.length, 4); ci++) {
+        const m = cells[ci].match(CMMC_CONTROL_RE);
+        if (m) { controlRef = m[1]; ctrlCellIdx = ci; break; }
+      }
+      if (!controlRef || mappings.has(controlRef)) continue;
 
-      const controlRef = ctrlMatch[1];
-      if (mappings.has(controlRef)) continue;
-
-      const narrativeCell = cells[1] ?? "";
-      const policyCell = cells.slice(2).join(" ") ?? "";
-
+      const remainingCells = cells.slice(ctrlCellIdx + 1);
+      const narrativeCell = remainingCells[0] ?? "";
+      const policyCell = remainingCells.slice(1).join(" ");
       const policyRef = extractPolicyRef(policyCell + " " + narrativeCell);
 
-      if (narrativeCell.length > 5) {
-        mappings.set(controlRef, {
-          controlRef,
-          implementationNarrative: narrativeCell.slice(0, 6000),
-          policyReference: policyRef,
-          sspStatus: detectStatus(narrativeCell + " " + policyCell),
-          sourceSection: "Control Implementation",
-        });
-      }
+      mappings.set(controlRef, {
+        controlRef,
+        implementationNarrative: narrativeCell.slice(0, 6000),
+        policyReference: policyRef,
+        sspStatus: detectStatus(narrativeCell + " " + policyCell),
+        sourceSection: "Control Implementation",
+      });
     }
   }
 
-  // Strategy 2: Paragraph-based extraction
-  const paraRe = /<p[^>]*>([\s\S]*?)<\/p>/gi;
+  // Strategy 2: Paragraph / heading / list-item extraction
+  // Matches control IDs in <p>, <h1-6>, and <li> tags.
+  const inlineRe = /<(?:p|h[1-6]|li)[^>]*>([\s\S]*?)<\/(?:p|h[1-6]|li)>/gi;
   const paragraphs: string[] = [];
   let para: RegExpExecArray | null;
-  paraRe.lastIndex = 0;
-  while ((para = paraRe.exec(html)) !== null) {
+  inlineRe.lastIndex = 0;
+  while ((para = inlineRe.exec(html)) !== null) {
     paragraphs.push(stripHtml(para[1]).trim());
   }
 
@@ -165,16 +169,35 @@ function extractControlMappings(html: string): ParsedControlMapping[] {
       j++;
     }
 
-    narrative = narrative.trim();
-    if (narrative.length > 10) {
-      mappings.set(controlRef, {
-        controlRef,
-        implementationNarrative: narrative.slice(0, 6000),
-        policyReference: extractPolicyRef(narrative),
-        sspStatus: detectStatus(narrative),
-        sourceSection: "Control Implementation",
-      });
-    }
+    mappings.set(controlRef, {
+      controlRef,
+      implementationNarrative: narrative.trim().slice(0, 6000),
+      policyReference: extractPolicyRef(narrative),
+      sspStatus: detectStatus(narrative),
+      sourceSection: "Control Implementation",
+    });
+  }
+
+  // Strategy 3: Full-text fallback sweep
+  // Strip all HTML tags and scan the entire document text for any control IDs
+  // not already captured by the previous strategies. This catches controls in
+  // unusual markup (bold runs, table headers, nested elements, etc.).
+  const fullText = stripHtml(html);
+  let sweep: RegExpExecArray | null;
+  CMMC_CONTROL_RE_G.lastIndex = 0;
+  while ((sweep = CMMC_CONTROL_RE_G.exec(fullText)) !== null) {
+    const controlRef = sweep[1];
+    if (mappings.has(controlRef)) continue;
+    // Grab up to 300 chars of surrounding context as a minimal narrative
+    const contextStart = Math.max(0, sweep.index + controlRef.length);
+    const context = fullText.slice(contextStart, contextStart + 300).replace(/^[\s:\-–]+/, "").trim();
+    mappings.set(controlRef, {
+      controlRef,
+      implementationNarrative: context.slice(0, 6000),
+      policyReference: extractPolicyRef(context),
+      sspStatus: detectStatus(context),
+      sourceSection: "Control Implementation",
+    });
   }
 
   return Array.from(mappings.values());
