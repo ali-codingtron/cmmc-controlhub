@@ -4,7 +4,7 @@ import path from "path";
 import { unlink, readFile } from "fs/promises";
 import { createReadStream } from "fs";
 import { db, sspDocumentsTable, sspSectionsTable, sspControlMappingsTable, controlsTable, controlAssessmentsTable, evidenceControlLinksTable, evidenceItemsTable } from "@workspace/db";
-import { eq, and, desc, count, isNotNull, isNull, sql } from "drizzle-orm";
+import { eq, and, desc, count, isNotNull, isNull, sql, ne } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 import { randomUUID } from "crypto";
@@ -314,8 +314,8 @@ router.post("/ssp/:id/parse", requireAuth, requireOrg, async (req, res): Promise
 
   const { sections, controlMappings } = await parseSSPDocument(buffer);
 
+  // Sections are never manually edited — safe to replace entirely
   await db.delete(sspSectionsTable).where(eq(sspSectionsTable.sspDocumentId, id));
-  await db.delete(sspControlMappingsTable).where(eq(sspControlMappingsTable.sspDocumentId, id));
 
   if (sections.length > 0) {
     await db.insert(sspSectionsTable).values(
@@ -332,11 +332,14 @@ router.post("/ssp/:id/parse", requireAuth, requireOrg, async (req, res): Promise
     );
   }
 
-  const allControls = await db
-    .select({ id: controlsTable.id, controlId: controlsTable.controlId })
-    .from(controlsTable);
+  const [allControls, existingMappings] = await Promise.all([
+    db.select({ id: controlsTable.id, controlId: controlsTable.controlId }).from(controlsTable),
+    db.select().from(sspControlMappingsTable).where(eq(sspControlMappingsTable.sspDocumentId, id)),
+  ]);
 
   const controlMap = new Map(allControls.map((c) => [c.controlId, c.id]));
+  // Map of controlRef → existing DB row for this SSP
+  const existingMap = new Map(existingMappings.map((m) => [m.controlRef, m]));
 
   const seenRefs = new Set<string>();
   const validMappings = controlMappings.filter((m) => {
@@ -346,20 +349,61 @@ router.post("/ssp/:id/parse", requireAuth, requireOrg, async (req, res): Promise
     return true;
   });
 
-  if (validMappings.length > 0) {
+  const toInsert: typeof validMappings = [];
+  const toUpdate: { ref: string; narrative: string; status: string; source: string }[] = [];
+
+  for (const m of validMappings) {
+    const existing = existingMap.get(m.controlRef);
+    if (!existing) {
+      // Control was not previously mapped — add it
+      toInsert.push(m);
+    } else if (!existing.isEdited) {
+      // Previously mapped but user has not manually edited it — refresh from SSP
+      toUpdate.push({
+        ref: m.controlRef,
+        narrative: m.implementationNarrative,
+        status: m.sspStatus || "planned",
+        source: m.sourceSection || "Control Implementation",
+      });
+    }
+    // isEdited = true → user customised this narrative; preserve it, do nothing
+  }
+
+  if (toInsert.length > 0) {
     await db.insert(sspControlMappingsTable).values(
-      validMappings.map((m) => ({
+      toInsert.map((m) => ({
         id: randomUUID(),
         sspDocumentId: id,
         organizationId: orgId,
         controlRef: m.controlRef,
         controlDbId: controlMap.get(m.controlRef) ?? null,
         implementationNarrative: m.implementationNarrative,
-        policyReference: null,
-        sspStatus: null,
+        policyReference: m.policyReference || null,
+        sspStatus: m.sspStatus || "planned",
         sourceSection: m.sourceSection || null,
         isEdited: false,
       }))
+    );
+  }
+
+  if (toUpdate.length > 0) {
+    await Promise.all(
+      toUpdate.map((u) =>
+        db
+          .update(sspControlMappingsTable)
+          .set({
+            implementationNarrative: u.narrative,
+            sspStatus: u.status,
+            sourceSection: u.source,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(sspControlMappingsTable.sspDocumentId, id),
+              eq(sspControlMappingsTable.controlRef, u.ref)
+            )
+          )
+      )
     );
   }
 
@@ -368,7 +412,14 @@ router.post("/ssp/:id/parse", requireAuth, requireOrg, async (req, res): Promise
     .set({ extractedAt: new Date(), updatedAt: new Date() })
     .where(eq(sspDocumentsTable.id, id));
 
-  res.json({ sectionsCount: sections.length, mappingsCount: validMappings.length });
+  const totalMappings = existingMappings.length + toInsert.length;
+  res.json({
+    sectionsCount: sections.length,
+    mappingsCount: totalMappings,
+    added: toInsert.length,
+    refreshed: toUpdate.length,
+    preserved: validMappings.length - toInsert.length - toUpdate.length,
+  });
 });
 
 // ── Set primary SSP ───────────────────────────────────────────────────────────
