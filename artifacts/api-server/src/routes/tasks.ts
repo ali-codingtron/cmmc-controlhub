@@ -184,6 +184,19 @@ router.patch("/tasks/:id", requireAuth, requireOrg, async (req, res) => {
   res.json(updated);
 });
 
+router.delete("/tasks/:id", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
+  const [existing] = await db
+    .select()
+    .from(tasksTable)
+    .where(and(eq(tasksTable.id, req.params.id as string), orgId ? eq(tasksTable.organizationId, orgId) : undefined))
+    .limit(1);
+  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+  await db.delete(tasksTable).where(eq(tasksTable.id, req.params.id as string));
+  await logAudit(req, "deleted", "task", req.params.id as string, { entityLabel: existing.title });
+  res.json({ success: true });
+});
+
 router.post("/tasks/:id/complete", requireAuth, requireOrg, async (req, res) => {
   const { notes } = req.body;
   const orgId = req.orgId;

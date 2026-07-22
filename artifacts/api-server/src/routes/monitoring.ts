@@ -741,4 +741,74 @@ router.get("/monitoring/stats", requireAuth, requireOrg, async (req, res) => {
   });
 });
 
+// ─── POST /api/monitoring — create a new monitoring item ─────────────────────
+
+router.post("/monitoring", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId!;
+  const orgRole = req.orgRole ?? "member";
+  if (!["admin", "compliance_manager"].includes(orgRole) && req.authUser?.role !== "admin") {
+    res.status(403).json({ error: "Insufficient permissions" });
+    return;
+  }
+
+  const { task, frequency, controlRef, description } = req.body;
+  if (!task || !frequency || !controlRef) {
+    res.status(400).json({ error: "task, frequency, and controlRef are required" });
+    return;
+  }
+  const validFrequencies = ["daily", "weekly", "monthly", "quarterly", "annually"];
+  if (!validFrequencies.includes(frequency)) {
+    res.status(400).json({ error: "Invalid frequency" });
+    return;
+  }
+
+  const existing = await db
+    .select({ sortOrder: monitoringItemsTable.sortOrder })
+    .from(monitoringItemsTable)
+    .where(eq(monitoringItemsTable.organizationId, orgId));
+  const maxSort = existing.reduce((max, item) => Math.max(max, item.sortOrder ?? 0), existing.length - 1);
+
+  const [inserted] = await db
+    .insert(monitoringItemsTable)
+    .values({
+      id: randomUUID(),
+      organizationId: orgId,
+      task,
+      frequency,
+      controlRef,
+      description: description ?? "",
+      status: "open",
+      sortOrder: maxSort + 1,
+      operatingProcedure: "",
+      testProcedure: "",
+      evidenceToRetain: "",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .returning();
+
+  res.status(201).json(inserted);
+});
+
+// ─── DELETE /api/monitoring/:id — remove a monitoring item ───────────────────
+
+router.delete("/monitoring/:id", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId!;
+  const orgRole = req.orgRole ?? "member";
+  if (!["admin", "compliance_manager"].includes(orgRole) && req.authUser?.role !== "admin") {
+    res.status(403).json({ error: "Insufficient permissions" });
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(monitoringItemsTable)
+    .where(and(eq(monitoringItemsTable.id, String(req.params.id)), eq(monitoringItemsTable.organizationId, orgId)))
+    .limit(1);
+  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+
+  await db.delete(monitoringItemsTable).where(eq(monitoringItemsTable.id, String(req.params.id)));
+  res.json({ success: true });
+});
+
 export default router;

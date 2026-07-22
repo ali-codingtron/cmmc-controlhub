@@ -22,7 +22,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Link } from "wouter";
-import { Plus, AlertTriangle, Loader2, X, Eye, Pencil, ChevronDown, Search } from "lucide-react";
+import { Plus, AlertTriangle, Loader2, X, Eye, Pencil, ChevronDown, Search, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useOrg } from "@/context/OrgContext";
 import { cn } from "@/lib/utils";
@@ -434,11 +434,15 @@ function PoamFormDialog({
 
 export default function Poams() {
   const qc = useQueryClient();
+  const { activeOrg } = useOrg();
+  const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterRisk, setFilterRisk] = useState("all");
   const [showAdd, setShowAdd] = useState(false);
   const [editPoam, setEditPoam] = useState<any | null>(null);
+  const [deletePoam, setDeletePoam] = useState<{ id: string; title: string } | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const isAssessor = useIsAssessor();
   const { isDemoMode } = useDemoMode();
 
@@ -465,6 +469,29 @@ export default function Poams() {
   ).length;
 
   const invalidate = () => qc.invalidateQueries({ queryKey: getListPoamsQueryKey() });
+
+  async function handleDeletePoam() {
+    if (!deletePoam) return;
+    setDeleteLoading(true);
+    try {
+      const token = localStorage.getItem("auth_token");
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      if (activeOrg?.id) headers["X-Organization-ID"] = activeOrg.id;
+      const r = await fetch(`/api/poams/${deletePoam.id}`, { method: "DELETE", headers });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        toast({ title: "Delete failed", description: d.error ?? "Could not delete POA&M", variant: "destructive" });
+        return;
+      }
+      toast({ title: "POA&M deleted" });
+      invalidate();
+      setDeletePoam(null);
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
 
   function toFormValues(poam: any): Partial<PoamForm> {
     return {
@@ -658,6 +685,15 @@ export default function Poams() {
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-red-600 hover:bg-red-50"
+                            title="Delete"
+                            onClick={() => setDeletePoam({ id: poam.id, title: poam.title ?? "" })}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
                       </TableCell>
                     )}
@@ -686,6 +722,26 @@ export default function Poams() {
           editId={editPoam.id}
         />
       )}
+
+      {/* Delete confirm dialog */}
+      <Dialog open={!!deletePoam} onOpenChange={() => setDeletePoam(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete POA&amp;M</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Permanently delete <span className="font-semibold text-foreground">"{deletePoam?.title}"</span>? This cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletePoam(null)} disabled={deleteLoading}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeletePoam} disabled={deleteLoading}>
+              {deleteLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Deleting…</> : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

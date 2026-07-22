@@ -688,6 +688,24 @@ export default function ReportsDomain() {
                 Your compliance posture is strong. Schedule a mock assessment before the official C3PAO engagement to validate readiness.
               </li>
             )}
+            {ac.score >= 80 && ac.score < 90 && es.evidenceGaps === 0 && poamSummary.overdue === 0 && (
+              <li className="text-blue-700 flex gap-2">
+                <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-blue-500" />
+                Good progress — score is in the 80–89% range. Focus on completing SSP narratives and closing any open POA&Ms to reach assessment-ready status.
+              </li>
+            )}
+            {ac.score >= 50 && ac.score < 80 && es.evidenceGaps === 0 && poamSummary.overdue === 0 && (
+              <li className="text-amber-700 flex gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" />
+                Compliance posture needs improvement. Prioritize evidence collection, SSP narratives, and closing open POA&Ms before scheduling an assessment.
+              </li>
+            )}
+            {ac.score < 50 && (
+              <li className="text-red-700 flex gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-red-500" />
+                Critical readiness gap — score below 50%. An immediate remediation sprint is recommended: identify unmet controls, create POA&Ms for each gap, and begin evidence collection before any assessment activities.
+              </li>
+            )}
           </ul>
         </CardContent>
       </Card>

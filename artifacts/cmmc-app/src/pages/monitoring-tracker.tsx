@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -34,6 +36,8 @@ import {
   ShieldX,
   TriangleAlert,
   Link2,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -440,6 +444,11 @@ export default function MonitoringTracker() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkFreq, setBulkFreq] = useState<MonitoringFrequency | "">("");
 
+  // Add / delete item state
+  const [showAddItem, setShowAddItem] = useState(false);
+  const [addForm, setAddForm] = useState({ task: "", frequency: "monthly" as MonitoringFrequency, controlRef: "", description: "" });
+  const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
+
   const { data: items = [], isLoading } = useQuery<MonitoringItem[]>({
     queryKey: ["monitoring", activeOrg?.id],
     queryFn: async () => {
@@ -479,6 +488,43 @@ export default function MonitoringTracker() {
       if (r.ok) queryClient.invalidateQueries({ queryKey: ["monitoring", activeOrg.id] });
     });
   }, [activeOrg?.id, items.length]);
+
+  const createMutation = useMutation({
+    mutationFn: async (data: { task: string; frequency: MonitoringFrequency; controlRef: string; description: string }) => {
+      if (!activeOrg?.id) throw new Error("No org");
+      const r = await fetch("/api/monitoring", {
+        method: "POST",
+        headers: { ...makeHeaders(activeOrg.id), "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!r.ok) { const d = await r.json(); throw new Error(d.error ?? "Failed to create"); }
+      return r.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["monitoring", activeOrg?.id] });
+      setShowAddItem(false);
+      setAddForm({ task: "", frequency: "monthly", controlRef: "", description: "" });
+      toast({ title: "Monitoring item added" });
+    },
+    onError: (e: Error) => toast({ title: "Failed to add item", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      if (!activeOrg?.id) throw new Error("No org");
+      const r = await fetch(`/api/monitoring/${id}`, {
+        method: "DELETE",
+        headers: makeHeaders(activeOrg.id),
+      });
+      if (!r.ok) { const d = await r.json(); throw new Error(d.error ?? "Failed to delete"); }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["monitoring", activeOrg?.id] });
+      setDeleteItemId(null);
+      toast({ title: "Item deleted" });
+    },
+    onError: (e: Error) => toast({ title: "Delete failed", description: e.message, variant: "destructive" }),
+  });
 
   const updateMutation = useMutation({
     mutationFn: async ({
@@ -659,9 +705,17 @@ export default function MonitoringTracker() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Monitoring Tracker</h1>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Activity className="h-4 w-4" />
-          <span>CMMC L2 Operational Monitoring</span>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Activity className="h-4 w-4" />
+            <span>CMMC L2 Operational Monitoring</span>
+          </div>
+          {!isAssessor && (
+            <Button size="sm" onClick={() => setShowAddItem(true)}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              Add Item
+            </Button>
+          )}
         </div>
       </div>
 
@@ -853,13 +907,14 @@ export default function MonitoringTracker() {
                   <TableHead className="w-36">Last Completed</TableHead>
                   <TableHead className="w-36">Next Due</TableHead>
                   <TableHead className="w-40">Status</TableHead>
-                  <TableHead className="w-48 pr-4">Notes</TableHead>
+                  <TableHead className="w-48">Notes</TableHead>
+                  {!isAssessor && <TableHead className="w-10 pr-4" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center text-muted-foreground py-10">
+                    <TableCell colSpan={isAssessor ? 10 : 11} className="text-center text-muted-foreground py-10">
                       No monitoring items match the current filters.
                     </TableCell>
                   </TableRow>
@@ -1049,7 +1104,7 @@ export default function MonitoringTracker() {
                           </TableCell>
 
                           {/* Notes */}
-                          <TableCell className="pr-4">
+                          <TableCell>
                             <Textarea
                               className="text-xs min-h-[2rem] resize-none disabled:opacity-60 disabled:cursor-not-allowed"
                               rows={2}
@@ -1062,6 +1117,19 @@ export default function MonitoringTracker() {
                               disabled={isAssessor}
                             />
                           </TableCell>
+
+                          {/* Delete */}
+                          {!isAssessor && (
+                            <TableCell className="pr-4">
+                              <button
+                                onClick={() => setDeleteItemId(item.id)}
+                                className="flex items-center justify-center w-7 h-7 rounded text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                                title="Delete item"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </TableCell>
+                          )}
                         </TableRow>
 
                         {/* Expandable workbook panel */}
@@ -1071,7 +1139,7 @@ export default function MonitoringTracker() {
                             hasFailed && "bg-orange-50/40 dark:bg-orange-950/10",
                             isEscalated && "bg-purple-50/40 dark:bg-purple-950/10",
                           )}>
-                            <TableCell colSpan={10} className="p-0">
+                            <TableCell colSpan={isAssessor ? 10 : 11} className="p-0">
                               <WorkbookPanel
                                 item={item}
                                 orgId={activeOrg?.id ?? ""}
@@ -1093,6 +1161,95 @@ export default function MonitoringTracker() {
           )}
         </CardContent>
       </Card>
+
+      {/* Add Item dialog */}
+      <Dialog open={showAddItem} onOpenChange={setShowAddItem}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add Monitoring Item</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="add-task">Task Name <span className="text-red-500">*</span></Label>
+              <Input
+                id="add-task"
+                placeholder="e.g. Review Firewall Rules"
+                value={addForm.task}
+                onChange={(e) => setAddForm((f) => ({ ...f, task: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Frequency <span className="text-red-500">*</span></Label>
+                <Select value={addForm.frequency} onValueChange={(v) => setAddForm((f) => ({ ...f, frequency: v as MonitoringFrequency }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="daily">Daily</SelectItem>
+                    <SelectItem value="weekly">Weekly</SelectItem>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="quarterly">Quarterly</SelectItem>
+                    <SelectItem value="annually">Annually</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="add-control">Control Ref <span className="text-red-500">*</span></Label>
+                <Input
+                  id="add-control"
+                  placeholder="e.g. 3.1.1"
+                  value={addForm.controlRef}
+                  onChange={(e) => setAddForm((f) => ({ ...f, controlRef: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="add-desc">Description</Label>
+              <Textarea
+                id="add-desc"
+                placeholder="Brief description of what this monitoring task covers…"
+                rows={2}
+                value={addForm.description}
+                onChange={(e) => setAddForm((f) => ({ ...f, description: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddItem(false)} disabled={createMutation.isPending}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => createMutation.mutate(addForm)}
+              disabled={createMutation.isPending || !addForm.task.trim() || !addForm.controlRef.trim()}
+            >
+              {createMutation.isPending ? "Adding…" : "Add Item"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirm dialog */}
+      <Dialog open={!!deleteItemId} onOpenChange={() => setDeleteItemId(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Monitoring Item</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Permanently remove this monitoring item? This cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteItemId(null)} disabled={deleteMutation.isPending}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteItemId && deleteMutation.mutate(deleteItemId)}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

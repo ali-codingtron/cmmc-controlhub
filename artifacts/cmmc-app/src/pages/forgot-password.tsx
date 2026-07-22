@@ -110,6 +110,9 @@ export default function ForgotPassword() {
                 <p className="text-xs text-muted-foreground">
                   The link expires in 30 minutes.
                 </p>
+                <p className="text-xs text-muted-foreground border-t pt-3 mt-1">
+                  Didn't receive an email? Your administrator may need to configure email delivery — contact them for a manual password reset link.
+                </p>
               </div>
               <Link href="/login">
                 <Button variant="outline" className="w-full gap-2">

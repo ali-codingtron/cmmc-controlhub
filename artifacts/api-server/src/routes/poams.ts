@@ -204,6 +204,19 @@ router.patch("/poams/:id", requireAuth, requireOrg, async (req, res) => {
   res.json(updated);
 });
 
+router.delete("/poams/:id", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId;
+  const [existing] = await db
+    .select()
+    .from(poamsTable)
+    .where(and(eq(poamsTable.id, req.params.id as string), orgId ? eq(poamsTable.organizationId, orgId) : undefined))
+    .limit(1);
+  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+  await db.delete(poamsTable).where(eq(poamsTable.id, req.params.id as string));
+  await logAudit(req, "deleted", "poam", req.params.id as string, { entityLabel: existing.title });
+  res.json({ success: true });
+});
+
 router.post("/poams/:id/close", requireAuth, requireOrg, async (req, res) => {
   const { resolutionSummary } = req.body;
   const orgId = req.orgId;

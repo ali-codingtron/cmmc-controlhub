@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   XCircle,
   ChevronRight,
+  ChevronDown,
   Plus,
   RefreshCw,
   FileText,
@@ -430,8 +431,38 @@ function VerificationPanel({
   const [rejectionReason, setRejectionReason] = useState("");
   const [loading, setLoading] = useState(false);
   const [showReject, setShowReject] = useState(false);
+  const [showAdminOverride, setShowAdminOverride] = useState(false);
+  const [adminJustification, setAdminJustification] = useState("");
+  const [adminLoading, setAdminLoading] = useState(false);
 
   const isSelf = user?.id === record.submittedById;
+
+  async function doAdminOverride() {
+    if (adminJustification.trim().length < 20) {
+      toast({ title: "Justification too short", description: "Enter at least 20 characters.", variant: "destructive" });
+      return;
+    }
+    setAdminLoading(true);
+    try {
+      const token = localStorage.getItem("auth_token");
+      const r = await fetch("/api/certification/admin-override", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "X-Organization-ID": activeOrg!.id },
+        body: JSON.stringify({ justification: adminJustification }),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        toast({ title: "Override failed", description: data.error ?? "Could not apply override", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Override applied", description: "Certification has been activated." });
+      onAction();
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    } finally {
+      setAdminLoading(false);
+    }
+  }
 
   async function doVerify() {
     setLoading(true);
@@ -523,11 +554,48 @@ function VerificationPanel({
       </div>
 
       {isSelf ? (
-        <div className="bg-white border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
-          <div className="font-medium mb-1">Awaiting Second-Person Verification</div>
-          <div className="text-xs text-blue-600">
-            You submitted this record. A different authorized user must verify it before the module activates.
+        <div className="space-y-3">
+          <div className="bg-white border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
+            <div className="font-medium mb-1">Awaiting Second-Person Verification</div>
+            <div className="text-xs text-blue-600">
+              You submitted this record. A different authorized user must verify it before the module activates.
+            </div>
           </div>
+          {user?.role === "admin" && (
+            <div className="border border-amber-200 rounded-xl overflow-hidden">
+              <button
+                onClick={() => setShowAdminOverride((v) => !v)}
+                className="w-full flex items-center justify-between px-4 py-3 bg-amber-50 text-sm font-medium text-amber-800 hover:bg-amber-100 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  Admin Override
+                </span>
+                <ChevronDown className={cn("h-4 w-4 transition-transform", showAdminOverride && "rotate-180")} />
+              </button>
+              {showAdminOverride && (
+                <div className="px-4 py-3 bg-white space-y-3">
+                  <p className="text-xs text-slate-500">
+                    Bypass the second-person requirement by documenting justification below. This action is permanently audit-logged.
+                  </p>
+                  <textarea
+                    rows={3}
+                    value={adminJustification}
+                    onChange={(e) => setAdminJustification(e.target.value)}
+                    placeholder="Justification for bypassing second-person verification (min 20 characters)…"
+                    className="w-full border border-amber-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+                  <button
+                    onClick={doAdminOverride}
+                    disabled={adminLoading || adminJustification.trim().length < 20}
+                    className="w-full py-2 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700 disabled:opacity-40 transition-colors"
+                  >
+                    {adminLoading ? "Applying override…" : "Apply Override & Activate"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
