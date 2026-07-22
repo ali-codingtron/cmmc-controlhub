@@ -185,13 +185,23 @@ async function seedBreakGlassAccount() {
 }
 
 async function seedDocumentTemplates() {
-  const [{ value: existing }] = await db.select({ value: count() }).from(documentTemplatesTable);
-  if (existing > 0) return;
+  // Incremental: fetch existing titles so new templates added to the data file
+  // are picked up on the next server start even when the table already has data.
+  const existingRows = await db
+    .select({ title: documentTemplatesTable.title })
+    .from(documentTemplatesTable);
+  const existingTitles = new Set(existingRows.map((r) => r.title));
 
-  logger.info("Seeding document templates...");
+  const toSeed = (DOCUMENT_TEMPLATES as readonly (typeof DOCUMENT_TEMPLATES)[number][]).filter(
+    (t) => !existingTitles.has(t.title)
+  );
+
+  if (toSeed.length === 0) return;
+
+  logger.info({ new: toSeed.length, existing: existingTitles.size }, "Seeding new document templates...");
   let seeded = 0;
 
-  for (const tmpl of DOCUMENT_TEMPLATES) {
+  for (const tmpl of toSeed) {
     const id = randomUUID();
     const extractedPlaceholders = [...(tmpl.bodyTemplate?.match(/\{\{(\w+)\}\}/g) ?? [])]
       .map((p: string) => p.replace(/\{\{|\}\}/g, ""));
@@ -236,7 +246,7 @@ async function seedDocumentTemplates() {
     seeded++;
   }
 
-  logger.info({ count: seeded }, "Document templates seeded");
+  logger.info({ seeded }, "Document templates seeded");
 }
 
 async function seedMonitoringItems() {
