@@ -12,6 +12,7 @@ export interface OrgSummary {
   industry: string | null;
   isActive: boolean;
   isTestOrganization: boolean;
+  certificationModuleState: string;
   role: string;
 }
 

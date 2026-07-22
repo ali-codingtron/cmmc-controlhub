@@ -73,6 +73,7 @@ import HelpAdmin from "@/pages/help-admin";
 import DfarsObligations from "@/pages/dfars-obligations";
 import Crosswalk from "@/pages/crosswalk";
 import AdminPackageMigration from "@/pages/admin-package-migration";
+import Certification from "@/pages/certification";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -237,6 +238,7 @@ function AppRoutes() {
               <Route path="/pre-assessment/results/:id">
                 {(params: { id: string }) => <PaResults id={params.id} />}
               </Route>
+              <Route path="/certification" component={Certification} />
               <Route path="/dfars-obligations" component={DfarsObligations} />
               <Route path="/crosswalk" component={Crosswalk} />
               <Route path="/admin/package-migration" component={AdminPackageMigration} />

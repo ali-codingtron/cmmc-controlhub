@@ -1,0 +1,937 @@
+Create an organization-gated CMMC Certification & Sustainment module.
+
+Important terminology:
+
+Do not call this a “C3PAO Certification” module.
+
+The organization receives a Conditional or Final Level 2 (C3PAO) CMMC Status after an assessment performed by a C3PAO.
+
+Module name:
+
+CMMC Certification & Sustainment
+
+Sidebar label:
+
+Certification
+
+Purpose:
+
+This module becomes available only after an organization records and verifies an official Conditional or Final Level 2 (C3PAO) CMMC Status.
+
+It is used to preserve the official assessment record, track annual affirmations, maintain the certified scope, evaluate changes, complete a Conditional POA&M, and prepare for recertification.
+
+====================================================================
+1. PRODUCTION SAFETY
+====================================================================
+
+Do not activate this module for any existing organization.
+
+Do not change:
+
+- organization data
+- controls
+- evidence
+- documents
+- SSP
+- POA&M
+- monitoring
+- reports
+- roles
+- users
+- current navigation
+- current assessment modes
+
+Add the module in a disabled state.
+
+All existing organizations should default to:
+
+certification_module_state = NOT_AVAILABLE
+
+No current production organization should see the new sidebar item until an authorized activation is completed.
+
+====================================================================
+2. ORGANIZATION CERTIFICATION STATES
+====================================================================
+
+Add an organization certification state:
+
+- NOT_AVAILABLE
+- VERIFICATION_PENDING
+- CONDITIONAL_L2_C3PAO
+- FINAL_L2_C3PAO
+- EXPIRED
+- SUSPENDED
+- INVALIDATED
+- ARCHIVED
+
+Default:
+
+NOT_AVAILABLE
+
+Behavior:
+
+NOT_AVAILABLE:
+- Certification sidebar item hidden
+- certification routes unavailable
+
+VERIFICATION_PENDING:
+- sidebar hidden from normal users
+- verification page visible only to users with certification.verify permission
+
+CONDITIONAL_L2_C3PAO:
+- Certification sidebar item visible
+- amber status
+- POA&M Closeout tab visible
+
+FINAL_L2_C3PAO:
+- Certification sidebar item visible
+- green status
+- POA&M Closeout tab hidden unless historical closeout data exists
+
+EXPIRED:
+- module remains available for historical review
+- red Expired status
+- no active-certification claims
+
+SUSPENDED or INVALIDATED:
+- module visible only to authorized users
+- prominent warning
+- retain history and records
+
+ARCHIVED:
+- hidden from normal navigation
+- retained for authorized historical access
+
+====================================================================
+3. ACTIVATION WORKFLOW
+====================================================================
+
+Do not use a simple checkbox.
+
+Add:
+
+Organization Settings > Certification Status
+
+Button:
+
+Record CMMC Certification Status
+
+Step 1 — Status:
+
+- Conditional Level 2 (C3PAO)
+- Final Level 2 (C3PAO)
+
+Step 2 — Official Assessment Details:
+
+Required fields:
+
+- CMMC UID
+- Assessment Level
+- C3PAO Name
+- CMMC Status Date
+- Assessment Start Date
+- Assessment Completion Date
+- Assessment Unique Identifier
+- CAGE Codes
+- Assessment Scope Name
+- SSP Title
+- SSP Version
+- SSP Date
+- Affirming Official
+- Internal Certification Owner
+
+Optional fields:
+
+- assessor names
+- assessor business contact information
+- contract references
+- notes
+
+Step 3 — Supporting Records:
+
+Require at least one appropriate official record:
+
+- CMMC Assessment Findings Report
+- official status confirmation
+- authorized SPRS status verification
+- certification record, if issued
+- POA&M closeout result, if applicable
+
+Optional:
+
+- artifact hash manifest
+- final scope package
+- final SSP
+- assessment correspondence
+
+Step 4 — Verification:
+
+The user entering the record cannot be the only verifier.
+
+Require verification by a second authorized user with:
+
+certification.verify
+
+The verifier confirms:
+
+- CMMC UID format
+- status
+- dates
+- C3PAO
+- scope
+- CAGE codes
+- SSP information
+- supporting record availability
+
+Only after verification should the module state change from:
+
+VERIFICATION_PENDING
+
+to:
+
+CONDITIONAL_L2_C3PAO
+or
+FINAL_L2_C3PAO
+
+Provide a Global Admin override only with required justification and audit logging.
+
+====================================================================
+4. CMMC UID VALIDATION
+====================================================================
+
+Validate the CMMC UID as 10 alphanumeric characters.
+
+Store it normalized in uppercase.
+
+Do not allow duplicate active CMMC UIDs across unrelated certification records without an explicit override and justification.
+
+Do not expose the UID publicly.
+
+====================================================================
+5. SIDEBAR VISIBILITY
+====================================================================
+
+The sidebar item must be generated server-side or from an authorized organization context.
+
+Show:
+
+Certification
+
+only when:
+
+- organization certification state permits visibility
+- user has certification.view
+- organization is currently selected
+
+Do not display a disabled or Coming Soon sidebar item.
+
+When the module is not available, it should not appear at all.
+
+Do not show it in:
+
+- public demo
+- unauthenticated pages
+- organizations without verified status
+
+====================================================================
+6. BACKEND ROUTE PROTECTION
+====================================================================
+
+Create routes such as:
+
+/certification
+/certification/records
+/certification/scope
+/certification/affirmations
+/certification/sustainment
+/certification/changes
+/certification/poam-closeout
+/certification/recertification
+/certification/history
+
+Every page and API must verify:
+
+- authenticated user
+- selected organization
+- organization membership
+- certification.view permission
+- certification module state
+
+If the module is not active:
+
+- return 404 or a controlled unavailable response
+- do not expose certification metadata
+
+Do not rely only on hiding the sidebar item.
+
+====================================================================
+7. MODULE OVERVIEW
+====================================================================
+
+Create a professional overview page.
+
+Header:
+
+CMMC Certification & Sustainment
+
+Organization name
+
+Status badge:
+
+- Final Level 2 (C3PAO)
+- Conditional Level 2 (C3PAO)
+- Expired
+- Suspended
+- Invalidated
+
+Top summary cards:
+
+- CMMC Status
+- CMMC UID
+- C3PAO
+- Status Date
+- Next Annual Affirmation
+- Status Valid Through
+- Next Certification Assessment
+- Certified Scope
+- Sustainment Health
+
+Do not show a readiness percentage.
+
+Internal sustainment health values:
+
+- On Track
+- Attention Needed
+- At Risk
+- Expired
+
+Add disclaimer:
+
+“Control HUB displays the certification information recorded and verified by the organization. Official status remains governed by the applicable government systems, assessment records, and contractual requirements.”
+
+====================================================================
+8. TABS
+====================================================================
+
+Add tabs:
+
+- Overview
+- Official Records
+- Certified Scope
+- Annual Affirmations
+- Sustainment
+- Change Impact
+- POA&M Closeout
+- Recertification
+- History
+
+POA&M Closeout should appear only for:
+
+- Conditional status
+- or historical records that previously used a closeout assessment
+
+====================================================================
+9. OFFICIAL RECORDS
+====================================================================
+
+Store controlled certification records.
+
+Record types:
+
+- CMMC Assessment Findings Report
+- CMMC Status Confirmation
+- SPRS Verification
+- Certification Record
+- CMMC UID Record
+- Final Assessment Scope
+- SSP Used for Assessment
+- Artifact Hash Manifest
+- Conditional POA&M
+- POA&M Closeout Assessment
+- Annual Affirmation
+- Assessment Correspondence
+- Other Official Record
+
+Fields:
+
+- title
+- record type
+- status
+- effective date
+- uploaded by
+- uploaded date
+- description
+- file
+- checksum
+- related certification record
+- confidentiality classification
+
+Actions based on permissions:
+
+- View
+- Preview
+- Download
+- Add Record
+- Replace with New Version
+- Archive
+
+Do not make these records publicly accessible.
+
+====================================================================
+10. CERTIFIED SCOPE
+====================================================================
+
+Store the certified assessment scope as a point-in-time snapshot.
+
+Include:
+
+- scope name
+- organization
+- CAGE codes
+- locations
+- CUI assets
+- Security Protection Assets
+- Contractor Risk Managed Assets
+- Specialized Assets
+- External Service Providers
+- network diagram
+- CUI data-flow diagram
+- SSP version
+- scope approval date
+- scope notes
+
+Do not overwrite the certified scope when current organization data changes.
+
+Add:
+
+Compare Current Scope to Certified Scope
+
+Show differences:
+
+- new assets
+- removed assets
+- changed services
+- changed locations
+- changed CAGE codes
+- changed ESPs
+- changed CUI flow
+- changed network boundary
+- changed SSP version
+
+This comparison is advisory and must not automatically invalidate the status.
+
+====================================================================
+11. ANNUAL AFFIRMATIONS
+====================================================================
+
+Create an affirmation tracker.
+
+Fields:
+
+- affirmation number
+- due date
+- status
+- affirming official
+- preparation owner
+- submitted date
+- submission reference
+- supporting document
+- notes
+
+Statuses:
+
+- Not Started
+- In Preparation
+- Ready for Signature
+- Submitted
+- Confirmed
+- Overdue
+- Not Required
+
+Generate reminders:
+
+- 90 days
+- 60 days
+- 30 days
+- 14 days
+- 7 days
+- overdue
+
+Do not claim to submit to SPRS automatically unless an authorized integration exists.
+
+Track:
+
+- preparation
+- approval
+- submission
+- proof of submission
+
+====================================================================
+12. CONDITIONAL POA&M CLOSEOUT
+====================================================================
+
+For Conditional Level 2 status, show:
+
+- Conditional Status Date
+- 180-Day Closeout Deadline
+- Days Remaining
+- POA&M Items
+- Owners
+- Milestones
+- Evidence Required
+- Current Status
+- Scheduled C3PAO Closeout Assessment
+- Closeout Result
+
+Use amber warning cards.
+
+Statuses:
+
+- Open
+- In Progress
+- Evidence Ready
+- Ready for Closeout Assessment
+- Closed
+- Failed Closeout
+- Expired
+
+Do not reuse normal operational POA&M data blindly.
+
+Link to relevant POA&M records but preserve the certification-specific closeout snapshot.
+
+When a verified final status is entered after closeout:
+
+- retain the Conditional record
+- add the Final record
+- update the active certification state
+- retain the full history
+
+====================================================================
+13. SUSTAINMENT DASHBOARD
+====================================================================
+
+Create a sustainment dashboard that references existing modules without duplicating their data.
+
+Show:
+
+- monitoring items overdue
+- evidence requiring review
+- approved evidence becoming stale
+- SSP changes since status date
+- open POA&M items
+- expired policies/procedures
+- scope changes
+- ESP changes
+- privileged-access changes
+- material incidents
+- unreviewed configuration changes
+- annual affirmation preparation status
+- recertification milestone status
+
+Each item should link to its authoritative existing record.
+
+Do not create duplicate monitoring, evidence, SSP, or POA&M records.
+
+====================================================================
+14. CHANGE IMPACT REGISTER
+====================================================================
+
+Create certification-specific change-impact records.
+
+Fields:
+
+- change title
+- change date
+- description
+- system/service affected
+- scope impact
+- CUI impact
+- controls affected
+- SSP update required
+- diagram update required
+- provider/ESP change
+- CAGE/location change
+- reassessment considered
+- external clarification required
+- impact decision
+- decision owner
+- approval
+- evidence
+- notes
+
+Impact decisions:
+
+- No Certification Impact
+- Documentation Update Required
+- Scope Review Required
+- Material Change Review Required
+- External Clarification Required
+- Potential Reassessment Required
+
+Do not automatically declare certification invalid.
+
+Require an authorized human decision.
+
+====================================================================
+15. RECERTIFICATION
+====================================================================
+
+Create a recertification timeline.
+
+Milestones:
+
+- 12 Months Before Expiration
+- 9 Months Before Expiration
+- 6 Months Before Expiration
+- 4 Months Before Expiration
+- 3 Months Before Expiration
+- 2 Months Before Expiration
+- 1 Month Before Expiration
+- Assessment Scheduled
+- Assessment Completed
+
+Track:
+
+- owner
+- due date
+- status
+- linked work
+- evidence
+- notes
+
+Suggested activities:
+
+- scope review
+- SSP refresh
+- evidence review
+- internal assessment
+- POA&M review
+- monitoring history review
+- assessor selection
+- assessment logistics
+- read-only access validation
+- final management review
+
+====================================================================
+16. CERTIFICATION HISTORY
+====================================================================
+
+Preserve every certification lifecycle event.
+
+Show a timeline:
+
+- assessment initiated
+- assessment completed
+- Conditional status received
+- POA&M closeout initiated
+- POA&M closeout completed
+- Final status received
+- annual affirmation submitted
+- material scope change reviewed
+- status expired
+- recertification completed
+- status suspended or invalidated
+- record archived
+
+Never overwrite prior status records.
+
+====================================================================
+17. STATUS VALIDITY CALCULATIONS
+====================================================================
+
+For Final Level 2 (C3PAO):
+
+- calculate the next certification assessment date from the applicable three-year cycle
+- separately track annual affirmation due dates
+
+For Conditional Level 2 (C3PAO):
+
+- calculate the 180-day closeout deadline
+- separately track annual affirmation requirements where applicable
+
+Do not hardcode status as valid solely from date calculations.
+
+Show:
+
+Recorded Status Validity
+
+and include:
+
+“Subject to continuing compliance, current affirmation, official government records, and contract requirements.”
+
+====================================================================
+18. ROLE PERMISSIONS
+====================================================================
+
+Add capabilities:
+
+- certification.view
+- certification.activate
+- certification.verify
+- certification.edit
+- certification.upload_records
+- certification.manage_scope
+- certification.manage_affirmations
+- certification.manage_sustainment
+- certification.manage_change_impact
+- certification.manage_poam_closeout
+- certification.manage_recertification
+- certification.download_records
+- certification.archive
+
+Recommended:
+
+Global Admin:
+all permissions
+
+Organization Admin:
+manage organization certification data, except second-person verification of their own submission
+
+Compliance Manager:
+manage records, affirmations, sustainment, changes, and recertification
+
+Reviewer:
+review and verify where assigned
+
+Executive Viewer:
+view overview, status, deadlines, and approved records
+
+IT Contributor:
+view assigned sustainment/change tasks only
+
+Assessor Read-Only:
+view approved certification records when granted
+
+Demo Viewer:
+no access
+
+Backend enforcement is required.
+
+====================================================================
+19. NOTIFICATIONS
+====================================================================
+
+Use the existing notification/email system.
+
+Send notifications for:
+
+- verification requested
+- verification completed
+- affirmation due
+- affirmation overdue
+- POA&M closeout milestone due
+- POA&M closeout deadline approaching
+- recertification milestone due
+- material change awaiting review
+- status nearing expiration
+- record upload failure
+
+Do not send certification data to unauthorized recipients.
+
+====================================================================
+20. VISUAL DESIGN
+====================================================================
+
+Use a professional certification-command-center design.
+
+Color rules:
+
+Final:
+green
+
+Conditional:
+amber
+
+Expired / Invalidated:
+red
+
+Historical / Archived:
+slate
+
+Header should show:
+
+- organization
+- status badge
+- CMMC UID
+- C3PAO
+- status date
+- next deadline
+
+Use:
+
+- status cards
+- deadline countdowns
+- timeline
+- scope-change summary
+- affirmation progress
+- clean tables
+- professional navy/slate background
+
+Do not make the page look like a readiness checklist.
+
+====================================================================
+21. PUBLIC DISPLAY
+====================================================================
+
+Do not automatically publish a certification badge on:
+
+- public demo
+- marketing page
+- organization public profile
+- login page
+- reports shared publicly
+
+Any future public certification badge must be a separate explicitly approved feature.
+
+====================================================================
+22. AUDIT LOGGING
+====================================================================
+
+Log:
+
+- certification record created
+- verification requested
+- verification completed
+- verification rejected
+- module activated
+- module state changed
+- official record uploaded
+- official record viewed/downloaded
+- affirmation updated
+- scope snapshot created
+- scope comparison performed
+- change-impact decision recorded
+- POA&M closeout updated
+- recertification milestone updated
+- status expired
+- status archived
+
+Include:
+
+- user
+- organization
+- certification record
+- previous state
+- new state
+- reason
+- timestamp
+- IP address
+- user agent
+- success/failure
+
+====================================================================
+23. ACCEPTANCE TESTS
+====================================================================
+
+Test A:
+
+Create a normal organization with no certification record.
+
+Expected:
+
+- Certification does not appear in sidebar
+- direct route is unavailable
+- no certification API data is exposed
+
+Test B:
+
+Submit a Final Level 2 certification record.
+
+Expected:
+
+- state becomes Verification Pending
+- sidebar remains hidden from normal users
+
+Test C:
+
+A second authorized user verifies the record.
+
+Expected:
+
+- state becomes Final Level 2 (C3PAO)
+- Certification appears in sidebar for authorized roles
+
+Test D:
+
+Submit a Conditional Level 2 record.
+
+Expected:
+
+- Certification appears after verification
+- POA&M Closeout tab is visible
+- 180-day countdown is displayed
+
+Test E:
+
+Record a Final status after successful closeout.
+
+Expected:
+
+- Conditional history remains
+- Final status becomes active
+- history is preserved
+
+Test F:
+
+Annual affirmation becomes due.
+
+Expected:
+
+- reminders are generated
+- overview shows affirmation attention
+- official certification status is not silently changed by Control HUB
+
+Test G:
+
+Certification expires.
+
+Expected:
+
+- records remain available
+- status changes to Expired
+- no active certification claim is displayed
+- history is preserved
+
+Test H:
+
+Direct unauthorized API request is attempted.
+
+Expected:
+
+- access denied
+- no certification metadata is returned
+
+Test I:
+
+Public demo is opened.
+
+Expected:
+
+- Certification module is not visible
+- no real certification information is exposed
+
+Test J:
+
+Review all existing production organizations.
+
+Expected:
+
+- none are automatically activated
+- no existing data is changed
+
+====================================================================
+24. MOST IMPORTANT RULE
+====================================================================
+
+The Certification module is hidden until an organization’s official status is entered and independently verified.
+
+The module must preserve official records and support ongoing sustainment.
+
+It must not:
+
+- certify an organization
+- create an official government status
+- submit to SPRS without an authorized integration
+- automatically invalidate a status
+- expose certification information publicly
+- appear for uncertified organizations

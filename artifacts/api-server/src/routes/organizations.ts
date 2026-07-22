@@ -37,6 +37,7 @@ router.get("/organizations/my-orgs", requireAuth, async (req, res) => {
         industry: organizationsTable.industry,
         isActive: organizationsTable.isActive,
         isTestOrganization: organizationsTable.isTestOrganization,
+        certificationModuleState: organizationsTable.certificationModuleState,
         role: sql<string>`'admin'`,
       })
       .from(organizationsTable)
@@ -55,6 +56,7 @@ router.get("/organizations/my-orgs", requireAuth, async (req, res) => {
       industry: organizationsTable.industry,
       isActive: organizationsTable.isActive,
       isTestOrganization: organizationsTable.isTestOrganization,
+      certificationModuleState: organizationsTable.certificationModuleState,
       role: organizationUsersTable.role,
       joinedAt: organizationUsersTable.joinedAt,
     })

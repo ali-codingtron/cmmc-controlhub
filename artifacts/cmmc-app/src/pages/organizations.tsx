@@ -343,6 +343,7 @@ function OrgCreationWizard({ open, onClose, onSuccess }: { open: boolean; onClos
         industry: newOrg.industry ?? form.industry ?? null,
         isActive: true,
         isTestOrganization: false,
+        certificationModuleState: "NOT_AVAILABLE",
         role: "admin",
       };
       setActiveOrg(newOrgSummary);
@@ -902,6 +903,7 @@ export default function Organizations() {
         cmmcTargetLevel: statOrg.cmmcTargetLevel,
         industry: null,
         isActive: true,
+        certificationModuleState: "NOT_AVAILABLE",
         isTestOrganization: statOrg.isTestOrganization,
         role: "admin",
       });

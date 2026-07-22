@@ -17,3 +17,4 @@ export * from "./password-reset";
 export * from "./help";
 export * from "./sso";
 export * from "./frameworks";
+export * from "./certification";

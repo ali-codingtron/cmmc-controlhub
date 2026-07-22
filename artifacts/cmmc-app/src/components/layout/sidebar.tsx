@@ -22,6 +22,7 @@ import {
   FileCheck2,
   GitCompare,
   Package,
+  Award,
 } from "lucide-react";
 
 import { useAuth } from "@/lib/auth";
@@ -208,6 +209,15 @@ export function Sidebar() {
           )}
           {hasMultiplePackages && (
             <NavLink href="/crosswalk" icon={GitCompare} label="Framework Crosswalk" />
+          )}
+          {!isDemoMode && activeOrg && [
+            "CONDITIONAL_L2_C3PAO",
+            "FINAL_L2_C3PAO",
+            "EXPIRED",
+            "SUSPENDED",
+            "INVALIDATED",
+          ].includes(activeOrg.certificationModuleState ?? "") && (
+            <NavLink href="/certification" icon={Award} label="Certification" />
           )}
           <NavLink href="/evidence" icon={FileText} label="Evidence" />
           <NavLink href="/monitoring" icon={Activity} label="Monitoring Tracker" />

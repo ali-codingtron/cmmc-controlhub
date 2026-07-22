@@ -933,11 +933,205 @@ async function seedCrosswalkRequirements() {
   );
 }
 
+async function migrateCertificationTables() {
+  const migrations = [
+    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS certification_module_state text NOT NULL DEFAULT 'NOT_AVAILABLE'`,
+    `CREATE TABLE IF NOT EXISTS certification_records (
+      id text PRIMARY KEY,
+      organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      certification_status text NOT NULL,
+      cmmc_uid text NOT NULL,
+      assessment_level text NOT NULL,
+      c3pao_name text NOT NULL,
+      cmmc_status_date timestamptz NOT NULL,
+      assessment_start_date timestamptz NOT NULL,
+      assessment_completion_date timestamptz NOT NULL,
+      assessment_unique_id text NOT NULL,
+      cage_codes text[] NOT NULL DEFAULT '{}',
+      assessment_scope_name text NOT NULL,
+      ssp_title text NOT NULL,
+      ssp_version text NOT NULL,
+      ssp_date timestamptz NOT NULL,
+      affirming_official text NOT NULL,
+      internal_certification_owner text NOT NULL,
+      assessor_names text[] DEFAULT '{}',
+      assessor_contact_info text,
+      contract_references text[] DEFAULT '{}',
+      notes text,
+      module_state text NOT NULL DEFAULT 'VERIFICATION_PENDING',
+      submitted_by_id text REFERENCES users(id) ON DELETE SET NULL,
+      submitted_at timestamptz NOT NULL DEFAULT now(),
+      verified_by_id text REFERENCES users(id) ON DELETE SET NULL,
+      verified_at timestamptz,
+      verification_notes text,
+      rejected_by_id text REFERENCES users(id) ON DELETE SET NULL,
+      rejected_at timestamptz,
+      rejection_reason text,
+      admin_override_by_id text REFERENCES users(id) ON DELETE SET NULL,
+      admin_override_justification text,
+      status_valid_through timestamptz,
+      next_affirmation_due timestamptz,
+      closeout_deadline timestamptz,
+      is_active boolean NOT NULL DEFAULT true,
+      is_archived boolean NOT NULL DEFAULT false,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`,
+    `CREATE TABLE IF NOT EXISTS certification_official_records (
+      id text PRIMARY KEY,
+      certification_record_id text NOT NULL REFERENCES certification_records(id) ON DELETE CASCADE,
+      organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      title text NOT NULL,
+      record_type text NOT NULL,
+      status text NOT NULL DEFAULT 'active',
+      effective_date timestamptz,
+      description text,
+      confidentiality_classification text DEFAULT 'controlled',
+      is_required boolean NOT NULL DEFAULT false,
+      file_key text,
+      file_name text,
+      file_mime_type text,
+      file_size_bytes integer,
+      file_checksum text,
+      uploaded_by_id text REFERENCES users(id) ON DELETE SET NULL,
+      uploaded_at timestamptz NOT NULL DEFAULT now(),
+      archived_by_id text REFERENCES users(id) ON DELETE SET NULL,
+      archived_at timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`,
+    `CREATE TABLE IF NOT EXISTS certification_scope_snapshots (
+      id text PRIMARY KEY,
+      certification_record_id text NOT NULL REFERENCES certification_records(id) ON DELETE CASCADE,
+      organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      scope_name text NOT NULL,
+      cage_codes text[] NOT NULL DEFAULT '{}',
+      locations jsonb DEFAULT '[]',
+      cui_assets jsonb DEFAULT '[]',
+      security_protection_assets jsonb DEFAULT '[]',
+      contractor_risk_managed_assets jsonb DEFAULT '[]',
+      specialized_assets jsonb DEFAULT '[]',
+      external_service_providers jsonb DEFAULT '[]',
+      network_diagram_file_key text,
+      cui_data_flow_diagram_file_key text,
+      ssp_version text,
+      scope_approval_date timestamptz,
+      scope_notes text,
+      created_by_id text REFERENCES users(id) ON DELETE SET NULL,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`,
+    `CREATE TABLE IF NOT EXISTS certification_affirmations (
+      id text PRIMARY KEY,
+      certification_record_id text NOT NULL REFERENCES certification_records(id) ON DELETE CASCADE,
+      organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      affirmation_number integer NOT NULL DEFAULT 1,
+      due_date timestamptz NOT NULL,
+      status text NOT NULL DEFAULT 'Not Started',
+      affirming_official text,
+      preparation_owner_id text REFERENCES users(id) ON DELETE SET NULL,
+      submitted_date timestamptz,
+      submission_reference text,
+      notes text,
+      supporting_document_file_key text,
+      supporting_document_name text,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`,
+    `CREATE TABLE IF NOT EXISTS certification_change_impact (
+      id text PRIMARY KEY,
+      certification_record_id text NOT NULL REFERENCES certification_records(id) ON DELETE CASCADE,
+      organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      change_title text NOT NULL,
+      change_date timestamptz NOT NULL,
+      description text NOT NULL,
+      system_service_affected text,
+      scope_impact text,
+      cui_impact text,
+      controls_affected text[] DEFAULT '{}',
+      ssp_update_required boolean DEFAULT false,
+      diagram_update_required boolean DEFAULT false,
+      provider_esp_change boolean DEFAULT false,
+      cage_location_change boolean DEFAULT false,
+      reassessment_considered boolean DEFAULT false,
+      external_clarification_required boolean DEFAULT false,
+      impact_decision text,
+      decision_owner_id text REFERENCES users(id) ON DELETE SET NULL,
+      approved_by_id text REFERENCES users(id) ON DELETE SET NULL,
+      approved_at timestamptz,
+      evidence_file_key text,
+      notes text,
+      status text NOT NULL DEFAULT 'open',
+      created_by_id text REFERENCES users(id) ON DELETE SET NULL,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`,
+    `CREATE TABLE IF NOT EXISTS certification_poam_closeout (
+      id text PRIMARY KEY,
+      certification_record_id text NOT NULL REFERENCES certification_records(id) ON DELETE CASCADE,
+      organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      title text NOT NULL,
+      description text,
+      linked_poam_id text,
+      owner_id text REFERENCES users(id) ON DELETE SET NULL,
+      due_date timestamptz,
+      milestone text,
+      evidence_required text,
+      evidence_file_key text,
+      notes text,
+      status text NOT NULL DEFAULT 'Open',
+      scheduled_closeout_assessment_date timestamptz,
+      closeout_result text,
+      created_by_id text REFERENCES users(id) ON DELETE SET NULL,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`,
+    `CREATE TABLE IF NOT EXISTS certification_recertification_milestones (
+      id text PRIMARY KEY,
+      certification_record_id text NOT NULL REFERENCES certification_records(id) ON DELETE CASCADE,
+      organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      milestone_name text NOT NULL,
+      sort_order integer NOT NULL DEFAULT 0,
+      due_date timestamptz,
+      status text NOT NULL DEFAULT 'not_started',
+      owner_id text REFERENCES users(id) ON DELETE SET NULL,
+      linked_work text,
+      notes text,
+      evidence_file_key text,
+      completed_at timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`,
+    `CREATE TABLE IF NOT EXISTS certification_history (
+      id text PRIMARY KEY,
+      certification_record_id text NOT NULL REFERENCES certification_records(id) ON DELETE CASCADE,
+      organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      event_type text NOT NULL,
+      event_title text NOT NULL,
+      description text,
+      previous_state text,
+      new_state text,
+      performed_by_id text REFERENCES users(id) ON DELETE SET NULL,
+      performed_by_name text,
+      metadata jsonb DEFAULT '{}',
+      occurred_at timestamptz NOT NULL DEFAULT now()
+    )`,
+  ];
+  for (const stmt of migrations) {
+    try {
+      await db.execute(sql.raw(stmt));
+    } catch (_e) {
+      // Already exists — safe to ignore
+    }
+  }
+}
+
 export async function runStartupSeed() {
   try {
     await migrateSsoTable();
     await migrateFaqTable();
     await migrateMicrosoftSsoColumns();
+    await migrateCertificationTables();
     await migrateBreakGlassColumns();
     await migrateAuditEnum();
     await seedDomainControls();
