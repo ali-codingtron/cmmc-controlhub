@@ -242,6 +242,7 @@ router.get("/controls", requireAuth, requireOrg, async (req, res) => {
   const result = controls.map((c) => ({
     ...c,
     status: c.status ?? "not_started",
+    hasNarrative: !!(c.implementationNarrative?.trim()),
     evidenceCount: evidenceCounts[c.id] ?? 0,
     approvedEvidenceCount: evidenceCounts[`approved_${c.id}`] ?? 0,
     openTaskCount: taskCounts[c.id] ?? 0,

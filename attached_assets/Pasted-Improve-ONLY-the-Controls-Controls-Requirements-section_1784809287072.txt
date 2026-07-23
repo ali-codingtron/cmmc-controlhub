@@ -1,0 +1,864 @@
+Improve ONLY the Controls / Controls & Requirements section by adding multiple useful views.
+
+Current issue:
+
+The Controls page currently presents one flat list of all controls. The list is useful for detailed searching, but it is not the easiest way for regular users to understand:
+
+- progress by security domain
+- which controls need attention
+- which controls have evidence
+- which controls have complete narratives
+- which controls have monitoring or POA&M issues
+- how requirements are grouped when multiple compliance packages are selected
+
+Goal:
+
+Add several selectable views that use the same existing organization-specific control data.
+
+Do not create duplicate controls.
+
+Do not change any current:
+
+- control status
+- implementation narrative
+- evidence mapping
+- SSP narrative
+- monitoring record
+- POA&M record
+- owner
+- organization package assignment
+- production data
+
+This is primarily a Controls-section user-interface and query enhancement.
+
+====================================================================
+1. PAGE NAME AND PURPOSE
+====================================================================
+
+Keep the sidebar label:
+
+Controls
+
+Use the page title:
+
+Controls & Requirements
+
+Subtitle:
+
+“Review implementation progress, supporting evidence, monitoring, SSP coverage, and remediation status across the organization’s selected compliance packages.”
+
+If the organization only uses CMMC, the page may continue to display CMMC terminology.
+
+If the organization uses multiple frameworks, display:
+
+- CMMC controls
+- NIST requirements
+- assessment objectives
+- DFARS obligations
+- custom requirements
+
+using the selected organization packages.
+
+====================================================================
+2. ADD A VIEW SWITCHER
+====================================================================
+
+At the top-right of the Controls page, add a clear view switcher.
+
+Primary views:
+
+- Domain Overview
+- Detailed Table
+- Readiness Matrix
+- Attention Needed
+
+Conditional view:
+
+- Package View
+
+Only display Package View if the organization has more than one compliance package or framework assigned.
+
+Use icons and labels.
+
+Example:
+
+[Domain Overview] [Table] [Matrix] [Attention Needed] [Package View]
+
+Default:
+
+Domain Overview
+
+Allow the user to save their preferred view.
+
+Persist the selected view:
+
+- per user
+- per organization
+
+Also include the view in the URL.
+
+Examples:
+
+/controls?view=domains
+/controls?view=table
+/controls?view=matrix
+/controls?view=attention
+/controls?view=packages
+
+Browser Back should preserve the prior view and filters.
+
+====================================================================
+3. SHARED FILTERS ACROSS ALL VIEWS
+====================================================================
+
+Use one consistent filter bar across the views.
+
+Filters:
+
+- Search
+- Framework / Package
+- Security Domain / Family
+- Level
+- Status
+- Owner
+- Evidence Coverage
+- Monitoring Status
+- POA&M Status
+- SSP Coverage
+- Applicability
+- My Assigned Controls
+- Clear Filters
+
+Search should match:
+
+- control or requirement ID
+- title
+- requirement text
+- implementation narrative
+- owner
+- linked package
+
+Filters should apply consistently in all views.
+
+Example:
+
+A user selects:
+
+Domain = Access Control
+Status = In Progress
+
+Then switches from Domain Overview to Detailed Table.
+
+The filters should remain active.
+
+====================================================================
+4. DOMAIN OVERVIEW — DEFAULT VIEW
+====================================================================
+
+Create a professional card-based view grouped by security domain or requirement family.
+
+For CMMC Level 2 / NIST SP 800-171 Revision 2, show domain cards such as:
+
+- AC — Access Control
+- AT — Awareness and Training
+- AU — Audit and Accountability
+- CM — Configuration Management
+- IA — Identification and Authentication
+- IR — Incident Response
+- MA — Maintenance
+- MP — Media Protection
+- PE — Physical Protection
+- PS — Personnel Security
+- RA — Risk Assessment
+- CA — Security Assessment
+- SC — System and Communications Protection
+- SI — System and Information Integrity
+
+For NIST SP 800-171 Revision 3, use the families applicable to that package.
+
+For DFARS packages, do not represent obligations as CMMC security domains. Use obligation-group cards instead.
+
+====================================================================
+5. DOMAIN CARD CONTENT
+====================================================================
+
+Each domain card should show:
+
+- domain code
+- full domain name
+- applicable control count
+- implemented count
+- in-progress count
+- not-started count
+- at-risk count
+- not-applicable count
+- implementation completion percentage
+- controls with current evidence
+- controls without evidence
+- overdue monitoring count
+- open POA&M count
+- next recommended action
+
+Example:
+
+AC — Access Control
+
+18 of 22 Implemented
+82% Complete
+
+Status:
+- Implemented: 18
+- In Progress: 2
+- Not Started: 1
+- At Risk: 1
+
+Evidence:
+19 of 22 controls supported
+
+Monitoring:
+1 overdue item
+
+POA&M:
+2 open items
+
+Button:
+
+Open Access Control
+
+Use a progress bar and compact status indicators.
+
+Do not overload the card with every metric. The card should remain readable.
+
+====================================================================
+6. DOMAIN CARD COLORS
+====================================================================
+
+Use professional, restrained colors.
+
+Recommended:
+
+Green:
+All applicable controls implemented and no significant gaps.
+
+Blue:
+Work is progressing and no critical issue exists.
+
+Amber:
+Evidence, monitoring, or remediation attention is needed.
+
+Red:
+At-risk controls, overdue critical monitoring, or high-risk POA&M exists.
+
+Slate:
+Not started or insufficient data.
+
+Do not determine card color only from one percentage.
+
+Use the domain’s most significant active issue.
+
+Add a tooltip explaining why the card has its current status.
+
+====================================================================
+7. DOMAIN DETAIL VIEW
+====================================================================
+
+Clicking a domain card should open a focused Domain Detail view.
+
+Example route:
+
+/controls/domain/AC
+
+Header:
+
+Access Control
+
+Show:
+
+- domain description
+- overall progress
+- applicable controls
+- evidence coverage
+- monitoring status
+- open POA&M
+- owners
+- selected package badges
+
+Sections:
+
+A. Summary
+
+B. Controls in This Domain
+
+C. Attention Required
+
+D. Evidence Coverage
+
+E. Monitoring and POA&M
+
+Controls in This Domain should use the improved detailed table.
+
+Add:
+
+Back to Domain Overview
+
+Browser Back should return to the same scroll position.
+
+====================================================================
+8. DETAILED TABLE VIEW
+====================================================================
+
+Keep the existing table concept, but improve it.
+
+Recommended columns:
+
+- Requirement ID
+- Title
+- Domain / Family
+- Package
+- Level
+- Owner
+- Status
+- Narrative
+- Evidence
+- Monitoring
+- POA&M
+- SSP
+- Last Updated
+- Actions
+
+Column meanings:
+
+Narrative:
+- Complete
+- Missing
+- Needs Review
+
+Evidence:
+- current evidence count
+- approved/current evidence indicator
+- stale/pending warning
+
+Monitoring:
+- Current
+- Due Soon
+- Overdue
+- None Required
+
+POA&M:
+- open count
+- high-risk warning
+
+SSP:
+- narrative present
+- missing
+- mismatch/needs review if that logic already exists
+
+Add a column chooser so users can hide unnecessary columns.
+
+Add density options:
+
+- Comfortable
+- Compact
+
+Add row actions:
+
+- Open Control
+- View Evidence
+- View Monitoring
+- View POA&M
+
+Only show actions allowed by the current user’s role.
+
+====================================================================
+9. READINESS MATRIX VIEW
+====================================================================
+
+Create a matrix optimized for compliance managers and reviewers.
+
+Each row represents one control or requirement.
+
+Columns:
+
+- Requirement ID
+- Status
+- Implementation Narrative
+- Configure Steps
+- Evidence
+- Monitoring
+- SSP
+- POA&M
+- Owner
+- Overall Attention
+
+Use compact status cells.
+
+Example:
+
+| Control | Status | Narrative | Steps | Evidence | Monitoring | SSP | POA&M |
+| AC.L1-3.1.1 | Implemented | Complete | 8/8 | 6 Current | Current | Present | None |
+
+Status cell meanings:
+
+Green:
+Complete/current
+
+Amber:
+Partial, pending review, due soon, or needs attention
+
+Red:
+Missing, overdue, high-risk, or blocked
+
+Gray:
+Not applicable or not required
+
+Each cell should be clickable.
+
+Examples:
+
+Click Evidence cell:
+Open that control’s Evidence tab.
+
+Click Monitoring:
+Open linked monitoring items.
+
+Click SSP:
+Open that control’s SSP tab.
+
+Click POA&M:
+Open linked POA&M items.
+
+Add legend:
+
+- Complete / Current
+- Partial / Pending
+- Missing / Overdue
+- Not Required
+
+====================================================================
+10. MATRIX VIEW FILTERS
+====================================================================
+
+Add quick matrix filters:
+
+- Show All
+- Missing Narratives
+- Missing Evidence
+- Pending Evidence
+- Stale Evidence
+- Overdue Monitoring
+- Open POA&M
+- High-Risk POA&M
+- Missing SSP Narrative
+- Ready for Review
+
+Allow export of the current matrix as XLSX if the existing report/export system supports it.
+
+Do not add CSV.
+
+====================================================================
+11. ATTENTION NEEDED VIEW
+====================================================================
+
+Create a work-focused view containing only controls that need action.
+
+Group controls by issue type:
+
+- Missing Implementation Narrative
+- No Current Evidence
+- Evidence Pending Review
+- Stale Evidence
+- Configure Steps Incomplete
+- Overdue Monitoring
+- Open POA&M
+- High-Risk POA&M
+- Missing SSP Narrative
+- Control Status Inconsistency
+- No Assigned Owner
+
+At the top, show issue summary cards.
+
+Example:
+
+No Current Evidence: 12
+Overdue Monitoring: 3
+Open High-Risk POA&M: 2
+Missing SSP Narratives: 5
+
+Each issue card filters the results.
+
+====================================================================
+12. ATTENTION ITEM CONTENT
+====================================================================
+
+Each attention item should show:
+
+- control ID
+- control title
+- domain
+- package
+- owner
+- current status
+- issue
+- why it matters
+- recommended next action
+- button to resolve/open the correct tab
+
+Example:
+
+IA.L2-3.5.3 — Multifactor Authentication
+
+Issue:
+Current evidence is missing.
+
+Why it matters:
+The implementation narrative states MFA is enforced, but no current approved evidence is linked.
+
+Recommended action:
+Upload or link an MFA registration report and Conditional Access policy evidence.
+
+Button:
+Open Evidence Tab
+
+Do not automatically change control status.
+
+====================================================================
+13. PACKAGE VIEW
+====================================================================
+
+Show Package View only when the organization has multiple packages.
+
+Group requirements by:
+
+- CMMC
+- NIST SP 800-171
+- NIST SP 800-171A
+- DFARS
+- FAR
+- Custom
+
+Each package card should show:
+
+- package name
+- version
+- requirement count
+- implementation progress
+- evidence coverage
+- gaps
+- linked crosswalk
+- Open Package button
+
+For equivalent package requirements:
+
+- use the canonical logical requirement where available
+- display package aliases
+- do not create duplicate control progress or evidence counts
+
+Example:
+
+Canonical Requirement 3.1.1
+
+Badges:
+- CMMC AC.L1-3.1.1
+- NIST R2 3.1.1
+
+One implementation status
+One evidence set
+One SSP narrative
+
+For DFARS:
+
+Show contract obligations separately.
+
+Do not label DFARS obligations as equivalent controls.
+
+====================================================================
+14. “MY ASSIGNED CONTROLS” AS A FILTER
+====================================================================
+
+Do not create a separate permanent view unless necessary.
+
+Add:
+
+My Assigned Controls
+
+as a quick filter.
+
+When enabled:
+
+- show controls where the current user is the owner
+- preserve the current selected view
+
+Examples:
+
+Domain Overview:
+Show only domains containing the user’s assigned controls.
+
+Detailed Table:
+Show only assigned rows.
+
+Attention Needed:
+Show only assigned issues.
+
+====================================================================
+15. OPTIONAL REVIEW MODE
+====================================================================
+
+Add a secondary control:
+
+Open Review Mode
+
+This should be useful for Reviewers and Assessor Read-Only users.
+
+Review Mode should show one control at a time with:
+
+- control ID and title
+- status
+- implementation narrative
+- evidence summary
+- SSP summary
+- monitoring summary
+- POA&M summary
+- Previous Control
+- Next Control
+
+Do not make Review Mode a primary default view.
+
+Do not allow editing for read-only roles.
+
+====================================================================
+16. VIEW-LEVEL SUMMARY
+====================================================================
+
+At the top of the Controls page, show a compact summary based on current filters.
+
+Example:
+
+110 Applicable Requirements
+
+- 82 Implemented
+- 17 In Progress
+- 6 Not Started
+- 5 At Risk
+
+Evidence Coverage:
+92 of 110
+
+Overdue Monitoring:
+3
+
+Open POA&M:
+7
+
+When filters are active, change the summary to reflect filtered records.
+
+Do not display counts unrelated to the current organization.
+
+====================================================================
+17. DEEP LINKING
+====================================================================
+
+Support direct URLs such as:
+
+/controls?view=domains&domain=AC
+/controls?view=table&status=IN_PROGRESS
+/controls?view=matrix&issue=MISSING_EVIDENCE
+/controls?view=attention&owner=me
+/controls?view=packages&package=NIST_800_171_R2
+
+This is important for:
+
+- dashboard links
+- reports
+- bookmarks
+- browser navigation
+- help documentation
+
+====================================================================
+18. ROLE BEHAVIOR
+====================================================================
+
+All roles with controls.view may switch among permitted views.
+
+Global Admin / Organization Admin:
+- view all controls
+- use authorized management actions
+
+Compliance Manager:
+- view all organization controls
+- use workflow actions allowed by permission matrix
+
+IT Contributor:
+- use views and update assigned work where permitted
+
+Reviewer:
+- use review and matrix views
+- review evidence/status where permitted
+
+Executive Viewer:
+- use Domain Overview and read-only table/matrix
+
+Assessor Read-Only:
+- use Domain Overview, Table, Matrix, and Review Mode
+- no add/edit/delete/status-change actions
+
+Demo Viewer:
+- read-only sample organization data
+
+Backend authorization remains required.
+
+====================================================================
+19. PERFORMANCE
+====================================================================
+
+The page may display 110 or more requirements.
+
+Avoid running one database query per control.
+
+Create aggregated organization-control summary queries for:
+
+- status counts
+- evidence counts
+- monitoring counts
+- POA&M counts
+- SSP coverage
+- owner assignments
+
+Use server-side pagination for the Detailed Table if needed.
+
+Use virtualized rendering for large matrix/package views if necessary.
+
+Cache only safe summary data and invalidate it when:
+
+- control status changes
+- evidence link changes
+- monitoring changes
+- POA&M changes
+- SSP mapping changes
+- owner changes
+
+====================================================================
+20. PRODUCTION DATA SAFETY
+====================================================================
+
+Do not:
+
+- modify existing control records
+- modify statuses
+- modify narratives
+- modify evidence mappings
+- modify SSP mappings
+- modify POA&M
+- modify monitoring records
+- modify framework package assignments
+- duplicate global controls
+- re-seed production organizations
+
+Allowed:
+
+- new view preferences
+- new UI components
+- new read-only summary queries
+- new safe URL/filter state
+- optional user display-preference records
+
+Before applying any schema change, provide a dry-run summary.
+
+====================================================================
+21. ACCEPTANCE TESTS
+====================================================================
+
+Test A — Default View:
+
+Open Controls.
+
+Expected:
+
+Domain Overview loads by default.
+
+Test B — Domain Cards:
+
+Each domain card shows:
+
+- status breakdown
+- completion percentage
+- evidence coverage
+- monitoring issues
+- open POA&M
+
+Test C — Domain Drilldown:
+
+Click Access Control.
+
+Expected:
+
+Access Control detail opens with only AC controls.
+
+Test D — View Switching:
+
+Apply Status = In Progress.
+
+Switch between Table, Matrix, and Attention Needed.
+
+Expected:
+
+Filter remains active.
+
+Test E — Matrix:
+
+Click an Evidence cell.
+
+Expected:
+
+The selected control opens on its Evidence tab.
+
+Test F — Attention Needed:
+
+Select Missing Evidence.
+
+Expected:
+
+Only controls lacking current evidence are shown.
+
+Test G — Package View:
+
+Organization has CMMC L2 and NIST Rev. 2.
+
+Expected:
+
+Both packages display without duplicating equivalent implementation records.
+
+Test H — My Assigned:
+
+Enable My Assigned Controls.
+
+Expected:
+
+Only controls owned by the current user appear.
+
+Test I — Assessor:
+
+Sign in as Assessor Read-Only.
+
+Expected:
+
+Views are available, but no edit/add/delete controls are shown or authorized.
+
+Test J — Production Safety:
+
+No existing production control, evidence, SSP, monitoring, POA&M, owner, or status data is changed.
+
+====================================================================
+22. MOST IMPORTANT DESIGN RULE
+====================================================================
+
+The views are different ways to display the same underlying organization-control data.
+
+Do not create separate control records, statuses, evidence links, or progress values for each view.
+
+Recommended user experience:
+
+- Domain Overview answers: “Where do we stand?”
+- Detailed Table answers: “Show me every requirement.”
+- Readiness Matrix answers: “What is complete or missing for each control?”
+- Attention Needed answers: “What should we work on next?”
+- Package View answers: “How do the selected frameworks compare?”

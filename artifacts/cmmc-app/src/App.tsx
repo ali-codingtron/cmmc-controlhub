@@ -14,6 +14,7 @@ import DemoApp from "@/pages/demo-app";
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
 import Controls from "@/pages/controls";
+import ControlDomain from "@/pages/controls-domain";
 import ControlDetail from "@/pages/control-detail";
 import Evidence from "@/pages/evidence";
 import EvidenceUpload from "@/pages/evidence-upload";
@@ -136,6 +137,9 @@ function AppRoutes() {
             <Switch>
               <Route path="/" component={Dashboard} />
               <Route path="/controls" component={Controls} />
+              <Route path="/controls/domain/:code">
+                {(params: { code: string }) => <ControlDomain code={params.code} />}
+              </Route>
               <Route path="/controls/:id">
                 {(params: { id: string }) => <ControlDetail id={params.id} />}
               </Route>
