@@ -491,7 +491,7 @@ router.get("/crosswalk", requireAuth, requireOrg, async (req, res) => {
       )
     );
 
-  if (orgPkgRows.length < 2) {
+  if (orgPkgRows.length < 1) {
     res.json([]);
     return;
   }
@@ -549,14 +549,51 @@ router.get("/crosswalk", requireAuth, requireOrg, async (req, res) => {
       .select()
       .from(requirementCrosswalkTable)
       .where(
-        and(
-          inArray(requirementCrosswalkTable.sourceRequirementId, reqIds),
-          inArray(requirementCrosswalkTable.targetRequirementId, reqIds)
-        )
+        inArray(requirementCrosswalkTable.sourceRequirementId, reqIds)
       );
   } catch {
     res.json([]);
     return;
+  }
+
+  // Load metadata for any target requirements not in org's packages (e.g. reference catalogs)
+  const missingTargetIds = [
+    ...new Set(
+      crosswalkRows
+        .map((cw) => cw.targetRequirementId)
+        .filter((id) => !reqMap[id])
+    ),
+  ];
+  if (missingTargetIds.length > 0) {
+    const extraReqs = await db
+      .select({
+        id: complianceRequirementsTable.id,
+        packageId: complianceRequirementsTable.packageId,
+        requirementKey: complianceRequirementsTable.requirementId,
+        title: complianceRequirementsTable.title,
+      })
+      .from(complianceRequirementsTable)
+      .where(inArray(complianceRequirementsTable.id, missingTargetIds));
+    for (const r of extraReqs) reqMap[r.id] = r;
+
+    const missingPkgIds = [
+      ...new Set(extraReqs.map((r) => r.packageId).filter((id) => !pkgMap[id])),
+    ];
+    if (missingPkgIds.length > 0) {
+      const extraPkgs = await db
+        .select({
+          id: compliancePackagesTable.id,
+          name: compliancePackagesTable.name,
+          frameworkShortName: complianceFrameworksTable.shortName,
+        })
+        .from(compliancePackagesTable)
+        .innerJoin(
+          complianceFrameworksTable,
+          eq(compliancePackagesTable.frameworkId, complianceFrameworksTable.id)
+        )
+        .where(inArray(compliancePackagesTable.id, missingPkgIds));
+      for (const p of extraPkgs) pkgMap[p.id] = p;
+    }
   }
 
   // Enrich with control assessment status, narrative, and domain

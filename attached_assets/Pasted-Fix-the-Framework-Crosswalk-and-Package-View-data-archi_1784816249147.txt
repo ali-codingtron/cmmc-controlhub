@@ -1,0 +1,751 @@
+Fix the Framework Crosswalk and Package View data architecture.
+
+Current production behavior:
+
+1. Framework Crosswalk returns:
+   “No crosswalk mappings between these packages”
+   when comparing:
+
+   NIST SP 800-171 Rev. 2
+   to
+   NIST SP 800-53 Rev. 4
+
+2. Controls > Package View shows:
+
+   - NIST SP 800-171 Rev. 2 — 110 Controls
+   - NIST SP 800-53 Rev. 4 — 0 Controls
+   - DFARS 252.204-7012 — 0 Controls
+
+This indicates that package assignments exist, but the required reference-control, crosswalk, and DFARS obligation data is either missing, incorrectly keyed, or being queried from the wrong tables.
+
+Goal:
+
+Correct the Framework Crosswalk and Package View without modifying existing organization implementation data.
+
+Do not change:
+
+- organization control statuses
+- implementation narratives
+- evidence
+- evidence mappings
+- SSP narratives
+- monitoring records
+- POA&M records
+- control owners
+- existing NIST SP 800-171 organization records
+- existing package assignments
+- any VTCCORP.US production data
+
+====================================================================
+1. RUN A READ-ONLY DIAGNOSTIC FIRST
+====================================================================
+
+Before changing data, inspect and report:
+
+Compliance packages:
+- package ID
+- package key
+- package name
+- version
+- package type
+- requirement count
+- enabled status
+
+Specifically inspect:
+
+- NIST SP 800-171 Rev. 2
+- NIST SP 800-53 Rev. 4
+- DFARS 252.204-7012
+
+Report:
+
+- number of ComplianceRequirement records for each package
+- number of DFARSObligation records for DFARS 252.204-7012
+- number of RequirementCrosswalk records between NIST 800-171 R2 and NIST 800-53 R4
+- number of organization package assignments for APEX Solutions
+- package IDs used by the dropdowns
+- package IDs used by crosswalk records
+- orphaned crosswalk records
+- duplicate package records
+- mismatched package keys
+- crosswalk rows whose source or target requirement no longer exists
+
+Also inspect the Framework Crosswalk API/query and identify whether it is querying:
+
+- global framework mappings
+- organization requirement statuses
+- organization package assignments
+- only controls that have organization status records
+
+The diagnostic must not modify production data.
+
+====================================================================
+2. CORRECT PACKAGE TYPES
+====================================================================
+
+Use clear package types:
+
+NIST SP 800-171 Rev. 2:
+
+package_type = IMPLEMENTATION_REQUIREMENTS
+
+NIST SP 800-53 Rev. 4:
+
+package_type = REFERENCE_CONTROL_CATALOG
+
+DFARS 252.204-7012:
+
+package_type = CONTRACT_OBLIGATIONS
+
+Do not treat all three as identical control packages.
+
+Package types should determine how each package is displayed.
+
+====================================================================
+3. NIST SP 800-171 REV. 2
+====================================================================
+
+Continue treating NIST SP 800-171 Rev. 2 as an implementation package.
+
+It should contain:
+
+- 110 security requirements
+- organization-specific status
+- implementation narrative
+- evidence
+- monitoring
+- POA&M
+- SSP mappings
+- owners
+
+Do not duplicate or recreate the existing 110 organization controls.
+
+Use the current records as the authoritative organization implementation records.
+
+====================================================================
+4. NIST SP 800-53 REV. 4
+====================================================================
+
+NIST SP 800-53 Rev. 4 should function as a reference control catalog unless the organization explicitly selects an implementation baseline.
+
+Do not show:
+
+0 Controls
+0% Complete
+
+as though it is an empty implementation framework.
+
+Instead show:
+
+NIST SP 800-53 Rev. 4
+Reference Control Catalog
+
+Suggested metrics:
+
+- 110 NIST 800-171 requirements mapped
+- X unique referenced 800-53 controls
+- X mapping relationships
+- 0 unmapped source requirements
+- Reference Only
+
+Do not calculate an implementation percentage for the full 800-53 catalog unless the organization has selected:
+
+- a specific 800-53 baseline
+- a custom 800-53 control subset
+- a contract-specific 800-53 implementation package
+
+If no baseline is selected, display:
+
+“Reference catalog — not independently assessed”
+
+====================================================================
+5. IMPORT THE OFFICIAL 800-171 R2 TO 800-53 R4 MAPPINGS
+====================================================================
+
+Populate the global crosswalk using the mappings in Appendix D of NIST SP 800-171 Rev. 2.
+
+Do not invent mappings.
+
+Use the official source-control mappings.
+
+Each NIST SP 800-171 requirement may map to:
+
+- one 800-53 control
+- multiple 800-53 controls
+- control enhancements where applicable
+
+Create normalized mapping records.
+
+Example model:
+
+RequirementCrosswalk
+- id
+- source_package_id
+- source_requirement_id
+- target_package_id
+- target_requirement_id
+- relationship_type
+- mapping_direction
+- source_type
+- source_reference
+- rationale
+- reviewed_date
+- status
+
+Use:
+
+relationship_type = SOURCE_CONTROL_MAPPING
+
+or:
+
+relationship_type = DERIVED_FROM
+
+Do not mark every relationship as Equivalent.
+
+Mapping source:
+
+Official
+
+Source reference:
+
+NIST SP 800-171 Rev. 2, Appendix D
+
+Mapping direction:
+
+NIST SP 800-171 requirement
+→ NIST SP 800-53 Rev. 4 source control
+
+Enforce uniqueness:
+
+source_requirement_id
++
+target_requirement_id
++
+relationship_type
+
+Do not create duplicate rows.
+
+====================================================================
+6. USE GLOBAL CROSSWALK DATA
+====================================================================
+
+Framework Crosswalk must use global mapping data.
+
+It should not require the organization to have separate implementation-status records for every target reference control.
+
+Correct behavior:
+
+APEX Solutions has NIST 800-171 Rev. 2 assigned.
+
+NIST 800-53 Rev. 4 is enabled as a reference catalog.
+
+The crosswalk should still display the official mappings, even if APEX Solutions is not independently implementing the complete 800-53 catalog.
+
+Organization-specific readiness should be overlaid separately.
+
+The crosswalk query should:
+
+1. Resolve Package A.
+2. Resolve Package B.
+3. Load global mappings between the package IDs.
+4. Load source and target requirement/control metadata.
+5. Optionally overlay organization implementation status.
+6. Return mapping rows.
+
+Do not filter out a global mapping merely because the target control has no OrganizationRequirementStatus record.
+
+====================================================================
+7. FIX PACKAGE ID AND VERSION MATCHING
+====================================================================
+
+Use stable package keys, not display names.
+
+Recommended keys:
+
+NIST_800_171_R2
+NIST_800_53_R4
+DFARS_252_204_7012
+
+Do not join packages using labels such as:
+
+“NIST SP 800-171 Rev. 2”
+“NIST 800-171 R2”
+“NIST 800-171 Rev 2”
+
+Normalize aliases during import, but store one canonical key.
+
+Verify that:
+
+- dropdown package ID
+- requirement package ID
+- crosswalk source package ID
+- crosswalk target package ID
+- organization package ID
+
+all resolve to the same canonical records.
+
+Do not create duplicate package records merely because the names differ slightly.
+
+====================================================================
+8. IMPROVE THE CROSSWALK SUMMARY
+====================================================================
+
+When comparing:
+
+NIST SP 800-171 Rev. 2
+to
+NIST SP 800-53 Rev. 4
+
+Show summary cards:
+
+- Source Requirements: 110
+- Source Requirements Mapped: 110
+- Mapping Relationships: X
+- Unique Target Controls: X
+- Unmapped Source Requirements: 0
+- Mapping Source: Official
+- Mapping Type: Source Control Mapping
+
+Add an informational callout:
+
+“NIST SP 800-171 Rev. 2 requirements were derived from selected NIST SP 800-53 Rev. 4 controls. A single 800-171 requirement may map to multiple 800-53 controls. These mappings provide traceability and do not mean the organization is implementing the entire 800-53 catalog.”
+
+Do not show:
+
+100% implementation reuse
+
+unless comparing equivalent implementation frameworks such as CMMC Level 2 and NIST SP 800-171 Rev. 2.
+
+====================================================================
+9. FIX REQUIREMENT MAPPING TABLE
+====================================================================
+
+For NIST 800-171 to 800-53, table columns should be:
+
+- NIST 800-171 Requirement
+- Requirement Title
+- 800-53 Source Controls
+- Relationship
+- Mapping Source
+- Organization Status
+- Evidence Coverage
+- Actions
+
+Display multiple target controls in the same row or allow row expansion.
+
+Example pattern:
+
+3.1.1
+Limit system access to authorized users, processes, and devices
+
+Mapped 800-53 controls:
+AC-2
+AC-3
+AC-17
+
+Relationship:
+Source Control Mapping
+
+Source:
+Official — Appendix D
+
+Do not require one visible duplicate source row for every target control unless the user selects:
+
+Expanded Mapping View
+
+Views:
+
+- Grouped by 800-171 Requirement
+- Expanded Relationship Rows
+
+Default:
+
+Grouped
+
+====================================================================
+10. CLICKABLE MAPPING DETAILS
+====================================================================
+
+Clicking a mapping should open a detail drawer.
+
+Show:
+
+Source Requirement:
+- package
+- requirement ID
+- title
+- requirement text
+- organization status
+- evidence coverage
+
+Target Control:
+- NIST 800-53 control ID
+- title
+- family
+- control text or summary
+- reference status
+
+Mapping:
+- relationship type
+- source publication
+- source appendix/table
+- rationale
+- official/curated status
+
+Important:
+
+Do not imply that the target 800-53 control is fully implemented merely because the 800-171 requirement is implemented.
+
+Show:
+
+“Implementation status is recorded against the active 800-171 requirement. The 800-53 control is shown as a source-control reference.”
+
+====================================================================
+11. FIX THE EMPTY STATE
+====================================================================
+
+The current empty state says:
+
+“No crosswalk mappings between these packages.”
+
+Replace it with more diagnostic empty states.
+
+A. Mapping Dataset Not Installed:
+
+“Crosswalk data has not been loaded for these packages.”
+
+B. No Official Mapping Exists:
+
+“No supported mapping is currently available for this package comparison.”
+
+C. Package Data Incomplete:
+
+“The target reference catalog is incomplete or unavailable.”
+
+D. No Organization Package Access:
+
+“This package is not enabled for the selected organization.”
+
+Add an admin-only diagnostic reference or error code.
+
+Do not tell normal users to randomly choose different packages when an official mapping should exist.
+
+====================================================================
+12. FIX THE PACKAGE VIEW
+====================================================================
+
+Package View must render cards according to package type.
+
+A. Implementation Requirement Package:
+
+Example:
+NIST SP 800-171 Rev. 2
+
+Show:
+- Requirements
+- Implemented
+- In Progress
+- Not Started
+- At Risk
+- Evidence Coverage
+- Readiness Percentage
+
+B. Reference Control Catalog:
+
+Example:
+NIST SP 800-53 Rev. 4
+
+Show:
+- Reference Catalog
+- Mapped Source Requirements
+- Unique Referenced Controls
+- Mapping Relationships
+- Unmapped Requirements
+- Open Crosswalk
+
+Do not show implementation percentage unless a baseline is active.
+
+C. Contract Obligation Package:
+
+Example:
+DFARS 252.204-7012
+
+Show:
+- Contract Obligations
+- Ready
+- Needs Attention
+- Not Started
+- Required Evidence
+- Open Obligations
+
+Button:
+Open DFARS Obligations
+
+Do not show “0 Controls.”
+
+====================================================================
+13. FIX DFARS 252.204-7012 DISPLAY
+====================================================================
+
+DFARS 252.204-7012 must use DFARSObligation records.
+
+Populate or verify obligation groups such as:
+
+- Adequate Security / NIST SP 800-171 Implementation
+- Cyber Incident Reporting
+- Malicious Software Submission
+- Media Preservation
+- Additional Information and Access
+- Subcontractor Flowdown
+- External Service Provider Responsibilities
+- Incident Report Number Flowdown
+- CUI/CDI Handling and Scope
+- Contract-Specific Variance/Approval Tracking
+
+Do not turn these into ordinary NIST controls.
+
+The Package View card should display:
+
+DFARS 252.204-7012
+Contract Obligation Package
+
+Example metrics:
+
+- 9 Obligations
+- 6 Ready
+- 2 In Progress
+- 1 Needs Attention
+
+Use actual seeded obligation counts.
+
+====================================================================
+14. PACKAGE ASSIGNMENT BEHAVIOR
+====================================================================
+
+Assigning a package to an organization should behave according to package type.
+
+IMPLEMENTATION_REQUIREMENTS:
+
+- create OrganizationRequirementStatus records
+
+REFERENCE_CONTROL_CATALOG:
+
+- do not create implementation statuses for every catalog control
+- enable reference and crosswalk access
+- create statuses only if a baseline/subset is explicitly selected
+
+CONTRACT_OBLIGATIONS:
+
+- create OrganizationObligationStatus records
+- do not create ordinary control records
+
+Do not create empty control packages.
+
+====================================================================
+15. ADMIN DATA HEALTH CHECK
+====================================================================
+
+Add an admin-only diagnostic:
+
+Framework Data Health
+
+For every package show:
+
+- package key
+- package type
+- requirement/control count
+- obligation count
+- crosswalk source count
+- crosswalk target count
+- organization assignments
+- missing references
+- duplicate IDs
+- orphaned mappings
+- status
+
+Health statuses:
+
+- Healthy
+- Missing Requirements
+- Missing Obligations
+- Missing Crosswalk
+- Orphaned Mappings
+- Duplicate Package
+- Version Conflict
+
+Add:
+
+Validate Framework Data
+
+This is read-only by default.
+
+Do not auto-repair production data without confirmation.
+
+====================================================================
+16. REPAIR / SEED SCRIPT
+====================================================================
+
+Create an idempotent script:
+
+pnpm seed:framework-crosswalks
+
+It should:
+
+- resolve canonical package records
+- import official NIST 800-171 R2 to 800-53 R4 mappings
+- create missing reference-control records
+- avoid duplicates
+- preserve existing custom mappings
+- update official mappings only when source version changes
+- report inserted, updated, skipped, and conflicting rows
+
+Add a dry-run mode:
+
+pnpm seed:framework-crosswalks --dry-run
+
+Dry run should show:
+
+- packages resolved
+- reference controls to create
+- mappings to create
+- mappings to update
+- conflicts
+- duplicate records
+- no database changes
+
+Do not run the non-dry-run production seed until the dry-run is reviewed.
+
+====================================================================
+17. DO NOT DUPLICATE ORGANIZATION IMPLEMENTATION DATA
+====================================================================
+
+Do not create separate implementation narratives and evidence collections for:
+
+- NIST 800-171 requirement 3.1.1
+- its mapped 800-53 controls
+
+unless the organization explicitly selects an 800-53 baseline for independent implementation.
+
+The mapped 800-53 controls are reference/source controls by default.
+
+Continue storing organization readiness against the active implementation package.
+
+====================================================================
+18. PRODUCTION SAFETY
+====================================================================
+
+Do not modify:
+
+- existing APEX Solutions NIST 800-171 statuses
+- implementation narratives
+- evidence
+- evidence mappings
+- monitoring
+- POA&M
+- SSP
+- owners
+- package selections
+- VTCCORP.US
+- Carme Tech
+
+Allowed:
+
+- reference control records
+- global crosswalk rows
+- DFARS obligation definitions
+- corrected package-type metadata
+- read-only display queries
+- package-specific card components
+- diagnostic reports
+
+If changing existing package_type values affects data behavior, provide a dry-run impact report first.
+
+====================================================================
+19. ACCEPTANCE TESTS
+====================================================================
+
+Test A:
+
+Compare:
+
+NIST SP 800-171 Rev. 2
+to
+NIST SP 800-53 Rev. 4
+
+Expected:
+
+- mappings are displayed
+- 110 source requirements are represented
+- source requirements may map to multiple target controls
+- no incorrect “no mapping data” message
+
+Test B:
+
+Open Package View.
+
+Expected:
+
+NIST SP 800-171 Rev. 2:
+- shows 110 implementation requirements and current progress
+
+NIST SP 800-53 Rev. 4:
+- shows Reference Catalog
+- shows mapped source requirements and unique target controls
+- does not show 0% implementation
+
+DFARS 252.204-7012:
+- shows Contract Obligations
+- does not show 0 Controls
+
+Test C:
+
+Click an 800-171 to 800-53 mapping.
+
+Expected:
+
+- mapping detail opens
+- official source is shown
+- target control is identified as a source/reference control
+- no false target implementation status is asserted
+
+Test D:
+
+Use the Framework Data Health diagnostic.
+
+Expected:
+
+- all package counts and mappings are visible
+- missing data is identified clearly
+
+Test E:
+
+Review existing APEX Solutions control data before and after.
+
+Expected:
+
+- no status, narrative, evidence, monitoring, POA&M, or owner changes
+
+Test F:
+
+Review VTCCORP.US.
+
+Expected:
+
+- no data change
+
+====================================================================
+20. MOST IMPORTANT DESIGN RULE
+====================================================================
+
+Different package types must not be treated identically.
+
+NIST SP 800-171 Rev. 2:
+Implementation Requirements
+
+NIST SP 800-53 Rev. 4:
+Reference Control Catalog unless a baseline is explicitly selected
+
+DFARS 252.204-7012:
+Contract Obligations
+
+The crosswalk must use official global mappings and must not depend on the target reference catalog having organization implementation records.

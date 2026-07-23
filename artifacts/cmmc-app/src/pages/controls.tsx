@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useListControls, useListOrgPackages } from "@workspace/api-client-react";
 import { useOrg } from "@/context/OrgContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +15,7 @@ import {
   X, LayoutGrid, Table2, Grid3x3, AlertTriangle, Package2,
   CheckCircle2, Clock, Circle, XCircle, ChevronRight, Info,
   FileText, ShieldAlert, AlertCircle, Minus, BookOpen, SlidersHorizontal,
+  ArrowLeftRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -699,9 +701,48 @@ function AttentionNeeded({ controls }: { controls: Control[] }) {
 }
 
 function PackageView({ controls, activePackages }: { controls: Control[]; activePackages: any[] }) {
+  const { activeOrg } = useOrg();
+  const orgId = activeOrg?.id ?? "";
+
+  const hasDfars = activePackages.some((p: any) => p.packageType === "contract_clause");
+  const { data: dfarsObs = [] } = useQuery<any[]>({
+    queryKey: ["/api/dfars-obligations", orgId],
+    enabled: hasDfars && !!orgId,
+    queryFn: async () => {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch("/api/dfars-obligations", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "X-Organization-ID": orgId,
+        },
+      });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    staleTime: 60000,
+  });
+
+  const dfarsObsByPkg = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    for (const o of dfarsObs) {
+      if (!map[o.packageId]) map[o.packageId] = [];
+      map[o.packageId].push(o);
+    }
+    return map;
+  }, [dfarsObs]);
+
   const pkgGroups = useMemo(() => {
     return activePackages.map((pkg: any) => {
       const key: string = pkg.packageKey ?? "";
+      const isImplementation = L1_PACKAGE_KEYS.has(key);
+      const isDfars = pkg.packageType === "contract_clause";
+      if (isDfars) {
+        const obligations = dfarsObsByPkg[pkg.packageId] ?? [];
+        return { pkg, type: "dfars" as const, obligations };
+      }
+      if (!isImplementation) {
+        return { pkg, type: "reference" as const };
+      }
       const applicable = controls.filter((c) => {
         if (c.level === "L1") return L1_PACKAGE_KEYS.has(key);
         return L2_ONLY_PACKAGE_KEYS.has(key);
@@ -710,14 +751,82 @@ function PackageView({ controls, activePackages }: { controls: Control[]; active
       const atRisk = applicable.filter((c) => c.status === "at_risk").length;
       const withEvidence = applicable.filter((c) => (c.approvedEvidenceCount ?? 0) > 0).length;
       const pct = applicable.length > 0 ? Math.round((implemented / applicable.length) * 100) : 0;
-      return { pkg, applicable, implemented, atRisk, withEvidence, pct };
+      return { pkg, type: "implementation" as const, applicable, implemented, atRisk, withEvidence, pct };
     });
-  }, [controls, activePackages]);
+  }, [controls, activePackages, dfarsObsByPkg]);
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {pkgGroups.map(({ pkg, applicable, implemented, atRisk, withEvidence, pct }) => {
+        {pkgGroups.map((group) => {
+          if (group.type === "dfars") {
+            const { pkg, obligations } = group;
+            const compliant = obligations.filter((o: any) => o.status === "compliant").length;
+            const inProgress = obligations.filter((o: any) => o.status === "in_progress").length;
+            const pending = obligations.filter((o: any) => o.status === "pending" || o.status === "gap").length;
+            const total = obligations.length;
+            const pct = total > 0 ? Math.round((compliant / total) * 100) : 0;
+            const color: CardColor = pending > 0 ? "amber" : pct === 100 ? "green" : inProgress > 0 ? "blue" : "slate";
+            return (
+              <Card key={pkg.packageId} className={cn("border-l-4", colorBorder[color])}>
+                <CardContent className="pt-4 pb-3">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div>
+                      <Badge variant="outline" className="text-[10px] mb-1 bg-orange-50 text-orange-700 border-orange-200">
+                        Contract Clause
+                      </Badge>
+                      <p className="font-semibold text-sm">{pkg.packageName}</p>
+                    </div>
+                    <span className="text-lg font-bold text-muted-foreground">{pct}%</span>
+                  </div>
+                  <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden mb-3">
+                    <div className={cn("h-full rounded-full", colorBar[color])} style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                    <div><p className="font-semibold">{total}</p><p className="text-muted-foreground">Obligations</p></div>
+                    <div><p className="font-semibold text-green-700">{compliant}</p><p className="text-muted-foreground">Compliant</p></div>
+                    <div><p className={cn("font-semibold", pending > 0 ? "text-amber-700" : "")}>{pending}</p><p className="text-muted-foreground">Pending</p></div>
+                  </div>
+                  {inProgress > 0 && (
+                    <div className="text-xs text-muted-foreground text-center mt-1">{inProgress} in progress</div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          }
+
+          if (group.type === "reference") {
+            const { pkg } = group;
+            return (
+              <Card key={pkg.packageId} className={cn("border-l-4", colorBorder["slate"])}>
+                <CardContent className="pt-4 pb-3">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div>
+                      <Badge variant="outline" className={cn("text-[10px] mb-1",
+                        pkg.frameworkShortName?.startsWith("NIST") ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-slate-100 text-slate-600"
+                      )}>
+                        {pkg.frameworkShortName}
+                      </Badge>
+                      <p className="font-semibold text-sm">{pkg.packageName}</p>
+                    </div>
+                    <BookOpen className="h-4 w-4 text-muted-foreground mt-1 shrink-0" />
+                  </div>
+                  <div className="py-2 px-3 rounded-md bg-muted/40 text-xs text-muted-foreground mb-3 space-y-1">
+                    <p className="font-medium text-foreground/80">Reference Control Catalog</p>
+                    <p>Not independently assessed. Use the Crosswalk to see how your implementation requirements map to this catalog.</p>
+                  </div>
+                  <Link href="/crosswalk">
+                    <Button variant="outline" size="sm" className="w-full h-8 text-xs gap-1.5">
+                      <ArrowLeftRight className="h-3 w-3" />
+                      View in Crosswalk
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            );
+          }
+
+          const { pkg, applicable, implemented, atRisk, withEvidence, pct } = group;
           const color: CardColor = atRisk > 0 ? "red" : pct === 100 ? "green" : pct >= 50 ? "blue" : "slate";
           return (
             <Card key={pkg.packageId} className={cn("border-l-4", colorBorder[color])}>

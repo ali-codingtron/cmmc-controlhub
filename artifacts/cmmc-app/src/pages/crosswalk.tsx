@@ -468,8 +468,37 @@ export default function Crosswalk() {
     staleTime: 300000,
   });
 
+  // Fetch all packages globally to find reference catalogs not org-assigned
+  const { data: globalPackages = [] } = useQuery<any[]>({
+    queryKey: ["/api/packages"],
+    queryFn: async () => {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch("/api/packages", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    staleTime: 600000,
+  });
+
+  const REFERENCE_CATALOG_KEYS = new Set(["NIST_800_53_R4", "NIST_800_53_R5"]);
+  const orgPackageIds = new Set(activePackages.map((p: any) => p.packageId));
+  const referenceCatalogs = globalPackages
+    .filter((p: any) => REFERENCE_CATALOG_KEYS.has(p.packageKey) && !orgPackageIds.has(p.id))
+    .map((p: any) => ({
+      packageId: p.id,
+      packageKey: p.packageKey,
+      packageName: p.name,
+      packageType: p.packageType ?? "control_framework",
+      frameworkShortName: p.frameworkShortName ?? "NIST",
+      isActive: true,
+      isReferenceCatalog: true as const,
+    }));
+  const packageBOptions = [...activePackages, ...referenceCatalogs];
+
   const pkgAInfo = activePackages.find((p: any) => p.packageId === committedPkgAId);
-  const pkgBInfo = activePackages.find((p: any) => p.packageId === committedPkgBId);
+  const pkgBInfo = packageBOptions.find((p: any) => p.packageId === committedPkgBId);
 
   const pairFiltered = useMemo(() => {
     if (!committedPkgAId || !committedPkgBId) return crosswalk;
@@ -534,7 +563,7 @@ export default function Crosswalk() {
     );
   }
 
-  const fewPackages = activePackages.length < 2;
+  const fewPackages = packageBOptions.length < 2;
 
   function handleSwap() {
     const tmp = pendingPkgAId;
@@ -718,7 +747,7 @@ export default function Crosswalk() {
 
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">To Package B</label>
-                <Select value={pendingPkgBId} onValueChange={setPendingPkgBId}>
+                <Select value={pendingPkgBId} onValueChange={setPendingPkgBId} >
                   <SelectTrigger className="w-52">
                     <SelectValue placeholder="Select package B" />
                   </SelectTrigger>
@@ -726,6 +755,18 @@ export default function Crosswalk() {
                     {activePackages.map((p: any) => (
                       <SelectItem key={p.packageId} value={p.packageId}>{p.packageName}</SelectItem>
                     ))}
+                    {referenceCatalogs.length > 0 && (
+                      <>
+                        <div className="px-2 pt-2 pb-0.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-t mt-1">
+                          Reference Catalogs
+                        </div>
+                        {referenceCatalogs.map((p: any) => (
+                          <SelectItem key={p.packageId} value={p.packageId}>
+                            {p.packageName}
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -779,9 +820,11 @@ export default function Crosswalk() {
         <Card>
           <CardContent className="py-12 text-center">
             <GitCompare className="h-10 w-10 mx-auto mb-3 text-muted-foreground/40" />
-            <p className="font-medium text-muted-foreground">No crosswalk mappings between these packages</p>
+            <p className="font-medium text-muted-foreground">No crosswalk mappings for this pair</p>
             <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-              No mapping data exists between the selected packages. Try selecting different packages or check that your organization has the appropriate packages assigned.
+              {pkgBInfo?.isReferenceCatalog
+                ? `Official mapping data between ${pkgAInfo?.packageName ?? "Package A"} and ${pkgBInfo?.packageName ?? "Package B"} has not been loaded yet. An administrator can initialize the reference catalog crosswalk data to enable this comparison.`
+                : "No mapping data exists between the selected packages. Try selecting a different combination."}
             </p>
           </CardContent>
         </Card>
@@ -793,7 +836,7 @@ export default function Crosswalk() {
             <GitCompare className="h-10 w-10 mx-auto mb-3 text-muted-foreground/40" />
             <p className="font-medium text-muted-foreground">No crosswalk data available</p>
             <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-              No crosswalk mappings exist between the currently assigned packages. Crosswalk data is available when two packages share overlapping requirements.
+              No crosswalk mappings have been loaded for your assigned packages. If you are comparing to a reference catalog such as NIST 800-53, the official source control mapping data may need to be initialized by an administrator.
             </p>
           </CardContent>
         </Card>
