@@ -64,6 +64,7 @@ type Control = {
   hasNarrative: boolean;
   evidenceCount: number;
   approvedEvidenceCount: number;
+  pendingReviewEvidenceCount: number;
   openTaskCount: number;
   openPoamCount: number;
 };
@@ -599,7 +600,7 @@ const ISSUE_DEFS = [
   { key: "open_poam", label: "Open POA&M", color: "amber" as const, icon: AlertTriangle, test: (c: Control) => (c.openPoamCount ?? 0) > 0, why: "Open plan-of-action items indicate unresolved security gaps.", action: "Review POA&M milestones and close completed items." },
   { key: "missing_narrative", label: "Missing Narrative", color: "amber" as const, icon: BookOpen, test: (c: Control) => !c.hasNarrative && c.status !== "not_applicable" && c.status !== "not_started", why: "No implementation narrative has been written for this control.", action: "Document how the control is implemented in the narrative field." },
   { key: "needs_review", label: "Needs Review", color: "amber" as const, icon: AlertCircle, test: (c: Control) => c.status === "needs_review" || c.status === "assessor_ready", why: "The control is flagged for review before assessment.", action: "Review evidence and implementation status." },
-  { key: "pending_evidence", label: "Evidence Pending Review", color: "amber" as const, icon: FileText, test: (c: Control) => (c.evidenceCount ?? 0) > (c.approvedEvidenceCount ?? 0) && (c.evidenceCount ?? 0) > 0, why: "Evidence has been submitted but not yet reviewed and approved.", action: "Review pending evidence submissions." },
+  { key: "pending_evidence", label: "Evidence Pending Review", color: "amber" as const, icon: FileText, test: (c: Control) => (c.pendingReviewEvidenceCount ?? 0) > 0, why: "Evidence has been submitted but not yet reviewed and approved.", action: "Review pending evidence submissions." },
   { key: "not_started", label: "Not Started", color: "slate" as const, icon: Circle, test: (c: Control) => c.status === "not_started", why: "Implementation has not yet begun.", action: "Assign an owner and begin implementation." },
 ] as const;
 

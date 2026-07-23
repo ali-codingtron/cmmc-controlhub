@@ -208,6 +208,19 @@ router.get("/controls", requireAuth, requireOrg, async (req, res) => {
       )
       .groupBy(evidenceControlLinksTable.controlId);
 
+    const pendingReviewEvRows = await db
+      .select({ controlId: evidenceControlLinksTable.controlId, cnt: count() })
+      .from(evidenceControlLinksTable)
+      .innerJoin(evidenceItemsTable, eq(evidenceItemsTable.id, evidenceControlLinksTable.evidenceId))
+      .where(
+        and(
+          inArray(evidenceControlLinksTable.controlId, controlIds),
+          eq(evidenceItemsTable.status, "pending_review"),
+          orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined
+        )
+      )
+      .groupBy(evidenceControlLinksTable.controlId);
+
     const taskRows = await db
       .select({ controlId: taskControlLinksTable.controlId, cnt: count() })
       .from(taskControlLinksTable)
@@ -235,6 +248,7 @@ router.get("/controls", requireAuth, requireOrg, async (req, res) => {
 
     evRows.forEach((r) => { evidenceCounts[r.controlId] = Number(r.cnt); });
     approvedEvRows.forEach((r) => { evidenceCounts[`approved_${r.controlId}`] = Number(r.cnt); });
+    pendingReviewEvRows.forEach((r) => { evidenceCounts[`pending_${r.controlId}`] = Number(r.cnt); });
     taskRows.forEach((r) => { taskCounts[r.controlId] = Number(r.cnt); });
     poamRows.forEach((r) => { if (r.controlId) poamCounts[r.controlId] = Number(r.cnt); });
   }
@@ -245,6 +259,7 @@ router.get("/controls", requireAuth, requireOrg, async (req, res) => {
     hasNarrative: !!(c.implementationNarrative?.trim()),
     evidenceCount: evidenceCounts[c.id] ?? 0,
     approvedEvidenceCount: evidenceCounts[`approved_${c.id}`] ?? 0,
+    pendingReviewEvidenceCount: evidenceCounts[`pending_${c.id}`] ?? 0,
     openTaskCount: taskCounts[c.id] ?? 0,
     openPoamCount: poamCounts[c.id] ?? 0,
   }));

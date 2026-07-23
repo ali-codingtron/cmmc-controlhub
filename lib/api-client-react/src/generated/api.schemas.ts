@@ -380,6 +380,7 @@ export interface ControlWithStatus {
   status: ControlWithStatusStatus;
   evidenceCount: number;
   approvedEvidenceCount: number;
+  pendingReviewEvidenceCount: number;
   openTaskCount: number;
   openPoamCount: number;
   implementationNarrative?: string | null;
