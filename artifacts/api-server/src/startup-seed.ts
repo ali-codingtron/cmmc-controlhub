@@ -695,7 +695,7 @@ async function seedComplianceFrameworkHelpArticles() {
 
 async function seedCrosswalkRequirements() {
   // Check per-package so new packages can be seeded even if others already exist
-  const [cmmcL1Count, cmmcL2Count, nistR2Count, nistR3Count, dfars7012Count, farCount] = await Promise.all([
+  const [cmmcL1Count, cmmcL2Count, nistR2Count, nistR3Count, dfars7012Count, farCount, l1FarCrosswalkCount] = await Promise.all([
     db.select({ cnt: count() }).from(complianceRequirementsTable)
       .where(eq(complianceRequirementsTable.packageId, "pkg-cmmc-l1-self")),
     db.select({ cnt: count() }).from(complianceRequirementsTable)
@@ -708,6 +708,12 @@ async function seedCrosswalkRequirements() {
       .where(eq(complianceRequirementsTable.packageId, "pkg-dfars-7012")),
     db.select({ cnt: count() }).from(complianceRequirementsTable)
       .where(eq(complianceRequirementsTable.packageId, "pkg-far-52-204-21")),
+    db.select({ cnt: count() }).from(requirementCrosswalkTable)
+      .where(
+        sql`source_requirement_id IN (
+          SELECT id FROM compliance_requirements WHERE package_id = 'pkg-cmmc-l1-self'
+        )`
+      ),
   ]);
 
   const needCmmcL1 = Number(cmmcL1Count[0].cnt) === 0;
@@ -716,7 +722,8 @@ async function seedCrosswalkRequirements() {
   const needNistR3 = Number(nistR3Count[0].cnt) === 0;
   const needDfars7012 = Number(dfars7012Count[0].cnt) === 0;
   const needFar = Number(farCount[0].cnt) === 0;
-  const nothingToDo = !needCmmcL1 && !needCmmcL2 && !needNistR2 && !needNistR3 && !needDfars7012 && !needFar;
+  const needL1FarCrosswalk = Number(l1FarCrosswalkCount[0].cnt) === 0;
+  const nothingToDo = !needCmmcL1 && !needCmmcL2 && !needNistR2 && !needNistR3 && !needDfars7012 && !needFar && !needL1FarCrosswalk;
   if (nothingToDo) return;
 
   // Read active controls to derive requirements
@@ -776,6 +783,34 @@ async function seedCrosswalkRequirements() {
         createdAt: new Date(),
         updatedAt: new Date(),
       }).onConflictDoNothing();
+    }
+  }
+
+  // --- CMMC L1 ↔ FAR 52.204-21 crosswalk (equivalent) ---
+  // Both packages cover exactly the same 17 L1 practices; each requirement is equivalent.
+  if (needL1FarCrosswalk) {
+    const [l1Reqs, farReqs] = await Promise.all([
+      db.select({ id: complianceRequirementsTable.id, requirementId: complianceRequirementsTable.requirementId })
+        .from(complianceRequirementsTable)
+        .where(eq(complianceRequirementsTable.packageId, "pkg-cmmc-l1-self")),
+      db.select({ id: complianceRequirementsTable.id, requirementId: complianceRequirementsTable.requirementId })
+        .from(complianceRequirementsTable)
+        .where(eq(complianceRequirementsTable.packageId, "pkg-far-52-204-21")),
+    ]);
+    const farByKey: Record<string, string> = {};
+    for (const r of farReqs) farByKey[r.requirementId] = r.id;
+    for (const r of l1Reqs) {
+      const farId = farByKey[r.requirementId];
+      if (farId) {
+        await db.insert(requirementCrosswalkTable).values({
+          id: randomUUID(),
+          sourceRequirementId: r.id,
+          targetRequirementId: farId,
+          relationshipType: "equivalent",
+          notes: `${r.requirementId} — CMMC Level 1 ≡ FAR 52.204-21 (identical safeguarding requirement)`,
+          createdAt: new Date(),
+        }).onConflictDoNothing();
+      }
     }
   }
 
@@ -925,6 +960,7 @@ async function seedCrosswalkRequirements() {
       nistR2Reqs: needNistR2 ? nistControls.length : "skip",
       nistR3Reqs: needNistR3 ? nistControls.length : "skip",
       dfars7012Reqs: needDfars7012 ? 1 : "skip",
+      crosswalkL1Far: needL1FarCrosswalk ? l1Controls.length : "skip",
       crosswalkCmmcR2: (needCmmcL2 || needNistR2) ? nistControls.length : "skip",
       crosswalkR2R3: needNistR3 ? nistControls.length : "skip",
       crosswalkDfars7012Nist: needDfars7012 ? nistControls.length : "skip",

@@ -12,3 +12,4 @@
 - [Express 5 typecheck patterns](express5-typecheck-patterns.md) — req.params cast, async void handlers, inArray enum, archiver ESM import, logAudit metadata fields.
 - [Org-role auth architecture](org-role-auth.md) — users.role = global JWT role; organization_users.role = org-specific role; always use req.orgRole (set by requireOrg) for permission checks.
 - [Smart Evidence Mapping](smart-evidence-mapping.md) — local-only analysis engine (no external AI); controlsTable needs LEFT JOIN domainsTable for domain name; confidence tiers + scoring rules.
+- [CMMC L1 ↔ FAR 52.204-21 crosswalk](cmmc-l1-far-crosswalk.md) — 17 equivalent rows missing; nothingToDo guard in seedCrosswalkRequirements skipped them; fix pattern for adding future crosswalk pairs.
