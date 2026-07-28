@@ -463,7 +463,7 @@ export default function DemoLanding() {
               </p>
               <div className="flex flex-wrap gap-4 text-xs">
                 <a
-                  href="https://www.defense.gov/CMMC/"
+                  href="https://dodcio.defense.gov/CMMC/"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 transition-colors"
