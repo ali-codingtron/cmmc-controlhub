@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, ExternalLink } from "lucide-react";
+import { ArrowLeft, ExternalLink } from "lucide-react";
 import carmetechLogo from "@assets/Carme_Tech_Logo_Official_1779981155506.png";
 
 const CONSULTATION_HREF = "mailto:info@carmetechnology.com?subject=Control%20HUB%20Consultation%20Request";
@@ -11,7 +11,6 @@ const SYNC_THRESHOLD = 0.3;
 
 export default function DemoVideo() {
   const [, navigate] = useLocation();
-  const [isLoading, setIsLoading] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const syncingRef = useRef(false);
@@ -95,25 +94,6 @@ export default function DemoVideo() {
     };
   }, [syncAudioToVideo]);
 
-  const handleLaunchDemo = async () => {
-    setIsLoading(true);
-    try {
-      const res = await fetch("/api/auth/demo-login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      localStorage.setItem("auth_token", data.token);
-      if (data.demoOrgId) localStorage.setItem("cmmc_active_org_id", data.demoOrgId);
-      localStorage.setItem("isDemoMode", "true");
-      window.location.href = "/";
-    } catch {
-      /* silently fail */
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   return (
     <div className="min-h-screen" style={{ background: "#F8FAFC" }}>
@@ -207,14 +187,6 @@ export default function DemoVideo() {
               Control HUB · CMMC, NIST 800-171 &amp; DFARS Readiness Platform
             </span>
             <div className="flex gap-3">
-              <Button
-                onClick={handleLaunchDemo}
-                disabled={isLoading}
-                className="bg-blue-600 hover:bg-blue-700 text-white border-0 font-semibold h-9 px-5 text-sm"
-              >
-                {isLoading ? "Launching…" : "Launch Live Demo"}
-                {!isLoading && <ArrowRight className="h-4 w-4 ml-1.5" />}
-              </Button>
               <a
                 href={CONSULTATION_HREF}
                 className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md text-sm font-medium"

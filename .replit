@@ -50,3 +50,6 @@ MICROSOFT_CLIENT_SECRET = "sDj8Q~fTmBC2otBDN4itKRR4GOBvnVeCr7xm7aLZ"
 MICROSOFT_REDIRECT_URI = "https://controlhub.carmetechnology.com/api/pre-assessment/microsoft/callback"
 MICROSOFT_AUTHORITY = "https://login.microsoftonline.com/organizations"
 APP_BASE_URL = "https://controlhub.carmetechnology.com"
+
+[objectStorage]
+defaultBucketID = "replit-objstore-53b2ddf4-b6d9-43e9-b4f5-80395c7abcc5"

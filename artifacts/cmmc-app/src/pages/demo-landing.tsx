@@ -1,11 +1,8 @@
-import { useState } from "react";
 import { useLocation } from "wouter";
-import { useDemoMode } from "@/context/DemoModeContext";
-import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   Shield, FileText, Activity, AlertTriangle, BarChart3,
-  Network, Search, CheckCircle, ArrowRight, Play,
+  Network, Search, CheckCircle, Play,
   Users, ExternalLink, ClipboardList, RadarIcon, BookOpen,
   TrendingUp, Zap, Building2, Info, Target, ChevronDown,
 } from "lucide-react";
@@ -98,37 +95,7 @@ function ReadinessCard() {
 }
 
 export default function DemoLanding() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const { enableDemoMode } = useDemoMode();
   const [, navigate] = useLocation();
-  const queryClient = useQueryClient();
-
-  const handleLaunchDemo = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/auth/demo-login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error ?? "Demo login failed. Please try again.");
-        return;
-      }
-      const data = await res.json();
-      localStorage.setItem("auth_token", data.token);
-      if (data.demoOrgId) localStorage.setItem("cmmc_active_org_id", data.demoOrgId);
-      enableDemoMode();
-      queryClient.clear();
-      window.location.href = "/";
-    } catch {
-      setError("Could not connect to the server. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   return (
     <div className="min-h-screen text-foreground" style={{ fontFamily: "inherit" }}>
@@ -158,15 +125,6 @@ export default function DemoLanding() {
             >
               Sign In
             </button>
-            <Button
-              size="sm"
-              onClick={handleLaunchDemo}
-              disabled={isLoading}
-              className="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white border-0"
-            >
-              {isLoading ? "Loading…" : "Launch Demo"}
-              {!isLoading && <ArrowRight className="h-3.5 w-3.5 ml-1.5" />}
-            </Button>
           </div>
         </div>
       </header>
@@ -210,23 +168,7 @@ export default function DemoLanding() {
                 support from one secure platform.
               </p>
 
-              {error && (
-                <div className="mb-5 p-3 rounded-lg text-sm"
-                  style={{ background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.3)", color: "#FCA5A5" }}>
-                  {error}
-                </div>
-              )}
-
               <div className="flex flex-wrap gap-3 mb-4">
-                <Button
-                  size="lg"
-                  onClick={handleLaunchDemo}
-                  disabled={isLoading}
-                  className="font-semibold px-7 bg-blue-600 hover:bg-blue-700 text-white border-0 shadow-lg"
-                >
-                  {isLoading ? "Launching…" : "Launch Live Demo"}
-                  {!isLoading && <ArrowRight className="h-4 w-4 ml-2" />}
-                </Button>
                 <Button
                   size="lg"
                   variant="outline"
@@ -245,10 +187,6 @@ export default function DemoLanding() {
                   <ExternalLink className="h-3.5 w-3.5" />
                 </a>
               </div>
-
-              <p className="text-xs text-slate-600">
-                Explore a sample organization using synthetic data. No account required.
-              </p>
             </div>
 
             <div className="w-full lg:w-auto lg:flex-shrink-0 flex justify-center lg:justify-end">
@@ -468,18 +406,6 @@ export default function DemoLanding() {
             ))}
           </div>
 
-          <div className="mt-10 text-center">
-            <Button
-              size="lg"
-              onClick={handleLaunchDemo}
-              disabled={isLoading}
-              className="px-10 font-semibold bg-blue-600 hover:bg-blue-700 text-white border-0 shadow-xl"
-            >
-              {isLoading ? "Launching…" : "Launch Live Demo"}
-              {!isLoading && <ArrowRight className="h-4 w-4 ml-2" />}
-            </Button>
-            <p className="text-xs text-slate-600 mt-3">Explore a sample organization using synthetic data. No account required.</p>
-          </div>
         </div>
       </section>
 
@@ -575,15 +501,6 @@ export default function DemoLanding() {
             Request a consultation to discuss your timeline, gaps, and options.
           </p>
           <div className="flex flex-wrap justify-center gap-3">
-            <Button
-              size="lg"
-              onClick={handleLaunchDemo}
-              disabled={isLoading}
-              className="px-8 font-semibold bg-blue-600 hover:bg-blue-700 text-white border-0"
-            >
-              {isLoading ? "Launching…" : "Launch Live Demo"}
-              {!isLoading && <ArrowRight className="h-4 w-4 ml-2" />}
-            </Button>
             <a
               href={CONSULTATION_HREF}
               className="inline-flex items-center gap-2 px-8 h-11 rounded-md text-sm font-semibold transition-colors"
@@ -609,7 +526,6 @@ export default function DemoLanding() {
               <p className="text-[11px] text-slate-600">Demo uses synthetic sample data only. Not legal advice.</p>
             </div>
             <div className="flex flex-wrap justify-center gap-5 text-xs text-slate-500">
-              <button onClick={handleLaunchDemo} className="hover:text-white transition-colors">Launch Demo</button>
               <button onClick={() => navigate("/demo-video")} className="hover:text-white transition-colors">Watch Walkthrough</button>
               <a href={CONSULTATION_HREF} className="hover:text-white transition-colors">Request Consultation</a>
               <button onClick={() => navigate("/login")} className="hover:text-white transition-colors">Sign In</button>
