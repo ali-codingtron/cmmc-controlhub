@@ -242,10 +242,12 @@ router.get("/organizations/:id", requireAuth, async (req, res) => {
 });
 
 router.patch("/organizations/:id", requireAuth, requireAdmin, async (req, res) => {
+  const orgId = req.params.id as string;
+
   const [existing] = await db
     .select()
     .from(organizationsTable)
-    .where(eq(organizationsTable.id, req.params.id as string))
+    .where(eq(organizationsTable.id, orgId))
     .limit(1);
 
   if (!existing) {
@@ -260,6 +262,22 @@ router.patch("/organizations/:id", requireAuth, requireAdmin, async (req, res) =
     systemName, systemOwner, securityOfficer, itAdministrator,
     defaultClassification, documentNumberPrefix,
   } = req.body;
+
+  // Track changed fields for audit log
+  const ORG_KEYS = [
+    "name", "legalName", "shortName", "cageCode", "uei", "industry",
+    "primaryContact", "organizationAddress", "assessmentScope", "cmmcTargetLevel",
+    "notes", "isActive", "systemName", "systemOwner", "securityOfficer",
+    "itAdministrator", "defaultClassification", "documentNumberPrefix",
+  ] as const;
+  const previousValue: Record<string, unknown> = {};
+  const newValue: Record<string, unknown> = {};
+  for (const key of ORG_KEYS) {
+    if (req.body[key] !== undefined && req.body[key] !== (existing as any)[key]) {
+      previousValue[key] = (existing as any)[key];
+      newValue[key] = req.body[key];
+    }
+  }
 
   await db
     .update(organizationsTable)
@@ -284,13 +302,22 @@ router.patch("/organizations/:id", requireAuth, requireAdmin, async (req, res) =
       documentNumberPrefix: documentNumberPrefix !== undefined ? documentNumberPrefix : existing.documentNumberPrefix,
       updatedAt: new Date(),
     })
-    .where(eq(organizationsTable.id, req.params.id as string));
+    .where(eq(organizationsTable.id, orgId));
 
-  const [updated] = await db.select().from(organizationsTable).where(eq(organizationsTable.id, req.params.id as string)).limit(1);
+  await logAudit(req, "org_profile_updated", "organization", orgId, {
+    entityLabel: existing.name,
+    previousValue: Object.keys(previousValue).length > 0 ? previousValue : undefined,
+    newValue: {
+      fieldsChanged: Object.keys(newValue),
+      ...newValue,
+    },
+  });
+
+  const [updated] = await db.select().from(organizationsTable).where(eq(organizationsTable.id, orgId)).limit(1);
   res.json(updated);
 });
 
-// PATCH /api/organizations/:id/profile — org admins and compliance managers can update doc profile fields
+// PATCH /api/organizations/:id/profile — Global Admins and org_admins of that org.
 router.patch("/organizations/:id/profile", requireAuth, async (req: any, res: any): Promise<void> => {
   const orgId = req.params.id as string;
 
@@ -305,24 +332,36 @@ router.patch("/organizations/:id/profile", requireAuth, async (req: any, res: an
     return;
   }
 
-  // Allow: global admin OR org member with org_admin/compliance_manager role
-  if (req.authUser?.role !== "admin") {
+  // Authorization: platform Global Admin OR org_admin member of this specific org.
+  const isGlobalAdmin = req.authUser?.role === "admin";
+  let isOrgAdmin = false;
+  if (!isGlobalAdmin) {
     const [membership] = await db
       .select({ role: organizationUsersTable.role })
       .from(organizationUsersTable)
       .where(
         and(
-          eq(organizationUsersTable.organizationId, orgId),
           eq(organizationUsersTable.userId, req.authUser!.id),
-          eq(organizationUsersTable.status, "active")
-        )
+          eq(organizationUsersTable.organizationId, orgId),
+        ),
       )
       .limit(1);
+    isOrgAdmin = membership?.role === "org_admin";
+  }
 
-    if (!membership || !["global_admin", "org_admin", "compliance_manager"].includes(membership.role)) {
-      res.status(403).json({ error: "Only org admins and compliance managers can update the document profile" });
-      return;
-    }
+  if (!isGlobalAdmin && !isOrgAdmin) {
+    await logAudit(req, "org_profile_edit_denied", "organization", orgId, {
+      entityLabel: existing.name,
+      newValue: {
+        attemptedAction: "PATCH /organizations/:id/profile",
+        platformRole: req.authUser?.role ?? "none",
+        result: "denied",
+      },
+    });
+    res.status(403).json({
+      error: "You do not have permission to edit this organization's profile.",
+    });
+    return;
   }
 
   const {
@@ -330,6 +369,22 @@ router.patch("/organizations/:id/profile", requireAuth, async (req: any, res: an
     assessmentScope, systemName, systemOwner, securityOfficer,
     itAdministrator, defaultClassification, documentNumberPrefix,
   } = req.body;
+
+  // Build the update set and track only fields that actually changed for the audit log.
+  const PROFILE_KEYS = [
+    "legalName", "organizationAddress", "cageCode", "uei", "assessmentScope",
+    "systemName", "systemOwner", "securityOfficer", "itAdministrator",
+    "defaultClassification", "documentNumberPrefix",
+  ] as const;
+
+  const previousValue: Record<string, unknown> = {};
+  const newValue: Record<string, unknown> = {};
+  for (const key of PROFILE_KEYS) {
+    if (req.body[key] !== undefined && req.body[key] !== (existing as any)[key]) {
+      previousValue[key] = (existing as any)[key];
+      newValue[key] = req.body[key];
+    }
+  }
 
   await db
     .update(organizationsTable)
@@ -348,6 +403,15 @@ router.patch("/organizations/:id/profile", requireAuth, async (req: any, res: an
       updatedAt: new Date(),
     })
     .where(eq(organizationsTable.id, orgId));
+
+  await logAudit(req, "org_profile_updated", "organization", orgId, {
+    entityLabel: existing.name,
+    previousValue: Object.keys(previousValue).length > 0 ? previousValue : undefined,
+    newValue: {
+      fieldsChanged: Object.keys(newValue),
+      ...newValue,
+    },
+  });
 
   const [updated] = await db.select().from(organizationsTable).where(eq(organizationsTable.id, orgId)).limit(1);
   res.json(updated);

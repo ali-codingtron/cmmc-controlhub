@@ -24,6 +24,7 @@ import {
   FileStack, TrendingUp, Pencil,
 } from "lucide-react";
 import { useOrg } from "@/context/OrgContext";
+import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -210,12 +211,14 @@ function DocumentProfileDialog({
   orgId,
   fullOrg,
   onSaved,
+  canEditProfile,
 }: {
   open: boolean;
   onClose: () => void;
   orgId: string;
   fullOrg: Record<string, any> | null;
   onSaved: () => void;
+  canEditProfile: boolean;
 }) {
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
@@ -269,8 +272,9 @@ function DocumentProfileDialog({
         <DialogHeader>
           <DialogTitle>Organization Document Profile</DialogTitle>
           <DialogDescription>
-            These values auto-fill every generated document. Complete as many fields as possible
-            to reduce manual entry during document generation.
+            {canEditProfile
+              ? "These values auto-fill every generated document. Complete as many fields as possible to reduce manual entry during document generation."
+              : "These values auto-fill every generated document. Contact a Global Administrator to update this information."}
           </DialogDescription>
         </DialogHeader>
 
@@ -291,14 +295,23 @@ function DocumentProfileDialog({
                           <span className="ml-1.5 text-[10px] text-muted-foreground font-normal">(managed in Organizations)</span>
                         )}
                       </Label>
-                      <Input
-                        id={`profile-${f.key}`}
-                        value={form[f.key] ?? ""}
-                        onChange={(e) => setForm((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                        placeholder={f.placeholder}
-                        disabled={f.readOnly || saving}
-                        className={cn("text-sm", f.readOnly && "bg-muted text-muted-foreground")}
-                      />
+                      {canEditProfile && !f.readOnly ? (
+                        <Input
+                          id={`profile-${f.key}`}
+                          value={form[f.key] ?? ""}
+                          onChange={(e) => setForm((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                          placeholder={f.placeholder}
+                          disabled={saving}
+                          className="text-sm"
+                        />
+                      ) : (
+                        <div
+                          id={`profile-${f.key}`}
+                          className="text-sm px-3 py-2 rounded-md border bg-muted text-muted-foreground min-h-[36px]"
+                        >
+                          {form[f.key] || <span className="italic opacity-60">{f.placeholder ?? "Not set"}</span>}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -309,11 +322,13 @@ function DocumentProfileDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>
-            Cancel
+            {canEditProfile ? "Cancel" : "Close"}
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />Saving…</> : "Save Profile"}
-          </Button>
+          {canEditProfile && (
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />Saving…</> : "Save Profile"}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -323,11 +338,15 @@ function DocumentProfileDialog({
 // ── MAIN PAGE ───────────────────────────────────────────────────────────────────
 
 export default function DocumentationCenter() {
+  const { user } = useAuth();
   const { activeOrg } = useOrg();
   const orgId = activeOrg?.id;
   const queryClient = useQueryClient();
   const [expandProfile, setExpandProfile] = useState(false);
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+
+  // Global Admins and org_admins of the active org may edit the organization profile.
+  const canEditProfile = user?.role === "admin" || activeOrg?.role === "org_admin";
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery({
     queryKey: ["doc-template-library-list"],
@@ -398,13 +417,14 @@ export default function DocumentationCenter() {
 
   return (
     <div className="space-y-8">
-      {/* Profile dialog */}
+      {/* Profile dialog — only mounted for Global Admins (edit) or when explicitly opened for read-only view) */}
       {orgId && (
         <DocumentProfileDialog
           open={profileDialogOpen}
           onClose={() => setProfileDialogOpen(false)}
           orgId={orgId}
           fullOrg={fullOrg ?? null}
+          canEditProfile={canEditProfile}
           onSaved={() => {
             refetchFullOrg();
             queryClient.invalidateQueries({ queryKey: ["org-full-profile", orgId] });
@@ -621,17 +641,19 @@ export default function DocumentationCenter() {
                   {expandProfile ? "Show less" : `Show ${profileFieldValues.length - 6} more fields`}
                 </button>
               )}
-              <div className="pt-2">
-                <Button
-                  size="sm"
-                  variant={profilePct < 100 ? "default" : "outline"}
-                  className="w-full text-xs"
-                  onClick={() => setProfileDialogOpen(true)}
-                >
-                  <Pencil className="h-3.5 w-3.5 mr-1.5" />
-                  {profilePct === 0 ? "Complete Document Profile" : profilePct < 100 ? "Finish Document Profile" : "Edit Document Profile"}
-                </Button>
-              </div>
+              {canEditProfile && (
+                <div className="pt-2">
+                  <Button
+                    size="sm"
+                    variant={profilePct < 100 ? "default" : "outline"}
+                    className="w-full text-xs"
+                    onClick={() => setProfileDialogOpen(true)}
+                  >
+                    <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                    {profilePct === 0 ? "Complete Document Profile" : profilePct < 100 ? "Finish Document Profile" : "Edit Document Profile"}
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

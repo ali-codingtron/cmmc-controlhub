@@ -169,16 +169,16 @@ function AppRoutes() {
               <Route path="/security" component={SecurityCenter} />
               <Route path="/admin/roadmap-backfill" component={AdminRoadmapBackfill} />
               <Route path="/documents">
-                {() => <AdminOnly><Documents /></AdminOnly>}
+                {() => <Documents />}
               </Route>
               <Route path="/documents/templates">
-                {() => <AdminOnly><DocTemplateLibrary /></AdminOnly>}
+                {() => <DocTemplateLibrary />}
               </Route>
               <Route path="/documents/templates/:id">
-                {(params: { id: string }) => <AdminOnly><DocTemplateDetail id={params.id} /></AdminOnly>}
+                {(params: { id: string }) => <DocTemplateDetail id={params.id} />}
               </Route>
               <Route path="/documents/generate">
-                {() => <AdminOnly><DocGenerate /></AdminOnly>}
+                {() => <DocGenerate />}
               </Route>
               <Route path="/documents/list">
                 {() => <Redirect to="/documents" />}
@@ -196,7 +196,7 @@ function AppRoutes() {
                 {() => <Redirect to="/documents" />}
               </Route>
               <Route path="/documents/:id">
-                {(params: { id: string }) => <AdminOnly><DocumentDetail id={params.id} /></AdminOnly>}
+                {(params: { id: string }) => <DocumentDetail id={params.id} />}
               </Route>
               <Route path="/ssp">
                 {() => <Redirect to="/ssp/overview" />}

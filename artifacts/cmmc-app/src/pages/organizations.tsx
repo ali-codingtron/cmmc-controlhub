@@ -11,6 +11,8 @@ import {
   Trash2,
   Check,
   Award,
+  Pencil,
+  Loader2,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useOrg } from "@/context/OrgContext";
@@ -406,9 +408,220 @@ function CertificationInitiateWizard({
   );
 }
 
+// ─── Edit Org Dialog ───────────────────────────────────────────────────────────
+
+function EditOrgDialog({
+  open,
+  orgId,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  orgId: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [loaded, setLoaded] = useState(false);
+
+  // Fetch full org data when dialog opens
+  const { data: fullOrg, isLoading } = useQuery({
+    queryKey: ["org-edit-detail", orgId],
+    queryFn: async () => {
+      const token = localStorage.getItem("auth_token");
+      const base = (import.meta.env.BASE_URL ?? "").replace(/\/$/, "");
+      const r = await fetch(`${base}/api/organizations/${orgId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) throw new Error("Failed to load organization");
+      return r.json() as Promise<Record<string, any>>;
+    },
+    enabled: open && !!orgId,
+  });
+
+  // Populate form once data arrives
+  if (fullOrg && !loaded) {
+    setForm({
+      name: fullOrg.name ?? "",
+      legalName: fullOrg.legalName ?? "",
+      shortName: fullOrg.shortName ?? "",
+      cageCode: fullOrg.cageCode ?? "",
+      uei: fullOrg.uei ?? "",
+      industry: fullOrg.industry ?? "",
+      primaryContact: fullOrg.primaryContact ?? "",
+      organizationAddress: fullOrg.organizationAddress ?? "",
+      assessmentScope: fullOrg.assessmentScope ?? "",
+      cmmcTargetLevel: fullOrg.cmmcTargetLevel ?? "L2",
+      notes: fullOrg.notes ?? "",
+    });
+    setLoaded(true);
+  }
+
+  function handleClose() {
+    setLoaded(false);
+    setForm({});
+    onClose();
+  }
+
+  async function handleSave() {
+    if (!form.name?.trim()) {
+      toast({ title: "Organization name is required", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      const token = localStorage.getItem("auth_token");
+      const base = (import.meta.env.BASE_URL ?? "").replace(/\/$/, "");
+      const r = await fetch(`${base}/api/organizations/${orgId}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: form.name.trim(),
+          legalName: form.legalName || null,
+          shortName: form.shortName || null,
+          cageCode: form.cageCode || null,
+          uei: form.uei || null,
+          industry: form.industry || null,
+          primaryContact: form.primaryContact || null,
+          organizationAddress: form.organizationAddress || null,
+          assessmentScope: form.assessmentScope || null,
+          cmmcTargetLevel: form.cmmcTargetLevel || "L2",
+          notes: form.notes || null,
+        }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error ?? "Save failed");
+      }
+      toast({ title: "Organization profile saved" });
+      onSaved();
+      handleClose();
+    } catch (e: any) {
+      toast({ title: "Save failed", description: e.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const set = (key: string, value: string) => setForm((f) => ({ ...f, [key]: value }));
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Pencil className="h-4 w-4 text-primary" />
+            Edit Organization Profile
+          </DialogTitle>
+        </DialogHeader>
+
+        {isLoading || !loaded ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="space-y-5 py-2">
+            {/* Identity */}
+            <div>
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3 pb-1.5 border-b">
+                Organization Identity
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2 space-y-1">
+                  <Label className="text-xs">Organization Name <span className="text-destructive">*</span></Label>
+                  <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Apex Defense LLC" disabled={saving} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Legal Name</Label>
+                  <Input value={form.legalName} onChange={(e) => set("legalName", e.target.value)} placeholder="Full legal entity name" disabled={saving} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Short Name</Label>
+                  <Input value={form.shortName} onChange={(e) => set("shortName", e.target.value)} placeholder="Apex" disabled={saving} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">CAGE Code</Label>
+                  <Input value={form.cageCode} onChange={(e) => set("cageCode", e.target.value)} placeholder="1ABC2" disabled={saving} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">UEI</Label>
+                  <Input value={form.uei} onChange={(e) => set("uei", e.target.value)} placeholder="Unique Entity Identifier" disabled={saving} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Industry</Label>
+                  <Input value={form.industry} onChange={(e) => set("industry", e.target.value)} placeholder="Aerospace & Defense" disabled={saving} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">CMMC Target Level</Label>
+                  <Select value={form.cmmcTargetLevel} onValueChange={(v) => set("cmmcTargetLevel", v)} disabled={saving}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="L1">Level 1 (FCI only)</SelectItem>
+                      <SelectItem value="L2">Level 2 (CUI)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="sm:col-span-2 space-y-1">
+                  <Label className="text-xs">Primary Contact</Label>
+                  <Input value={form.primaryContact} onChange={(e) => set("primaryContact", e.target.value)} placeholder="Name and title" disabled={saving} />
+                </div>
+                <div className="sm:col-span-2 space-y-1">
+                  <Label className="text-xs">Organization Address</Label>
+                  <Input value={form.organizationAddress} onChange={(e) => set("organizationAddress", e.target.value)} placeholder="Street, City, State ZIP" disabled={saving} />
+                </div>
+              </div>
+            </div>
+
+            {/* Assessment */}
+            <div>
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3 pb-1.5 border-b">
+                Assessment Scope
+              </h3>
+              <div className="space-y-1">
+                <Label className="text-xs">Assessment Scope Description</Label>
+                <Input value={form.assessmentScope} onChange={(e) => set("assessmentScope", e.target.value)} placeholder="Brief description of systems in scope" disabled={saving} />
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3 pb-1.5 border-b">
+                Notes
+              </h3>
+              <div className="space-y-1">
+                <Label className="text-xs">Internal Notes</Label>
+                <textarea
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                  rows={3}
+                  value={form.notes}
+                  onChange={(e) => set("notes", e.target.value)}
+                  placeholder="Internal notes about this organization"
+                  disabled={saving}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        <DialogFooter className="pt-2 border-t mt-2">
+          <Button variant="outline" onClick={handleClose} disabled={saving}>Cancel</Button>
+          <Button onClick={handleSave} disabled={saving || isLoading || !loaded}>
+            {saving ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />Saving…</> : "Save Changes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Org Card ─────────────────────────────────────────────────────────────────
 
-function OrgCard({ org, onSwitch, onDelete, onInitiateCert }: { org: OrgStats; onSwitch: (id: string) => void; onDelete: (id: string, name: string) => void; onInitiateCert: (id: string, name: string) => void }) {
+function OrgCard({ org, onSwitch, onDelete, onInitiateCert, onEdit }: { org: OrgStats; onSwitch: (id: string) => void; onDelete: (id: string, name: string) => void; onInitiateCert: (id: string, name: string) => void; onEdit: (id: string) => void }) {
   const { activeOrg } = useOrg();
   const isActive = activeOrg?.id === org.id;
   const levelColor = org.cmmcTargetLevel === "L1" ? "bg-blue-500/10 text-blue-600 border-blue-200 dark:text-blue-400" : "bg-purple-500/10 text-purple-600 border-purple-200 dark:text-purple-400";
@@ -498,15 +711,26 @@ function OrgCard({ org, onSwitch, onDelete, onInitiateCert }: { org: OrgStats; o
         >
           {isActive ? "Currently Viewing" : "Switch to Org"}
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300 dark:text-blue-400 dark:border-blue-800 dark:hover:bg-blue-950/30"
-          onClick={() => onInitiateCert(org.id, org.name)}
-        >
-          <Award className="h-3.5 w-3.5 mr-1.5" />
-          Initiate Certification
-        </Button>
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={() => onEdit(org.id)}
+          >
+            <Pencil className="h-3.5 w-3.5 mr-1.5" />
+            Edit Profile
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300 dark:text-blue-400 dark:border-blue-800 dark:hover:bg-blue-950/30"
+            onClick={() => onInitiateCert(org.id, org.name)}
+          >
+            <Award className="h-3.5 w-3.5 mr-1.5" />
+            Certification
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
@@ -1170,6 +1394,7 @@ export default function Organizations() {
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [certWizardOrg, setCertWizardOrg] = useState<{ id: string; name: string } | null>(null);
+  const [editOrgId, setEditOrgId] = useState<string | null>(null);
 
   const { data: stats = [], isLoading, refetch } = useQuery<OrgStats[]>({
     queryKey: ["global-stats"],
@@ -1319,6 +1544,7 @@ export default function Organizations() {
               onSwitch={handleSwitch}
               onDelete={(id, name) => setDeleteTarget({ id, name })}
               onInitiateCert={(id, name) => setCertWizardOrg({ id, name })}
+              onEdit={(id) => setEditOrgId(id)}
             />
           ))}
         </div>
@@ -1384,6 +1610,19 @@ export default function Organizations() {
       )}
 
       <OrgCreationWizard open={showNew} onClose={() => setShowNew(false)} onSuccess={refreshOrgs} />
+
+      {editOrgId && (
+        <EditOrgDialog
+          open={!!editOrgId}
+          orgId={editOrgId}
+          onClose={() => setEditOrgId(null)}
+          onSaved={() => {
+            refetch();
+            refreshOrgs();
+            queryClient.invalidateQueries({ queryKey: ["org-edit-detail", editOrgId] });
+          }}
+        />
+      )}
 
       {certWizardOrg && (
         <CertificationInitiateWizard

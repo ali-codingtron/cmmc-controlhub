@@ -1,0 +1,266 @@
+Update the Edit Organization Profile feature so ONLY users with the platform-level Global Admin role can make changes.
+
+This requirement is strict.
+
+====================================================================
+GLOBAL ADMIN-ONLY EDITING
+====================================================================
+
+Only a user whose authenticated platform role is:
+
+GLOBAL_ADMIN
+
+may:
+
+- see the Edit Profile action
+- open the editable Organization Profile form
+- submit profile changes
+- change organization name
+- change legal name
+- change short name
+- change CAGE code
+- change UEI
+- change industry
+- change primary contact information
+- change address
+- change assessment-scope description
+- change organization logo
+- change profile notes
+
+No organization-specific role may edit an organization profile.
+
+The following roles must not be allowed to edit organization profiles:
+
+- Organization Admin
+- Compliance Manager
+- IT Contributor
+- Reviewer
+- Executive Viewer
+- Assessor Read-Only
+- Demo Viewer
+
+This restriction applies even when an Organization Admin is assigned to the organization being viewed.
+
+====================================================================
+UI BEHAVIOR
+====================================================================
+
+For Global Admin:
+
+- show Edit Profile on organization cards
+- show Edit Profile on the organization detail page
+- allow access to the editable profile form
+- show Save Changes
+
+For all non-Global Admin users:
+
+- hide Edit Profile
+- hide Save Changes
+- do not render editable fields
+- show organization profile information as read-only where existing permissions allow
+- do not show disabled editing controls that imply the user may request access
+
+The read-only profile may display:
+
+- Organization Name
+- Legal Name
+- Short Name
+- CAGE Code
+- UEI
+- Industry
+- Primary Contact
+- Address
+- Assessment Scope
+- Compliance Configuration
+
+But no non-Global Admin user may modify these values.
+
+====================================================================
+BACKEND AUTHORIZATION
+====================================================================
+
+Do not rely only on hiding the Edit Profile button.
+
+Every organization-profile update API must verify:
+
+authenticatedUser.platformRole === GLOBAL_ADMIN
+
+Example:
+
+PATCH /api/organizations/:organizationId/profile
+
+Authorization:
+
+1. Confirm the user is authenticated.
+2. Load the user’s platform role from the authoritative backend source.
+3. Confirm platform role equals GLOBAL_ADMIN.
+4. If not, return HTTP 403.
+5. Do not use organization membership role as a substitute.
+6. Do not trust a platform-role value supplied by the browser.
+
+Organization Admin membership must not grant profile-edit permission.
+
+Compliance Manager membership must not grant profile-edit permission.
+
+Use a dedicated capability if the application uses capability checks:
+
+organizations.profile.edit
+
+Assign this capability only to:
+
+GLOBAL_ADMIN
+
+Do not assign it to any organization role.
+
+====================================================================
+DIRECT-URL AND API PROTECTION
+====================================================================
+
+A non-Global Admin must not be able to edit a profile by:
+
+- entering the edit URL manually
+- modifying frontend state
+- changing an API request
+- using browser developer tools
+- calling the PATCH endpoint directly
+- impersonating an organization role
+
+Expected behavior:
+
+- editable route returns a controlled unauthorized response or redirects to the read-only profile
+- PATCH request returns HTTP 403
+- no fields are changed
+- unauthorized attempt is audit logged
+
+Error message:
+
+“You do not have permission to edit organization profiles. This action is restricted to Global Administrators.”
+
+====================================================================
+GLOBAL ADMIN IDENTIFICATION
+====================================================================
+
+Use the platform-level role as the authoritative source:
+
+platform_role = GLOBAL_ADMIN
+
+Do not authorize profile editing based on:
+
+- legacy role
+- Organization Admin membership
+- current organization role
+- role badge displayed in the frontend
+- the selected organization
+- a client-supplied role value
+
+The break-glass System Administrator account may edit organization profiles because it is a platform-level Global Admin.
+
+Do not alter the break-glass account’s authentication or protection settings.
+
+====================================================================
+AUDIT LOGGING
+====================================================================
+
+Log all organization-profile edit activity.
+
+For successful changes, record:
+
+- acting Global Admin
+- target organization
+- fields changed
+- previous values
+- new values
+- reason, when required
+- timestamp
+- IP address
+- user agent
+- success
+
+For denied attempts, record:
+
+- acting user
+- platform role
+- target organization
+- attempted action
+- timestamp
+- IP address
+- user agent
+- denied result
+
+Do not log secrets, passwords, tokens, or unnecessary sensitive data.
+
+====================================================================
+ACCEPTANCE TESTS
+====================================================================
+
+Test A — Global Admin:
+
+Sign in as a platform Global Admin.
+
+Expected:
+
+- Edit Profile is visible
+- editable form opens
+- profile changes save successfully
+- values remain after reopening
+
+Test B — Organization Admin:
+
+Sign in as an Organization Admin for APEX Solutions.
+
+Expected:
+
+- organization profile may be viewed
+- Edit Profile is not visible
+- direct edit URL is denied or read-only
+- direct PATCH request returns HTTP 403
+
+Test C — Compliance Manager:
+
+Expected:
+
+- profile is read-only
+- no edit action
+- update API returns HTTP 403
+
+Test D — All Other Roles:
+
+Expected:
+
+- no profile editing
+- no Save Changes button
+- direct update request denied
+
+Test E — Cross-Organization Access:
+
+A Global Admin may edit any organization profile.
+
+A non-Global Admin may not edit any organization profile, even one where they are Organization Admin.
+
+Test F — Production Safety:
+
+Editing a profile does not change:
+
+- organization ID
+- URL slug
+- compliance packages
+- target level
+- controls
+- statuses
+- evidence
+- documents
+- SSP
+- monitoring
+- POA&M
+- users
+- memberships
+- certification status
+- files
+
+====================================================================
+MOST IMPORTANT RULE
+====================================================================
+
+Organization profile editing is a platform-level Global Admin function only.
+
+Organization-specific roles never grant permission to edit an organization profile.
