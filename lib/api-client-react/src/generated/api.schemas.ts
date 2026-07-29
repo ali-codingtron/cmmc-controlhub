@@ -32,6 +32,7 @@ export const UserRole = {
   reviewer: "reviewer",
   executive_viewer: "executive_viewer",
   assessor: "assessor",
+  none: "none",
 } as const;
 
 export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus] | null;
@@ -62,6 +63,8 @@ export interface User {
   failedLoginCount: number;
   lastLoginAt?: string | null;
   invitationExpiresAt?: string | null;
+  isBreakGlass?: boolean;
+  mfaExempt?: boolean;
 }
 
 export interface AuthResponse {
@@ -172,51 +175,85 @@ export interface SecurityCenterData {
   recentEvents: SecurityCenterDataRecentEventsItem[];
 }
 
-export type CreateUserBodyRole =
-  (typeof CreateUserBodyRole)[keyof typeof CreateUserBodyRole];
+export type UserDetailPlatformRole =
+  (typeof UserDetailPlatformRole)[keyof typeof UserDetailPlatformRole];
 
-export const CreateUserBodyRole = {
-  admin: "admin",
-  compliance_manager: "compliance_manager",
-  it_contributor: "it_contributor",
-  reviewer: "reviewer",
-  executive_viewer: "executive_viewer",
-  assessor: "assessor",
+export const UserDetailPlatformRole = {
+  none: "none",
+  global_admin: "global_admin",
 } as const;
 
-export interface CreateUserBody {
-  name: string;
-  email: string;
-  password: string;
-  role: CreateUserBodyRole;
-  title?: string;
-  department?: string;
-}
+export type UserDetail = User & {
+  platformRole: UserDetailPlatformRole;
+  platformRoleLabel: string;
+  /** Account is protected from routine destructive edits (break-glass). */
+  isProtected: boolean;
+  /** Legacy global role still stored on the account, if any. */
+  legacyRole?: string | null;
+  department?: string | null;
+  title?: string | null;
+  inviteAcceptedAt?: string | null;
+  invitationStatus?: string | null;
+  authProvider?: string | null;
+  updatedAt?: string | null;
+};
 
-export type UpdateUserBodyRole =
-  (typeof UpdateUserBodyRole)[keyof typeof UpdateUserBodyRole];
+export type EffectiveAccessPlatformRole =
+  (typeof EffectiveAccessPlatformRole)[keyof typeof EffectiveAccessPlatformRole];
 
-export const UpdateUserBodyRole = {
-  admin: "admin",
-  compliance_manager: "compliance_manager",
-  it_contributor: "it_contributor",
-  reviewer: "reviewer",
-  executive_viewer: "executive_viewer",
-  assessor: "assessor",
+export const EffectiveAccessPlatformRole = {
+  none: "none",
+  global_admin: "global_admin",
 } as const;
 
-export interface UpdateUserBody {
-  name?: string;
-  email?: string;
-  role?: UpdateUserBodyRole;
-  title?: string;
-  department?: string;
-  isActive?: boolean;
+export type EffectiveAccessMembershipStatus =
+  | (typeof EffectiveAccessMembershipStatus)[keyof typeof EffectiveAccessMembershipStatus]
+  | null;
+
+export const EffectiveAccessMembershipStatus = {
+  active: "active",
+  invited: "invited",
+  suspended: "suspended",
+} as const;
+
+export type EffectiveAccessPermissionSource =
+  (typeof EffectiveAccessPermissionSource)[keyof typeof EffectiveAccessPermissionSource];
+
+export const EffectiveAccessPermissionSource = {
+  PLATFORM_ROLE: "PLATFORM_ROLE",
+  ORGANIZATION_MEMBERSHIP: "ORGANIZATION_MEMBERSHIP",
+  LEGACY_GLOBAL_ROLE: "LEGACY_GLOBAL_ROLE",
+  NONE: "NONE",
+} as const;
+
+export interface EffectiveAccess {
+  userId: string;
+  organizationId?: string | null;
+  organizationName?: string | null;
+  platformRole: EffectiveAccessPlatformRole;
+  platformRoleLabel: string;
+  organizationRole?: string | null;
+  organizationRoleLabel?: string | null;
+  membershipStatus?: EffectiveAccessMembershipStatus;
+  effectiveRole: string;
+  effectiveRoleLabel: string;
+  permissionSource: EffectiveAccessPermissionSource;
+  membershipRequired: boolean;
+  hasAccess: boolean;
+  permissions: string[];
+  deniedPermissions: string[];
+  /** A legacy global role still stored on the account. INFORMATIONAL ONLY — it never grants access; only the platform role and active organization memberships do. */
+  legacyRole?: string | null;
+  reason?: string | null;
 }
 
-export interface ResetPasswordBody {
-  password: string;
-}
+export type OrganizationAccessStatePlatformRole =
+  (typeof OrganizationAccessStatePlatformRole)[keyof typeof OrganizationAccessStatePlatformRole];
+
+export const OrganizationAccessStatePlatformRole = {
+  none: "none",
+  global_admin: "global_admin",
+} as const;
 
 export type UserOrgMembershipRole =
   (typeof UserOrgMembershipRole)[keyof typeof UserOrgMembershipRole];
@@ -249,11 +286,109 @@ export interface UserOrgMembership {
   joinedAt?: string | null;
 }
 
+/**
+ * Canonical organization-access state for one user. Exactly one entry per organization. For Global Admins, memberships are not the source of access — membershipRequired is false and platformAccessNote explains why.
+
+ */
+export interface OrganizationAccessState {
+  userId: string;
+  platformRole: OrganizationAccessStatePlatformRole;
+  membershipRequired: boolean;
+  platformAccessNote?: string | null;
+  memberships: UserOrgMembership[];
+  distinctOrganizationCount: number;
+  /** Redundant rows detected in the database for this user. 0 when healthy. */
+  duplicateRowCount: number;
+  /** Fingerprint of the saved set, for optimistic concurrency control. */
+  version: string;
+}
+
+export type SaveOrganizationAccessBodyMembershipsItemRole =
+  (typeof SaveOrganizationAccessBodyMembershipsItemRole)[keyof typeof SaveOrganizationAccessBodyMembershipsItemRole];
+
+export const SaveOrganizationAccessBodyMembershipsItemRole = {
+  org_admin: "org_admin",
+  compliance_manager: "compliance_manager",
+  it_contributor: "it_contributor",
+  reviewer: "reviewer",
+  executive_viewer: "executive_viewer",
+  assessor: "assessor",
+} as const;
+
+export type SaveOrganizationAccessBodyMembershipsItemStatus =
+  (typeof SaveOrganizationAccessBodyMembershipsItemStatus)[keyof typeof SaveOrganizationAccessBodyMembershipsItemStatus];
+
+export const SaveOrganizationAccessBodyMembershipsItemStatus = {
+  active: "active",
+  invited: "invited",
+  suspended: "suspended",
+} as const;
+
+export type SaveOrganizationAccessBodyMembershipsItem = {
+  organizationId: string;
+  role: SaveOrganizationAccessBodyMembershipsItemRole;
+  status: SaveOrganizationAccessBodyMembershipsItemStatus;
+};
+
+export interface SaveOrganizationAccessBody {
+  memberships: SaveOrganizationAccessBodyMembershipsItem[];
+  expectedVersion?: string | null;
+  reason?: string | null;
+}
+
+/**
+ * Platform role only. Organization-specific roles are assigned through organization access, never here. The server rejects anything else.
+ */
+export type CreateUserBodyRole =
+  (typeof CreateUserBodyRole)[keyof typeof CreateUserBodyRole];
+
+export const CreateUserBodyRole = {
+  none: "none",
+  global_admin: "global_admin",
+} as const;
+
+export interface CreateUserBody {
+  name: string;
+  email: string;
+  password: string;
+  /** Platform role only. Organization-specific roles are assigned through organization access, never here. The server rejects anything else. */
+  role: CreateUserBodyRole;
+  title?: string;
+  department?: string;
+}
+
+/**
+ * Platform role only. Organization-specific roles are assigned through organization access, never here. The server rejects anything else.
+ */
+export type UpdateUserBodyRole =
+  (typeof UpdateUserBodyRole)[keyof typeof UpdateUserBodyRole];
+
+export const UpdateUserBodyRole = {
+  none: "none",
+  global_admin: "global_admin",
+} as const;
+
+export interface UpdateUserBody {
+  name?: string;
+  email?: string;
+  /** Platform role only. Organization-specific roles are assigned through organization access, never here. The server rejects anything else. */
+  role?: UpdateUserBodyRole;
+  title?: string;
+  department?: string;
+  isActive?: boolean;
+}
+
+export interface ResetPasswordBody {
+  password: string;
+}
+
+/**
+ * Assignable organization role. global_admin is a PLATFORM role and is rejected here — it must never be stored on a membership.
+ */
 export type AddUserToOrgBodyRole =
   (typeof AddUserToOrgBodyRole)[keyof typeof AddUserToOrgBodyRole];
 
 export const AddUserToOrgBodyRole = {
-  global_admin: "global_admin",
   org_admin: "org_admin",
   compliance_manager: "compliance_manager",
   it_contributor: "it_contributor",
@@ -273,15 +408,18 @@ export const AddUserToOrgBodyStatus = {
 
 export interface AddUserToOrgBody {
   organizationId: string;
+  /** Assignable organization role. global_admin is a PLATFORM role and is rejected here — it must never be stored on a membership. */
   role: AddUserToOrgBodyRole;
   status?: AddUserToOrgBodyStatus;
 }
 
+/**
+ * Assignable organization role. global_admin is a PLATFORM role and is rejected here — it must never be stored on a membership.
+ */
 export type UpdateUserOrgMembershipBodyRole =
   (typeof UpdateUserOrgMembershipBodyRole)[keyof typeof UpdateUserOrgMembershipBodyRole];
 
 export const UpdateUserOrgMembershipBodyRole = {
-  global_admin: "global_admin",
   org_admin: "org_admin",
   compliance_manager: "compliance_manager",
   it_contributor: "it_contributor",
@@ -300,6 +438,7 @@ export const UpdateUserOrgMembershipBodyStatus = {
 } as const;
 
 export interface UpdateUserOrgMembershipBody {
+  /** Assignable organization role. global_admin is a PLATFORM role and is rejected here — it must never be stored on a membership. */
   role?: UpdateUserOrgMembershipBodyRole;
   status?: UpdateUserOrgMembershipBodyStatus;
 }
@@ -1431,16 +1570,15 @@ export interface DocCheckResult {
   message: string;
 }
 
+/**
+ * Platform role only. Organization-specific roles go in orgMemberships.
+ */
 export type SendInvitationBodyRole =
   (typeof SendInvitationBodyRole)[keyof typeof SendInvitationBodyRole];
 
 export const SendInvitationBodyRole = {
-  admin: "admin",
-  compliance_manager: "compliance_manager",
-  it_contributor: "it_contributor",
-  reviewer: "reviewer",
-  executive_viewer: "executive_viewer",
-  assessor: "assessor",
+  none: "none",
+  global_admin: "global_admin",
 } as const;
 
 export type SendInvitationBodyOrgMembershipsItem = {
@@ -1451,6 +1589,7 @@ export type SendInvitationBodyOrgMembershipsItem = {
 export interface SendInvitationBody {
   name: string;
   email: string;
+  /** Platform role only. Organization-specific roles go in orgMemberships. */
   role: SendInvitationBodyRole;
   title?: string;
   department?: string;
@@ -1579,6 +1718,10 @@ export interface AddOrgPackagesResponse {
   inserted: string[];
   skipped: string[];
 }
+
+export type GetUserEffectiveAccessParams = {
+  organizationId?: string;
+};
 
 export type ValidateInvitationParams = {
   token: string;

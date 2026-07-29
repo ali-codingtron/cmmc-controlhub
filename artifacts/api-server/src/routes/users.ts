@@ -17,9 +17,25 @@ import {
   evidenceItemsTable,
   passwordResetTokensTable,
 } from "@workspace/db";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, inArray, sql } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
 import { logAudit } from "../lib/audit";
+import {
+  ASSIGNABLE_ORG_ROLES,
+  GLOBAL_ADMIN_LOCK_KEY,
+  LEGACY_GLOBAL_ROLES,
+  countActiveGlobalAdmins,
+  isAssignableOrgRole,
+  isMembershipStatus,
+  listDistinctMemberships,
+  membershipSetVersion,
+  normalizePlatformRole,
+  platformRoleToStoredRole,
+  resolveEffectiveAccess,
+  roleLabel,
+  type MembershipStatus,
+  type OrgRole,
+} from "../lib/access-control";
 import { randomUUID } from "crypto";
 import { logger } from "../lib/logger";
 import { sendPasswordResetEmail, getAppBaseUrl } from "../lib/email";
@@ -27,6 +43,11 @@ import { generateResetToken, RESET_TOKEN_EXPIRY_MINUTES } from "../lib/password-
 
 const router = Router();
 const SALT_ROUNDS = 12;
+
+// Signals a last-active-Global-Admin violation from inside a transaction so the
+// whole unit of work rolls back. Thrown, not returned, because the check lives in
+// the same transaction as the writes it guards.
+const LAST_ADMIN_SENTINEL = "LAST_ACTIVE_GLOBAL_ADMIN";
 
 // ── List users ───────────────────────────────────────────────────────────────
 router.get("/users", requireAuth, async (req, res) => {
@@ -84,6 +105,16 @@ router.post("/users", requireAuth, requireRole("admin"), async (req, res) => {
     return;
   }
 
+  // New users default to Platform Role = None. Access then comes solely from the
+  // organization memberships assigned to them.
+  const storedRole = role === undefined ? "none" : platformRoleToStoredRole(role);
+  if (!storedRole) {
+    res.status(400).json({
+      error: `Invalid platform role "${String(role)}". Allowed: none, global_admin. Organization-specific roles are assigned through organization access.`,
+    });
+    return;
+  }
+
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
   const id = randomUUID();
 
@@ -92,7 +123,7 @@ router.post("/users", requireAuth, requireRole("admin"), async (req, res) => {
     name,
     email: email.toLowerCase(),
     passwordHash,
-    role: role ?? "it_contributor",
+    role: storedRole,
     title,
     department,
     isActive: true,
@@ -100,7 +131,10 @@ router.post("/users", requireAuth, requireRole("admin"), async (req, res) => {
     updatedAt: new Date(),
   });
 
-  await logAudit(req, "created", "user", id, { entityLabel: name });
+  await logAudit(req, "created", "user", id, {
+    entityLabel: name,
+    newValue: { platformRole: normalizePlatformRole(storedRole) },
+  });
 
   const [created] = await db
     .select({
@@ -186,29 +220,88 @@ router.get("/users/migration-report", requireAuth, requireRole("admin"), async (
 });
 
 // ── Get user ─────────────────────────────────────────────────────────────────
+// Authoritative source for the Edit User modal. Returns the canonical platform
+// role alongside the raw stored role so the client never has to guess.
+// Admin-or-self only. This payload carries account-security facts (break-glass,
+// MFA enrollment/exemption, auth provider, protection state), so it must not be
+// readable by any authenticated user for any other user id.
 router.get("/users/:id", requireAuth, async (req, res) => {
+  const userId = req.params.id as string;
+
+  if (req.authUser!.role !== "admin" && req.authUser!.id !== userId) {
+    res.status(403).json({ error: "You can only view your own user record." });
+    return;
+  }
+
   const [user] = await db
     .select({
       id: usersTable.id,
       name: usersTable.name,
       email: usersTable.email,
       role: usersTable.role,
+      status: usersTable.status,
       title: usersTable.title,
       department: usersTable.department,
       isActive: usersTable.isActive,
+      invitedAt: usersTable.invitedAt,
+      inviteAcceptedAt: usersTable.inviteAcceptedAt,
       lastLoginAt: usersTable.lastLoginAt,
       createdAt: usersTable.createdAt,
       updatedAt: usersTable.updatedAt,
+      mfaEnabled: usersTable.mfaEnabled,
+      mfaExempt: usersTable.mfaExempt,
+      isBreakGlass: usersTable.isBreakGlass,
+      authProvider: usersTable.authProvider,
+      invitationStatus: userInvitationsTable.status,
+      invitationExpiresAt: userInvitationsTable.expiresAt,
     })
     .from(usersTable)
-    .where(eq(usersTable.id, req.params.id as string))
+    .leftJoin(
+      userInvitationsTable,
+      and(
+        eq(userInvitationsTable.userId, usersTable.id),
+        eq(userInvitationsTable.status, "pending"),
+      ),
+    )
+    .where(eq(usersTable.id, userId))
     .limit(1);
 
   if (!user) {
     res.status(404).json({ error: "Not found" });
     return;
   }
-  res.json(user);
+
+  await logAudit(req, "viewed", "user", userId, { entityLabel: user.email });
+
+  res.json({
+    ...user,
+    platformRole: normalizePlatformRole(user.role),
+    platformRoleLabel: roleLabel(normalizePlatformRole(user.role) === "global_admin" ? "admin" : "none"),
+    /** True when this account is protected from routine destructive edits. */
+    isProtected: user.isBreakGlass,
+    /** Legacy global role still stored on the account, surfaced for the migration report. */
+    legacyRole: (LEGACY_GLOBAL_ROLES as readonly string[]).includes(user.role) ? user.role : null,
+  });
+});
+
+// ── Effective access (single source of truth) ────────────────────────────────
+// organizationId is optional: omit it to resolve platform-level access only, so a
+// Global Admin can be reported without first choosing an organization.
+router.get("/users/:id/effective-access", requireAuth, requireRole("admin"), async (req, res) => {
+  const userId = req.params.id as string;
+  const organizationId = (req.query.organizationId as string | undefined) || null;
+
+  const access = await resolveEffectiveAccess(userId, organizationId);
+  if (!access) {
+    res.status(404).json({ error: organizationId ? "User or organization not found" : "User not found" });
+    return;
+  }
+
+  await logAudit(req, "viewed", "user_effective_permissions", userId, {
+    newValue: { organizationId, effectiveRole: access.effectiveRole, source: access.permissionSource },
+  });
+
+  res.json(access);
 });
 
 // ── Update user ──────────────────────────────────────────────────────────────
@@ -226,8 +319,27 @@ router.patch("/users/:id", requireAuth, requireRole("admin"), async (req, res) =
   }
 
   if (existing.isBreakGlass) {
+    await logAudit(req, "updated", "user", req.params.id as string, {
+      entityLabel: existing.email,
+      newValue: { blocked: true, reason: "protected break-glass account" },
+    });
     res.status(403).json({ error: "The break-glass emergency account cannot be modified through the UI. Use the CLI script to rotate credentials." });
     return;
+  }
+
+  // Normalize the platform role at the API boundary so null / "" / "none" /
+  // "global_admin" can never be stored inconsistently, and an ORGANIZATION role
+  // can never be smuggled into the platform-role column.
+  let nextRole = existing.role;
+  if (role !== undefined) {
+    const normalized = platformRoleToStoredRole(role);
+    if (!normalized) {
+      res.status(400).json({
+        error: `Invalid platform role "${String(role)}". Allowed: none, global_admin. Organization-specific roles are assigned through organization access.`,
+      });
+      return;
+    }
+    nextRole = normalized;
   }
 
   // If email is changing, check for conflicts
@@ -243,24 +355,64 @@ router.patch("/users/:id", requireAuth, requireRole("admin"), async (req, res) =
     }
   }
 
-  const changes: Record<string, boolean> = {};
-  if (role && role !== existing.role) changes.roleChanged = true;
+  const roleChanged = nextRole !== existing.role;
+  const updateValues = {
+    name: name ?? existing.name,
+    email: email ? email.toLowerCase() : existing.email,
+    role: nextRole,
+    title: title !== undefined ? title : existing.title,
+    department: department !== undefined ? department : existing.department,
+    isActive: isActive !== undefined ? isActive : existing.isActive,
+    updatedAt: new Date(),
+  };
 
-  await db
-    .update(usersTable)
-    .set({
-      name: name ?? existing.name,
-      email: email ? email.toLowerCase() : existing.email,
-      role: role ?? existing.role,
-      title: title !== undefined ? title : existing.title,
-      department: department !== undefined ? department : existing.department,
-      isActive: isActive !== undefined ? isActive : existing.isActive,
-      updatedAt: new Date(),
-    })
-    .where(eq(usersTable.id, req.params.id as string));
+  // Never let the platform end up with no active Global Admin. The check and the
+  // write MUST share one transaction holding the advisory lock — releasing the
+  // lock between them lets two concurrent demotions each see "one admin left"
+  // and both commit, stranding the platform with zero admins.
+  const isDemotion =
+    existing.role === "admin" && (nextRole !== "admin" || isActive === false);
 
-  const action = changes.roleChanged ? "role_changed" : "updated";
-  await logAudit(req, action, "user", req.params.id as string, { entityLabel: existing.email });
+  if (isDemotion) {
+    const wouldStrand = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${GLOBAL_ADMIN_LOCK_KEY})`);
+      if ((await countActiveGlobalAdmins(existing.id, tx)) === 0) return true;
+      await tx
+        .update(usersTable)
+        .set(updateValues)
+        .where(eq(usersTable.id, req.params.id as string));
+      return false;
+    });
+    if (wouldStrand) {
+      res.status(409).json({
+        error:
+          "This is the last active Global Admin. Assign Global Admin to another active user before removing it here.",
+      });
+      return;
+    }
+  } else {
+    await db
+      .update(usersTable)
+      .set(updateValues)
+      .where(eq(usersTable.id, req.params.id as string));
+  }
+
+  await logAudit(req, roleChanged ? "role_changed" : "updated", "user", req.params.id as string, {
+    entityLabel: existing.email,
+    previousValue: roleChanged
+      ? { platformRole: normalizePlatformRole(existing.role), storedRole: existing.role }
+      : undefined,
+    newValue: roleChanged
+      ? {
+          change:
+            normalizePlatformRole(nextRole) === "global_admin"
+              ? "global_admin_assigned"
+              : "global_admin_removed",
+          platformRole: normalizePlatformRole(nextRole),
+          storedRole: nextRole,
+        }
+      : undefined,
+  });
 
   const [updated] = await db
     .select({
@@ -277,13 +429,13 @@ router.patch("/users/:id", requireAuth, requireRole("admin"), async (req, res) =
     .where(eq(usersTable.id, req.params.id as string))
     .limit(1);
 
-  res.json(updated);
+  res.json({ ...updated, platformRole: normalizePlatformRole(nextRole) });
 });
 
 // ── Delete user ──────────────────────────────────────────────────────────────
 router.delete("/users/:id", requireAuth, requireRole("admin"), async (req, res) => {
   const [existing] = await db
-    .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, isBreakGlass: usersTable.isBreakGlass })
+    .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, role: usersTable.role, isBreakGlass: usersTable.isBreakGlass })
     .from(usersTable)
     .where(eq(usersTable.id, req.params.id as string))
     .limit(1);
@@ -304,12 +456,23 @@ router.delete("/users/:id", requireAuth, requireRole("admin"), async (req, res) 
     return;
   }
 
-  await logAudit(req, "deleted", "user", existing.id, { entityLabel: existing.email });
-
   const targetId = req.params.id as string;
   const adminId = req.authUser!.id;
 
-  await db.transaction(async (tx) => {
+  // Deleting an admin is the most permanent way to remove one, so it enforces the
+  // same last-active-Global-Admin invariant. The lock is taken at the top of the
+  // SAME transaction that performs the delete, so the count cannot go stale between
+  // the check and the write, and a violation rolls the whole delete back.
+  try {
+    await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${GLOBAL_ADMIN_LOCK_KEY})`);
+    if (
+      normalizePlatformRole(existing.role) === "global_admin" &&
+      (await countActiveGlobalAdmins(existing.id, tx)) === 0
+    ) {
+      throw new Error(LAST_ADMIN_SENTINEL);
+    }
+
     // Nullify nullable FK references so the user row can be deleted
     await tx.update(auditLogsTable).set({ userId: null }).where(eq(auditLogsTable.userId, targetId));
     await tx.update(controlAssessmentsTable).set({ assessedById: null }).where(eq(controlAssessmentsTable.assessedById, targetId));
@@ -341,7 +504,19 @@ router.delete("/users/:id", requireAuth, requireRole("admin"), async (req, res) 
 
     // Finally delete the user
     await tx.delete(usersTable).where(eq(usersTable.id, targetId));
-  });
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message === LAST_ADMIN_SENTINEL) {
+      res.status(409).json({
+        error:
+          "This is the last active Global Admin. Assign Global Admin to another active user before deleting this one.",
+      });
+      return;
+    }
+    throw err;
+  }
+
+  await logAudit(req, "deleted", "user", existing.id, { entityLabel: existing.email });
 
   res.json({ success: true });
 });
@@ -349,7 +524,7 @@ router.delete("/users/:id", requireAuth, requireRole("admin"), async (req, res) 
 // ── Deactivate user ──────────────────────────────────────────────────────────
 router.post("/users/:id/deactivate", requireAuth, requireRole("admin"), async (req, res) => {
   const [existing] = await db
-    .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, isBreakGlass: usersTable.isBreakGlass })
+    .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, role: usersTable.role, isBreakGlass: usersTable.isBreakGlass })
     .from(usersTable)
     .where(eq(usersTable.id, req.params.id as string))
     .limit(1);
@@ -369,10 +544,31 @@ router.post("/users/:id/deactivate", requireAuth, requireRole("admin"), async (r
     return;
   }
 
-  await db
-    .update(usersTable)
-    .set({ isActive: false, status: "suspended", updatedAt: new Date() })
-    .where(eq(usersTable.id, req.params.id as string));
+  // Deactivating an admin removes an active Global Admin just as surely as
+  // demoting one, so this path enforces the same invariant under the same lock,
+  // with the check and the write in one transaction.
+  const wouldStrand = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${GLOBAL_ADMIN_LOCK_KEY})`);
+    if (
+      normalizePlatformRole(existing.role) === "global_admin" &&
+      (await countActiveGlobalAdmins(existing.id, tx)) === 0
+    ) {
+      return true;
+    }
+    await tx
+      .update(usersTable)
+      .set({ isActive: false, status: "suspended", updatedAt: new Date() })
+      .where(eq(usersTable.id, req.params.id as string));
+    return false;
+  });
+
+  if (wouldStrand) {
+    res.status(409).json({
+      error:
+        "This is the last active Global Admin. Assign Global Admin to another active user before deactivating this one.",
+    });
+    return;
+  }
 
   await logAudit(req, "deactivated", "user", existing.id, { entityLabel: existing.email });
 
@@ -526,25 +722,273 @@ router.post("/users/:id/send-password-reset", requireAuth, requireRole("admin"),
 });
 
 // ── Get user org memberships ─────────────────────────────────────────────────
+// Returns exactly one row per organization. Reading raw rows previously made the
+// Users table over-count ("+1164 more") because the table has historically lacked
+// a UNIQUE(user_id, organization_id) constraint.
+// Admin-or-self only: which organizations a user belongs to, and in what role, is
+// not information every authenticated user should be able to read about anyone else.
 router.get("/users/:id/orgs", requireAuth, async (req, res) => {
-  const memberships = await db
-    .select({
-      membershipId: organizationUsersTable.id,
-      organizationId: organizationsTable.id,
-      organizationName: organizationsTable.name,
-      role: organizationUsersTable.role,
-      status: organizationUsersTable.status,
-      joinedAt: organizationUsersTable.joinedAt,
-    })
-    .from(organizationUsersTable)
-    .innerJoin(
-      organizationsTable,
-      eq(organizationsTable.id, organizationUsersTable.organizationId)
-    )
-    .where(eq(organizationUsersTable.userId, req.params.id as string))
-    .orderBy(organizationsTable.name);
+  const userId = req.params.id as string;
 
+  if (req.authUser!.role !== "admin" && req.authUser!.id !== userId) {
+    res.status(403).json({ error: "You can only view your own organization access." });
+    return;
+  }
+
+  const memberships = await listDistinctMemberships(userId);
   res.json(memberships);
+});
+
+// ── Canonical organization-access state ──────────────────────────────────────
+router.get("/users/:id/organization-access", requireAuth, requireRole("admin"), async (req, res) => {
+  const userId = req.params.id as string;
+
+  const [user] = await db
+    .select({ id: usersTable.id, role: usersTable.role })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+
+  if (!user) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  res.json(await buildOrganizationAccessState(userId, user.role));
+});
+
+/**
+ * Build the organization-access envelope for a user.
+ *
+ * For Global Admins, memberships are NOT the source of access — the platform role
+ * is. Any rows that exist are historical and are reported as such rather than as
+ * required grants.
+ */
+async function buildOrganizationAccessState(userId: string, storedRole: string) {
+  const memberships = await listDistinctMemberships(userId);
+  const platformRole = normalizePlatformRole(storedRole);
+  const duplicateRowCount = memberships.reduce((sum, m) => sum + m.duplicateRowCount, 0);
+
+  return {
+    userId,
+    platformRole,
+    membershipRequired: platformRole !== "global_admin",
+    platformAccessNote:
+      platformRole === "global_admin"
+        ? "Global Admin has platform-wide access to all organizations. Organization-specific memberships are not required."
+        : null,
+    memberships,
+    distinctOrganizationCount: memberships.length,
+    duplicateRowCount,
+    version: membershipSetVersion(memberships),
+  };
+}
+
+// ── Transactionally replace the full organization-membership set ─────────────
+router.put("/users/:id/organization-access", requireAuth, requireRole("admin"), async (req, res) => {
+  const userId = req.params.id as string;
+  const { memberships: incoming, expectedVersion, reason } = req.body ?? {};
+
+  if (!Array.isArray(incoming)) {
+    res.status(400).json({ error: "memberships must be an array" });
+    return;
+  }
+
+  // 2 ── Verify the target user exists.
+  const [user] = await db
+    .select({
+      id: usersTable.id,
+      email: usersTable.email,
+      role: usersTable.role,
+      isBreakGlass: usersTable.isBreakGlass,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+
+  if (!user) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  // 7 ── Protected accounts are never reshaped through the standard modal.
+  if (user.isBreakGlass) {
+    await logAudit(req, "org_access_changed", "user", userId, {
+      entityLabel: user.email,
+      newValue: { blocked: true, reason: "protected break-glass account" },
+    });
+    res.status(403).json({
+      error:
+        "The break-glass emergency account is protected. Its access comes from the Global Admin platform role and cannot be changed here.",
+    });
+    return;
+  }
+
+  // 3/4/5 ── Validate every organization ID, role and status; reject duplicates.
+  const seen = new Set<string>();
+  const desired: { organizationId: string; role: OrgRole; status: MembershipStatus }[] = [];
+
+  for (const entry of incoming) {
+    const organizationId = entry?.organizationId;
+    if (typeof organizationId !== "string" || !organizationId) {
+      res.status(400).json({ error: "Every membership requires an organizationId" });
+      return;
+    }
+    if (seen.has(organizationId)) {
+      res.status(400).json({ error: "The same organization was assigned more than once" });
+      return;
+    }
+    seen.add(organizationId);
+
+    if (!isAssignableOrgRole(entry?.role)) {
+      res.status(400).json({
+        error: `Invalid organization role "${String(entry?.role)}". Allowed: ${ASSIGNABLE_ORG_ROLES.join(", ")}`,
+      });
+      return;
+    }
+    const status = entry?.status ?? "active";
+    if (!isMembershipStatus(status)) {
+      res.status(400).json({ error: `Invalid membership status "${String(status)}"` });
+      return;
+    }
+    desired.push({ organizationId, role: entry.role, status });
+  }
+
+  if (desired.length > 0) {
+    const validOrgs = await db
+      .select({ id: organizationsTable.id })
+      .from(organizationsTable)
+      .where(inArray(organizationsTable.id, desired.map((d) => d.organizationId)));
+    if (validOrgs.length !== desired.length) {
+      res.status(400).json({ error: "One or more organizations do not exist" });
+      return;
+    }
+  }
+
+  // 6-10 ── Read the current set, check the version, and reconcile — all inside a
+  // single transaction that first takes a row lock on the user. Reading the
+  // "before" set outside the transaction would let two concurrent saves both pass
+  // the version check and silently last-writer-wins, which is exactly what
+  // expectedVersion exists to prevent. The lock serialises membership writes per
+  // user, so the version observed here is the version we write against.
+  let before: Awaited<ReturnType<typeof listDistinctMemberships>> = [];
+  let added: typeof desired = [];
+  let changed: typeof desired = [];
+  let removed: typeof before = [];
+  let beforeByOrg = new Map<string, (typeof before)[number]>();
+
+  try {
+    const conflict = await db.transaction(async (tx) => {
+      // Serialise concurrent membership edits for this user.
+      await tx.execute(sql`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`);
+
+      before = await listDistinctMemberships(userId, tx);
+      const currentVersion = membershipSetVersion(before);
+      if (expectedVersion && expectedVersion !== currentVersion) {
+        return currentVersion;
+      }
+
+      beforeByOrg = new Map(before.map((m) => [m.organizationId, m]));
+      const desiredByOrg = new Map(desired.map((d) => [d.organizationId, d]));
+
+      added = desired.filter((d) => !beforeByOrg.has(d.organizationId));
+      removed = before.filter((m) => !desiredByOrg.has(m.organizationId));
+      changed = desired.filter((d) => {
+        const prev = beforeByOrg.get(d.organizationId);
+        return prev && (prev.role !== d.role || prev.status !== d.status);
+      });
+
+      for (const d of desired) {
+        const prev = beforeByOrg.get(d.organizationId);
+        if (prev) {
+          // Update EVERY row for this pair, not just one. Duplicate rows would
+          // otherwise keep serving the old role after a successful save.
+          await tx
+            .update(organizationUsersTable)
+            .set({ role: d.role, status: d.status })
+            .where(
+              and(
+                eq(organizationUsersTable.userId, userId),
+                eq(organizationUsersTable.organizationId, d.organizationId),
+              ),
+            );
+        } else {
+          await tx.insert(organizationUsersTable).values({
+            id: randomUUID(),
+            organizationId: d.organizationId,
+            userId,
+            role: d.role,
+            status: d.status,
+            joinedAt: new Date(),
+          });
+        }
+      }
+
+      for (const m of removed) {
+        await tx
+          .delete(organizationUsersTable)
+          .where(
+            and(
+              eq(organizationUsersTable.userId, userId),
+              eq(organizationUsersTable.organizationId, m.organizationId),
+            ),
+          );
+      }
+
+      return null;
+    });
+
+    if (conflict) {
+      res.status(409).json({
+        error:
+          "This user's organization access was changed by someone else. Reload the user and re-apply your changes.",
+        currentVersion: conflict,
+      });
+      return;
+    }
+  } catch (err) {
+    logger.error({ err, userId }, "Organization access save failed — transaction rolled back");
+    await logAudit(req, "org_access_changed", "user", userId, {
+      entityLabel: user.email,
+      newValue: { success: false },
+    });
+    res.status(500).json({
+      error: "Organization access could not be saved. No changes were applied.",
+    });
+    return;
+  }
+
+  // 11 ── Audit each distinct change with previous and new values.
+  const summarize = (m: { organizationId: string; role: string; status: string }) => ({
+    organizationId: m.organizationId,
+    role: m.role,
+    roleLabel: roleLabel(m.role),
+    status: m.status,
+  });
+
+  for (const a of added) {
+    await logAudit(req, "org_access_changed", "user", userId, {
+      entityLabel: user.email,
+      newValue: { change: "access_added", ...summarize(a), reason: reason ?? null },
+    });
+  }
+  for (const c of changed) {
+    await logAudit(req, "org_access_changed", "user", userId, {
+      entityLabel: user.email,
+      previousValue: summarize(beforeByOrg.get(c.organizationId)!),
+      newValue: { change: "org_role_changed", ...summarize(c), reason: reason ?? null },
+    });
+  }
+  for (const r of removed) {
+    await logAudit(req, "org_access_changed", "user", userId, {
+      entityLabel: user.email,
+      previousValue: summarize(r),
+      newValue: { change: "access_removed", reason: reason ?? null },
+    });
+  }
+
+  // 12 ── Return the canonical saved membership list.
+  res.json(await buildOrganizationAccessState(userId, user.role));
 });
 
 // ── Add user to org ───────────────────────────────────────────────────────────
@@ -557,8 +1001,21 @@ router.post("/users/:id/orgs", requireAuth, requireRole("admin"), async (req, re
     return;
   }
 
+  // "global_admin" is a PLATFORM role — it must never be stored as an org role.
+  if (!isAssignableOrgRole(role)) {
+    res.status(400).json({
+      error: `Invalid organization role "${String(role)}". Allowed: ${ASSIGNABLE_ORG_ROLES.join(", ")}`,
+    });
+    return;
+  }
+  const nextStatus = status ?? "active";
+  if (!isMembershipStatus(nextStatus)) {
+    res.status(400).json({ error: `Invalid membership status "${String(nextStatus)}"` });
+    return;
+  }
+
   const [user] = await db
-    .select({ id: usersTable.id, email: usersTable.email })
+    .select({ id: usersTable.id, email: usersTable.email, isBreakGlass: usersTable.isBreakGlass })
     .from(usersTable)
     .where(eq(usersTable.id, userId))
     .limit(1);
@@ -568,36 +1025,57 @@ router.post("/users/:id/orgs", requireAuth, requireRole("admin"), async (req, re
     return;
   }
 
-  // Upsert membership
-  const [existing] = await db
-    .select({ id: organizationUsersTable.id })
+  if (user.isBreakGlass) {
+    res.status(403).json({
+      error:
+        "The break-glass emergency account is protected. Its access comes from the Global Admin platform role and cannot be changed here.",
+    });
+    return;
+  }
+
+  // Upsert membership. Updates EVERY row for this (user, org) pair — duplicates
+  // would otherwise keep serving the old role after an apparently successful save.
+  const existing = await db
+    .select({ id: organizationUsersTable.id, role: organizationUsersTable.role, status: organizationUsersTable.status })
     .from(organizationUsersTable)
     .where(
       and(
         eq(organizationUsersTable.organizationId, organizationId),
         eq(organizationUsersTable.userId, userId)
       )
-    )
-    .limit(1);
+    );
 
-  if (existing) {
+  if (existing.length > 0) {
     await db
       .update(organizationUsersTable)
-      .set({ role, status: status ?? "active", joinedAt: new Date() })
-      .where(eq(organizationUsersTable.id, existing.id));
+      .set({ role, status: nextStatus, joinedAt: new Date() })
+      .where(
+        and(
+          eq(organizationUsersTable.organizationId, organizationId),
+          eq(organizationUsersTable.userId, userId)
+        )
+      );
   } else {
     await db.insert(organizationUsersTable).values({
       id: randomUUID(),
       organizationId,
       userId,
       role,
-      status: status ?? "active",
+      status: nextStatus,
       joinedAt: new Date(),
     });
   }
 
   await logAudit(req, "org_access_changed", "user", userId, {
     entityLabel: user.email,
+    previousValue: existing[0] ? { role: existing[0].role, status: existing[0].status } : null,
+    newValue: {
+      change: existing.length > 0 ? "org_role_changed" : "access_added",
+      organizationId,
+      role,
+      roleLabel: roleLabel(role),
+      status: nextStatus,
+    },
   });
 
   const [membership] = await db
@@ -630,31 +1108,69 @@ router.patch("/users/:id/orgs/:orgId", requireAuth, requireRole("admin"), async 
   const { id: userId, orgId: organizationId } = req.params as Record<string, string>;
   const { role, status } = req.body;
 
-  const [membership] = await db
-    .select({ id: organizationUsersTable.id })
-    .from(organizationUsersTable)
-    .where(
-      and(
-        eq(organizationUsersTable.organizationId, organizationId),
-        eq(organizationUsersTable.userId, userId)
-      )
-    )
+  if (role !== undefined && !isAssignableOrgRole(role)) {
+    res.status(400).json({
+      error: `Invalid organization role "${String(role)}". Allowed: ${ASSIGNABLE_ORG_ROLES.join(", ")}`,
+    });
+    return;
+  }
+  if (status !== undefined && !isMembershipStatus(status)) {
+    res.status(400).json({ error: `Invalid membership status "${String(status)}"` });
+    return;
+  }
+
+  const [target] = await db
+    .select({ email: usersTable.email, isBreakGlass: usersTable.isBreakGlass })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
     .limit(1);
 
-  if (!membership) {
+  if (!target) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+  if (target.isBreakGlass) {
+    res.status(403).json({
+      error:
+        "The break-glass emergency account is protected. Its access comes from the Global Admin platform role and cannot be changed here.",
+    });
+    return;
+  }
+
+  const pair = and(
+    eq(organizationUsersTable.organizationId, organizationId),
+    eq(organizationUsersTable.userId, userId)
+  );
+
+  const existing = await db
+    .select({ id: organizationUsersTable.id, role: organizationUsersTable.role, status: organizationUsersTable.status })
+    .from(organizationUsersTable)
+    .where(pair);
+
+  if (existing.length === 0) {
     res.status(404).json({ error: "Membership not found" });
     return;
   }
 
+  // Update every row for the pair so duplicates cannot serve a stale role.
   await db
     .update(organizationUsersTable)
     .set({
       ...(role ? { role } : {}),
       ...(status ? { status } : {}),
     })
-    .where(eq(organizationUsersTable.id, membership.id));
+    .where(pair);
 
-  await logAudit(req, "org_access_changed", "user", userId, {});
+  await logAudit(req, "org_access_changed", "user", userId, {
+    entityLabel: target.email,
+    previousValue: { organizationId, role: existing[0]!.role, status: existing[0]!.status },
+    newValue: {
+      change: role ? "org_role_changed" : "membership_status_changed",
+      organizationId,
+      ...(role ? { role, roleLabel: roleLabel(role) } : {}),
+      ...(status ? { status } : {}),
+    },
+  });
 
   const [updated] = await db
     .select({
@@ -670,7 +1186,7 @@ router.patch("/users/:id/orgs/:orgId", requireAuth, requireRole("admin"), async 
       organizationsTable,
       eq(organizationsTable.id, organizationUsersTable.organizationId)
     )
-    .where(eq(organizationUsersTable.id, membership.id))
+    .where(pair)
     .limit(1);
 
   res.json(updated);
@@ -680,28 +1196,47 @@ router.patch("/users/:id/orgs/:orgId", requireAuth, requireRole("admin"), async 
 router.delete("/users/:id/orgs/:orgId", requireAuth, requireRole("admin"), async (req, res) => {
   const { id: userId, orgId: organizationId } = req.params as Record<string, string>;
 
-  const [membership] = await db
-    .select({ id: organizationUsersTable.id })
-    .from(organizationUsersTable)
-    .where(
-      and(
-        eq(organizationUsersTable.organizationId, organizationId),
-        eq(organizationUsersTable.userId, userId)
-      )
-    )
+  const [target] = await db
+    .select({ email: usersTable.email, isBreakGlass: usersTable.isBreakGlass })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
     .limit(1);
 
-  if (!membership) {
+  if (!target) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+  if (target.isBreakGlass) {
+    res.status(403).json({
+      error:
+        "The break-glass emergency account is protected. Its access comes from the Global Admin platform role and cannot be changed here.",
+    });
+    return;
+  }
+
+  const pair = and(
+    eq(organizationUsersTable.organizationId, organizationId),
+    eq(organizationUsersTable.userId, userId)
+  );
+
+  const existing = await db
+    .select({ id: organizationUsersTable.id, role: organizationUsersTable.role, status: organizationUsersTable.status })
+    .from(organizationUsersTable)
+    .where(pair);
+
+  if (existing.length === 0) {
     res.status(404).json({ error: "Membership not found" });
     return;
   }
 
-  await db
-    .delete(organizationUsersTable)
-    .where(eq(organizationUsersTable.id, membership.id));
+  // Removes only the membership rows for this pair — never the user, never org data.
+  // All duplicate rows go together, otherwise the access would appear to survive removal.
+  await db.delete(organizationUsersTable).where(pair);
 
   await logAudit(req, "org_access_changed", "user", userId, {
-    newValue: { removed: true },
+    entityLabel: target.email,
+    previousValue: { organizationId, role: existing[0]!.role, status: existing[0]!.status },
+    newValue: { change: "access_removed", organizationId, rowsRemoved: existing.length },
   });
 
   res.json({ success: true });

@@ -12,6 +12,8 @@ import {
 } from "@workspace/db";
 import { eq, and, count, or, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { logAudit } from "../lib/audit";
+import { ASSIGNABLE_ORG_ROLES, isAssignableOrgRole } from "../lib/access-control";
 import { randomUUID } from "crypto";
 
 const router = Router();
@@ -113,11 +115,14 @@ router.post("/organizations", requireAuth, requireAdmin, async (req, res) => {
     isActive: true,
   });
 
+  // The creator becomes Organization Admin of the new org. "global_admin" is a
+  // PLATFORM role and must never be written into organization_users.role — doing so
+  // mixes the two role scopes and makes membership rows look like platform grants.
   await db.insert(organizationUsersTable).values({
     id: randomUUID(),
     organizationId: id,
     userId: req.authUser!.id,
-    role: "global_admin",
+    role: "org_admin",
     status: "active",
     joinedAt: new Date(),
   });
@@ -395,8 +400,38 @@ router.post("/organizations/:id/users", requireAuth, requireAdmin, async (req, r
     return;
   }
 
+  // This is a second way into organization_users, so it must enforce the same
+  // role-scope boundary as the Users & Roles endpoints. Without this, "global_admin"
+  // (a PLATFORM role) could still be written into a membership row here, which is
+  // exactly the mixing that made memberships look like platform grants.
+  if (!isAssignableOrgRole(role)) {
+    res.status(400).json({
+      error: `Invalid organization role "${String(role)}". Allowed: ${ASSIGNABLE_ORG_ROLES.join(", ")}. "global_admin" is a platform role and is assigned through the user's platform role, not a membership.`,
+    });
+    return;
+  }
+
+  const [target] = await db
+    .select({ email: usersTable.email, isBreakGlass: usersTable.isBreakGlass })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+
+  if (!target) {
+    res.status(400).json({ error: "User not found" });
+    return;
+  }
+
+  if (target.isBreakGlass) {
+    res.status(403).json({
+      error:
+        "The break-glass emergency account is protected. Its access comes from the Global Admin platform role and cannot be changed here.",
+    });
+    return;
+  }
+
   const existing = await db
-    .select({ id: organizationUsersTable.id })
+    .select({ id: organizationUsersTable.id, role: organizationUsersTable.role, status: organizationUsersTable.status })
     .from(organizationUsersTable)
     .where(
       and(
@@ -421,6 +456,14 @@ router.post("/organizations/:id/users", requireAuth, requireAdmin, async (req, r
       joinedAt: new Date(),
     });
   }
+
+  // Membership/role changes are auditable wherever they happen, not only on the
+  // Users & Roles routes, so role history stays traceable.
+  await logAudit(req, "org_access_changed", "user", userId, {
+    entityLabel: target.email,
+    previousValue: existing.length > 0 ? { role: existing[0].role, status: existing[0].status } : null,
+    newValue: { organizationId: req.params.id as string, role, status: "active" },
+  });
 
   res.json({ organizationId: req.params.id as string, userId, role });
 });
@@ -451,15 +494,52 @@ router.delete("/organizations/:id", requireAuth, requireAdmin, async (req, res) 
 });
 
 router.delete("/organizations/:id/users/:userId", requireAuth, requireAdmin, async (req, res) => {
+  const targetUserId = req.params.userId as string;
+
+  const [target] = await db
+    .select({ email: usersTable.email, isBreakGlass: usersTable.isBreakGlass })
+    .from(usersTable)
+    .where(eq(usersTable.id, targetUserId))
+    .limit(1);
+
+  if (!target) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  if (target.isBreakGlass) {
+    res.status(403).json({
+      error:
+        "The break-glass emergency account is protected. Its access comes from the Global Admin platform role and cannot be changed here.",
+    });
+    return;
+  }
+
+  const previous = await db
+    .select({ role: organizationUsersTable.role, status: organizationUsersTable.status })
+    .from(organizationUsersTable)
+    .where(
+      and(
+        eq(organizationUsersTable.organizationId, req.params.id as string),
+        eq(organizationUsersTable.userId, targetUserId)
+      )
+    );
+
   await db
     .update(organizationUsersTable)
     .set({ status: "suspended" })
     .where(
       and(
         eq(organizationUsersTable.organizationId, req.params.id as string),
-        eq(organizationUsersTable.userId, req.params.userId as string)
+        eq(organizationUsersTable.userId, targetUserId)
       )
     );
+
+  await logAudit(req, "org_access_changed", "user", targetUserId, {
+    entityLabel: target.email,
+    previousValue: previous.length > 0 ? previous[0] : null,
+    newValue: { organizationId: req.params.id as string, status: "suspended" },
+  });
 
   res.json({ success: true });
 });

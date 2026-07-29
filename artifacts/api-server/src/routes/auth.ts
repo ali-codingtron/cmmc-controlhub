@@ -30,7 +30,7 @@ import { signMfaStateToken, verifyMfaStateToken } from "../lib/mfa-jwt";
 import { randomUUID } from "crypto";
 import { logger } from "../lib/logger";
 import { sendPasswordResetEmail, getAppBaseUrl, sendBreakGlassLoginAlert } from "../lib/email";
-import { getOrgPermissions } from "../lib/permissions";
+import { resolveEffectiveAccess } from "../lib/access-control";
 import {
   generateResetToken,
   hashResetToken,
@@ -1640,61 +1640,35 @@ router.get("/auth/organization-context/:organizationId", requireAuth, async (req
   }
   const userId = targetUserIdParam ?? req.authUser!.id;
 
-  const [org] = await db
-    .select({ id: organizationsTable.id, name: organizationsTable.name })
-    .from(organizationsTable)
-    .where(eq(organizationsTable.id, organizationId))
-    .limit(1);
+  // Resolved through the single shared authorization service so this diagnostic
+  // view and the middleware that actually gates requests can never disagree.
+  const access = await resolveEffectiveAccess(userId, organizationId);
 
-  if (!org) {
-    res.status(404).json({ error: "Organization not found" });
+  if (!access) {
+    res.status(404).json({ error: "User or organization not found" });
     return;
   }
 
-  // Determine if target user is a global admin
-  const [targetUser] = await db
-    .select({ role: usersTable.role })
-    .from(usersTable)
-    .where(eq(usersTable.id, userId))
-    .limit(1);
-
-  if (targetUser?.role === "admin") {
-    res.json({
-      organizationId,
-      organizationName: org.name,
-      userId,
-      effectiveRole: "admin",
-      platformRole: "global_admin",
-      membershipStatus: "global_admin",
-      permissions: getOrgPermissions("admin"),
-    });
-    return;
-  }
-
-  const [membership] = await db
-    .select({ role: organizationUsersTable.role, status: organizationUsersTable.status })
-    .from(organizationUsersTable)
-    .where(
-      and(
-        eq(organizationUsersTable.userId, userId),
-        eq(organizationUsersTable.organizationId, organizationId),
-      ),
-    )
-    .limit(1);
-
-  if (!membership) {
-    res.status(404).json({ error: "User has no membership in this organization" });
-    return;
-  }
-
+  // Note: a user with no membership is a valid, describable state — it returns 200
+  // with hasAccess=false and a reason, so the UI can say "No active organization
+  // membership exists" instead of rendering a blank panel on a 404.
   res.json({
-    organizationId,
-    organizationName: org.name,
-    userId,
-    effectiveRole: membership.role,
-    platformRole: "none",
-    membershipStatus: membership.status,
-    permissions: getOrgPermissions(membership.role),
+    organizationId: access.organizationId,
+    organizationName: access.organizationName,
+    userId: access.userId,
+    effectiveRole: access.effectiveRole,
+    effectiveRoleLabel: access.effectiveRoleLabel,
+    platformRole: access.platformRole,
+    platformRoleLabel: access.platformRoleLabel,
+    organizationRole: access.organizationRole,
+    organizationRoleLabel: access.organizationRoleLabel,
+    membershipStatus: access.membershipStatus,
+    permissionSource: access.permissionSource,
+    membershipRequired: access.membershipRequired,
+    hasAccess: access.hasAccess,
+    permissions: access.permissions,
+    deniedPermissions: access.deniedPermissions,
+    reason: access.reason,
   });
 });
 

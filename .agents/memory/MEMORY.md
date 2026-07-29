@@ -11,5 +11,7 @@
 - [Documents module file viewer](documents-file-viewer.md) — Document detail page, preview endpoint, fileKey was missing from select, legacy key handling, document_control_maps has no relationship_type.
 - [Express 5 typecheck patterns](express5-typecheck-patterns.md) — req.params cast, async void handlers, inArray enum, archiver ESM import, logAudit metadata fields.
 - [Org-role auth architecture](org-role-auth.md) — users.role = global JWT role; organization_users.role = org-specific role; always use req.orgRole (set by requireOrg) for permission checks.
+- [Users & Roles access model](users-roles-access-model.md) — only 2 platform roles (none/global_admin, stored as "admin"); no membership = no access; 7 invariants incl. lock-inside-transaction rules.
+- [organization_users duplicates](membership-duplicates.md) — onConflictDoNothing is a no-op without a unique index; repair order (diagnose → fix writer → collapse in reads → delete → constraint last).
 - [Smart Evidence Mapping](smart-evidence-mapping.md) — local-only analysis engine (no external AI); controlsTable needs LEFT JOIN domainsTable for domain name; confidence tiers + scoring rules.
 - [CMMC L1 ↔ FAR 52.204-21 crosswalk](cmmc-l1-far-crosswalk.md) — 17 equivalent rows missing; nothingToDo guard in seedCrosswalkRequirements skipped them; fix pattern for adding future crosswalk pairs.

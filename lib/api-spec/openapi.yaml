@@ -353,7 +353,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/User"
+                $ref: "#/components/schemas/UserDetail"
     patch:
       operationId: updateUser
       tags: [users]
@@ -541,6 +541,78 @@ paths:
       responses:
         "200":
           description: Removed
+
+  /users/{id}/effective-access:
+    get:
+      operationId: getUserEffectiveAccess
+      tags: [users]
+      summary: Resolve a user's effective access, optionally scoped to one organization
+      description: >
+        Single source of truth for authorization. Omit organizationId to resolve
+        platform-level access only — a Global Admin is reported without requiring
+        an organization to be selected.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: organizationId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Effective access
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EffectiveAccess"
+
+  /users/{id}/organization-access:
+    get:
+      operationId: getUserOrganizationAccess
+      tags: [users]
+      summary: Get the canonical organization-access state for a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Organization access state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationAccessState"
+    put:
+      operationId: saveUserOrganizationAccess
+      tags: [users]
+      summary: Transactionally replace a user's full organization-membership set
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveOrganizationAccessBody"
+      responses:
+        "200":
+          description: Canonical saved organization access state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationAccessState"
+        "409":
+          description: Concurrent modification — reload before saving
 
   # ─── INVITATIONS ────────────────────────────────────────────
   /users/invite:
@@ -2605,7 +2677,7 @@ components:
           type: string
         role:
           type: string
-          enum: [admin, compliance_manager, it_contributor, reviewer, executive_viewer, assessor]
+          enum: [admin, compliance_manager, it_contributor, reviewer, executive_viewer, assessor, none]
         status:
           type: string
           enum: [invited, pending_setup, active, suspended, deactivated]
@@ -2645,6 +2717,10 @@ components:
           type: string
           format: date-time
           nullable: true
+        isBreakGlass:
+          type: boolean
+        mfaExempt:
+          type: boolean
       required:
         - id
         - name
@@ -2654,6 +2730,178 @@ components:
         - createdAt
         - mfaEnabled
         - failedLoginCount
+
+    UserDetail:
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - type: object
+          properties:
+            platformRole:
+              type: string
+              enum: [none, global_admin]
+            platformRoleLabel:
+              type: string
+            isProtected:
+              type: boolean
+              description: Account is protected from routine destructive edits (break-glass).
+            legacyRole:
+              type: string
+              nullable: true
+              description: Legacy global role still stored on the account, if any.
+            department:
+              type: string
+              nullable: true
+            title:
+              type: string
+              nullable: true
+            inviteAcceptedAt:
+              type: string
+              format: date-time
+              nullable: true
+            invitationStatus:
+              type: string
+              nullable: true
+            authProvider:
+              type: string
+              nullable: true
+            updatedAt:
+              type: string
+              format: date-time
+              nullable: true
+          required:
+            - platformRole
+            - platformRoleLabel
+            - isProtected
+
+    EffectiveAccess:
+      type: object
+      properties:
+        userId:
+          type: string
+        organizationId:
+          type: string
+          nullable: true
+        organizationName:
+          type: string
+          nullable: true
+        platformRole:
+          type: string
+          enum: [none, global_admin]
+        platformRoleLabel:
+          type: string
+        organizationRole:
+          type: string
+          nullable: true
+        organizationRoleLabel:
+          type: string
+          nullable: true
+        membershipStatus:
+          type: string
+          enum: [active, invited, suspended]
+          nullable: true
+        effectiveRole:
+          type: string
+        effectiveRoleLabel:
+          type: string
+        permissionSource:
+          type: string
+          enum: [PLATFORM_ROLE, ORGANIZATION_MEMBERSHIP, LEGACY_GLOBAL_ROLE, NONE]
+        membershipRequired:
+          type: boolean
+        hasAccess:
+          type: boolean
+        permissions:
+          type: array
+          items:
+            type: string
+        deniedPermissions:
+          type: array
+          items:
+            type: string
+        legacyRole:
+          description: >-
+            A legacy global role still stored on the account. INFORMATIONAL ONLY —
+            it never grants access; only the platform role and active organization
+            memberships do.
+          type: string
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+      required:
+        - userId
+        - platformRole
+        - platformRoleLabel
+        - effectiveRole
+        - effectiveRoleLabel
+        - permissionSource
+        - membershipRequired
+        - hasAccess
+        - permissions
+        - deniedPermissions
+
+    OrganizationAccessState:
+      type: object
+      description: >
+        Canonical organization-access state for one user. Exactly one entry per
+        organization. For Global Admins, memberships are not the source of access —
+        membershipRequired is false and platformAccessNote explains why.
+      properties:
+        userId:
+          type: string
+        platformRole:
+          type: string
+          enum: [none, global_admin]
+        membershipRequired:
+          type: boolean
+        platformAccessNote:
+          type: string
+          nullable: true
+        memberships:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserOrgMembership"
+        distinctOrganizationCount:
+          type: integer
+        duplicateRowCount:
+          type: integer
+          description: Redundant rows detected in the database for this user. 0 when healthy.
+        version:
+          type: string
+          description: Fingerprint of the saved set, for optimistic concurrency control.
+      required:
+        - userId
+        - platformRole
+        - membershipRequired
+        - memberships
+        - distinctOrganizationCount
+        - duplicateRowCount
+        - version
+
+    SaveOrganizationAccessBody:
+      type: object
+      required: [memberships]
+      properties:
+        memberships:
+          type: array
+          items:
+            type: object
+            required: [organizationId, role, status]
+            properties:
+              organizationId:
+                type: string
+              role:
+                type: string
+                enum: [org_admin, compliance_manager, it_contributor, reviewer, executive_viewer, assessor]
+              status:
+                type: string
+                enum: [active, invited, suspended]
+        expectedVersion:
+          type: string
+          nullable: true
+        reason:
+          type: string
+          nullable: true
 
     CreateUserBody:
       type: object
@@ -2665,8 +2913,11 @@ components:
         password:
           type: string
         role:
+          description: >-
+            Platform role only. Organization-specific roles are assigned through
+            organization access, never here. The server rejects anything else.
           type: string
-          enum: [admin, compliance_manager, it_contributor, reviewer, executive_viewer, assessor]
+          enum: [none, global_admin]
         title:
           type: string
         department:
@@ -2685,8 +2936,11 @@ components:
         email:
           type: string
         role:
+          description: >-
+            Platform role only. Organization-specific roles are assigned through
+            organization access, never here. The server rejects anything else.
           type: string
-          enum: [admin, compliance_manager, it_contributor, reviewer, executive_viewer, assessor]
+          enum: [none, global_admin]
         title:
           type: string
         department:
@@ -2734,8 +2988,11 @@ components:
         organizationId:
           type: string
         role:
+          description: >-
+            Assignable organization role. global_admin is a PLATFORM role and is
+            rejected here — it must never be stored on a membership.
           type: string
-          enum: [global_admin, org_admin, compliance_manager, it_contributor, reviewer, executive_viewer, assessor]
+          enum: [org_admin, compliance_manager, it_contributor, reviewer, executive_viewer, assessor]
         status:
           type: string
           enum: [active, invited, suspended]
@@ -2744,8 +3001,11 @@ components:
       type: object
       properties:
         role:
+          description: >-
+            Assignable organization role. global_admin is a PLATFORM role and is
+            rejected here — it must never be stored on a membership.
           type: string
-          enum: [global_admin, org_admin, compliance_manager, it_contributor, reviewer, executive_viewer, assessor]
+          enum: [org_admin, compliance_manager, it_contributor, reviewer, executive_viewer, assessor]
         status:
           type: string
           enum: [active, invited, suspended]
@@ -4707,8 +4967,10 @@ components:
         email:
           type: string
         role:
+          description: >-
+            Platform role only. Organization-specific roles go in orgMemberships.
           type: string
-          enum: [admin, compliance_manager, it_contributor, reviewer, executive_viewer, assessor]
+          enum: [none, global_admin]
         title:
           type: string
         department:

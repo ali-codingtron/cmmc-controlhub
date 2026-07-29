@@ -4,6 +4,11 @@ import { randomUUID } from "crypto";
 import { db, usersTable, userInvitationsTable, organizationUsersTable, organizationsTable, auditLogsTable } from "@workspace/db";
 import { eq, and, gt } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
+import {
+  ASSIGNABLE_ORG_ROLES,
+  isAssignableOrgRole,
+  platformRoleToStoredRole,
+} from "../lib/access-control";
 import { generateInviteToken, hashToken, INVITE_EXPIRY_DAYS } from "../lib/invite-token";
 import { sendInvitationEmail, isEmailConfigured, getAppBaseUrl } from "../lib/email";
 import { logger } from "../lib/logger";
@@ -67,6 +72,26 @@ async function handleSendInvitation(req: Request, res: Response): Promise<void> 
     return;
   }
 
+  // Normalize the PLATFORM role at the boundary, exactly as POST/PATCH /users do,
+  // so an invite can never be the back door that stores an organization role in
+  // the platform-role column. Organization roles arrive via orgMemberships.
+  const normalizedRole = platformRoleToStoredRole(role);
+  if (!normalizedRole) {
+    res.status(400).json({
+      error: `Invalid platform role "${String(role)}". Allowed: none, global_admin. Organization-specific roles are assigned through organization access.`,
+    });
+    return;
+  }
+
+  for (const m of orgMemberships ?? []) {
+    if (!isAssignableOrgRole(m.role)) {
+      res.status(400).json({
+        error: `Invalid organization role "${String(m.role)}". Allowed: ${ASSIGNABLE_ORG_ROLES.join(", ")}`,
+      });
+      return;
+    }
+  }
+
   const normalizedEmail = email.trim().toLowerCase();
 
   const [existing] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, normalizedEmail)).limit(1);
@@ -84,7 +109,7 @@ async function handleSendInvitation(req: Request, res: Response): Promise<void> 
     name: name.trim(),
     email: normalizedEmail,
     passwordHash: null,
-    role: role as any,
+    role: normalizedRole,
     title: title?.trim() ?? null,
     department: department?.trim() ?? null,
     isActive: false,

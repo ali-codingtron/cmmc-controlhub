@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import {
   useListUsers,
@@ -9,8 +9,15 @@ import {
   useDeactivateUser,
   useActivateUser,
   useResetUserPassword,
+  useGetUser,
+  getGetUserQueryKey,
   useGetUserOrgs,
   getGetUserOrgsQueryKey,
+  useGetUserOrganizationAccess,
+  getGetUserOrganizationAccessQueryKey,
+  useSaveUserOrganizationAccess,
+  useGetUserEffectiveAccess,
+  getGetUserEffectiveAccessQueryKey,
   useAddUserToOrg,
   useUpdateUserOrgMembership,
   useRemoveUserFromOrg,
@@ -23,7 +30,13 @@ import {
   useResendInvitation,
   useCancelInvitation,
 } from "@workspace/api-client-react";
-import type { User, UserOrgMembership, OrganizationSummary } from "@workspace/api-client-react";
+import type {
+  User,
+  UserDetail,
+  UserOrgMembership,
+  OrganizationSummary,
+  OrganizationAccessState,
+} from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -99,15 +112,8 @@ import { cn } from "@/lib/utils";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const GLOBAL_ROLES = [
-  { value: "admin", label: "Global Admin" },
-  { value: "compliance_manager", label: "Compliance Manager" },
-  { value: "it_contributor", label: "IT Contributor" },
-  { value: "reviewer", label: "Reviewer" },
-  { value: "executive_viewer", label: "Executive Viewer" },
-  { value: "assessor", label: "Assessor Read-Only" },
-] as const;
-
+// Organization-specific roles. `global_admin` is deliberately absent — it is a
+// PLATFORM role, not something granted through a membership.
 const ORG_ROLES = [
   { value: "org_admin", label: "Organization Admin" },
   { value: "compliance_manager", label: "Compliance Manager" },
@@ -123,19 +129,45 @@ const ORG_STATUSES = [
   { value: "suspended", label: "Suspended" },
 ] as const;
 
+// The only two platform roles. Everything else is organization-scoped.
 const PLATFORM_ROLES = [
-  { value: "none", label: "No Platform Role" },
-  { value: "admin", label: "Global Admin" },
+  { value: "none", label: "None — Organization Access Only" },
+  { value: "global_admin", label: "Global Admin — All Organizations" },
 ] as const;
 
-function globalRoleLabel(role: string) {
-  if (role === "admin") return "Global Admin";
-  return "—";
+type PlatformRoleValue = (typeof PLATFORM_ROLES)[number]["value"];
+
+/** Canonical platform role for a stored `users.role` value. */
+function platformRoleOf(storedRole: string | null | undefined): PlatformRoleValue {
+  return storedRole === "admin" || storedRole === "global_admin" ? "global_admin" : "none";
+}
+
+/** Short label for the Users table. Never a blank or ambiguous value. */
+function platformRoleLabel(storedRole: string | null | undefined) {
+  return platformRoleOf(storedRole) === "global_admin" ? "Global Admin" : "None";
+}
+
+function isGlobalAdminRole(storedRole: string | null | undefined) {
+  return platformRoleOf(storedRole) === "global_admin";
 }
 
 function orgRoleLabel(role: string) {
+  if (role === "global_admin") return "Global Admin";
   return ORG_ROLES.find((r) => r.value === role)?.label ?? role;
 }
+
+function orgStatusLabel(status: string) {
+  return ORG_STATUSES.find((s) => s.value === status)?.label ?? status;
+}
+
+/** Legacy global roles that predate the platform/organization split. */
+const LEGACY_GLOBAL_ROLES = [
+  "compliance_manager",
+  "it_contributor",
+  "reviewer",
+  "executive_viewer",
+  "assessor",
+];
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "—";
@@ -179,7 +211,7 @@ function UserForm({
             id="uf-name"
             value={data.name}
             onChange={(e) => onChange("name", e.target.value)}
-            placeholder="Jane Smith"
+            placeholder="Enter full name"
             className={errors.name ? "border-red-500" : ""}
           />
           {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
@@ -193,7 +225,7 @@ function UserForm({
             type="email"
             value={data.email}
             onChange={(e) => onChange("email", e.target.value)}
-            placeholder="jane@example.com"
+            placeholder="name@company.com"
             className={errors.email ? "border-red-500" : ""}
           />
           {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
@@ -221,11 +253,13 @@ function UserForm({
 
       <div className="space-y-1.5">
         <Label htmlFor="uf-platform-role">Platform Role</Label>
+        {/* Stores the canonical platform role only. "None" is a real, explicit
+            value — it is never a stand-in for an organization role. */}
         <Select
-          value={data.role === "admin" ? "admin" : "none"}
-          onValueChange={(v) => onChange("role", v === "admin" ? "admin" : "it_contributor")}
+          value={platformRoleOf(data.role)}
+          onValueChange={(v) => onChange("role", v)}
         >
-          <SelectTrigger id="uf-platform-role">
+          <SelectTrigger id="uf-platform-role" data-testid="select-platform-role">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -237,8 +271,17 @@ function UserForm({
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          Global Admin has unrestricted access across all organizations. For all other users, access is controlled by organization-specific roles.
+          <strong>Global Admin</strong> grants access to every organization and does not need
+          organization memberships. <strong>None</strong> means access comes solely from the
+          organizations assigned on the Organization Access tab.
         </p>
+        {LEGACY_GLOBAL_ROLES.includes(data.role) && (
+          <p className="text-xs text-amber-700">
+            This account still carries the legacy global role
+            "{data.role.replace(/_/g, " ")}". Saving with Platform Role = None replaces it with
+            organization-based access.
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -248,7 +291,7 @@ function UserForm({
             id="uf-title"
             value={data.title}
             onChange={(e) => onChange("title", e.target.value)}
-            placeholder="Security Engineer"
+            placeholder="Enter job title"
           />
         </div>
         <div className="space-y-1.5">
@@ -257,7 +300,7 @@ function UserForm({
             id="uf-dept"
             value={data.department}
             onChange={(e) => onChange("department", e.target.value)}
-            placeholder="IT / Security"
+            placeholder="Enter department"
           />
         </div>
       </div>
@@ -267,213 +310,534 @@ function UserForm({
 
 // ─── Org Memberships Panel ────────────────────────────────────────────────────
 
-function OrgMembershipsPanel({ userId }: { userId: string }) {
+interface DraftMembership {
+  organizationId: string;
+  organizationName: string;
+  role: string;
+  status: string;
+  /** Role/status as currently persisted. Undefined for rows the admin just added. */
+  savedRole?: string;
+  savedStatus?: string;
+  markedForRemoval: boolean;
+}
+
+function buildDraft(state: OrganizationAccessState | undefined): DraftMembership[] {
+  if (!state) return [];
+  return state.memberships.map((m) => ({
+    organizationId: m.organizationId,
+    organizationName: m.organizationName,
+    role: m.role,
+    status: m.status,
+    savedRole: m.role,
+    savedStatus: m.status,
+    markedForRemoval: false,
+  }));
+}
+
+/**
+ * Organization Access editor.
+ *
+ * Edits are staged locally and only persisted when "Save Organization Access" is
+ * pressed. Per-control auto-save was removed: it gave no confirmation, no way to
+ * revert, and — combined with duplicate membership rows — made saves look like
+ * they had silently failed.
+ */
+function OrgMembershipsPanel({
+  userId,
+  onDirtyChange,
+  disabled,
+  disabledReason,
+}: {
+  userId: string;
+  onDirtyChange?: (dirty: boolean) => void;
+  disabled?: boolean;
+  disabledReason?: string;
+}) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const { data: memberships = [], isLoading } = useGetUserOrgs(userId);
+
+  const {
+    data: access,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useGetUserOrganizationAccess(userId, {
+    query: { queryKey: getGetUserOrganizationAccessQueryKey(userId) },
+  });
+
   const { data: allOrgs = [] } = useListOrganizations({
     query: { queryKey: ["organizations"] },
   });
 
-  const addMutation = useAddUserToOrg();
-  const updateMutation = useUpdateUserOrgMembership();
-  const removeMutation = useRemoveUserFromOrg();
+  const saveMutation = useSaveUserOrganizationAccess();
 
+  const [draft, setDraft] = useState<DraftMembership[]>([]);
+  const [syncedKey, setSyncedKey] = useState<string | null>(null);
   const [addOrgId, setAddOrgId] = useState("");
   const [addRole, setAddRole] = useState("it_contributor");
   const [addStatus, setAddStatus] = useState("active");
   const [showAddRow, setShowAddRow] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const assignedOrgIds = new Set(memberships.map((m) => m.organizationId));
-  const availableOrgs = allOrgs.filter((o) => !assignedOrgIds.has(o.id));
+  // Re-sync the draft whenever the server-side set actually changes (identified by
+  // its version fingerprint) — including the first load and after a save. Local
+  // edits survive background refetches that return the same version.
+  const dataKey = access ? `${access.userId}:${access.version}` : null;
+  if (dataKey && dataKey !== syncedKey) {
+    setSyncedKey(dataKey);
+    setDraft(buildDraft(access));
+    setShowAddRow(false);
+    setAddOrgId("");
+  }
 
-  const invalidate = () =>
-    qc.refetchQueries({ queryKey: getGetUserOrgsQueryKey(userId), exact: true });
+  const readOnly = disabled || access?.membershipRequired === false;
 
-  const handleAdd = async () => {
-    if (!addOrgId || !addRole) return;
-    try {
-      await addMutation.mutateAsync({
-        id: userId,
-        data: { organizationId: addOrgId, role: addRole as any, status: addStatus as any },
-      });
-      setAddOrgId("");
-      setAddRole("it_contributor");
-      setAddStatus("active");
-      setShowAddRow(false);
-      await invalidate();
-      toast({ title: "Organization access granted" });
-    } catch {
-      toast({ title: "Failed to add organization", variant: "destructive" });
+  const changes = draft.reduce(
+    (acc, d) => {
+      if (!d.savedRole) acc.added += 1;
+      else if (d.markedForRemoval) acc.removed += 1;
+      else if (d.role !== d.savedRole || d.status !== d.savedStatus) acc.modified += 1;
+      return acc;
+    },
+    { added: 0, removed: 0, modified: 0 },
+  );
+  const isDirty = changes.added + changes.removed + changes.modified > 0;
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  // Reset the dirty flag when this panel unmounts so a closed dialog never
+  // leaves a stale "unsaved changes" warning behind.
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+
+  const assignedOrgIds = new Set(draft.filter((d) => !d.markedForRemoval).map((d) => d.organizationId));
+
+  const updateRow = (organizationId: string, patch: Partial<DraftMembership>) =>
+    setDraft((prev) =>
+      prev.map((d) => (d.organizationId === organizationId ? { ...d, ...patch } : d)),
+    );
+
+  const handleAdd = () => {
+    if (!addOrgId) return;
+    const org = allOrgs.find((o) => o.id === addOrgId);
+    if (!org) return;
+
+    const existing = draft.find((d) => d.organizationId === addOrgId);
+    if (existing) {
+      // Re-adding an organization that was staged for removal simply un-stages it.
+      updateRow(addOrgId, { markedForRemoval: false, role: addRole, status: addStatus });
+    } else {
+      setDraft((prev) => [
+        ...prev,
+        {
+          organizationId: addOrgId,
+          organizationName: org.name,
+          role: addRole,
+          status: addStatus,
+          markedForRemoval: false,
+        },
+      ]);
+    }
+    setAddOrgId("");
+    setAddRole("it_contributor");
+    setAddStatus("active");
+    setShowAddRow(false);
+  };
+
+  const handleRemoveClick = (row: DraftMembership) => {
+    if (!row.savedRole) {
+      // Never persisted — drop it outright, nothing to confirm.
+      setDraft((prev) => prev.filter((d) => d.organizationId !== row.organizationId));
+    } else {
+      updateRow(row.organizationId, { markedForRemoval: true });
     }
   };
 
-  const handleUpdateRole = async (membership: UserOrgMembership, role: string) => {
+  const handleRevert = () => {
+    setDraft(buildDraft(access));
+    setShowAddRow(false);
+    setAddOrgId("");
+  };
+
+  const doSave = async () => {
+    setConfirmOpen(false);
+    const memberships = draft
+      .filter((d) => !d.markedForRemoval)
+      .map((d) => ({
+        organizationId: d.organizationId,
+        role: d.role as any,
+        status: d.status as any,
+      }));
+
     try {
-      await updateMutation.mutateAsync({
+      const saved = await saveMutation.mutateAsync({
         id: userId,
-        orgId: membership.organizationId,
-        data: { role: role as any },
+        data: { memberships, expectedVersion: access?.version ?? null },
       });
-      await invalidate();
-    } catch {
-      toast({ title: "Failed to update role", variant: "destructive" });
+      // Adopt the canonical server response so what's on screen is exactly what
+      // was stored — no optimistic guesses.
+      qc.setQueryData(getGetUserOrganizationAccessQueryKey(userId), saved);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: getGetUserOrgsQueryKey(userId) }),
+        qc.invalidateQueries({ queryKey: getListUsersQueryKey() }),
+      ]);
+      toast({
+        title: "Organization access saved",
+        description: `${saved.distinctOrganizationCount} organization${saved.distinctOrganizationCount === 1 ? "" : "s"} assigned.`,
+      });
+    } catch (e: any) {
+      const status = e?.status ?? e?.response?.status;
+      if (status === 409) {
+        toast({
+          title: "Someone else changed this user",
+          description: "Reloading the latest organization access. Re-apply your changes and save again.",
+          variant: "destructive",
+        });
+        await refetch();
+        return;
+      }
+      toast({
+        title: "Organization access was not saved",
+        description: e?.message ?? "No changes were applied. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
-  const handleUpdateStatus = async (membership: UserOrgMembership, status: string) => {
-    try {
-      await updateMutation.mutateAsync({
-        id: userId,
-        orgId: membership.organizationId,
-        data: { status: status as any },
-      });
-      await invalidate();
-    } catch {
-      toast({ title: "Failed to update status", variant: "destructive" });
+  const handleSaveClick = () => {
+    if (changes.removed > 0) {
+      setConfirmOpen(true);
+      return;
     }
-  };
-
-  const handleRemove = async (membership: UserOrgMembership) => {
-    try {
-      await removeMutation.mutateAsync({ id: userId, orgId: membership.organizationId });
-      await invalidate();
-      toast({ title: "Organization access removed" });
-    } catch {
-      toast({ title: "Failed to remove organization", variant: "destructive" });
-    }
+    void doSave();
   };
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 py-4 text-muted-foreground text-sm">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Loading organizations…
+      <div className="space-y-2 py-2" data-testid="org-access-loading">
+        <div className="h-9 rounded-md bg-muted animate-pulse" />
+        <div className="h-9 rounded-md bg-muted animate-pulse" />
+        <div className="h-9 w-1/2 rounded-md bg-muted animate-pulse" />
       </div>
     );
   }
 
+  if (isError || !access) {
+    return (
+      <div className="rounded-md border border-red-200 bg-red-50 p-4 space-y-3" data-testid="org-access-error">
+        <div className="flex items-start gap-2 text-sm text-red-700">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          <div>
+            <p className="font-medium">Organization access could not be loaded.</p>
+            <p className="text-xs mt-0.5">
+              {(error as any)?.message ?? "The request failed."} No changes have been made.
+            </p>
+          </div>
+        </div>
+        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => void refetch()}>
+          <RefreshCw className="h-3.5 w-3.5" />
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  const visibleRows = [...draft].sort((a, b) => a.organizationName.localeCompare(b.organizationName));
+  const availableOrgs = allOrgs.filter((o) => !assignedOrgIds.has(o.id));
+
   return (
-    <div className="space-y-3">
-      {memberships.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No organization access assigned.</p>
-      ) : (
-        <div className="space-y-2">
-          {memberships.map((m) => (
-            <div
-              key={m.membershipId}
-              className="flex items-center gap-2 rounded-md border px-3 py-2 bg-muted/30"
-            >
-              <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-              <span className="text-sm font-medium flex-1 min-w-0 truncate">
-                {m.organizationName}
-              </span>
-              <Select
-                value={m.role}
-                onValueChange={(v) => handleUpdateRole(m, v)}
-              >
-                <SelectTrigger className="h-7 w-44 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ORG_ROLES.map((r) => (
-                    <SelectItem key={r.value} value={r.value} className="text-xs">
-                      {r.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={m.status}
-                onValueChange={(v) => handleUpdateStatus(m, v)}
-              >
-                <SelectTrigger className="h-7 w-28 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ORG_STATUSES.map((s) => (
-                    <SelectItem key={s.value} value={s.value} className="text-xs">
-                      {s.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-muted-foreground hover:text-red-500"
-                onClick={() => handleRemove(m)}
-              >
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          ))}
+    <div className="space-y-3" data-testid="org-access-panel">
+      {/* Global Admin: platform role is the access source, memberships are not required. */}
+      {access.membershipRequired === false && (
+        <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 flex items-start gap-2">
+          <ShieldCheck className="h-4 w-4 mt-0.5 shrink-0" />
+          <div>
+            <p className="font-medium">Global Admin — access to all organizations</p>
+            <p className="text-xs mt-0.5">
+              {access.platformAccessNote ??
+                "Organization-specific memberships are not required for this user."}
+              {visibleRows.length > 0 &&
+                " Any rows listed below are historical records and are not used to calculate access."}
+            </p>
+          </div>
         </div>
       )}
 
-      {showAddRow ? (
-        <div className="flex items-center gap-2 rounded-md border px-3 py-2 bg-blue-50/50 border-blue-200">
-          <Select value={addOrgId} onValueChange={setAddOrgId}>
-            <SelectTrigger className="h-7 flex-1 text-xs">
-              <SelectValue placeholder="Select organization…" />
-            </SelectTrigger>
-            <SelectContent>
-              {availableOrgs.map((o) => (
-                <SelectItem key={o.id} value={o.id} className="text-xs">
-                  {o.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={addRole} onValueChange={setAddRole}>
-            <SelectTrigger className="h-7 w-44 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {ORG_ROLES.map((r) => (
-                <SelectItem key={r.value} value={r.value} className="text-xs">
-                  {r.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={addStatus} onValueChange={setAddStatus}>
-            <SelectTrigger className="h-7 w-24 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {ORG_STATUSES.map((s) => (
-                <SelectItem key={s.value} value={s.value} className="text-xs">
-                  {s.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button size="sm" className="h-7 text-xs" onClick={handleAdd} disabled={!addOrgId}>
-            Add
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => setShowAddRow(false)}
-          >
-            <X className="h-3.5 w-3.5" />
-          </Button>
+      {disabled && disabledReason && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 flex items-start gap-2">
+          <ShieldAlert className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>{disabledReason}</span>
         </div>
+      )}
+
+      {access.duplicateRowCount > 0 && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          <div>
+            <p className="font-medium">
+              {access.duplicateRowCount} redundant membership record
+              {access.duplicateRowCount === 1 ? "" : "s"} detected
+            </p>
+            <p className="text-xs mt-0.5">
+              Each organization is shown once below, which is what actually applies. Ask an
+              administrator to run the membership repair script to clean up the extra rows.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {visibleRows.length === 0 ? (
+        <p className="text-sm text-muted-foreground" data-testid="org-access-empty">
+          {access.membershipRequired === false
+            ? "No organization-specific memberships recorded."
+            : "No organization access assigned. This user cannot open any organization yet."}
+        </p>
       ) : (
-        availableOrgs.length > 0 && (
+        <div className="space-y-2">
+          {visibleRows.map((m) => {
+            const isNew = !m.savedRole;
+            const isModified =
+              !isNew && !m.markedForRemoval && (m.role !== m.savedRole || m.status !== m.savedStatus);
+            return (
+              <div
+                key={m.organizationId}
+                data-testid={`org-access-row-${m.organizationId}`}
+                className={cn(
+                  "flex items-center gap-2 rounded-md border px-3 py-2 bg-muted/30",
+                  isNew && "border-emerald-300 bg-emerald-50/60",
+                  isModified && "border-amber-300 bg-amber-50/60",
+                  m.markedForRemoval && "border-red-300 bg-red-50/60 opacity-80",
+                )}
+              >
+                <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span
+                  className={cn(
+                    "text-sm font-medium flex-1 min-w-0 truncate",
+                    m.markedForRemoval && "line-through",
+                  )}
+                >
+                  {m.organizationName}
+                </span>
+
+                {isNew && (
+                  <Badge variant="outline" className="text-[10px] h-5 border-emerald-400 text-emerald-700">
+                    New
+                  </Badge>
+                )}
+                {isModified && (
+                  <Badge variant="outline" className="text-[10px] h-5 border-amber-400 text-amber-700">
+                    Changed
+                  </Badge>
+                )}
+                {m.markedForRemoval && (
+                  <Badge variant="outline" className="text-[10px] h-5 border-red-400 text-red-700">
+                    Will be removed
+                  </Badge>
+                )}
+
+                {readOnly || m.markedForRemoval ? (
+                  <>
+                    <Badge variant="outline" className="text-xs font-normal h-7 px-2">
+                      {orgRoleLabel(m.role)}
+                    </Badge>
+                    <Badge variant="secondary" className="text-xs font-normal h-7 px-2">
+                      {orgStatusLabel(m.status)}
+                    </Badge>
+                  </>
+                ) : (
+                  <>
+                    <Select value={m.role} onValueChange={(v) => updateRow(m.organizationId, { role: v })}>
+                      <SelectTrigger className="h-7 w-44 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ORG_ROLES.map((r) => (
+                          <SelectItem key={r.value} value={r.value} className="text-xs">
+                            {r.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={m.status} onValueChange={(v) => updateRow(m.organizationId, { status: v })}>
+                      <SelectTrigger className="h-7 w-28 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ORG_STATUSES.map((s) => (
+                          <SelectItem key={s.value} value={s.value} className="text-xs">
+                            {s.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </>
+                )}
+
+                {!readOnly &&
+                  (m.markedForRemoval ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => updateRow(m.organizationId, { markedForRemoval: false })}
+                    >
+                      Undo
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-red-500"
+                      aria-label={`Remove access to ${m.organizationName}`}
+                      onClick={() => handleRemoveClick(m)}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  ))}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {!readOnly &&
+        (showAddRow ? (
+          <div className="flex items-center gap-2 rounded-md border px-3 py-2 bg-blue-50/50 border-blue-200">
+            <Select value={addOrgId} onValueChange={setAddOrgId}>
+              <SelectTrigger className="h-7 flex-1 text-xs">
+                <SelectValue placeholder="Select organization…" />
+              </SelectTrigger>
+              <SelectContent>
+                {allOrgs.map((o) => {
+                  const taken = assignedOrgIds.has(o.id);
+                  return (
+                    <SelectItem key={o.id} value={o.id} className="text-xs" disabled={taken}>
+                      {o.name}
+                      {taken && <span className="ml-2 text-muted-foreground">— Already assigned</span>}
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+            <Select value={addRole} onValueChange={setAddRole}>
+              <SelectTrigger className="h-7 w-44 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ORG_ROLES.map((r) => (
+                  <SelectItem key={r.value} value={r.value} className="text-xs">
+                    {r.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={addStatus} onValueChange={setAddStatus}>
+              <SelectTrigger className="h-7 w-24 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ORG_STATUSES.map((s) => (
+                  <SelectItem key={s.value} value={s.value} className="text-xs">
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button size="sm" className="h-7 text-xs" onClick={handleAdd} disabled={!addOrgId}>
+              Add
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowAddRow(false)}>
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ) : (
           <Button
             variant="outline"
             size="sm"
             className="gap-1.5 text-xs"
+            disabled={availableOrgs.length === 0}
             onClick={() => setShowAddRow(true)}
           >
             <Plus className="h-3.5 w-3.5" />
-            Add Organization Access
+            {availableOrgs.length === 0 ? "All organizations assigned" : "Add Organization Access"}
           </Button>
-        )
+        ))}
+
+      {/* Explicit save workflow — nothing above is persisted until this runs. */}
+      {!readOnly && (
+        <div className="flex items-center justify-between gap-3 border-t pt-3">
+          <p className="text-xs text-muted-foreground" data-testid="org-access-dirty-state">
+            {isDirty ? (
+              <span className="text-amber-700 font-medium">
+                Unsaved changes:{" "}
+                {[
+                  changes.added > 0 && `${changes.added} added`,
+                  changes.modified > 0 && `${changes.modified} changed`,
+                  changes.removed > 0 && `${changes.removed} to remove`,
+                ]
+                  .filter(Boolean)
+                  .join(", ")}
+              </span>
+            ) : (
+              "All organization access changes are saved."
+            )}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRevert}
+              disabled={!isDirty || saveMutation.isPending}
+            >
+              Revert Changes
+            </Button>
+            <Button
+              size="sm"
+              className="gap-1.5"
+              onClick={handleSaveClick}
+              disabled={!isDirty || saveMutation.isPending}
+              data-testid="save-org-access"
+            >
+              {saveMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Save Organization Access
+            </Button>
+          </div>
+        </div>
       )}
+
+      {/* Removing access is destructive — confirm before it is applied. */}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              Remove organization access?
+            </DialogTitle>
+            <DialogDescription>
+              This user will immediately lose access to the following organization
+              {changes.removed === 1 ? "" : "s"}. Their account, evidence and other organization
+              data are not affected.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="text-sm space-y-1 list-disc pl-5">
+            {draft
+              .filter((d) => d.markedForRemoval)
+              .map((d) => (
+                <li key={d.organizationId}>{d.organizationName}</li>
+              ))}
+          </ul>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void doSave()}>
+              Remove Access &amp; Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -686,7 +1050,7 @@ function InviteDialog({ open, onClose, onInvited, emailConfigured }: InviteDialo
                   id="inv-name"
                   value={form.name}
                   onChange={(e) => setField("name", e.target.value)}
-                  placeholder="Jane Smith"
+                  placeholder="Enter full name"
                   className={errors.name ? "border-red-500" : ""}
                   autoFocus
                 />
@@ -701,7 +1065,7 @@ function InviteDialog({ open, onClose, onInvited, emailConfigured }: InviteDialo
                   type="email"
                   value={form.email}
                   onChange={(e) => setField("email", e.target.value)}
-                  placeholder="jane@example.com"
+                  placeholder="name@company.com"
                   className={errors.email ? "border-red-500" : ""}
                 />
                 {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
@@ -711,8 +1075,8 @@ function InviteDialog({ open, onClose, onInvited, emailConfigured }: InviteDialo
             <div className="space-y-1.5">
               <Label htmlFor="inv-platform-role">Platform Role</Label>
               <Select
-                value={form.role === "admin" ? "admin" : "none"}
-                onValueChange={(v) => setField("role", v === "admin" ? "admin" : "it_contributor")}
+                value={platformRoleOf(form.role)}
+                onValueChange={(v) => setField("role", v)}
               >
                 <SelectTrigger id="inv-platform-role">
                   <SelectValue />
@@ -737,7 +1101,7 @@ function InviteDialog({ open, onClose, onInvited, emailConfigured }: InviteDialo
                   id="inv-title"
                   value={form.title}
                   onChange={(e) => setField("title", e.target.value)}
-                  placeholder="Security Engineer"
+                  placeholder="Enter job title"
                 />
               </div>
               <div className="space-y-1.5">
@@ -746,7 +1110,7 @@ function InviteDialog({ open, onClose, onInvited, emailConfigured }: InviteDialo
                   id="inv-dept"
                   value={form.department}
                   onChange={(e) => setField("department", e.target.value)}
-                  placeholder="IT / Security"
+                  placeholder="Enter department"
                 />
               </div>
             </div>
@@ -992,28 +1356,92 @@ function CreateUserDialog({ open, onClose, onCreated }: CreateUserDialogProps) {
 
 // ─── User Org Summary (table cell badge) ──────────────────────────────────────
 
-function UserOrgSummary({ userId }: { userId: string }) {
-  const { data: memberships = [], isLoading } = useGetUserOrgs(userId);
+/**
+ * Organization Access cell.
+ *
+ * Counts DISTINCT organizations, never raw membership rows — the API collapses
+ * duplicates, and Global Admins are described by their platform role rather than
+ * by a membership count.
+ */
+function UserOrgSummary({ user }: { user: User }) {
+  const isGlobalAdmin = isGlobalAdminRole(user.role);
+
+  const { data: memberships = [], isLoading } = useGetUserOrgs(user.id, {
+    query: { queryKey: getGetUserOrgsQueryKey(user.id), enabled: !isGlobalAdmin },
+  });
+
+  if (isGlobalAdmin) {
+    return (
+      <Badge
+        variant="outline"
+        className="text-[10px] font-normal border-blue-400 text-blue-700 bg-blue-50 gap-1"
+        data-testid={`org-summary-${user.id}`}
+      >
+        <ShieldCheck className="h-3 w-3" />
+        All Organizations — Global Admin
+      </Badge>
+    );
+  }
 
   if (isLoading) {
     return <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />;
   }
-  if (memberships.length === 0) {
-    return <span className="text-xs text-muted-foreground">—</span>;
+
+  // Defensive: collapse again client-side so a stale cached payload can never
+  // reproduce an inflated count.
+  const distinct = Array.from(
+    new Map(memberships.map((m) => [m.organizationId, m])).values(),
+  ).sort((a, b) => a.organizationName.localeCompare(b.organizationName));
+
+  if (distinct.length === 0) {
+    return (
+      <span className="text-xs text-muted-foreground" data-testid={`org-summary-${user.id}`}>
+        No organization access
+      </span>
+    );
   }
 
-  const shown = memberships.slice(0, 2);
-  const extra = memberships.length - shown.length;
+  const shown = distinct.slice(0, 2);
+  const extra = distinct.length - shown.length;
 
   return (
-    <div className="flex flex-wrap gap-1">
+    <div className="flex flex-wrap gap-1 items-center" data-testid={`org-summary-${user.id}`}>
       {shown.map((m) => (
-        <Badge key={m.membershipId} variant="outline" className="text-[10px] font-normal max-w-[180px] truncate">
+        <Badge
+          key={m.organizationId}
+          variant="outline"
+          className="text-[10px] font-normal max-w-[180px] truncate"
+        >
           {m.organizationName} — {orgRoleLabel(m.role)}
         </Badge>
       ))}
       {extra > 0 && (
-        <Badge variant="secondary" className="text-[10px]">+{extra} more</Badge>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="text-[10px] rounded-full border bg-secondary px-2 py-0.5 hover:bg-secondary/70"
+            >
+              +{extra} more
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-72 p-2">
+            <p className="text-xs font-semibold px-1 pb-1.5">
+              {distinct.length} organization{distinct.length === 1 ? "" : "s"}
+            </p>
+            <div className="max-h-64 overflow-y-auto space-y-1">
+              {distinct.map((m) => (
+                <div
+                  key={m.organizationId}
+                  className="flex items-center justify-between gap-2 text-xs px-1 py-0.5"
+                >
+                  <span className="truncate">{m.organizationName}</span>
+                  <span className="text-muted-foreground shrink-0">{orgRoleLabel(m.role)}</span>
+                </div>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
       )}
     </div>
   );
@@ -1021,7 +1449,8 @@ function UserOrgSummary({ userId }: { userId: string }) {
 
 // ─── Effective Permissions Panel (EditDialog Permissions tab) ─────────────────
 
-const DIAGNOSTIC_PERMISSIONS = [
+/** Capabilities surfaced in the access diagnostic. Display-only. */
+const DIAGNOSTIC_PERMISSIONS: string[] = [
   "documents.generate", "documents.edit", "documents.approve", "documents.delete",
   "evidence.approve", "evidence.edit", "evidence.delete",
   "controls.edit",
@@ -1033,92 +1462,206 @@ const DIAGNOSTIC_PERMISSIONS = [
   "reports.generate", "preassessment.run", "ssp.edit",
 ];
 
-interface OrgContext {
-  organizationId: string;
-  organizationName: string;
-  userId: string;
-  effectiveRole: string;
-  platformRole: string;
-  membershipStatus: string;
-  permissions: string[];
-}
+const PERMISSION_SOURCE_LABELS: Record<string, string> = {
+  PLATFORM_ROLE: "Platform role (Global Admin)",
+  ORGANIZATION_MEMBERSHIP: "Organization membership",
+  LEGACY_GLOBAL_ROLE: "Legacy global role",
+  NONE: "No access",
+};
 
+/**
+ * Read-only access diagnostic. Reads from the same authorization service the
+ * server uses to gate requests, so it cannot disagree with real behaviour.
+ *
+ * Renders a definitive answer in every state — a Global Admin resolves without
+ * selecting an organization, and "no membership" is an explicit message rather
+ * than a blank panel.
+ */
 function EffectivePermissionsPanel({ userId }: { userId: string }) {
-  const { data: allOrgs = [] } = useListOrganizations({ query: { queryKey: ["organizations-perm"] } as any });
+  const { data: allOrgs = [] } = useListOrganizations({
+    query: { queryKey: ["organizations"] },
+  });
   const [selectedOrgId, setSelectedOrgId] = useState<string>("");
 
-  const { data: context, isLoading: ctxLoading } = useQuery({
-    queryKey: ["org-context-diagnostic", userId, selectedOrgId],
-    queryFn: async (): Promise<OrgContext | null> => {
-      if (!selectedOrgId) return null;
-      const token = localStorage.getItem("auth_token");
-      const r = await fetch(`/api/auth/organization-context/${selectedOrgId}?userId=${userId}`, {
-        headers: { Authorization: `Bearer ${token ?? ""}` },
-      });
-      if (!r.ok) return null;
-      return r.json();
+  const {
+    data: access,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useGetUserEffectiveAccess(
+    userId,
+    selectedOrgId ? { organizationId: selectedOrgId } : undefined,
+    {
+      query: {
+        queryKey: getGetUserEffectiveAccessQueryKey(
+          userId,
+          selectedOrgId ? { organizationId: selectedOrgId } : undefined,
+        ),
+      },
     },
-    enabled: !!selectedOrgId,
-  });
+  );
 
-  const permSet = new Set(context?.permissions ?? []);
+  const permSet = new Set(access?.permissions ?? []);
+  const isGlobalAdmin = access?.platformRole === "global_admin";
 
   return (
-    <div className="space-y-4 py-2">
+    <div className="space-y-4 py-2" data-testid="effective-permissions-panel">
       <div className="space-y-1.5">
-        <Label>Select Organization</Label>
-        <Select value={selectedOrgId} onValueChange={setSelectedOrgId}>
-          <SelectTrigger>
-            <SelectValue placeholder="Choose an organization to inspect…" />
+        <Label>Organization Scope</Label>
+        <Select
+          value={selectedOrgId || "__platform__"}
+          onValueChange={(v) => setSelectedOrgId(v === "__platform__" ? "" : v)}
+        >
+          <SelectTrigger data-testid="select-permission-scope">
+            <SelectValue />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="__platform__">Platform-wide (no organization selected)</SelectItem>
             {allOrgs.map((o) => (
-              <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+              <SelectItem key={o.id} value={o.id}>
+                {o.name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
+        <p className="text-xs text-muted-foreground">
+          Global Admin access is resolved without selecting an organization. Choose an
+          organization to see the permissions that apply inside it.
+        </p>
       </div>
 
-      {ctxLoading && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+      {isLoading && (
+        <div className="space-y-2">
+          <div className="h-16 rounded-md bg-muted animate-pulse" />
+          <div className="h-24 rounded-md bg-muted animate-pulse" />
         </div>
       )}
 
-      {!selectedOrgId && !ctxLoading && (
-        <p className="text-sm text-muted-foreground">Select an organization above to inspect the effective permissions for this user.</p>
+      {isError && (
+        <div className="rounded-md border border-red-200 bg-red-50 p-4 space-y-3">
+          <div className="flex items-start gap-2 text-sm text-red-700">
+            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-medium">Effective permissions could not be calculated.</p>
+              <p className="text-xs mt-0.5">{(error as any)?.message ?? "The request failed."}</p>
+            </div>
+          </div>
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => void refetch()}>
+            <RefreshCw className="h-3.5 w-3.5" />
+            Retry
+          </Button>
+        </div>
       )}
 
-      {context && (
+      {access && (
         <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-3">
-            <div className="rounded-md border p-3">
-              <div className="text-xs text-muted-foreground mb-1">Effective Role</div>
-              <div className="text-sm font-medium capitalize">{context.effectiveRole.replace(/_/g, " ")}</div>
-            </div>
-            <div className="rounded-md border p-3">
-              <div className="text-xs text-muted-foreground mb-1">Platform Role</div>
-              <div className="text-sm font-medium">{context.platformRole === "global_admin" ? "Global Admin" : "None"}</div>
-            </div>
-            <div className="rounded-md border p-3">
-              <div className="text-xs text-muted-foreground mb-1">Membership Status</div>
-              <div className="text-sm font-medium capitalize">{context.membershipStatus.replace(/_/g, " ")}</div>
+          {/* Access is stated plainly before any matrix is shown. */}
+          <div
+            className={cn(
+              "rounded-md border p-3 flex items-start gap-2 text-sm",
+              access.hasAccess
+                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                : "border-amber-200 bg-amber-50 text-amber-800",
+            )}
+            data-testid="effective-access-verdict"
+          >
+            {access.hasAccess ? (
+              <ShieldCheck className="h-4 w-4 mt-0.5 shrink-0" />
+            ) : (
+              <Ban className="h-4 w-4 mt-0.5 shrink-0" />
+            )}
+            <div>
+              <p className="font-medium">
+                {isGlobalAdmin
+                  ? "Global Admin — full access to all organizations"
+                  : access.hasAccess
+                    ? `Access granted as ${access.effectiveRoleLabel}`
+                    : "No access"}
+              </p>
+              <p className="text-xs mt-0.5">
+                {access.reason ??
+                  (access.organizationName
+                    ? `Resolved for ${access.organizationName}.`
+                    : "Resolved at the platform level.")}
+              </p>
             </div>
           </div>
 
+          {/* Platform role, organization role, effective role and membership status are
+              reported as four separate facts — mixing them was the original defect. */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-md border p-3">
+              <div className="text-xs text-muted-foreground mb-1">Platform Role</div>
+              <div className="text-sm font-medium">{access.platformRoleLabel}</div>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="text-xs text-muted-foreground mb-1">Organization Role</div>
+              <div className="text-sm font-medium">
+                {access.organizationRoleLabel ?? (selectedOrgId ? "None" : "Not scoped")}
+              </div>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="text-xs text-muted-foreground mb-1">Membership Status</div>
+              <div className="text-sm font-medium">
+                {access.membershipStatus
+                  ? orgStatusLabel(access.membershipStatus)
+                  : access.membershipRequired
+                    ? "No membership"
+                    : "Not required"}
+              </div>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="text-xs text-muted-foreground mb-1">Effective Role</div>
+              <div className="text-sm font-medium">{access.effectiveRoleLabel}</div>
+            </div>
+          </div>
+
+          <div className="rounded-md border p-3">
+            <div className="text-xs text-muted-foreground mb-1">Permission Source</div>
+            <div className="text-sm font-medium" data-testid="permission-source">
+              {PERMISSION_SOURCE_LABELS[access.permissionSource] ?? access.permissionSource}
+            </div>
+            {access.legacyRole && (
+              <p className="text-xs text-amber-700 mt-1">
+                This account still stores the legacy global role "
+                {access.legacyRole.replace(/_/g, " ")}". It does not grant any access —
+                only the platform role and organization memberships above do. Clear it by
+                setting the Platform Role explicitly.
+              </p>
+            )}
+          </div>
+
+          {!access.hasAccess && access.membershipRequired && (
+            <p className="text-sm text-muted-foreground" data-testid="no-membership-message">
+              No active organization membership exists. Grant access on the Organization Access
+              tab to give this user permissions here.
+            </p>
+          )}
+
           <div>
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Permission Matrix</div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Capabilities
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {access.permissions.length} allowed · {access.deniedPermissions.length} denied
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-              {DIAGNOSTIC_PERMISSIONS.map((p) => (
-                <div key={p} className="flex items-center gap-2 text-xs py-0.5">
-                  {permSet.has(p) ? (
-                    <Check className="h-3 w-3 text-green-600 shrink-0" />
-                  ) : (
-                    <X className="h-3 w-3 text-red-400 shrink-0" />
-                  )}
-                  <span className={permSet.has(p) ? "text-foreground" : "text-muted-foreground"}>{p}</span>
-                </div>
-              ))}
+              {DIAGNOSTIC_PERMISSIONS.map((p) => {
+                const allowed = permSet.has(p);
+                return (
+                  <div key={p} className="flex items-center gap-2 text-xs py-0.5">
+                    {allowed ? (
+                      <Check className="h-3 w-3 text-green-600 shrink-0" />
+                    ) : (
+                      <X className="h-3 w-3 text-red-400 shrink-0" />
+                    )}
+                    <span className={allowed ? "text-foreground" : "text-muted-foreground"}>{p}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -1258,10 +1801,21 @@ const EMPTY_FORM: UserFormData = {
   name: "",
   email: "",
   password: "",
-  role: "it_contributor",
+  role: "none",
   title: "",
   department: "",
 };
+
+function formFromUser(u: UserDetail): UserFormData {
+  return {
+    name: u.name ?? "",
+    email: u.email ?? "",
+    password: "",
+    role: u.role ?? "none",
+    title: u.title ?? "",
+    department: u.department ?? "",
+  };
+}
 
 interface EditDialogProps {
   user: User | null;
@@ -1270,25 +1824,64 @@ interface EditDialogProps {
   onSuccess: () => void;
 }
 
+/**
+ * Edit User.
+ *
+ * Always loads the target user by ID when opened rather than trusting whatever was
+ * in the row. Previously the form state was initialised once — while the selected
+ * user was still null — so it kept showing an empty form (its placeholders read as
+ * fake sample data) no matter which user was clicked.
+ */
 function EditDialog({ user, open, onClose, onSuccess }: EditDialogProps) {
   const { toast } = useToast();
+  const qc = useQueryClient();
   const { user: authUser } = useAuth();
   const isAdmin = authUser?.role === "admin";
 
-  const [form, setForm] = useState<UserFormData>(() =>
-    user
-      ? {
-          name: user.name,
-          email: user.email,
-          password: "",
-          role: user.role,
-          title: user.title ?? "",
-          department: user.department ?? "",
-        }
-      : EMPTY_FORM
-  );
+  const userId = user?.id ?? null;
+
+  const {
+    data: detail,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useGetUser(userId ?? "", {
+    query: {
+      queryKey: getGetUserQueryKey(userId ?? ""),
+      enabled: open && !!userId,
+      // The row that opened this dialog is a list projection, not the full record —
+      // never seed the form from it.
+      staleTime: 0,
+      gcTime: 0,
+    },
+  });
+
+  const [form, setForm] = useState<UserFormData>(EMPTY_FORM);
   const [errors, setErrors] = useState<Partial<Record<keyof UserFormData, string>>>({});
   const [activeTab, setActiveTab] = useState<"details" | "orgs" | "permissions">("details");
+  const [loadedId, setLoadedId] = useState<string | null>(null);
+  const [orgsDirty, setOrgsDirty] = useState(false);
+  const [pendingClose, setPendingClose] = useState(false);
+
+  // Clear all prior state the moment the dialog opens or the target changes, so no
+  // values from a previously edited user can ever be displayed.
+  useEffect(() => {
+    if (!open) return;
+    setForm(EMPTY_FORM);
+    setErrors({});
+    setActiveTab("details");
+    setLoadedId(null);
+    setOrgsDirty(false);
+    setPendingClose(false);
+  }, [open, userId]);
+
+  // Populate from the authoritative fetch exactly once per loaded user.
+  if (detail && detail.id === userId && loadedId !== detail.id) {
+    setLoadedId(detail.id);
+    setForm(formFromUser(detail));
+    setErrors({});
+  }
 
   const updateMutation = useUpdateUser();
 
@@ -1297,35 +1890,54 @@ function EditDialog({ user, open, onClose, onSuccess }: EditDialogProps) {
     setErrors((e) => ({ ...e, [field]: undefined }));
   };
 
+  const savedForm = detail ? formFromUser(detail) : null;
+  const detailsDirty =
+    !!savedForm &&
+    loadedId === detail?.id &&
+    (form.name !== savedForm.name ||
+      form.email !== savedForm.email ||
+      platformRoleOf(form.role) !== platformRoleOf(savedForm.role) ||
+      form.title !== savedForm.title ||
+      form.department !== savedForm.department);
+
+  const isProtected = detail?.isProtected === true || detail?.isBreakGlass === true;
+  const isSelf = detail?.id === authUser?.id;
+
   const validate = () => {
     const errs: Partial<Record<keyof UserFormData, string>> = {};
     if (!form.name.trim()) errs.name = "Name is required";
     if (!form.email.trim()) errs.email = "Email is required";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
-      errs.email = "Invalid email address";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = "Invalid email address";
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
   const handleSubmit = async () => {
+    if (!detail) return;
     if (!validate()) return;
     try {
       await updateMutation.mutateAsync({
-        id: user!.id,
+        id: detail.id,
         data: {
-          name: form.name,
-          email: form.email,
-          role: form.role as any,
+          name: form.name.trim(),
+          email: form.email.trim(),
+          // Canonical platform role only — an organization role can never be sent here.
+          role: platformRoleOf(form.role) as any,
           title: form.title || undefined,
           department: form.department || undefined,
         },
       });
-      toast({ title: "User updated successfully" });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: getGetUserQueryKey(detail.id) }),
+        qc.invalidateQueries({ queryKey: getListUsersQueryKey() }),
+      ]);
+      toast({ title: "User details saved" });
       onSuccess();
-      onClose();
     } catch (err: any) {
-      const msg = err?.response?.data?.error ?? "Failed to update user";
-      if (msg.toLowerCase().includes("email")) {
+      const msg = err?.response?.data?.error ?? err?.message ?? "Failed to update user";
+      if (msg.toLowerCase().includes("last active global admin")) {
+        toast({ title: "Change blocked", description: msg, variant: "destructive" });
+      } else if (msg.toLowerCase().includes("email")) {
         setErrors({ email: "Email already in use" });
       } else {
         toast({ title: msg, variant: "destructive" });
@@ -1333,45 +1945,92 @@ function EditDialog({ user, open, onClose, onSuccess }: EditDialogProps) {
     }
   };
 
+  const hasUnsaved = detailsDirty || orgsDirty;
+
+  const requestClose = () => {
+    if (hasUnsaved) {
+      setPendingClose(true);
+      return;
+    }
+    onClose();
+  };
+
+  const switchTab = (tab: "details" | "orgs" | "permissions") => {
+    // Tabs keep their own drafts, so switching never discards work silently.
+    setActiveTab(tab);
+  };
+
+  const identity = detail
+    ? `${detail.name} · ${detail.email}`
+    : userId
+      ? "Loading user…"
+      : "No user selected";
+
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={(o) => (!o ? requestClose() : undefined)}>
       <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Edit User</DialogTitle>
+          {/* Always show WHICH user is being edited. */}
+          <DialogDescription className="flex flex-wrap items-center gap-1.5" data-testid="edit-user-identity">
+            <span className="font-medium text-foreground">{identity}</span>
+            {detail && isGlobalAdminRole(detail.role) && (
+              <Badge variant="outline" className="border-blue-400 text-blue-700 bg-blue-50 gap-1 text-[10px]">
+                <ShieldCheck className="h-3 w-3" /> Global Admin
+              </Badge>
+            )}
+            {detail?.isBreakGlass && (
+              <Badge variant="outline" className="border-red-500 text-red-700 bg-red-50 gap-1 text-[10px]">
+                <ShieldAlert className="h-3 w-3" /> Break-Glass
+              </Badge>
+            )}
+            {isProtected && (
+              <Badge variant="outline" className="border-amber-500 text-amber-700 bg-amber-50 gap-1 text-[10px]">
+                Protected Account
+              </Badge>
+            )}
+            {isSelf && (
+              <Badge variant="secondary" className="text-[10px]">
+                You
+              </Badge>
+            )}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex gap-1 border-b pb-0 -mt-2 shrink-0">
           <button
-            onClick={() => setActiveTab("details")}
+            onClick={() => switchTab("details")}
             className={cn(
-              "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+              "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5",
               activeTab === "details"
                 ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
             )}
           >
             Details
+            {detailsDirty && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
           </button>
           <button
-            onClick={() => setActiveTab("orgs")}
+            onClick={() => switchTab("orgs")}
             className={cn(
               "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5",
               activeTab === "orgs"
                 ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
             )}
           >
             <Building2 className="h-3.5 w-3.5" />
             Organization Access
+            {orgsDirty && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
           </button>
           {isAdmin && (
             <button
-              onClick={() => setActiveTab("permissions")}
+              onClick={() => switchTab("permissions")}
               className={cn(
                 "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5",
                 activeTab === "permissions"
                   ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
               )}
             >
               <ShieldCheck className="h-3.5 w-3.5" />
@@ -1381,29 +2040,168 @@ function EditDialog({ user, open, onClose, onSuccess }: EditDialogProps) {
         </div>
 
         <div className="py-2 overflow-y-auto flex-1 min-h-0">
-          {activeTab === "details" && (
-            <UserForm data={form} onChange={setField} isEdit={true} errors={errors} />
+          {isLoading && (
+            <div className="space-y-3 py-2" data-testid="edit-user-loading">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="h-16 rounded-md bg-muted animate-pulse" />
+                <div className="h-16 rounded-md bg-muted animate-pulse" />
+              </div>
+              <div className="h-20 rounded-md bg-muted animate-pulse" />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="h-16 rounded-md bg-muted animate-pulse" />
+                <div className="h-16 rounded-md bg-muted animate-pulse" />
+              </div>
+            </div>
           )}
-          {activeTab === "orgs" && user && (
-            <OrgMembershipsPanel userId={user.id} />
+
+          {isError && (
+            <div
+              className="rounded-md border border-red-200 bg-red-50 p-4 space-y-3"
+              data-testid="edit-user-error"
+            >
+              <div className="flex items-start gap-2 text-sm text-red-700">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-medium">This user could not be loaded.</p>
+                  <p className="text-xs mt-0.5">
+                    {(error as any)?.message ?? "The request failed."} No fields are shown because
+                    no data was received.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => void refetch()}>
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Retry
+                </Button>
+                <Button size="sm" variant="ghost" onClick={onClose}>
+                  Close
+                </Button>
+              </div>
+            </div>
           )}
-          {activeTab === "permissions" && user && isAdmin && (
-            <EffectivePermissionsPanel userId={user.id} />
+
+          {!isLoading && !isError && detail && (
+            <>
+              {activeTab === "details" && (
+                <div className="space-y-4">
+                  {isProtected && (
+                    <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex items-start gap-2">
+                      <ShieldAlert className="h-4 w-4 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="font-medium">Protected emergency account</p>
+                        <p className="text-xs mt-0.5">
+                          The break-glass account cannot be edited, deactivated, demoted or deleted
+                          from this screen. Use the dedicated CLI script to rotate its credentials.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  <UserForm data={form} onChange={setField} isEdit={true} errors={errors} />
+                  <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground border-t pt-3">
+                    <div>
+                      <span className="font-medium text-foreground">Account status: </span>
+                      {detail.status ?? (detail.isActive ? "active" : "deactivated")}
+                    </div>
+                    <div>
+                      <span className="font-medium text-foreground">MFA: </span>
+                      {detail.mfaExempt ? "Exempt" : detail.mfaEnabled ? "Enabled" : "Not enrolled"}
+                    </div>
+                    <div>
+                      <span className="font-medium text-foreground">Created: </span>
+                      {formatDate(detail.createdAt)}
+                    </div>
+                    <div>
+                      <span className="font-medium text-foreground">Last login: </span>
+                      {formatDate(detail.lastLoginAt)}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {activeTab === "orgs" && (
+                <OrgMembershipsPanel
+                  userId={detail.id}
+                  onDirtyChange={setOrgsDirty}
+                  disabled={isProtected}
+                  disabledReason={
+                    isProtected
+                      ? "The break-glass account's access comes from its Global Admin platform role and cannot be changed here."
+                      : undefined
+                  }
+                />
+              )}
+              {activeTab === "permissions" && isAdmin && (
+                <EffectivePermissionsPanel userId={detail.id} />
+              )}
+            </>
           )}
         </div>
 
-        <DialogFooter className="shrink-0">
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          {activeTab === "details" && (
-            <Button onClick={handleSubmit} disabled={updateMutation.isPending}>
-              {updateMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Save Changes
+        <DialogFooter className="shrink-0 sm:justify-between">
+          <span className="text-xs text-muted-foreground self-center">
+            {activeTab === "orgs"
+              ? "Organization access is saved with its own button above."
+              : activeTab === "permissions"
+                ? "This tab is read-only."
+                : detailsDirty
+                  ? "You have unsaved detail changes."
+                  : ""}
+          </span>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={requestClose}>
+              {hasUnsaved ? "Close" : "Cancel"}
             </Button>
-          )}
+            {activeTab === "details" && (
+              <Button
+                onClick={handleSubmit}
+                disabled={
+                  updateMutation.isPending || isLoading || isError || !detail || isProtected || !detailsDirty
+                }
+                data-testid="save-user-details"
+              >
+                {updateMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Save Details
+              </Button>
+            )}
+          </div>
         </DialogFooter>
       </DialogContent>
+
+      {/* Closing with unsaved work requires an explicit decision. */}
+      <Dialog open={pendingClose} onOpenChange={setPendingClose}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Discard unsaved changes?
+            </DialogTitle>
+            <DialogDescription>
+              {[
+                detailsDirty && "user details",
+                orgsDirty && "organization access",
+              ]
+                .filter(Boolean)
+                .join(" and ")}{" "}
+              {detailsDirty && orgsDirty ? "have" : "has"} unsaved changes. Closing now discards
+              them — nothing has been written.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingClose(false)}>
+              Keep Editing
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setPendingClose(false);
+                onClose();
+              }}
+            >
+              Discard &amp; Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
@@ -1897,11 +2695,11 @@ export default function Users() {
                   >
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2 flex-wrap">
-                        {u.role === "admin" && (
+                        {isGlobalAdminRole(u.role) && (
                           <ShieldCheck className="h-3.5 w-3.5 text-blue-500 shrink-0" />
                         )}
                         {u.name}
-                        {(u as any).isBreakGlass && (
+                        {u.isBreakGlass && (
                           <Badge variant="outline" className="border-red-500 text-red-700 gap-1 text-xs bg-red-50 shrink-0">
                             <ShieldAlert className="h-3 w-3" /> Break-Glass
                           </Badge>
@@ -1915,12 +2713,18 @@ export default function Users() {
                     </TableCell>
                     <TableCell className="text-muted-foreground">{u.email}</TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="text-xs font-normal">
-                        {globalRoleLabel(u.role)}
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-xs font-normal",
+                          isGlobalAdminRole(u.role) && "border-blue-400 text-blue-700 bg-blue-50",
+                        )}
+                      >
+                        {platformRoleLabel(u.role)}
                       </Badge>
                     </TableCell>
                     <TableCell className="py-2">
-                      <UserOrgSummary userId={u.id} />
+                      <UserOrgSummary user={u} />
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {u.title || "—"}
@@ -1985,7 +2789,7 @@ export default function Users() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            {(u as any).isBreakGlass ? (
+                            {u.isBreakGlass ? (
                               <DropdownMenuItem disabled className="text-xs text-muted-foreground gap-2">
                                 <ShieldAlert className="h-4 w-4 text-red-500" />
                                 Break-glass account — protected
@@ -2101,15 +2905,19 @@ export default function Users() {
                                 )}
                               </>
                             )}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => open("delete", u)}
-                              className="gap-2 text-red-600 focus:text-red-600"
-                              disabled={u.id === me?.id}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              Delete User
-                            </DropdownMenuItem>
+                            {!u.isBreakGlass && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => open("delete", u)}
+                                  className="gap-2 text-red-600 focus:text-red-600"
+                                  disabled={u.id === me?.id}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  Delete User
+                                </DropdownMenuItem>
+                              </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

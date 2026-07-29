@@ -1,0 +1,1246 @@
+Perform a production-safe repair and hardening of ONLY the Control HUB Users & Roles module.
+
+I provided a video showing multiple serious issues in production.
+
+Observed problems:
+
+1. The System Administrator (Break Glass) account shows two visible APEX Solutions organization assignments and “+1164 more,” even though that many organizations do not exist.
+
+2. When I select Edit User, the Details tab does not display the selected user’s actual information. It displays incorrect sample/default information such as:
+
+   Jane Smith
+   jane@example.com
+   Security Engineer
+   IT / Security
+
+3. The form may display text in Full Name and Email while simultaneously showing:
+   “Name is required”
+   “Email is required”
+
+   This indicates the visible text is probably placeholder/default text and is not actually bound to form state.
+
+4. Organization Access changes do not persist after closing and reopening Edit User.
+
+5. The Organization Access tab does not provide a clear and reliable save workflow.
+
+6. The Effective Permissions tab sometimes displays no content.
+
+7. Global Admin, organization role, effective role, and membership status are being mixed together incorrectly.
+
+8. The Platform Role selector needs a real “None” option for users whose access is entirely organization-specific.
+
+Users and Roles are security-critical. This section must become reliable, predictable, transactional, fully audited, and protected against cross-organization access errors.
+
+====================================================================
+1. STRICT SCOPE
+====================================================================
+
+Change only:
+
+- Users & Roles page
+- Create User
+- Invite User, where it uses the same role model
+- Edit User modal/page
+- user-detail API
+- platform-role management
+- organization-membership management
+- effective-permission calculation
+- user-access diagnostics
+- user-role audit logging
+
+Do not redesign or modify:
+
+- Controls
+- Evidence
+- Documentation
+- SSP
+- Monitoring
+- POA&M
+- Roadmap
+- Pre-Assessment
+- Reports
+- Framework data
+- organization content
+- production evidence or files
+
+Do not modify passwords, MFA enrollment, SSO bindings, invitations, or authentication secrets as part of this repair.
+
+Preserve the existing break-glass authentication configuration.
+
+====================================================================
+2. DO A READ-ONLY DIAGNOSTIC FIRST
+====================================================================
+
+Before changing any production data, inspect and report the current architecture.
+
+For the System Administrator (Break Glass) account, report:
+
+- user ID
+- name
+- email
+- platform role
+- break-glass flag
+- active status
+- actual number of organizations in the database
+- raw organization-membership row count
+- distinct organization-membership count
+- duplicate membership count
+- orphaned membership count
+- organization IDs and roles
+- whether memberships are being generated for every organization
+- whether a query join is multiplying membership rows
+- API response returned to the Users & Roles table
+- API response returned to Edit User
+- API response returned to Effective Permissions
+
+Also inspect:
+
+- User table/model
+- legacy role field
+- platform role field
+- OrganizationMembership model/table
+- role-permission table
+- user-permission joins
+- user list query
+- user detail query
+- update-user endpoint
+- organization-access update endpoint
+- effective-permissions endpoint
+- frontend form initialization
+- frontend cache/query keys
+
+Specifically determine whether the “+1164 more” value is caused by:
+
+A. 1,164 actual membership records
+
+or
+
+B. SQL/API join multiplication, such as each membership being repeated for every permission
+
+or
+
+C. duplicate organization memberships
+
+or
+
+D. the UI counting permissions/rows rather than distinct organizations
+
+Do not delete any rows during this diagnostic.
+
+Do not assume that 1,164 real organization memberships exist.
+
+Provide the diagnostic findings before running a destructive repair.
+
+====================================================================
+3. CORRECT ROLE ARCHITECTURE
+====================================================================
+
+Use two separate role scopes.
+
+Platform roles:
+
+- NONE
+- GLOBAL_ADMIN
+
+Organization roles:
+
+- ORGANIZATION_ADMIN
+- COMPLIANCE_MANAGER
+- IT_CONTRIBUTOR
+- REVIEWER
+- EXECUTIVE_VIEWER
+- ASSESSOR_READ_ONLY
+- DEMO_VIEWER, only if still required
+
+Do not use these as platform roles:
+
+- Organization Admin
+- Compliance Manager
+- IT Contributor
+- Reviewer
+- Executive Viewer
+- Assessor Read-Only
+
+Only Global Admin is platform-wide.
+
+Every other role is assigned through a user-to-organization membership.
+
+====================================================================
+4. ADD A REAL PLATFORM ROLE = NONE
+====================================================================
+
+The Platform Role dropdown must include:
+
+- None — Organization Access Only
+- Global Admin — All Organizations
+
+Default for new users:
+
+None — Organization Access Only
+
+Store this using one canonical representation.
+
+Preferred:
+
+platform_role = NONE
+
+Do not inconsistently mix:
+
+- null
+- empty string
+- “none”
+- “No Platform Role”
+- “no_platform_role”
+
+Normalize the value at the API boundary.
+
+Platform Role = None means:
+
+- no platform-wide administrative authority
+- access is determined only through active organization memberships
+- the user may have different roles in different organizations
+
+Display the value in the Users table as:
+
+None
+
+not an ambiguous blank value.
+
+====================================================================
+5. CORRECT ORGANIZATION MEMBERSHIP MODEL
+====================================================================
+
+Use one organization-membership record per user and organization.
+
+Required fields:
+
+OrganizationMembership
+- id
+- user_id
+- organization_id
+- organization_role
+- membership_status
+- created_by
+- created_at
+- updated_by
+- updated_at
+- row_version or updated_at for concurrency control
+
+Organization roles:
+
+- ORGANIZATION_ADMIN
+- COMPLIANCE_MANAGER
+- IT_CONTRIBUTOR
+- REVIEWER
+- EXECUTIVE_VIEWER
+- ASSESSOR_READ_ONLY
+- DEMO_VIEWER, if required
+
+Membership statuses:
+
+- ACTIVE
+- INACTIVE
+- PENDING
+- REVOKED
+
+Do not store role names in membership_status.
+
+Do not use “Global Admin” as a membership status.
+
+Add or verify a unique database constraint:
+
+UNIQUE(user_id, organization_id)
+
+A user must not have duplicate membership rows for the same organization.
+
+Changing the role should update the existing membership rather than insert another row.
+
+====================================================================
+6. SPECIAL HANDLING FOR GLOBAL ADMINS
+====================================================================
+
+A Global Admin has access to every organization because of the platform role.
+
+Do not create or require one membership row for every organization.
+
+Do not enumerate all organizations in the Users table for a Global Admin.
+
+For Global Admin users, show Organization Access as:
+
+All Organizations — Global Admin
+
+Do not show:
+
+APEX Solutions
+APEX Solutions
++1164 more
+
+If historical organization memberships happen to exist for a Global Admin:
+
+- do not use them to calculate access
+- do not count them in the summary
+- do not automatically delete them without a reviewed repair plan
+- platform role remains authoritative
+
+The organization-access UI for a Global Admin should show:
+
+“Organization-specific assignments are not required because this user has Global Admin platform access.”
+
+Optionally provide a read-only view of historical memberships, but do not present them as necessary access grants.
+
+====================================================================
+7. PROTECT THE BREAK-GLASS ACCOUNT
+====================================================================
+
+The System Administrator (Break Glass) account must remain:
+
+- an active Global Admin
+- break-glass flagged
+- available across all organizations through platform access
+- independent of organization memberships
+
+Preserve its existing:
+
+- username/email
+- password configuration
+- MFA exemption, as currently configured
+- SSO exclusion, as currently configured
+- authentication method
+- break-glass behavior
+
+Do not change authentication settings as part of this repair.
+
+Add visible labels:
+
+- Break Glass
+- Protected Account
+- Global Admin
+
+Prevent routine actions from:
+
+- deleting the break-glass account
+- deactivating it
+- changing Platform Role from Global Admin
+- removing the break-glass flag
+- changing its email
+- linking it to SSO
+- changing its MFA exception
+
+Any future protected-account change must require:
+
+- a dedicated protected-account workflow
+- typed confirmation
+- a reason
+- secondary authorization if supported
+- audit logging
+
+Do not expose its password in the UI.
+
+====================================================================
+8. FIX THE USERS TABLE ORGANIZATION COUNT
+====================================================================
+
+The Organization Access summary must use distinct organization memberships.
+
+For non-global users:
+
+organizationCount =
+count(distinct active organization_id)
+
+Show up to two unique assignments.
+
+Example:
+
+APEX Solutions — Compliance Manager
+Carme Tech — Organization Admin
++2 more
+
+Calculate:
+
+moreCount = distinctMembershipCount - visibleUniqueMembershipCount
+
+Never calculate `+N more` from:
+
+- permission rows
+- joined query rows
+- role-capability rows
+- duplicate organization rows
+- ungrouped API results
+
+For Global Admin:
+
+Show:
+
+All Organizations — Global Admin
+
+Do not show a numeric count.
+
+Add a click/popover for non-global users to display the complete unique organization list.
+
+====================================================================
+9. FIX EDIT USER SELECTION
+====================================================================
+
+When the user selects:
+
+Row menu > Edit User
+
+the application must pass and store the exact selected user ID.
+
+Use:
+
+selectedUserId
+
+Do not initialize the form from:
+
+- static sample data
+- previous modal state
+- the currently logged-in user
+- the current organization
+- hard-coded Jane Smith values
+- table-row indexes
+- stale cached user data
+
+On modal open:
+
+1. Clear all previous form state.
+2. Set selectedUserId.
+3. Show a loading skeleton.
+4. Fetch the selected user by ID.
+5. Populate Details only after the fetch succeeds.
+6. Populate Organization Access from that user’s unique memberships.
+7. Populate Effective Permissions from that user’s platform role and memberships.
+8. Enable editing only after loading completes.
+
+If loading fails:
+
+Show:
+
+“Unable to load this user’s details.”
+
+Buttons:
+
+- Retry
+- Close
+
+Do not show empty editable fields after a failed fetch.
+
+====================================================================
+10. REMOVE ALL SAMPLE FORM VALUES
+====================================================================
+
+Remove hard-coded or placeholder user data such as:
+
+- Jane Smith
+- jane@example.com
+- Security Engineer
+- IT / Security
+
+Placeholders should be generic only:
+
+- Enter full name
+- user@example.com
+- Enter title
+- Select department
+
+The selected user’s actual values must be assigned to the controlled form values.
+
+The form must not display placeholder text as though it were real data.
+
+====================================================================
+11. FIX FORM STATE AND VALIDATION
+====================================================================
+
+Use controlled form values tied to the fetched user record.
+
+Required validation should operate on the same state displayed in the fields.
+
+Do not allow this condition:
+
+Visible text:
+Jane Smith
+
+Validation:
+Name is required
+
+That means displayed content and submitted form state are inconsistent.
+
+After loading:
+
+- Full Name contains the actual user name
+- Email contains the actual user email
+- Platform Role contains the actual platform role
+- Title contains the actual title
+- Department contains the actual department
+
+Do not run required-field validation before the user data has loaded.
+
+On tab changes, do not reset the Details form.
+
+On modal close, clear all state.
+
+When switching from editing User A to User B:
+
+- cancel or ignore the old request
+- clear User A values
+- load User B
+- never display User A’s data for User B
+
+====================================================================
+12. DETAILS TAB
+====================================================================
+
+Details should display the selected user’s actual:
+
+- Full Name
+- Email
+- Platform Role
+- Title
+- Department
+- Account Status
+- Break-Glass Status, if applicable
+- Created Date
+- Last Login
+- Invitation Status, where relevant
+
+Preserve the current policy for whether Email may be edited.
+
+If email is not safely editable because it is the login identity:
+
+- display it as read-only
+- do not render it as a blank field
+- use a separate future Change Email workflow
+
+Buttons:
+
+- Save Details
+- Cancel
+
+Save Details should update only user profile/platform fields.
+
+Do not silently modify organization memberships from the Details save.
+
+After success:
+
+- show “User details saved”
+- re-fetch the user
+- refresh the Users table
+- keep the modal open or close according to the current UX, but ensure the data is current
+
+====================================================================
+13. ORGANIZATION ACCESS TAB
+====================================================================
+
+For Platform Role = None, display all unique organization memberships.
+
+Each row should contain:
+
+- Organization
+- Organization Role
+- Membership Status
+- Remove action
+
+Actions:
+
+- Add Organization Access
+- Save Organization Access
+- Cancel / Revert Changes
+
+The current video appears to allow changes but provides no reliable save operation.
+
+Add an explicit:
+
+Save Organization Access
+
+button.
+
+Do not rely on closing the modal to save.
+
+Do not automatically save role changes without showing success/failure unless the app deliberately uses per-row auto-save with visible confirmation.
+
+Preferred:
+
+Edit locally, then save the complete membership set transactionally.
+
+Prevent selecting the same organization twice.
+
+If an organization is already assigned:
+
+- disable it in the selector
+- show “Already assigned”
+
+When removing access:
+
+- require confirmation
+- remove only the membership
+- do not delete the user
+- do not delete organization data
+
+====================================================================
+14. ORGANIZATION ACCESS SAVE TRANSACTION
+====================================================================
+
+Use a dedicated backend operation.
+
+Example:
+
+PUT /api/admin/users/:userId/organization-access
+
+Request:
+
+{
+  "memberships": [
+    {
+      "organizationId": "...",
+      "role": "COMPLIANCE_MANAGER",
+      "status": "ACTIVE"
+    },
+    {
+      "organizationId": "...",
+      "role": "ORGANIZATION_ADMIN",
+      "status": "ACTIVE"
+    }
+  ],
+  "expectedVersion": "..."
+}
+
+The backend must:
+
+1. Verify the acting administrator has permission.
+2. Verify the target user exists.
+3. Validate every organization ID.
+4. Validate every organization role.
+5. Reject duplicate organizations.
+6. Compare against the current version to prevent overwriting concurrent changes.
+7. Update existing memberships.
+8. Insert newly added memberships.
+9. Remove or revoke memberships removed by the administrator.
+10. Commit all changes in one transaction.
+11. Write audit events.
+12. Return the canonical saved membership list.
+
+If any operation fails:
+
+- roll back the full transaction
+- retain the previous memberships
+- return a clear error
+- do not partially save
+
+====================================================================
+15. SAVE AND RELOAD BEHAVIOR
+====================================================================
+
+After Save Organization Access succeeds:
+
+- show “Organization access saved”
+- replace local state with the API response
+- invalidate/re-fetch user detail
+- invalidate/re-fetch Users table
+- invalidate effective-permission queries
+- close and reopen should show the saved assignments
+
+Do not rely only on optimistic local UI state.
+
+If the API fails:
+
+Show:
+
+“Organization access could not be saved. No changes were applied.”
+
+Keep the unsaved edits available so the user may retry.
+
+====================================================================
+16. UNSAVED-CHANGE PROTECTION
+====================================================================
+
+Track dirty state separately for:
+
+- Details
+- Organization Access
+
+If the user:
+
+- switches tabs
+- closes the modal
+- clicks Cancel
+- selects another user
+
+while unsaved changes exist, show:
+
+“You have unsaved changes.”
+
+Options:
+
+- Save Changes
+- Discard Changes
+- Continue Editing
+
+Do not silently discard membership changes.
+
+====================================================================
+17. GLOBAL ADMIN ORGANIZATION ACCESS TAB
+====================================================================
+
+For users with Platform Role = Global Admin:
+
+Show:
+
+“Global Admin has platform-wide access to all organizations. Organization-specific memberships are not required.”
+
+Do not show thousands of organization rows.
+
+Do not create membership rows when a new organization is created.
+
+Do not use organization assignments to calculate a Global Admin’s permissions.
+
+For a non-break-glass Global Admin, historical organization memberships may be displayed in an advanced read-only area if needed, but they must not be presented as the source of access.
+
+====================================================================
+18. EFFECTIVE PERMISSIONS TAB
+====================================================================
+
+Make the Effective Permissions tab reliable and read-only.
+
+For Global Admin:
+
+Show immediately:
+
+Platform Role:
+Global Admin
+
+Effective Role:
+Global Admin
+
+Access Scope:
+All Organizations
+
+Permission Source:
+Platform Role
+
+Organization Membership:
+Not Required
+
+Do not require an organization selection before showing that the account is Global Admin.
+
+Allow optional organization selection only to show how global permissions apply in that organization.
+
+Do not show:
+
+Membership Status: Global Admin
+
+because Global Admin is a role, not a membership status.
+
+For Platform Role = None:
+
+Require selection from the user’s assigned organizations.
+
+Show:
+
+- Organization
+- Platform Role: None
+- Organization Role
+- Membership Status
+- Effective Role
+- Permission Source
+- Allowed Capabilities
+- Denied Capabilities
+
+If the user has no access to the selected organization:
+
+Show:
+
+“No active organization membership exists.”
+
+Do not display a blank modal.
+
+====================================================================
+19. USE CLEAR ROLE NAMES
+====================================================================
+
+Do not display ambiguous labels such as:
+
+Admin
+
+Use:
+
+- Global Admin
+- Organization Admin
+- Compliance Manager
+- IT Contributor
+- Reviewer
+- Executive Viewer
+- Assessor Read-Only
+
+Effective Role should use the full role name.
+
+====================================================================
+20. CENTRALIZE EFFECTIVE-PERMISSION CALCULATION
+====================================================================
+
+Use one backend authorization service.
+
+Example:
+
+resolveEffectiveAccess(userId, organizationId)
+
+Resolution order:
+
+1. If active user.platform_role = GLOBAL_ADMIN:
+   - effective role = GLOBAL_ADMIN
+   - source = PLATFORM_ROLE
+   - all platform-approved organization capabilities apply
+
+2. Otherwise:
+   - load the single active OrganizationMembership for user and organization
+   - effective role = organization_role
+   - source = ORGANIZATION_MEMBERSHIP
+
+3. If no active membership:
+   - no organization access
+
+Do not derive permissions from:
+
+- legacy role
+- table-row badges
+- client-submitted role
+- stale session role
+- the first membership found
+- current sidebar organization without validating the target object
+
+The Effective Permissions UI and backend authorization middleware must use the same permission service.
+
+====================================================================
+21. CREATE USER AND INVITE USER
+====================================================================
+
+Update Create User and Invite User to use the same role architecture.
+
+Platform Role:
+
+- None — Organization Access Only
+- Global Admin — All Organizations
+
+Default:
+
+None
+
+If Platform Role = None:
+
+- allow one or more organization assignments
+- require at least one active organization assignment before activation, unless the account is intentionally pending invitation
+
+If Platform Role = Global Admin:
+
+- organization assignments are not required
+- warn that the role grants access across the platform
+- require explicit confirmation
+
+Only authorized Global Admins may assign Global Admin.
+
+Do not allow ordinary Organization Admins to create platform Global Admins.
+
+====================================================================
+22. LEGACY ROLE HANDLING
+====================================================================
+
+The page already shows a Legacy Role Migration Report.
+
+Continue using it, but make organization memberships authoritative.
+
+Authorization precedence:
+
+1. Global Admin platform role
+2. Active organization membership
+3. Legacy fallback only when required to avoid unexpectedly locking out an existing account
+
+If legacy fallback is used:
+
+- log it
+- identify the user in the migration report
+- do not grant access to organizations not assigned to the user
+
+Platform Role None must not accidentally fall back to a global organization-style legacy role after migration is complete.
+
+====================================================================
+23. FIX THE +1164 ISSUE SAFELY
+====================================================================
+
+After the read-only diagnostic:
+
+Scenario A — Query Fan-Out Only:
+
+If the database contains the correct small number of memberships but the API/query returns duplicate rows:
+
+- fix the query
+- group by membership ID or organization ID
+- use distinct organization aggregation
+- do not change production membership data
+
+Scenario B — Duplicate Membership Rows:
+
+If duplicate memberships actually exist:
+
+- export a backup report
+- produce a dry-run repair
+- identify which row will be retained
+- retain the latest valid active membership or approved canonical record
+- preserve an audit record of removed duplicates
+- ask for explicit approval before production cleanup
+- add the unique constraint only after cleanup
+
+Scenario C — Global Admin Membership Materialization:
+
+If the application created a membership for every organization for Global Admins:
+
+- stop creating those rows
+- use platform access instead
+- provide a dry-run list of rows proposed for retirement
+- do not delete production rows without approval
+
+Create diagnostic commands such as:
+
+pnpm diagnose:user-access --email=sysadmin@controlhub.com
+
+and:
+
+pnpm repair:user-memberships --email=sysadmin@controlhub.com --dry-run
+
+The non-dry-run repair must not execute automatically.
+
+====================================================================
+24. CACHE AND SESSION INVALIDATION
+====================================================================
+
+After a platform role or organization membership changes:
+
+- invalidate user-detail cache
+- invalidate Users table cache
+- invalidate organization-context cache
+- invalidate effective-permission cache
+- increment an authorization version where supported
+- refresh the affected user’s permissions promptly
+
+Do not require a stale role to remain active until the next day or next deployment.
+
+Do not revoke the acting administrator’s session unexpectedly unless required.
+
+====================================================================
+25. PROTECTED ADMIN SAFEGUARDS
+====================================================================
+
+Prevent the application from reaching a state with no active Global Admin.
+
+Before demoting or deactivating a Global Admin:
+
+- verify another active Global Admin exists
+- require confirmation
+- audit the change
+
+The break-glass account must not be demoted or deactivated through the standard Edit User modal.
+
+Prevent an administrator from accidentally removing their own final administrative access without an explicit protected workflow.
+
+====================================================================
+26. API AUTHORIZATION
+====================================================================
+
+All Users & Roles APIs must enforce backend permissions.
+
+Suggested capabilities:
+
+- users.view
+- users.create
+- users.invite
+- users.edit_details
+- users.assign_platform_role
+- users.manage_organization_access
+- users.view_effective_permissions
+- users.deactivate
+- users.manage_break_glass
+
+Do not rely only on hiding buttons.
+
+Organization Admin may manage users within authorized organizations according to the existing policy, but must not assign platform Global Admin unless specifically authorized.
+
+====================================================================
+27. AUDIT LOGGING
+====================================================================
+
+Audit:
+
+- user details viewed
+- user details changed
+- platform role changed
+- organization access added
+- organization role changed
+- organization access removed
+- membership status changed
+- effective permissions viewed
+- Global Admin assigned
+- Global Admin removed
+- protected-account change attempted
+- duplicate-membership repair performed
+- legacy fallback used
+- save failed
+
+Include:
+
+- acting administrator
+- target user
+- organization, where applicable
+- previous value
+- new value
+- reason
+- timestamp
+- IP address
+- user agent
+- success/failure
+
+Do not log passwords, MFA secrets, tokens, or recovery information.
+
+====================================================================
+28. USER EXPERIENCE IMPROVEMENTS
+====================================================================
+
+Edit User modal should have clear tabs:
+
+- Details
+- Organization Access
+- Effective Permissions
+
+Show selected user identity in the modal header:
+
+Edit User
+System Administrator (Break Glass)
+sysadmin@controlhub.com
+
+This reduces the risk of editing the wrong user.
+
+Show loading, success, error, and unsaved states clearly.
+
+Buttons should be specific:
+
+Details:
+- Save Details
+
+Organization Access:
+- Save Organization Access
+
+Effective Permissions:
+- Close
+
+Do not use one ambiguous Save button for unrelated tab data.
+
+====================================================================
+29. AUTOMATED TEST COVERAGE
+====================================================================
+
+Add backend and frontend tests.
+
+Data tests:
+
+- one membership per user/organization
+- duplicate membership rejected
+- Global Admin requires no memberships
+- Platform Role None is valid
+- membership role/status are separate
+- distinct organization counts are correct
+
+Edit-modal tests:
+
+- selected user’s actual details load
+- no sample Jane Smith data
+- switching users clears stale data
+- loading failure shows error
+- visible values match submitted values
+- tab switching preserves unsaved state
+- closing modal clears state
+
+Save tests:
+
+- details save and persist
+- organization access saves and persists
+- role update changes existing membership
+- newly added access persists
+- removed access persists
+- failed transaction changes nothing
+- re-open displays canonical saved data
+
+Permission tests:
+
+- Global Admin receives all-organization access
+- Platform None receives only membership access
+- roles do not leak between organizations
+- unauthorized APIs return 403
+- effective permissions match actual backend authorization
+
+Break-glass tests:
+
+- table shows All Organizations — Global Admin
+- no +1164 count
+- edit shows actual break-glass details
+- standard modal cannot delete/deactivate/demote the account
+- existing authentication configuration remains unchanged
+
+====================================================================
+30. ACCEPTANCE TESTS
+====================================================================
+
+Test A — Break-Glass Row:
+
+Open Users & Roles.
+
+Expected:
+
+System Administrator (Break Glass) shows:
+
+Platform Role:
+Global Admin
+
+Organization Access:
+All Organizations — Global Admin
+
+It does not show duplicate APEX Solutions entries or “+1164 more.”
+
+Test B — Edit Break Glass:
+
+Select Edit User for:
+
+sysadmin@controlhub.com
+
+Expected:
+
+Details shows the actual:
+
+- name
+- email
+- platform role
+- title
+- department
+- break-glass status
+
+It does not show Jane Smith or jane@example.com.
+
+Test C — Validation:
+
+Open Edit User without changing anything.
+
+Expected:
+
+No false “Name is required” or “Email is required” errors.
+
+Test D — Platform Role None:
+
+Create or edit a normal user.
+
+Set:
+
+Platform Role = None — Organization Access Only
+
+Assign:
+
+APEX Solutions — Compliance Manager
+Carme Tech — Organization Admin
+
+Save.
+
+Expected:
+
+The user has no platform-wide role and retains both organization-specific roles.
+
+Test E — Organization Role Save:
+
+Change APEX Solutions role from IT Contributor to Compliance Manager.
+
+Click Save Organization Access.
+
+Close and reopen the user.
+
+Expected:
+
+Compliance Manager is still displayed.
+
+Test F — No Cross-Organization Leakage:
+
+A user is Organization Admin in Carme Tech and Compliance Manager in APEX Solutions.
+
+Expected:
+
+- Carme Tech grants Organization Admin permissions
+- APEX Solutions grants Compliance Manager permissions
+- Organization Admin does not leak into APEX Solutions
+
+Test G — Effective Permissions:
+
+Select a normal user and organization.
+
+Expected:
+
+The tab displays:
+
+- Platform Role
+- Organization Role
+- Membership Status
+- Effective Role
+- Permission Source
+- capabilities
+
+No blank panel appears.
+
+Test H — Global Admin Effective Permissions:
+
+Open the break-glass Effective Permissions tab.
+
+Expected:
+
+Global Admin information appears without requiring an organization selection.
+
+Test I — User Switching:
+
+Open User A, close, then open User B.
+
+Expected:
+
+Only User B’s information appears.
+
+Test J — Save Failure:
+
+Simulate an API failure while changing memberships.
+
+Expected:
+
+- no partial changes
+- previous membership state remains
+- clear error appears
+- unsaved edits remain available for retry
+
+Test K — Production Safety:
+
+No users, passwords, MFA configuration, SSO configuration, organization data, evidence, controls, or files are deleted or overwritten.
+
+====================================================================
+31. FINAL REQUIREMENTS
+====================================================================
+
+Do not start by deleting the apparent 1,164 organization records.
+
+First determine whether the problem is:
+
+- query fan-out
+- duplicate data
+- UI counting
+- Global Admin membership materialization
+
+Fix the underlying cause.
+
+The authoritative access model must be:
+
+Platform Role:
+- None
+- Global Admin
+
+Organization Access:
+- one unique membership per user and organization
+- one organization-specific role per membership
+
+Global Admin receives access through the platform role and must not require thousands of organization-membership records.

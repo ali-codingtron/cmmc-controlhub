@@ -2,6 +2,17 @@ import { pgTable, text, boolean, timestamp, integer, pgEnum, json, varchar } fro
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
+/**
+ * Platform-level role stored on `users.role`.
+ *
+ * Only two values are meaningful going forward:
+ *   - "admin" → Global Admin (platform-wide authority)
+ *   - "none"  → No platform role; access comes solely from organization memberships
+ *
+ * The remaining values are legacy global roles retained so existing accounts are
+ * not locked out. They are reported in the Legacy Role Migration Report and must
+ * never be offered as new platform-role choices.
+ */
 export const userRoleEnum = pgEnum("user_role", [
   "admin",
   "compliance_manager",
@@ -9,6 +20,7 @@ export const userRoleEnum = pgEnum("user_role", [
   "reviewer",
   "executive_viewer",
   "assessor",
+  "none",
 ]);
 
 export const mfaEnforcementModeEnum = pgEnum("mfa_enforcement_mode", [

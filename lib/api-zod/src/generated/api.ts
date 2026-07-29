@@ -34,6 +34,7 @@ export const LoginResponse = zod.object({
       "reviewer",
       "executive_viewer",
       "assessor",
+      "none",
     ]),
     status: zod
       .enum(["invited", "pending_setup", "active", "suspended", "deactivated"])
@@ -50,6 +51,8 @@ export const LoginResponse = zod.object({
     failedLoginCount: zod.number(),
     lastLoginAt: zod.coerce.date().nullish(),
     invitationExpiresAt: zod.coerce.date().nullish(),
+    isBreakGlass: zod.boolean().optional(),
+    mfaExempt: zod.boolean().optional(),
   }),
   token: zod.string(),
   mfa_required: zod.boolean().optional(),
@@ -78,6 +81,7 @@ export const GetMeResponse = zod.object({
     "reviewer",
     "executive_viewer",
     "assessor",
+    "none",
   ]),
   status: zod
     .enum(["invited", "pending_setup", "active", "suspended", "deactivated"])
@@ -94,6 +98,8 @@ export const GetMeResponse = zod.object({
   failedLoginCount: zod.number(),
   lastLoginAt: zod.coerce.date().nullish(),
   invitationExpiresAt: zod.coerce.date().nullish(),
+  isBreakGlass: zod.boolean().optional(),
+  mfaExempt: zod.boolean().optional(),
 });
 
 /**
@@ -125,6 +131,7 @@ export const MfaSetupVerifyResponse = zod.object({
       "reviewer",
       "executive_viewer",
       "assessor",
+      "none",
     ]),
     status: zod
       .enum(["invited", "pending_setup", "active", "suspended", "deactivated"])
@@ -141,6 +148,8 @@ export const MfaSetupVerifyResponse = zod.object({
     failedLoginCount: zod.number(),
     lastLoginAt: zod.coerce.date().nullish(),
     invitationExpiresAt: zod.coerce.date().nullish(),
+    isBreakGlass: zod.boolean().optional(),
+    mfaExempt: zod.boolean().optional(),
   }),
 });
 
@@ -163,6 +172,7 @@ export const MfaVerifyResponse = zod.object({
       "reviewer",
       "executive_viewer",
       "assessor",
+      "none",
     ]),
     status: zod
       .enum(["invited", "pending_setup", "active", "suspended", "deactivated"])
@@ -179,6 +189,8 @@ export const MfaVerifyResponse = zod.object({
     failedLoginCount: zod.number(),
     lastLoginAt: zod.coerce.date().nullish(),
     invitationExpiresAt: zod.coerce.date().nullish(),
+    isBreakGlass: zod.boolean().optional(),
+    mfaExempt: zod.boolean().optional(),
   }),
   token: zod.string(),
   mfa_required: zod.boolean().optional(),
@@ -205,6 +217,7 @@ export const MfaRecoveryCodeResponse = zod.object({
       "reviewer",
       "executive_viewer",
       "assessor",
+      "none",
     ]),
     status: zod
       .enum(["invited", "pending_setup", "active", "suspended", "deactivated"])
@@ -221,6 +234,8 @@ export const MfaRecoveryCodeResponse = zod.object({
     failedLoginCount: zod.number(),
     lastLoginAt: zod.coerce.date().nullish(),
     invitationExpiresAt: zod.coerce.date().nullish(),
+    isBreakGlass: zod.boolean().optional(),
+    mfaExempt: zod.boolean().optional(),
   }),
   token: zod.string(),
   mfa_required: zod.boolean().optional(),
@@ -371,6 +386,7 @@ export const ListUsersResponseItem = zod.object({
     "reviewer",
     "executive_viewer",
     "assessor",
+    "none",
   ]),
   status: zod
     .enum(["invited", "pending_setup", "active", "suspended", "deactivated"])
@@ -387,6 +403,8 @@ export const ListUsersResponseItem = zod.object({
   failedLoginCount: zod.number(),
   lastLoginAt: zod.coerce.date().nullish(),
   invitationExpiresAt: zod.coerce.date().nullish(),
+  isBreakGlass: zod.boolean().optional(),
+  mfaExempt: zod.boolean().optional(),
 });
 export const ListUsersResponse = zod.array(ListUsersResponseItem);
 
@@ -397,14 +415,11 @@ export const CreateUserBody = zod.object({
   name: zod.string(),
   email: zod.string(),
   password: zod.string(),
-  role: zod.enum([
-    "admin",
-    "compliance_manager",
-    "it_contributor",
-    "reviewer",
-    "executive_viewer",
-    "assessor",
-  ]),
+  role: zod
+    .enum(["none", "global_admin"])
+    .describe(
+      "Platform role only. Organization-specific roles are assigned through organization access, never here. The server rejects anything else.",
+    ),
   title: zod.string().optional(),
   department: zod.string().optional(),
 });
@@ -416,34 +431,59 @@ export const GetUserParams = zod.object({
   id: zod.coerce.string(),
 });
 
-export const GetUserResponse = zod.object({
-  id: zod.string(),
-  name: zod.string(),
-  email: zod.string(),
-  role: zod.enum([
-    "admin",
-    "compliance_manager",
-    "it_contributor",
-    "reviewer",
-    "executive_viewer",
-    "assessor",
-  ]),
-  status: zod
-    .enum(["invited", "pending_setup", "active", "suspended", "deactivated"])
-    .nullish(),
-  title: zod.string().nullish(),
-  department: zod.string().nullish(),
-  isActive: zod.boolean(),
-  invitedAt: zod.coerce.date().nullish(),
-  createdAt: zod.coerce.date(),
-  mfaEnabled: zod.boolean(),
-  mfaRequired: zod.boolean().optional(),
-  mfaResetRequired: zod.boolean().optional(),
-  lockedUntil: zod.coerce.date().nullish(),
-  failedLoginCount: zod.number(),
-  lastLoginAt: zod.coerce.date().nullish(),
-  invitationExpiresAt: zod.coerce.date().nullish(),
-});
+export const GetUserResponse = zod
+  .object({
+    id: zod.string(),
+    name: zod.string(),
+    email: zod.string(),
+    role: zod.enum([
+      "admin",
+      "compliance_manager",
+      "it_contributor",
+      "reviewer",
+      "executive_viewer",
+      "assessor",
+      "none",
+    ]),
+    status: zod
+      .enum(["invited", "pending_setup", "active", "suspended", "deactivated"])
+      .nullish(),
+    title: zod.string().nullish(),
+    department: zod.string().nullish(),
+    isActive: zod.boolean(),
+    invitedAt: zod.coerce.date().nullish(),
+    createdAt: zod.coerce.date(),
+    mfaEnabled: zod.boolean(),
+    mfaRequired: zod.boolean().optional(),
+    mfaResetRequired: zod.boolean().optional(),
+    lockedUntil: zod.coerce.date().nullish(),
+    failedLoginCount: zod.number(),
+    lastLoginAt: zod.coerce.date().nullish(),
+    invitationExpiresAt: zod.coerce.date().nullish(),
+    isBreakGlass: zod.boolean().optional(),
+    mfaExempt: zod.boolean().optional(),
+  })
+  .and(
+    zod.object({
+      platformRole: zod.enum(["none", "global_admin"]),
+      platformRoleLabel: zod.string(),
+      isProtected: zod
+        .boolean()
+        .describe(
+          "Account is protected from routine destructive edits (break-glass).",
+        ),
+      legacyRole: zod
+        .string()
+        .nullish()
+        .describe("Legacy global role still stored on the account, if any."),
+      department: zod.string().nullish(),
+      title: zod.string().nullish(),
+      inviteAcceptedAt: zod.coerce.date().nullish(),
+      invitationStatus: zod.string().nullish(),
+      authProvider: zod.string().nullish(),
+      updatedAt: zod.coerce.date().nullish(),
+    }),
+  );
 
 /**
  * @summary Update a user
@@ -456,15 +496,11 @@ export const UpdateUserBody = zod.object({
   name: zod.string().optional(),
   email: zod.string().optional(),
   role: zod
-    .enum([
-      "admin",
-      "compliance_manager",
-      "it_contributor",
-      "reviewer",
-      "executive_viewer",
-      "assessor",
-    ])
-    .optional(),
+    .enum(["none", "global_admin"])
+    .optional()
+    .describe(
+      "Platform role only. Organization-specific roles are assigned through organization access, never here. The server rejects anything else.",
+    ),
   title: zod.string().optional(),
   department: zod.string().optional(),
   isActive: zod.boolean().optional(),
@@ -481,6 +517,7 @@ export const UpdateUserResponse = zod.object({
     "reviewer",
     "executive_viewer",
     "assessor",
+    "none",
   ]),
   status: zod
     .enum(["invited", "pending_setup", "active", "suspended", "deactivated"])
@@ -497,6 +534,8 @@ export const UpdateUserResponse = zod.object({
   failedLoginCount: zod.number(),
   lastLoginAt: zod.coerce.date().nullish(),
   invitationExpiresAt: zod.coerce.date().nullish(),
+  isBreakGlass: zod.boolean().optional(),
+  mfaExempt: zod.boolean().optional(),
 });
 
 /**
@@ -524,6 +563,7 @@ export const DeactivateUserResponse = zod.object({
     "reviewer",
     "executive_viewer",
     "assessor",
+    "none",
   ]),
   status: zod
     .enum(["invited", "pending_setup", "active", "suspended", "deactivated"])
@@ -540,6 +580,8 @@ export const DeactivateUserResponse = zod.object({
   failedLoginCount: zod.number(),
   lastLoginAt: zod.coerce.date().nullish(),
   invitationExpiresAt: zod.coerce.date().nullish(),
+  isBreakGlass: zod.boolean().optional(),
+  mfaExempt: zod.boolean().optional(),
 });
 
 /**
@@ -560,6 +602,7 @@ export const ActivateUserResponse = zod.object({
     "reviewer",
     "executive_viewer",
     "assessor",
+    "none",
   ]),
   status: zod
     .enum(["invited", "pending_setup", "active", "suspended", "deactivated"])
@@ -576,6 +619,8 @@ export const ActivateUserResponse = zod.object({
   failedLoginCount: zod.number(),
   lastLoginAt: zod.coerce.date().nullish(),
   invitationExpiresAt: zod.coerce.date().nullish(),
+  isBreakGlass: zod.boolean().optional(),
+  mfaExempt: zod.boolean().optional(),
 });
 
 /**
@@ -623,15 +668,18 @@ export const AddUserToOrgParams = zod.object({
 
 export const AddUserToOrgBody = zod.object({
   organizationId: zod.string(),
-  role: zod.enum([
-    "global_admin",
-    "org_admin",
-    "compliance_manager",
-    "it_contributor",
-    "reviewer",
-    "executive_viewer",
-    "assessor",
-  ]),
+  role: zod
+    .enum([
+      "org_admin",
+      "compliance_manager",
+      "it_contributor",
+      "reviewer",
+      "executive_viewer",
+      "assessor",
+    ])
+    .describe(
+      "Assignable organization role. global_admin is a PLATFORM role and is rejected here — it must never be stored on a membership.",
+    ),
   status: zod.enum(["active", "invited", "suspended"]).optional(),
 });
 
@@ -663,7 +711,6 @@ export const UpdateUserOrgMembershipParams = zod.object({
 export const UpdateUserOrgMembershipBody = zod.object({
   role: zod
     .enum([
-      "global_admin",
       "org_admin",
       "compliance_manager",
       "it_contributor",
@@ -671,7 +718,10 @@ export const UpdateUserOrgMembershipBody = zod.object({
       "executive_viewer",
       "assessor",
     ])
-    .optional(),
+    .optional()
+    .describe(
+      "Assignable organization role. global_admin is a PLATFORM role and is rejected here — it must never be stored on a membership.",
+    ),
   status: zod.enum(["active", "invited", "suspended"]).optional(),
 });
 
@@ -701,19 +751,172 @@ export const RemoveUserFromOrgParams = zod.object({
 });
 
 /**
+ * Single source of truth for authorization. Omit organizationId to resolve platform-level access only — a Global Admin is reported without requiring an organization to be selected.
+
+ * @summary Resolve a user's effective access, optionally scoped to one organization
+ */
+export const GetUserEffectiveAccessParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const GetUserEffectiveAccessQueryParams = zod.object({
+  organizationId: zod.coerce.string().optional(),
+});
+
+export const GetUserEffectiveAccessResponse = zod.object({
+  userId: zod.string(),
+  organizationId: zod.string().nullish(),
+  organizationName: zod.string().nullish(),
+  platformRole: zod.enum(["none", "global_admin"]),
+  platformRoleLabel: zod.string(),
+  organizationRole: zod.string().nullish(),
+  organizationRoleLabel: zod.string().nullish(),
+  membershipStatus: zod.enum(["active", "invited", "suspended"]).nullish(),
+  effectiveRole: zod.string(),
+  effectiveRoleLabel: zod.string(),
+  permissionSource: zod.enum([
+    "PLATFORM_ROLE",
+    "ORGANIZATION_MEMBERSHIP",
+    "LEGACY_GLOBAL_ROLE",
+    "NONE",
+  ]),
+  membershipRequired: zod.boolean(),
+  hasAccess: zod.boolean(),
+  permissions: zod.array(zod.string()),
+  deniedPermissions: zod.array(zod.string()),
+  legacyRole: zod
+    .string()
+    .nullish()
+    .describe(
+      "A legacy global role still stored on the account. INFORMATIONAL ONLY — it never grants access; only the platform role and active organization memberships do.",
+    ),
+  reason: zod.string().nullish(),
+});
+
+/**
+ * @summary Get the canonical organization-access state for a user
+ */
+export const GetUserOrganizationAccessParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const GetUserOrganizationAccessResponse = zod
+  .object({
+    userId: zod.string(),
+    platformRole: zod.enum(["none", "global_admin"]),
+    membershipRequired: zod.boolean(),
+    platformAccessNote: zod.string().nullish(),
+    memberships: zod.array(
+      zod.object({
+        membershipId: zod.string(),
+        organizationId: zod.string(),
+        organizationName: zod.string(),
+        role: zod.enum([
+          "global_admin",
+          "org_admin",
+          "compliance_manager",
+          "it_contributor",
+          "reviewer",
+          "executive_viewer",
+          "assessor",
+        ]),
+        status: zod.enum(["active", "invited", "suspended"]),
+        joinedAt: zod.coerce.date().nullish(),
+      }),
+    ),
+    distinctOrganizationCount: zod.number(),
+    duplicateRowCount: zod
+      .number()
+      .describe(
+        "Redundant rows detected in the database for this user. 0 when healthy.",
+      ),
+    version: zod
+      .string()
+      .describe(
+        "Fingerprint of the saved set, for optimistic concurrency control.",
+      ),
+  })
+  .describe(
+    "Canonical organization-access state for one user. Exactly one entry per organization. For Global Admins, memberships are not the source of access — membershipRequired is false and platformAccessNote explains why.\n",
+  );
+
+/**
+ * @summary Transactionally replace a user's full organization-membership set
+ */
+export const SaveUserOrganizationAccessParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const SaveUserOrganizationAccessBody = zod.object({
+  memberships: zod.array(
+    zod.object({
+      organizationId: zod.string(),
+      role: zod.enum([
+        "org_admin",
+        "compliance_manager",
+        "it_contributor",
+        "reviewer",
+        "executive_viewer",
+        "assessor",
+      ]),
+      status: zod.enum(["active", "invited", "suspended"]),
+    }),
+  ),
+  expectedVersion: zod.string().nullish(),
+  reason: zod.string().nullish(),
+});
+
+export const SaveUserOrganizationAccessResponse = zod
+  .object({
+    userId: zod.string(),
+    platformRole: zod.enum(["none", "global_admin"]),
+    membershipRequired: zod.boolean(),
+    platformAccessNote: zod.string().nullish(),
+    memberships: zod.array(
+      zod.object({
+        membershipId: zod.string(),
+        organizationId: zod.string(),
+        organizationName: zod.string(),
+        role: zod.enum([
+          "global_admin",
+          "org_admin",
+          "compliance_manager",
+          "it_contributor",
+          "reviewer",
+          "executive_viewer",
+          "assessor",
+        ]),
+        status: zod.enum(["active", "invited", "suspended"]),
+        joinedAt: zod.coerce.date().nullish(),
+      }),
+    ),
+    distinctOrganizationCount: zod.number(),
+    duplicateRowCount: zod
+      .number()
+      .describe(
+        "Redundant rows detected in the database for this user. 0 when healthy.",
+      ),
+    version: zod
+      .string()
+      .describe(
+        "Fingerprint of the saved set, for optimistic concurrency control.",
+      ),
+  })
+  .describe(
+    "Canonical organization-access state for one user. Exactly one entry per organization. For Global Admins, memberships are not the source of access — membershipRequired is false and platformAccessNote explains why.\n",
+  );
+
+/**
  * @summary Invite a new user by email
  */
 export const SendInvitationBody = zod.object({
   name: zod.string(),
   email: zod.string(),
-  role: zod.enum([
-    "admin",
-    "compliance_manager",
-    "it_contributor",
-    "reviewer",
-    "executive_viewer",
-    "assessor",
-  ]),
+  role: zod
+    .enum(["none", "global_admin"])
+    .describe(
+      "Platform role only. Organization-specific roles go in orgMemberships.",
+    ),
   title: zod.string().optional(),
   department: zod.string().optional(),
   orgMemberships: zod

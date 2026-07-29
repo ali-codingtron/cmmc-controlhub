@@ -17,6 +17,8 @@
     "generate:user-guide": "tsx ./src/generate-user-guide.ts",
     "seed:apex-solutions": "tsx ./src/seed-apex-solutions.ts",
     "seed:framework-crosswalks": "tsx ./src/seed-nist-800-53-crosswalk.ts",
+    "diagnose:user-access": "tsx ./src/diagnose-user-access.ts",
+    "repair:user-memberships": "tsx ./src/repair-user-memberships.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

@@ -166,22 +166,18 @@ async function seedBreakGlassAccount() {
     userId = existing.id;
   }
 
-  // Ensure membership in every organization
-  const orgs = await db.select({ id: organizationsTable.id }).from(organizationsTable);
-  for (const org of orgs) {
-    await db.insert(organizationUsersTable).values({
-      id: randomUUID(),
-      organizationId: org.id,
-      userId,
-      role: "org_admin",
-      status: "active",
-      joinedAt: new Date(),
-    }).onConflictDoNothing();
-  }
-
-  if (orgs.length > 0) {
-    logger.info({ email: BREAK_GLASS_EMAIL, orgs: orgs.length }, "Break-glass account org memberships ensured");
-  }
+  // NOTE: Deliberately does NOT create an organization_users row per organization.
+  //
+  // The break-glass account is a Global Admin (users.role = "admin"), which grants
+  // platform-wide access to every organization through the platform role alone.
+  // Materialising one membership per organization here previously appended 10 rows
+  // on every server start: the `.onConflictDoNothing()` guard was a no-op because
+  // the table's only unique index is the primary key on `id`, and `id` was a fresh
+  // randomUUID() each run. That produced ~1,346 redundant rows and made the Users
+  // table report "+1164 more" while role edits silently hit only one duplicate.
+  //
+  // Platform role is authoritative for Global Admins — see resolveEffectiveAccess().
+  logger.info({ email: BREAK_GLASS_EMAIL }, "Break-glass account verified (platform-wide access via Global Admin role)");
 }
 
 async function seedDocumentTemplates() {

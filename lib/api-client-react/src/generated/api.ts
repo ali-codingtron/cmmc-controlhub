@@ -52,6 +52,7 @@ import type {
   DocumentVersionRecord,
   DomainReadiness,
   DomainWithStats,
+  EffectiveAccess,
   ErrorResponse,
   EvidenceDetail,
   EvidenceItem,
@@ -63,6 +64,7 @@ import type {
   GetAllDocumentsParams,
   GetRecentActivityParams,
   GetStaleEvidenceParams,
+  GetUserEffectiveAccessParams,
   HealthStatus,
   LinkControlsBody,
   ListAssessorControlsParams,
@@ -85,6 +87,7 @@ import type {
   MfaSetupVerifyResponse,
   MissingDocReport,
   OrgPackageAssignment,
+  OrganizationAccessState,
   OrganizationSummary,
   Poam,
   RejectDocumentBody,
@@ -92,6 +95,7 @@ import type {
   ResendInviteBody,
   ResetPasswordBody,
   RunDocChecksBody,
+  SaveOrganizationAccessBody,
   SearchEvidenceParams,
   SecurityCenterData,
   SecuritySettings,
@@ -116,6 +120,7 @@ import type {
   UpdateUserOrgMembershipBody,
   UploadEvidenceBody,
   User,
+  UserDetail,
   UserOrgMembership,
   ValidateInvitationParams,
   ValidateInvitationResponse,
@@ -1516,8 +1521,8 @@ export const getGetUserUrl = (id: string) => {
 export const getUser = async (
   id: string,
   options?: RequestInit,
-): Promise<User> => {
-  return customFetch<User>(getGetUserUrl(id), {
+): Promise<UserDetail> => {
+  return customFetch<UserDetail>(getGetUserUrl(id), {
     ...options,
     method: "GET",
   });
@@ -2358,6 +2363,311 @@ export const useRemoveUserFromOrg = <
   TContext
 > => {
   return useMutation(getRemoveUserFromOrgMutationOptions(options));
+};
+
+/**
+ * Single source of truth for authorization. Omit organizationId to resolve platform-level access only — a Global Admin is reported without requiring an organization to be selected.
+
+ * @summary Resolve a user's effective access, optionally scoped to one organization
+ */
+export const getGetUserEffectiveAccessUrl = (
+  id: string,
+  params?: GetUserEffectiveAccessParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/users/${id}/effective-access?${stringifiedParams}`
+    : `/api/users/${id}/effective-access`;
+};
+
+export const getUserEffectiveAccess = async (
+  id: string,
+  params?: GetUserEffectiveAccessParams,
+  options?: RequestInit,
+): Promise<EffectiveAccess> => {
+  return customFetch<EffectiveAccess>(
+    getGetUserEffectiveAccessUrl(id, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetUserEffectiveAccessQueryKey = (
+  id: string,
+  params?: GetUserEffectiveAccessParams,
+) => {
+  return [
+    `/api/users/${id}/effective-access`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetUserEffectiveAccessQueryOptions = <
+  TData = Awaited<ReturnType<typeof getUserEffectiveAccess>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  params?: GetUserEffectiveAccessParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getUserEffectiveAccess>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetUserEffectiveAccessQueryKey(id, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getUserEffectiveAccess>>
+  > = ({ signal }) =>
+    getUserEffectiveAccess(id, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getUserEffectiveAccess>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetUserEffectiveAccessQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getUserEffectiveAccess>>
+>;
+export type GetUserEffectiveAccessQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Resolve a user's effective access, optionally scoped to one organization
+ */
+
+export function useGetUserEffectiveAccess<
+  TData = Awaited<ReturnType<typeof getUserEffectiveAccess>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  params?: GetUserEffectiveAccessParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getUserEffectiveAccess>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetUserEffectiveAccessQueryOptions(
+    id,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get the canonical organization-access state for a user
+ */
+export const getGetUserOrganizationAccessUrl = (id: string) => {
+  return `/api/users/${id}/organization-access`;
+};
+
+export const getUserOrganizationAccess = async (
+  id: string,
+  options?: RequestInit,
+): Promise<OrganizationAccessState> => {
+  return customFetch<OrganizationAccessState>(
+    getGetUserOrganizationAccessUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetUserOrganizationAccessQueryKey = (id: string) => {
+  return [`/api/users/${id}/organization-access`] as const;
+};
+
+export const getGetUserOrganizationAccessQueryOptions = <
+  TData = Awaited<ReturnType<typeof getUserOrganizationAccess>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getUserOrganizationAccess>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetUserOrganizationAccessQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getUserOrganizationAccess>>
+  > = ({ signal }) =>
+    getUserOrganizationAccess(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getUserOrganizationAccess>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetUserOrganizationAccessQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getUserOrganizationAccess>>
+>;
+export type GetUserOrganizationAccessQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get the canonical organization-access state for a user
+ */
+
+export function useGetUserOrganizationAccess<
+  TData = Awaited<ReturnType<typeof getUserOrganizationAccess>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getUserOrganizationAccess>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetUserOrganizationAccessQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Transactionally replace a user's full organization-membership set
+ */
+export const getSaveUserOrganizationAccessUrl = (id: string) => {
+  return `/api/users/${id}/organization-access`;
+};
+
+export const saveUserOrganizationAccess = async (
+  id: string,
+  saveOrganizationAccessBody: SaveOrganizationAccessBody,
+  options?: RequestInit,
+): Promise<OrganizationAccessState> => {
+  return customFetch<OrganizationAccessState>(
+    getSaveUserOrganizationAccessUrl(id),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(saveOrganizationAccessBody),
+    },
+  );
+};
+
+export const getSaveUserOrganizationAccessMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveUserOrganizationAccess>>,
+    TError,
+    { id: string; data: BodyType<SaveOrganizationAccessBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof saveUserOrganizationAccess>>,
+  TError,
+  { id: string; data: BodyType<SaveOrganizationAccessBody> },
+  TContext
+> => {
+  const mutationKey = ["saveUserOrganizationAccess"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof saveUserOrganizationAccess>>,
+    { id: string; data: BodyType<SaveOrganizationAccessBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return saveUserOrganizationAccess(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SaveUserOrganizationAccessMutationResult = NonNullable<
+  Awaited<ReturnType<typeof saveUserOrganizationAccess>>
+>;
+export type SaveUserOrganizationAccessMutationBody =
+  BodyType<SaveOrganizationAccessBody>;
+export type SaveUserOrganizationAccessMutationError = ErrorType<void>;
+
+/**
+ * @summary Transactionally replace a user's full organization-membership set
+ */
+export const useSaveUserOrganizationAccess = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveUserOrganizationAccess>>,
+    TError,
+    { id: string; data: BodyType<SaveOrganizationAccessBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof saveUserOrganizationAccess>>,
+  TError,
+  { id: string; data: BodyType<SaveOrganizationAccessBody> },
+  TContext
+> => {
+  return useMutation(getSaveUserOrganizationAccessMutationOptions(options));
 };
 
 /**
