@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrg } from "@/context/OrgContext";
@@ -609,10 +609,10 @@ function NextStepBanner({
 
   const borderColor =
     variant === "warning"
-      ? "border-yellow-500/30 bg-yellow-500/5"
-      : "border-blue-500/30 bg-blue-500/5";
+      ? "border-amber-300 bg-amber-50"
+      : "border-blue-300 bg-blue-50";
   const textColor =
-    variant === "warning" ? "text-yellow-300" : "text-blue-300";
+    variant === "warning" ? "text-amber-700" : "text-blue-700";
 
   return (
     <div
@@ -627,7 +627,7 @@ function NextStepBanner({
         />
         <div className="text-xs">
           <span className={cn("font-semibold", textColor)}>Next Step: </span>
-          <span className="text-muted-foreground">{message}</span>
+          <span className="text-foreground/70">{message}</span>
         </div>
       </div>
       {buttonLabel && targetTab && (
@@ -637,8 +637,8 @@ function NextStepBanner({
           className={cn(
             "shrink-0 h-7 text-xs gap-1.5",
             variant === "warning"
-              ? "border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/10"
-              : "border-blue-500/30 text-blue-300 hover:bg-blue-500/10"
+              ? "border-amber-400 text-amber-700 hover:bg-amber-100"
+              : "border-blue-400 text-blue-700 hover:bg-blue-100"
           )}
           onClick={() => onTabChange(targetTab)}
         >
@@ -793,6 +793,38 @@ function OverrideDialog({
   );
 }
 
+// Maps freeform display labels (stored in roadmap evidence items) to the valid
+// evidence_type DB enum values used by evidence_items.
+function toEvidenceTypeEnum(displayType: string): string {
+  const t = displayType.toLowerCase().replace(/\s+/g, "_");
+  const VALID = ["policy","procedure","screenshot","log","report","ticket",
+    "configuration_export","access_review","training_record","incident_record",
+    "risk_record","approval_record","system_inventory","asset_inventory",
+    "supplier_review","backup_verification","network_diagram","scan_report","other"];
+  if (VALID.includes(t)) return t;
+  // Common display → enum mappings
+  if (t === "document" || t === "spreadsheet" || t === "presentation") return "report";
+  if (t === "diagram") return "network_diagram";
+  if (t === "scan") return "scan_report";
+  return "other";
+}
+
+const EVIDENCE_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "report",               label: "Report / Document" },
+  { value: "policy",               label: "Policy" },
+  { value: "procedure",            label: "Procedure" },
+  { value: "screenshot",           label: "Screenshot" },
+  { value: "log",                  label: "Log" },
+  { value: "configuration_export", label: "Configuration Export" },
+  { value: "access_review",        label: "Access Review" },
+  { value: "training_record",      label: "Training Record" },
+  { value: "scan_report",          label: "Scan Report" },
+  { value: "network_diagram",      label: "Network Diagram" },
+  { value: "system_inventory",     label: "System Inventory" },
+  { value: "asset_inventory",      label: "Asset Inventory" },
+  { value: "other",                label: "Other" },
+];
+
 // ── UploadEvidenceModal ───────────────────────────────────────────────────────
 function UploadEvidenceModal({
   open,
@@ -813,15 +845,28 @@ function UploadEvidenceModal({
 }) {
   const { toast } = useToast();
   const [title, setTitle] = useState(item?.title ?? "");
+  const [evidenceTypeValue, setEvidenceTypeValue] = useState(() => toEvidenceTypeEnum(item?.evidenceType ?? ""));
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync title when item changes
+  // Sync title + type when item changes
   const itemId = item?.id;
   useState(() => {
-    if (item) setTitle(item.title);
+    if (item) {
+      setTitle(item.title);
+      setEvidenceTypeValue(toEvidenceTypeEnum(item.evidenceType));
+    }
   });
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const dropped = e.dataTransfer.files[0];
+    if (dropped) setFile(dropped);
+  }, []);
 
   const handleSubmit = async () => {
     if (!file || !item) return;
@@ -832,10 +877,10 @@ function UploadEvidenceModal({
       const formData = new FormData();
       formData.append("file", file);
       formData.append("title", title || item.title);
-      formData.append("evidenceType", item.evidenceType);
-      formData.append("suggestedFilename", item.suggestedFilename || file.name);
+      formData.append("evidenceType", evidenceTypeValue);
 
-      const uploadRes = await fetch("/api/evidence", {
+      // Use the multipart upload endpoint (not the JSON-only /api/evidence)
+      const uploadRes = await fetch("/api/evidence/upload", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -887,7 +932,16 @@ function UploadEvidenceModal({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Type</Label>
-              <div className="text-sm font-mono bg-muted/30 border rounded px-2 py-1.5">{item.evidenceType}</div>
+              <Select value={evidenceTypeValue} onValueChange={setEvidenceTypeValue}>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EVIDENCE_TYPE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Suggested Filename</Label>
@@ -911,11 +965,36 @@ function UploadEvidenceModal({
           )}
           <div className="space-y-1.5">
             <Label>File <span className="text-red-400">*</span></Label>
-            <Input
-              type="file"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="text-sm"
-            />
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => fileInputRef.current?.click()}
+              onKeyDown={(e) => e.key === "Enter" && fileInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+              className={`relative flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-6 text-sm transition-colors cursor-pointer select-none
+                ${dragOver
+                  ? "border-primary bg-primary/5 text-primary"
+                  : "border-muted-foreground/25 bg-muted/20 text-muted-foreground hover:border-primary/50 hover:bg-primary/5"
+                }`}
+            >
+              <Upload className="h-6 w-6 shrink-0 opacity-60" />
+              {file ? (
+                <span className="font-medium text-foreground truncate max-w-full px-2">{file.name}</span>
+              ) : (
+                <>
+                  <span className="font-medium">Click to browse or drag &amp; drop</span>
+                  <span className="text-xs opacity-70">Any file type accepted</span>
+                </>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="sr-only"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              />
+            </div>
           </div>
           {uploadError && (
             <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded p-2">
@@ -3085,12 +3164,12 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
                 className={cn(
                   "rounded-lg border p-4 flex flex-wrap items-center justify-between gap-3",
                   action.progress?.understandAckAt
-                    ? "border-emerald-500/30 bg-emerald-500/5"
-                    : "border-blue-500/30 bg-blue-500/5"
+                    ? "border-emerald-300 bg-emerald-50"
+                    : "border-blue-300 bg-blue-50"
                 )}
               >
                 {action.progress?.understandAckAt ? (
-                  <div className="flex items-center gap-2 text-sm text-emerald-300">
+                  <div className="flex items-center gap-2 text-sm text-emerald-700">
                     <CheckCircle2 className="h-4 w-4 shrink-0" />
                     <span>
                       Acknowledged on{" "}
@@ -3098,7 +3177,7 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
                     </span>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 text-sm text-blue-300">
+                  <div className="flex items-center gap-2 text-sm text-blue-700">
                     <Info className="h-4 w-4 shrink-0" />
                     <span>
                       Acknowledge that you've read this overview to start tracking your progress.
@@ -3373,10 +3452,12 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
                             })}
                           </div>
                         )}
-                        <div className="ml-9 text-xs text-muted-foreground">
-                          <span className="font-medium text-foreground/60">Linked controls:</span>{" "}
-                          {action.controls.map((c) => c.controlRef).join(", ")}
-                        </div>
+                        {action.controls.length > 0 && (
+                          <div className="ml-9 text-xs text-muted-foreground">
+                            <span className="font-medium text-foreground/60">Linked controls:</span>{" "}
+                            {action.controls.map((c) => c.controlRef).join(", ")}
+                          </div>
+                        )}
                       </div>
                     );
                   })}

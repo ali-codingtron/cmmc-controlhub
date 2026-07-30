@@ -962,41 +962,22 @@ function TaskFormDialog({
               rows={3}
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>
-                Priority <span className="text-destructive">*</span>
-              </Label>
-              <Select value={form.priority} onValueChange={set("priority")}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PRIORITIES.map((p) => (
-                    <SelectItem key={p.value} value={p.value}>
-                      {p.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Assignee</Label>
-              <Select value={form.assigneeId || "__unassigned__"} onValueChange={(v) => set("assigneeId")(v === "__unassigned__" ? "" : v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Unassigned" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__unassigned__">Unassigned</SelectItem>
-                  {members.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>
-                      {m.name}
-                      <span className="ml-1 text-xs text-muted-foreground">({m.email})</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div>
+            <Label>
+              Priority <span className="text-destructive">*</span>
+            </Label>
+            <Select value={form.priority} onValueChange={set("priority")}>
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PRIORITIES.map((p) => (
+                  <SelectItem key={p.value} value={p.value}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
