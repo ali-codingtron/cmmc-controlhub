@@ -28,8 +28,21 @@ import {
   Wand2,
   Shield,
   Info,
+  Trash2,
+  Clock,
+  RotateCcw,
+  PlayCircle,
 } from "lucide-react";
-
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 interface SSPTemplate {
   templateKey: string;
   name: string;
@@ -76,6 +89,15 @@ interface SspStats {
   totalControls: number;
 }
 
+interface PrefillDraft {
+  id: string;
+  templateKey: string;
+  title: string;
+  status: string;
+  wizardStep: number;
+  updatedAt: string;
+  createdAt: string;
+}
 const STATUS_COLORS: Record<string, string> = {
   draft: "bg-yellow-100 text-yellow-800 border-yellow-200",
   review: "bg-blue-100 text-blue-800 border-blue-200",
@@ -327,6 +349,8 @@ function SspTemplateCard({
   );
 }
 
+const TOTAL_STEPS = 8;
+
 function SspResourcesCard() {
   const { activeOrg } = useOrg();
 
@@ -452,6 +476,7 @@ export default function SspOverview() {
           </CardContent>
         </Card>
 
+        <SspDraftsCard />
         <SspResourcesCard />
       </div>
     );
@@ -606,6 +631,9 @@ export default function SspOverview() {
         <QuickLink href="/ssp/export" icon={FileText} label="Export SSP" description="Download updated DOCX with all edits" />
       </div>
 
+      {/* ── In-Progress Drafts ── */}
+      <SspDraftsCard />
+
       {/* ── SSP Resources ── */}
       <SspResourcesCard />
     </div>
@@ -677,5 +705,187 @@ function QuickLink({
         </CardContent>
       </Card>
     </Link>
+  );
+}
+
+function SspDraftsCard() {
+  const { activeOrg } = useOrg();
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [, navigate] = useLocation();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const { data: drafts, isLoading } = useQuery<PrefillDraft[]>({
+    queryKey: ["ssp-prefill-drafts", activeOrg?.id],
+    queryFn: async () => {
+      const r = await fetch("/api/ssp/prefill-drafts", {
+        headers: apiHeaders(activeOrg?.id),
+      });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: !!activeOrg?.id,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (draftId: string) => {
+      const r = await fetch(`/api/ssp/prefill-drafts/${draftId}`, {
+        method: "DELETE",
+        headers: apiHeaders(activeOrg?.id),
+      });
+      if (!r.ok) throw new Error("Delete failed");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ssp-prefill-drafts", activeOrg?.id] });
+      toast({ title: "Draft deleted" });
+    },
+    onError: () => toast({ title: "Could not delete draft", variant: "destructive" }),
+  });
+
+  const draftToDelete = deletingId ? drafts?.find((d) => d.id === deletingId) : undefined;
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Wand2 className="h-4 w-4 text-violet-600" />
+            In-Progress SSP Drafts
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-center gap-2 py-6 text-muted-foreground text-sm">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading drafts…
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!drafts || drafts.length === 0) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Wand2 className="h-4 w-4 text-violet-600" />
+            In-Progress SSP Drafts
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="py-8 text-center space-y-2">
+          <Wand2 className="h-8 w-8 mx-auto text-muted-foreground/30" />
+          <p className="text-sm font-medium text-muted-foreground">No drafts yet</p>
+          <p className="text-xs text-muted-foreground">
+            Drafts are saved automatically as you work through the pre-fill wizard.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <>
+      <AlertDialog open={!!deletingId} onOpenChange={(open) => { if (!open) setDeletingId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete draft?</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{draftToDelete?.title ?? "This draft"}" will be permanently deleted. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={() => {
+                if (deletingId) deleteMutation.mutate(deletingId);
+                setDeletingId(null);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Wand2 className="h-4 w-4 text-violet-600" />
+            In-Progress SSP Drafts
+            <Badge variant="secondary" className="ml-auto text-xs">{drafts.length}</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 pt-1">
+          {drafts.map((draft) => {
+            const isComplete = draft.wizardStep >= TOTAL_STEPS;
+            const stepLabel = isComplete
+              ? "Complete"
+              : `Step ${draft.wizardStep} of ${TOTAL_STEPS}`;
+            const updatedDate = new Date(draft.updatedAt).toLocaleDateString(undefined, {
+              year: "numeric", month: "short", day: "numeric",
+            });
+
+            return (
+              <div
+                key={draft.id}
+                className="flex items-center gap-3 rounded-lg border bg-muted/20 px-4 py-3"
+              >
+                <div className={`p-2 rounded-md flex-shrink-0 ${isComplete ? "bg-green-100" : "bg-violet-100"}`}>
+                  <Wand2 className={`h-4 w-4 ${isComplete ? "text-green-700" : "text-violet-700"}`} />
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{draft.title}</p>
+                  <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground flex-wrap">
+                    <span className="flex items-center gap-1">
+                      <PlayCircle className="h-3 w-3" />
+                      {stepLabel}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {updatedDate}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {isComplete ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        navigate(`/ssp/prefill-wizard?draft=${draft.id}&templateKey=${draft.templateKey}`)
+                      }
+                    >
+                      <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                      Re-generate
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        navigate(`/ssp/prefill-wizard?draft=${draft.id}&templateKey=${draft.templateKey}`)
+                      }
+                    >
+                      <PlayCircle className="h-3.5 w-3.5 mr-1.5" />
+                      Continue
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() => setDeletingId(draft.id)}
+                    disabled={deleteMutation.isPending}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span className="sr-only">Delete draft</span>
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+    </>
   );
 }

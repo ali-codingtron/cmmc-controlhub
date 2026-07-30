@@ -96,6 +96,27 @@ const upload = multer({
 
 const router = Router();
 
+// ── Package-entitlement helper ────────────────────────────────────────────────
+// Returns true if `orgId` has an active package that makes `templateKey` available.
+async function orgIsEntitledToTemplate(orgId: string, templateKey: string): Promise<boolean> {
+  const pkgRows = await db
+    .select({ packageKey: compliancePackagesTable.packageKey })
+    .from(organizationPackagesTable)
+    .innerJoin(
+      compliancePackagesTable,
+      eq(organizationPackagesTable.packageId, compliancePackagesTable.id)
+    )
+    .where(
+      and(
+        eq(organizationPackagesTable.organizationId, orgId),
+        eq(organizationPackagesTable.isActive, true)
+      )
+    );
+  const packageKeys = pkgRows.map((r) => r.packageKey);
+  const compatible = resolveCompatibleSSPTemplates(packageKeys);
+  return compatible.some((t) => t.templateKey === templateKey);
+}
+
 // ── Get control mapping from primary SSP (must be before /:id routes) ─────────
 router.get("/ssp/control-mapping", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = (req as any).orgId as string;
@@ -389,6 +410,11 @@ router.post("/ssp/prefill-drafts", requireAuth, requireOrg, async (req, res): Pr
     return;
   }
 
+  if (!(await orgIsEntitledToTemplate(orgId, templateKey))) {
+    res.status(403).json({ error: "This template is not available for your compliance package." });
+    return;
+  }
+
   const [draft] = await db
     .insert(sspPrefillDraftsTable)
     .values({
@@ -508,6 +534,11 @@ router.post("/ssp/prefill-drafts/:draftId/generate", requireAuth, requireOrg, as
   const tmpl = getSSPTemplate(draft.templateKey);
   if (!tmpl) {
     res.status(400).json({ error: "Template definition not found" });
+    return;
+  }
+
+  if (!(await orgIsEntitledToTemplate(orgId, draft.templateKey))) {
+    res.status(403).json({ error: "This template is not available for your compliance package." });
     return;
   }
 
