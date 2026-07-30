@@ -3,6 +3,7 @@ import {
   db,
   organizationsTable,
   organizationUsersTable,
+  organizationFeaturesTable,
   usersTable,
   controlAssessmentsTable,
   evidenceItemsTable,
@@ -15,6 +16,9 @@ import { requireAuth } from "../lib/auth";
 import { logAudit } from "../lib/audit";
 import { ASSIGNABLE_ORG_ROLES, isAssignableOrgRole } from "../lib/access-control";
 import { randomUUID } from "crypto";
+
+const SUPPORTED_FEATURE_KEYS = ["IMPLEMENTATION_ROADMAP"] as const;
+type FeatureKey = typeof SUPPORTED_FEATURE_KEYS[number];
 
 const router = Router();
 
@@ -556,6 +560,131 @@ router.delete("/organizations/:id", requireAuth, requireAdmin, async (req, res) 
   req.log.info({ orgId: id, orgName: existing.name }, "Organization deleted");
   res.json({ success: true });
 });
+
+// ── Feature Flags ─────────────────────────────────────────────────────────────
+
+// GET /organizations/:id/features — any authenticated org member or Global Admin
+router.get("/organizations/:id/features", requireAuth, async (req, res) => {
+  const orgId = req.params.id as string;
+
+  // Authorization: platform Global Admin OR active org member
+  if (req.authUser?.role !== "admin") {
+    const [membership] = await db
+      .select({ id: organizationUsersTable.id })
+      .from(organizationUsersTable)
+      .where(
+        and(
+          eq(organizationUsersTable.organizationId, orgId),
+          eq(organizationUsersTable.userId, req.authUser!.id),
+          eq(organizationUsersTable.status, "active")
+        )
+      )
+      .limit(1);
+    if (!membership) {
+      res.status(403).json({ error: "Access denied" });
+      return;
+    }
+  }
+
+  const rows = await db
+    .select()
+    .from(organizationFeaturesTable)
+    .where(eq(organizationFeaturesTable.organizationId, orgId));
+
+  // Return all known feature keys with their state; missing record = enabled
+  const result = SUPPORTED_FEATURE_KEYS.map((key) => {
+    const row = rows.find((r) => r.featureKey === key);
+    if (row) {
+      return { featureKey: row.featureKey, enabled: row.enabled, initialized: row.initialized };
+    }
+    return { featureKey: key, enabled: true, initialized: false };
+  });
+
+  res.json(result);
+});
+
+// PATCH /organizations/:id/features/:key — Global Admins only
+router.patch(
+  "/organizations/:id/features/:key",
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const orgId = req.params.id as string;
+    const key = (req.params.key as string).toUpperCase() as FeatureKey;
+
+    if (!(SUPPORTED_FEATURE_KEYS as readonly string[]).includes(key)) {
+      res.status(400).json({ error: `Unsupported feature key: ${key}` });
+      return;
+    }
+
+    const { enabled, changeReason } = req.body;
+    if (typeof enabled !== "boolean") {
+      res.status(422).json({ error: "enabled (boolean) is required" });
+      return;
+    }
+
+    const [org] = await db
+      .select({ name: organizationsTable.name })
+      .from(organizationsTable)
+      .where(eq(organizationsTable.id, orgId))
+      .limit(1);
+    if (!org) {
+      res.status(404).json({ error: "Organization not found" });
+      return;
+    }
+
+    const [existing] = await db
+      .select()
+      .from(organizationFeaturesTable)
+      .where(
+        and(
+          eq(organizationFeaturesTable.organizationId, orgId),
+          eq(organizationFeaturesTable.featureKey, key)
+        )
+      )
+      .limit(1);
+
+    const prevEnabled = existing?.enabled ?? true; // missing record = enabled
+
+    const now = new Date();
+    if (existing) {
+      await db
+        .update(organizationFeaturesTable)
+        .set({
+          enabled,
+          changeReason: changeReason ?? null,
+          enabledBy: enabled ? req.authUser!.id : existing.enabledBy,
+          enabledAt: enabled ? now : existing.enabledAt,
+          disabledBy: !enabled ? req.authUser!.id : existing.disabledBy,
+          disabledAt: !enabled ? now : existing.disabledAt,
+          updatedAt: now,
+        })
+        .where(eq(organizationFeaturesTable.id, existing.id));
+    } else {
+      await db.insert(organizationFeaturesTable).values({
+        id: randomUUID(),
+        organizationId: orgId,
+        featureKey: key,
+        enabled,
+        initialized: false,
+        enabledBy: enabled ? req.authUser!.id : null,
+        enabledAt: enabled ? now : null,
+        disabledBy: !enabled ? req.authUser!.id : null,
+        disabledAt: !enabled ? now : null,
+        changeReason: changeReason ?? null,
+      });
+    }
+
+    const auditEvent = enabled ? "roadmap_module_enabled" : "roadmap_module_disabled";
+    await logAudit(req, auditEvent, "organization", orgId, {
+      entityLabel: org.name,
+      previousValue: { enabled: prevEnabled },
+      newValue: { enabled, featureKey: key, changeReason: changeReason ?? null },
+    });
+
+    res.json({ featureKey: key, enabled, initialized: existing?.initialized ?? false });
+  }
+);
 
 router.delete("/organizations/:id/users/:userId", requireAuth, requireAdmin, async (req, res) => {
   const targetUserId = req.params.userId as string;
