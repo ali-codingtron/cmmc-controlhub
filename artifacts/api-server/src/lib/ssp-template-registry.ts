@@ -247,19 +247,30 @@ export function buildPlaceholderValues(
     OUT_OF_SCOPE_ASSETS: v("outOfScopeAssets"),
 
     // ── Architecture ─────────────────────────────────────────────────────
-    // L1 template uses descriptive architecture section names
+    // L1 template uses longer descriptive architecture section names
     IDENTITY_AUTHENTICATION_AND_ACCESS_ARCHITECTURE: v("iamArchitectureNarrative"),
     ENDPOINT_AND_MALWARE_PROTECTION_ARCHITECTURE: v("endpointSecurityNarrative"),
     NETWORK_AND_BOUNDARY_PROTECTION_ARCHITECTURE: v("networkBoundaryNarrative"),
     EXTERNAL_SYSTEMS_AND_CLOUD_SERVICE_ARCHITECTURE: v("externalSystemsNarrative"),
+    // L2 template uses shorter/different architecture key names — aliases to same wizard fields
+    IDENTITY_AND_ACCESS_ARCHITECTURE: v("iamArchitectureNarrative"),
+    ENDPOINT_SECURITY_ARCHITECTURE: v("endpointSecurityNarrative"),
+    NETWORK_AND_BOUNDARY_SECURITY_ARCHITECTURE: v("networkBoundaryNarrative"),
+    CLOUD_SECURITY_ARCHITECTURE: v("externalSystemsNarrative"),
+    EXTERNAL_SERVICES_AND_CUSTOMER_RESPONSIBILITIES_NARRATIVE: v("externalSystemsNarrative"),
+    // Physical security architecture — L1 key and L2 key both map to physicalMediaNarrative
+    PHYSICAL_AND_MEDIA_PROTECTION_ARCHITECTURE: v("physicalMediaNarrative"),
+    PHYSICAL_AND_PERSONNEL_SECURITY_ARCHITECTURE: v("physicalMediaNarrative"),
     // Also cover any shortened keys in case of alias
     IAM_ARCHITECTURE_NARRATIVE: v("iamArchitectureNarrative"),
     ENDPOINT_SECURITY_NARRATIVE: v("endpointSecurityNarrative"),
     MALWARE_PROTECTION_NARRATIVE: v("malwareProtectionNarrative"),
     NETWORK_BOUNDARY_NARRATIVE: v("networkBoundaryNarrative"),
     EXTERNAL_SYSTEMS_NARRATIVE: v("externalSystemsNarrative"),
+    // Data flow narrative — L1 uses domain-specific keys; L2 uses generic key
     NETWORK_AND_FCI_DATA_FLOW_NARRATIVE: v("networkDataFlowNarrative"),
     NETWORK_AND_CUI_DATA_FLOW_NARRATIVE: v("networkDataFlowNarrative"),
+    NETWORK_AND_DATA_FLOW_NARRATIVE: v("networkDataFlowNarrative"),
 
     // ── Roles & responsibilities ──────────────────────────────────────────
     SYSTEM_OWNER_NAME: v("systemOwnerName"),

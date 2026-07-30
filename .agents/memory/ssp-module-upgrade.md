@@ -49,9 +49,10 @@ The templates use a specific naming scheme — do not guess, use these:
 - L1 requirements use Roman numeral ordinal (AC domain = I–IV, IA = V–VI, MP = VII, PE = VIII–IX, SC = X–XI, SI = XII–XV) — NOT the NIST ref format
   - e.g. `AC_L1_B_1_I_IMPLEMENTATION_NARRATIVE` = AC.L1-3.1.1
   - PE only has VIII and IX (consolidates 4 practices into 2 sections)
-- Architecture keys: `IDENTITY_AUTHENTICATION_AND_ACCESS_ARCHITECTURE`, `ENDPOINT_AND_MALWARE_PROTECTION_ARCHITECTURE`, `NETWORK_AND_BOUNDARY_PROTECTION_ARCHITECTURE`, `EXTERNAL_SYSTEMS_AND_CLOUD_SERVICE_ARCHITECTURE`
+- L1 architecture keys: `IDENTITY_AUTHENTICATION_AND_ACCESS_ARCHITECTURE`, `ENDPOINT_AND_MALWARE_PROTECTION_ARCHITECTURE`, `NETWORK_AND_BOUNDARY_PROTECTION_ARCHITECTURE`, `EXTERNAL_SYSTEMS_AND_CLOUD_SERVICE_ARCHITECTURE`, `NETWORK_AND_FCI_DATA_FLOW_NARRATIVE`
+- **L2 architecture keys differ from L1** — L2 uses shorter names; `buildPlaceholderValues` maps both sets to the same wizard fields. Rule: when adding a template, diff its `{{KEY}}` tokens against both L1 and L2 sets; L2 often shortens names (e.g. `IDENTITY_AUTHENTICATION_AND_ACCESS_ARCHITECTURE` → `IDENTITY_AND_ACCESS_ARCHITECTURE`).
 - Scope keys: `ASSESSMENT_SCOPE_NAME`, `IN_SCOPE_FCI_SYSTEMS`, `IN_SCOPE_PEOPLE_AND_ROLES`, `IN_SCOPE_FACILITIES_AND_LOCATIONS`, `BUSINESS_AND_FCI_USE_CASE_DESCRIPTION` (L1) / `BUSINESS_AND_CUI_USE_CASE_DESCRIPTION` (L2)
-- L2 uses `CAGE_CODE` (singular); L1 uses `CAGE_CODES` (plural)
+- L2 uses `CAGE_CODE` (singular) and `SYSTEM_ENCLAVE_NAME` (not `SYSTEM_ENVIRONMENT_NAME`); L1 uses `CAGE_CODES` (plural) and `SYSTEM_ENVIRONMENT_NAME`
 - Composite fields: `SECURITY_OFFICER_NAME_AND_TITLE`, `SYSTEM_OWNER_NAME_AND_TITLE`, `PRIMARY_CONTACT_NAME_AND_TITLE`
 
 **Why:** L1-only orgs were seeing the L2 NIST 800-171 template, which is inappropriate and confusing.
