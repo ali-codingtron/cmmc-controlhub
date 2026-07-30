@@ -61,6 +61,8 @@ export const roadmapActionsTable = pgTable("roadmap_actions", {
   operatingProcedure: text("operating_procedure").notNull(),
   testProcedure: text("test_procedure").notNull(),
   sortOrder: integer("sort_order").notNull().default(0),
+  /** Roadmap profile this action belongs to. NULL treated as CMMC_L2_R2 for backward compat. */
+  profileKey: text("profile_key"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

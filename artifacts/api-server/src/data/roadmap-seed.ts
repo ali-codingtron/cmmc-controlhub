@@ -12,6 +12,8 @@ export interface RoadmapSeedAction {
   operatingProcedure: string;
   testProcedure: string;
   sortOrder: number;
+  /** Roadmap profile this action belongs to. Defaults to CMMC_L2_R2 if absent. */
+  profileKey?: string;
   controls: Array<{
     controlId: string;
     supportType:

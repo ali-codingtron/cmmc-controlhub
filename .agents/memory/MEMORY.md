@@ -16,3 +16,5 @@
 - [Smart Evidence Mapping](smart-evidence-mapping.md) — local-only analysis engine (no external AI); controlsTable needs LEFT JOIN domainsTable for domain name; confidence tiers + scoring rules.
 - [CMMC L1 ↔ FAR 52.204-21 crosswalk](cmmc-l1-far-crosswalk.md) — 17 equivalent rows missing; nothingToDo guard in seedCrosswalkRequirements skipped them; fix pattern for adding future crosswalk pairs.
 - [Roadmap module architecture](roadmap-module.md) — Completion guard, optional module system, visual redesign; fail-open feature flags; missing record = enabled.
+- [Control-scoped Task Lifecycle](control-tasks.md) — Nested task router, TASK-XXXX generation, activity table, drizzle transaction typing pitfalls, schema rebuild steps.
+- [Roadmap profile system](roadmap-profile.md) — profile_key on roadmap_actions; L1/L2 resolution from packages; idempotent seed; filter pattern; lucide Map icon vs JS Map conflict.

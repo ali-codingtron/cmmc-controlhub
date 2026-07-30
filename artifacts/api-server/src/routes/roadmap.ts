@@ -15,14 +15,21 @@ import {
   orgProcedureStepProgressTable,
   evidenceItemsTable,
   organizationFeaturesTable,
+  organizationPackagesTable,
+  compliancePackagesTable,
 } from "@workspace/db";
-import { eq, and, inArray, asc } from "drizzle-orm";
+import { eq, and, inArray, asc, isNull, or } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth, requireNotAssessor, requireRole } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 import { randomUUID } from "crypto";
 import { ROADMAP_SEED } from "../data/roadmap-seed";
+import { L1_ROADMAP_SEED } from "../data/roadmap-l1-seed";
 import { PROCEDURE_STEPS_SEED } from "../data/roadmap-procedure-steps-seed";
+import {
+  resolveOrgRoadmapProfile,
+  PROFILE_METADATA,
+} from "../lib/roadmap-profile";
 import {
   computeRoadmapProgress,
   type ProcedureStepStatus,
@@ -65,6 +72,23 @@ async function requireRoadmapEnabled(
   }
 }
 
+// ── Profile ───────────────────────────────────────────────────────────────────
+router.get(
+  "/roadmap/profile",
+  requireAuth,
+  requireOrg,
+  requireRoadmapEnabled,
+  async (req, res) => {
+    const orgId = req.orgId!;
+    const profileKey = await resolveOrgRoadmapProfile(orgId);
+    if (!profileKey) {
+      res.json(null);
+      return;
+    }
+    res.json(PROFILE_METADATA[profileKey] ?? null);
+  }
+);
+
 // ── List Actions ──────────────────────────────────────────────────────────────
 router.get(
   "/roadmap/actions",
@@ -74,9 +98,27 @@ router.get(
   async (req, res) => {
     const orgId = req.orgId!;
 
+    // Resolve which roadmap profile this org is assigned to
+    const profileKey = await resolveOrgRoadmapProfile(orgId);
+    if (!profileKey) {
+      // Org has no compatible compliance packages → no roadmap
+      res.json([]);
+      return;
+    }
+
+    // Build the profile filter: L2 includes NULL rows (legacy, pre-profile seeding)
+    const profileFilter =
+      profileKey === "CMMC_L2_R2"
+        ? or(
+            eq(roadmapActionsTable.profileKey, "CMMC_L2_R2"),
+            isNull(roadmapActionsTable.profileKey)
+          )
+        : eq(roadmapActionsTable.profileKey, profileKey);
+
     const actions = await db
       .select()
       .from(roadmapActionsTable)
+      .where(profileFilter)
       .orderBy(roadmapActionsTable.sortOrder);
 
     if (actions.length === 0) {
@@ -1631,80 +1673,104 @@ router.delete(
 );
 
 // ── Seed Function ─────────────────────────────────────────────────────────────
-export async function seedRoadmapActions(): Promise<void> {
-  const [existing] = await db
-    .select({ id: roadmapActionsTable.id })
-    .from(roadmapActionsTable)
-    .limit(1);
 
-  if (existing) return;
+/** Shared helper to seed a single action and its linked data. */
+async function seedOneAction(
+  seed: import("../data/roadmap-seed").RoadmapSeedAction,
+  controlMap: Map<string, string>
+): Promise<void> {
+  await db.insert(roadmapActionsTable).values({
+    id: seed.id,
+    title: seed.title,
+    category: seed.category,
+    phase: seed.phase,
+    phaseName: seed.phaseName,
+    priority: seed.priority,
+    effort: seed.effort,
+    impactScore: seed.impactScore,
+    purpose: seed.purpose,
+    whyItMatters: seed.whyItMatters,
+    operatingProcedure: seed.operatingProcedure,
+    testProcedure: seed.testProcedure,
+    sortOrder: seed.sortOrder,
+    profileKey: seed.profileKey ?? "CMMC_L2_R2",
+  });
+
+  for (const ctrl of seed.controls) {
+    const dbId = controlMap.get(ctrl.controlId);
+    if (!dbId) continue;
+    await db.insert(roadmapActionControlLinksTable).values({
+      id: randomUUID(),
+      actionId: seed.id,
+      controlId: dbId,
+      supportType: ctrl.supportType,
+    });
+  }
+
+  for (let i = 0; i < seed.evidenceItems.length; i++) {
+    const ev = seed.evidenceItems[i]!;
+    await db.insert(roadmapActionEvidenceItemsTable).values({
+      id: randomUUID(),
+      actionId: seed.id,
+      title: ev.title,
+      evidenceType: ev.evidenceType,
+      suggestedFilename: ev.suggestedFilename,
+      sourceSystem: ev.sourceSystem,
+      mustShow: ev.mustShow,
+      sortOrder: i,
+    });
+  }
+
+  for (let i = 0; i < seed.documents.length; i++) {
+    const doc = seed.documents[i]!;
+    await db.insert(roadmapActionDocumentsTable).values({
+      id: randomUUID(),
+      actionId: seed.id,
+      title: doc.title,
+      docType: doc.docType,
+      sortOrder: i,
+    });
+  }
+
+  for (let i = 0; i < seed.checklistItems.length; i++) {
+    await db.insert(roadmapActionChecklistItemsTable).values({
+      id: randomUUID(),
+      actionId: seed.id,
+      label: seed.checklistItems[i]!,
+      sortOrder: i,
+    });
+  }
+}
+
+export async function seedRoadmapActions(): Promise<void> {
+  // ── Phase 1: Back-fill profile_key on existing L2 actions ───────────────────
+  // Existing actions seeded before profile_key was added have NULL — treat them as L2.
+  await db
+    .update(roadmapActionsTable)
+    .set({ profileKey: "CMMC_L2_R2" })
+    .where(isNull(roadmapActionsTable.profileKey));
+
+  // ── Phase 2: Idempotent insert of all seed actions ──────────────────────────
+  const existingRows = await db
+    .select({ id: roadmapActionsTable.id })
+    .from(roadmapActionsTable);
+  const existingIds = new Set(existingRows.map((r) => r.id));
 
   const allControls = await db
     .select({ id: controlsTable.id, controlId: controlsTable.controlId })
     .from(controlsTable);
   const controlMap = new Map(allControls.map((c) => [c.controlId, c.id]));
 
+  // Seed L2 actions (first-time DB setup)
   for (const seed of ROADMAP_SEED) {
-    await db.insert(roadmapActionsTable).values({
-      id: seed.id,
-      title: seed.title,
-      category: seed.category,
-      phase: seed.phase,
-      phaseName: seed.phaseName,
-      priority: seed.priority,
-      effort: seed.effort,
-      impactScore: seed.impactScore,
-      purpose: seed.purpose,
-      whyItMatters: seed.whyItMatters,
-      operatingProcedure: seed.operatingProcedure,
-      testProcedure: seed.testProcedure,
-      sortOrder: seed.sortOrder,
-    });
+    if (existingIds.has(seed.id)) continue;
+    await seedOneAction(seed, controlMap);
+  }
 
-    for (const ctrl of seed.controls) {
-      const dbId = controlMap.get(ctrl.controlId);
-      if (!dbId) continue;
-      await db.insert(roadmapActionControlLinksTable).values({
-        id: randomUUID(),
-        actionId: seed.id,
-        controlId: dbId,
-        supportType: ctrl.supportType,
-      });
-    }
-
-    for (let i = 0; i < seed.evidenceItems.length; i++) {
-      const ev = seed.evidenceItems[i];
-      await db.insert(roadmapActionEvidenceItemsTable).values({
-        id: randomUUID(),
-        actionId: seed.id,
-        title: ev.title,
-        evidenceType: ev.evidenceType,
-        suggestedFilename: ev.suggestedFilename,
-        sourceSystem: ev.sourceSystem,
-        mustShow: ev.mustShow,
-        sortOrder: i,
-      });
-    }
-
-    for (let i = 0; i < seed.documents.length; i++) {
-      const doc = seed.documents[i];
-      await db.insert(roadmapActionDocumentsTable).values({
-        id: randomUUID(),
-        actionId: seed.id,
-        title: doc.title,
-        docType: doc.docType,
-        sortOrder: i,
-      });
-    }
-
-    for (let i = 0; i < seed.checklistItems.length; i++) {
-      await db.insert(roadmapActionChecklistItemsTable).values({
-        id: randomUUID(),
-        actionId: seed.id,
-        label: seed.checklistItems[i],
-        sortOrder: i,
-      });
-    }
+  // Seed L1 actions (new — always idempotent)
+  for (const seed of L1_ROADMAP_SEED) {
+    if (existingIds.has(seed.id)) continue;
+    await seedOneAction(seed, controlMap);
   }
 }
 

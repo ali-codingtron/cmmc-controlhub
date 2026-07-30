@@ -1,0 +1,1174 @@
+Repair and complete ONLY the Tasks tab under Control Detail.
+
+I provided a video showing the current behavior.
+
+Current workflow:
+
+1. A user opens a control.
+2. The user selects the Tasks tab.
+3. The user clicks Add Task.
+4. The user enters:
+   - Title
+   - Description
+   - Priority
+   - Due Date
+5. The task saves successfully.
+6. The task appears as a summary card showing:
+   - Title
+   - Open status
+   - Priority
+   - Due Date
+
+Current problems:
+
+- The saved task cannot be opened.
+- Clicking the task does nothing.
+- The description entered during creation is no longer visible.
+- There is no View Task action.
+- There is no Edit Task action.
+- There is no way to change the assignee.
+- There is no way to move the task to In Progress.
+- There is no way to mark the task Blocked.
+- There is no way to close the task.
+- There is no way to reopen a closed task.
+- There is no task activity/history view.
+- There is no clear filtering between active and closed tasks.
+- There is no clear record of who created, updated, or closed the task.
+
+Goal:
+
+Turn the Tasks tab into a reliable control-level task-management workflow while preserving the existing task data.
+
+A task should remain linked to one organization and one control.
+
+====================================================================
+1. STRICT SCOPE
+====================================================================
+
+Change only:
+
+- Control Detail > Tasks tab
+- Add Task workflow
+- Task list/cards
+- Task Detail drawer or modal
+- Edit Task workflow
+- task status lifecycle
+- task assignment
+- task filters and counts
+- task API routes
+- task-specific permissions
+- task audit logging
+
+Do not redesign or modify:
+
+- Controls Library
+- other Control Detail tabs
+- Monitoring Tracker
+- POA&M
+- Evidence
+- Documentation
+- SSP
+- Implementation Roadmap
+- Pre-Assessment
+- Dashboard
+- Reports
+- Users and Roles
+- organization profiles
+- framework packages
+
+Do not convert existing tasks into Monitoring items or POA&M items.
+
+Tasks are one-time work items associated with a specific control.
+
+====================================================================
+2. RUN A READ-ONLY DIAGNOSTIC FIRST
+====================================================================
+
+Before changing production data, inspect:
+
+- Task database model/table
+- fields currently stored
+- control-to-task relationship
+- organization-to-task relationship
+- task-creation endpoint
+- task-list endpoint
+- current task status values
+- current permissions
+- frontend task-card component
+- whether a task-detail route or component already exists
+- whether edit/close endpoints already exist but are not connected
+
+Report:
+
+- total task count by organization
+- tasks by status
+- tasks missing organization ID
+- tasks missing control ID
+- tasks missing description
+- tasks missing created-by information
+- duplicate task records
+- orphaned task records
+- API response used by the Tasks tab
+
+Do not change or delete any task during the diagnostic.
+
+====================================================================
+3. TASK DATA MODEL
+====================================================================
+
+Use or extend the Task model safely.
+
+Recommended fields:
+
+ControlTask
+- id
+- task_number
+- organization_id
+- control_id
+- title
+- description
+- status
+- priority
+- assigned_to_user_id
+- due_date
+- start_date
+- closed_date
+- closure_summary
+- blocked_reason
+- created_by_user_id
+- created_at
+- updated_by_user_id
+- updated_at
+- closed_by_user_id
+- reopened_by_user_id
+- reopened_at
+- reopen_reason
+- cancelled_by_user_id
+- cancelled_at
+- cancellation_reason
+- row_version or updated_at for concurrency protection
+
+Task statuses:
+
+- OPEN
+- IN_PROGRESS
+- BLOCKED
+- CLOSED
+- CANCELLED
+
+Priority values:
+
+- LOW
+- MEDIUM
+- HIGH
+- CRITICAL
+
+Existing tasks should default safely to:
+
+status = OPEN
+
+if their current status is blank.
+
+Do not change valid existing statuses automatically.
+
+Do not require an assignee for existing records.
+
+Allow:
+
+assigned_to_user_id = null
+
+to mean:
+
+Unassigned
+
+====================================================================
+4. TASK NUMBER
+====================================================================
+
+Add a readable task number if one does not already exist.
+
+Example:
+
+TASK-0001
+
+or:
+
+APEX-TASK-0001
+
+The task number should be:
+
+- unique within the organization
+- stable
+- read-only after creation
+- safe for audit references
+
+Do not use the database UUID as the only user-facing identifier.
+
+Do not renumber existing tasks if task numbers already exist.
+
+====================================================================
+5. IMPROVE THE TASKS TAB
+====================================================================
+
+Keep the Tasks tab within the selected control.
+
+Add a short helper description:
+
+“Track one-time work associated with this control. Use Monitoring for recurring activities and POA&M for formal remediation items.”
+
+Add summary cards or compact counters:
+
+- Active
+- In Progress
+- Blocked
+- Overdue
+- Closed
+
+Add filters:
+
+- Search
+- Status
+- Priority
+- Assignee
+- Due Date
+- Show Closed
+- Clear Filters
+
+Default filter:
+
+Active Tasks
+
+Active means:
+
+- Open
+- In Progress
+- Blocked
+
+Closed and Cancelled tasks should remain available through filters.
+
+====================================================================
+6. TASK LIST DESIGN
+====================================================================
+
+Replace the current non-interactive task card with a clearly interactive row or card.
+
+Each task should show:
+
+- Task Number
+- Title
+- Short description preview
+- Status
+- Priority
+- Assignee
+- Due Date
+- Overdue or Due Soon indicator
+- Last Updated
+- Action menu
+
+Make the entire task row clickable.
+
+Add a visible hover state.
+
+Add keyboard accessibility:
+
+- task row is focusable
+- Enter or Space opens the task
+- action menu has accessible labels
+
+Add a three-dot action menu containing:
+
+For active tasks:
+
+- View Task
+- Edit Task
+- Start Task
+- Mark Blocked
+- Close Task
+- Cancel Task
+
+For closed tasks:
+
+- View Task
+- Reopen Task
+
+Only show actions permitted for the current user.
+
+Do not rely only on clicking the task title.
+
+====================================================================
+7. TASK DETAIL DRAWER
+====================================================================
+
+Clicking a task should open a Task Detail drawer.
+
+Recommended width:
+
+500–650 pixels
+
+Keep the user on the same control and Tasks tab.
+
+Support a URL such as:
+
+/controls/{controlId}?tab=tasks&task={taskId}
+
+This allows:
+
+- browser Back behavior
+- refreshing without losing the selected task
+- direct links to tasks
+- returning to the task after editing
+
+Drawer header:
+
+Task Number
+Task Title
+Status badge
+
+Show:
+
+Task Information:
+- Title
+- Description
+- Status
+- Priority
+- Assigned To
+- Due Date
+- Start Date
+- Created By
+- Created Date
+- Last Updated By
+- Last Updated Date
+
+Control Context:
+- Organization
+- Control ID
+- Control Title
+- Domain
+- Level / Package
+
+Closure Information, when closed:
+- Closed By
+- Closed Date
+- Closure Summary
+
+Blocked Information, when blocked:
+- Blocked Reason
+- Blocked By
+- Blocked Date
+
+Reopen Information, where applicable:
+- Reopened By
+- Reopened Date
+- Reopen Reason
+
+Actions:
+
+- Edit Task
+- Start Task
+- Mark Blocked
+- Close Task
+- Reopen Task
+- Cancel Task
+- Close Drawer
+
+====================================================================
+8. TASK ACTIVITY HISTORY
+====================================================================
+
+Add a read-only activity section in the Task Detail drawer.
+
+Show a chronological timeline:
+
+- task created
+- title changed
+- description changed
+- priority changed
+- assignee changed
+- due date changed
+- status changed
+- task blocked
+- task closed
+- task reopened
+- task cancelled
+
+Each event should show:
+
+- date and time
+- acting user
+- action
+- previous value
+- new value
+- reason or note, where applicable
+
+Do not expose unrelated system audit events.
+
+====================================================================
+9. ADD TASK WORKFLOW
+====================================================================
+
+Keep the existing Add Task button but improve the form.
+
+Fields:
+
+Required:
+- Title
+- Description
+- Priority
+
+Optional:
+- Assignee
+- Due Date
+- Start Date
+
+Automatically assigned:
+- Organization
+- Control
+- Created By
+- Created Date
+- Status = Open
+
+Assignee selector:
+
+- show only active users with access to the selected organization
+- show name, email, and organization role
+- allow Unassigned
+- do not show users from unrelated organizations
+
+The selected control should be displayed as read-only context:
+
+Linked Control:
+AC.L1-3.1.1 — Authorized Access Control
+
+Do not allow the user to alter organization_id or control_id through the browser payload.
+
+After creation:
+
+- close the modal
+- show success notification
+- refresh task list
+- update tab count
+- optionally open the newly created task
+
+====================================================================
+10. EDIT TASK WORKFLOW
+====================================================================
+
+Add Edit Task from:
+
+- Task Detail
+- task action menu
+
+Editable fields:
+
+- Title
+- Description
+- Priority
+- Assignee
+- Due Date
+- Start Date
+
+Status may be changed through dedicated lifecycle actions.
+
+Do not permit users to bypass closure requirements by selecting Closed from a generic dropdown.
+
+Buttons:
+
+- Save Changes
+- Cancel
+
+After save:
+
+- show “Task updated”
+- re-fetch the canonical task
+- update the task list
+- update Task Detail
+- record task history
+- preserve the selected task
+
+If save fails:
+
+Show:
+
+“The task could not be updated. No changes were applied.”
+
+Do not partially save.
+
+====================================================================
+11. START TASK
+====================================================================
+
+Add:
+
+Start Task
+
+Available when:
+
+status = OPEN
+
+Action:
+
+- status becomes IN_PROGRESS
+- start date defaults to current date if blank
+- updated-by and updated-date are recorded
+- activity history entry is created
+
+Show confirmation only if needed.
+
+After success:
+
+- update task card
+- update summary counts
+- show “Task moved to In Progress”
+
+====================================================================
+12. MARK TASK BLOCKED
+====================================================================
+
+Add:
+
+Mark Blocked
+
+Available when:
+
+- Open
+- In Progress
+
+Require:
+
+Blocked Reason
+
+Optional:
+
+- expected resolution date
+- note
+
+After confirmation:
+
+- status becomes BLOCKED
+- blocked reason is stored
+- activity history is recorded
+- task remains active
+- task displays a clear Blocked badge
+
+Add action:
+
+Resume Task
+
+Resume Task should:
+
+- move status to IN_PROGRESS
+- preserve blocked history
+- optionally require a resolution note
+
+====================================================================
+13. CLOSE TASK
+====================================================================
+
+Add a dedicated:
+
+Close Task
+
+action.
+
+Do not close the task through a basic status dropdown.
+
+Close Task modal should show:
+
+- Task Number
+- Task Title
+- Current Status
+- Assignee
+- Due Date
+
+Require:
+
+- Closure Summary
+
+Optional:
+
+- Completion Date, default to current date
+- Additional Notes
+
+On confirmation:
+
+- status becomes CLOSED
+- closed_date is recorded
+- closed_by_user_id is recorded
+- closure summary is stored
+- task activity history is recorded
+- task is removed from the default Active filter
+- task remains available under Show Closed
+
+Do not delete the task.
+
+Do not remove it from audit history.
+
+Show:
+
+“Task closed successfully.”
+
+====================================================================
+14. REOPEN TASK
+====================================================================
+
+Closed tasks must have:
+
+Reopen Task
+
+Require:
+
+- Reopen Reason
+
+Optional:
+
+- New Due Date
+- New Assignee
+
+On confirmation:
+
+- status becomes OPEN or IN_PROGRESS based on user selection
+- reopened_by is stored
+- reopened_at is stored
+- reopen reason is stored
+- prior closure information remains in history
+- task returns to active results
+
+Do not erase the original closure record.
+
+Show:
+
+“Task reopened.”
+
+====================================================================
+15. CANCEL TASK
+====================================================================
+
+Add:
+
+Cancel Task
+
+Use this instead of deleting a task when the work is no longer required.
+
+Require:
+
+- Cancellation Reason
+
+After confirmation:
+
+- status becomes CANCELLED
+- cancellation metadata is recorded
+- task remains available in history
+- task is excluded from active work by default
+
+Do not add a hard-delete action for normal users.
+
+If hard deletion already exists:
+
+- restrict it to platform Global Admin
+- allow only for erroneous/test records
+- require typed confirmation
+- audit it
+- do not expose it as the normal workflow
+
+====================================================================
+16. DUE-DATE STATUS LOGIC
+====================================================================
+
+Derive due-date indicators consistently.
+
+For active tasks:
+
+Overdue:
+due_date is before today
+
+Due Today:
+due_date equals today
+
+Due Soon:
+due date is within the next 7 days
+
+On Track:
+due date is more than 7 days away
+
+No Due Date:
+due date is blank
+
+Closed and Cancelled tasks must never display as Overdue.
+
+Use the organization/user timezone consistently.
+
+Do not compare full timestamps incorrectly when due dates are date-only values.
+
+====================================================================
+17. TASK COUNTS
+====================================================================
+
+Update counts immediately after task lifecycle changes.
+
+Recommended:
+
+Tasks tab badge:
+active task count
+
+Active means:
+
+- Open
+- In Progress
+- Blocked
+
+Inside the Tasks tab show:
+
+- active count
+- closed count
+- total count
+
+If retaining the existing total count in the tab badge, label the internal counts clearly.
+
+Do not count cancelled tasks as active.
+
+Do not count closed tasks as overdue.
+
+Use the same backend summary query for cards and badges.
+
+====================================================================
+18. API ROUTES
+====================================================================
+
+Use organization- and control-scoped backend routes.
+
+Examples:
+
+GET
+/api/organizations/:organizationId/controls/:controlId/tasks
+
+POST
+/api/organizations/:organizationId/controls/:controlId/tasks
+
+GET
+/api/organizations/:organizationId/controls/:controlId/tasks/:taskId
+
+PATCH
+/api/organizations/:organizationId/controls/:controlId/tasks/:taskId
+
+POST
+/api/organizations/:organizationId/controls/:controlId/tasks/:taskId/start
+
+POST
+/api/organizations/:organizationId/controls/:controlId/tasks/:taskId/block
+
+POST
+/api/organizations/:organizationId/controls/:controlId/tasks/:taskId/resume
+
+POST
+/api/organizations/:organizationId/controls/:controlId/tasks/:taskId/close
+
+POST
+/api/organizations/:organizationId/controls/:controlId/tasks/:taskId/reopen
+
+POST
+/api/organizations/:organizationId/controls/:controlId/tasks/:taskId/cancel
+
+GET
+/api/organizations/:organizationId/controls/:controlId/tasks/:taskId/activity
+
+Every route must verify:
+
+- authenticated user
+- organization access
+- task belongs to organization
+- task belongs to control
+- required permission
+- submitted assignee belongs to organization
+
+Do not trust organization_id, control_id, role, or user ID supplied by the frontend without validation.
+
+====================================================================
+19. TRANSACTIONAL UPDATES
+====================================================================
+
+Every lifecycle action should be transactional.
+
+Example Close Task:
+
+1. Verify authorization.
+2. Load the task by organization, control, and task ID.
+3. Verify it is not already Closed or Cancelled.
+4. Validate closure summary.
+5. Update task status and closure fields.
+6. Create activity/audit record.
+7. Commit.
+8. Return canonical task.
+
+If any step fails:
+
+- roll back all changes
+- preserve previous task state
+- return a clear error
+
+Do not leave a task closed without a closure record.
+
+====================================================================
+20. CONCURRENCY PROTECTION
+====================================================================
+
+Protect against two users editing the same task simultaneously.
+
+Use:
+
+- row_version
+or
+- updated_at comparison
+
+The Edit Task request should include:
+
+expectedVersion
+
+If the task changed after the form was opened:
+
+Return a conflict response.
+
+Show:
+
+“This task was updated by another user. Reload the latest task before saving.”
+
+Buttons:
+
+- Reload Latest
+- Cancel
+
+Do not silently overwrite newer changes.
+
+====================================================================
+21. PERMISSIONS
+====================================================================
+
+Use organization-specific capabilities.
+
+Recommended:
+
+- tasks.view
+- tasks.create
+- tasks.edit
+- tasks.assign
+- tasks.start
+- tasks.block
+- tasks.close
+- tasks.reopen
+- tasks.cancel
+- tasks.view_activity
+- tasks.delete
+
+Suggested role behavior:
+
+Global Admin:
+all capabilities
+
+Organization Admin:
+all organization task capabilities
+
+Compliance Manager:
+create, edit, assign, start, block, close, reopen, cancel
+
+IT Contributor:
+view
+create if permitted
+edit assigned tasks
+start assigned tasks
+block assigned tasks
+close assigned tasks if permitted
+
+Reviewer:
+view and view activity
+other actions only if explicitly granted
+
+Executive Viewer:
+read-only
+
+Assessor Read-Only:
+read-only
+
+Demo Viewer:
+read-only demo behavior
+
+Backend authorization is required.
+
+Do not rely only on hiding buttons.
+
+====================================================================
+22. ASSIGNEE VALIDATION
+====================================================================
+
+An assignee must:
+
+- be an active user
+- have active access to the task’s organization
+- not be deleted or revoked
+
+If an assigned user later loses organization access:
+
+- keep their historical name on existing task history
+- mark current assignment as Access Removed
+- alert an authorized user to reassign the active task
+- do not delete the task
+
+Do not assign tasks to unrelated organization users.
+
+====================================================================
+23. AUDIT LOGGING
+====================================================================
+
+Log:
+
+- task created
+- task viewed
+- task edited
+- assignee changed
+- priority changed
+- due date changed
+- task started
+- task blocked
+- task resumed
+- task closed
+- task reopened
+- task cancelled
+- task deletion attempted
+- task save failed
+
+Include:
+
+- acting user
+- organization
+- control
+- task ID and task number
+- previous state
+- new state
+- reason or closure summary
+- timestamp
+- IP address
+- user agent
+- success/failure
+
+Do not log secrets or unrelated user information.
+
+====================================================================
+24. ERROR HANDLING
+====================================================================
+
+Use clear errors.
+
+Unable to load:
+
+“Task details could not be loaded.”
+
+Unable to update:
+
+“The task could not be updated. No changes were applied.”
+
+Unable to close:
+
+“The task could not be closed. It remains active.”
+
+Unauthorized:
+
+“You do not have permission to perform this task action.”
+
+Invalid assignee:
+
+“The selected user does not have active access to this organization.”
+
+Do not expose:
+
+- stack traces
+- raw SQL errors
+- internal storage details
+- authorization internals
+
+====================================================================
+25. PRODUCTION DATA SAFETY
+====================================================================
+
+Do not:
+
+- delete existing tasks
+- reset task statuses
+- change task control links
+- change task organization IDs
+- change descriptions
+- change due dates
+- change priorities
+- assign existing tasks automatically
+- convert tasks to Monitoring or POA&M records
+- re-seed tasks
+- modify unrelated modules
+
+Add new fields as nullable where needed.
+
+Existing production tasks must remain visible and become openable/editable after the repair.
+
+Do not require a destructive migration.
+
+====================================================================
+26. AUTOMATED TESTS
+====================================================================
+
+Add frontend and backend tests.
+
+Create tests:
+
+- task creates successfully
+- correct organization/control are stored
+- task appears in list
+- description is preserved
+- tab count updates
+
+View tests:
+
+- clicking task opens correct Task Detail
+- direct task URL loads correct task
+- task from another organization is denied
+- task activity displays
+
+Edit tests:
+
+- title updates
+- description updates
+- priority updates
+- assignee updates
+- due date updates
+- changes persist after reopening
+- failed update changes nothing
+- concurrency conflict prevents overwrite
+
+Lifecycle tests:
+
+- Open task can move to In Progress
+- active task can be Blocked
+- blocked task can resume
+- active task can close with summary
+- closed task is excluded from active filter
+- closed task can reopen with reason
+- cancelled task remains in history
+- closed/cancelled task is not overdue
+
+Permission tests:
+
+- authorized role can perform permitted actions
+- Assessor Read-Only cannot modify
+- unauthorized API call returns 403
+- assignee from another organization is rejected
+
+====================================================================
+27. ACCEPTANCE TESTS
+====================================================================
+
+Test A — Existing Task:
+
+Open:
+
+AC.L1-3.1.1 > Tasks
+
+Click the existing task:
+
+“This is a test”
+
+Expected:
+
+- Task Detail opens
+- description is visible
+- status, priority, due date, control, creator, and dates are visible
+
+Test B — Edit:
+
+Change:
+
+- Title
+- Description
+- Priority
+- Due Date
+- Assignee
+
+Save.
+
+Close and reopen the task.
+
+Expected:
+
+All changes remain.
+
+Test C — Start:
+
+Click Start Task.
+
+Expected:
+
+Status becomes In Progress and start date is recorded.
+
+Test D — Block:
+
+Click Mark Blocked and enter a reason.
+
+Expected:
+
+Task shows Blocked with the reason.
+
+Test E — Close:
+
+Click Close Task and enter a closure summary.
+
+Expected:
+
+- status becomes Closed
+- closed by/date are displayed
+- task leaves the Active filter
+- task remains available under Show Closed
+
+Test F — Reopen:
+
+Open the closed task and click Reopen Task.
+
+Enter a reason.
+
+Expected:
+
+- task becomes active
+- prior closure history remains
+- reopen event is displayed
+
+Test G — Counts:
+
+Create, close, and reopen tasks.
+
+Expected:
+
+- Tasks tab count and summary counts update correctly
+- closed tasks are not counted as active or overdue
+
+Test H — Read-Only Role:
+
+Open task as Assessor Read-Only.
+
+Expected:
+
+- task details are visible
+- no create/edit/start/block/close/reopen/cancel actions are available
+- direct modification API returns HTTP 403
+
+Test I — Production Safety:
+
+No existing task, control, evidence, monitoring record, POA&M, SSP record, or organization data is deleted or overwritten.
+
+====================================================================
+28. MOST IMPORTANT RULES
+====================================================================
+
+1. Every saved task must be openable and viewable.
+
+2. Task edits and lifecycle changes must persist after closing and reopening.
+
+3. Closing a task preserves the record and requires closure information.
+
+4. Reopening a task preserves the original closure history.
+
+5. Tasks remain organization- and control-scoped.
+
+6. This repair must not alter Monitoring, POA&M, or any other Control HUB module.

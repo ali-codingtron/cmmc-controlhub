@@ -21,6 +21,14 @@ export type OrgPermission =
   | "poam.close"
   | "tasks.create"
   | "tasks.edit"
+  | "tasks.assign"
+  | "tasks.start"
+  | "tasks.block"
+  | "tasks.close"
+  | "tasks.reopen"
+  | "tasks.cancel"
+  | "tasks.view_activity"
+  | "tasks.delete"
   | "roadmap.view"
   | "roadmap.update"
   | "monitoring.update"
@@ -35,7 +43,8 @@ const ALL_PERMISSIONS: OrgPermission[] = [
   "evidence.approve", "evidence.edit", "evidence.delete",
   "controls.edit",
   "poam.create", "poam.edit", "poam.close",
-  "tasks.create", "tasks.edit",
+  "tasks.create", "tasks.edit", "tasks.assign", "tasks.start", "tasks.block",
+  "tasks.close", "tasks.reopen", "tasks.cancel", "tasks.view_activity", "tasks.delete",
   "roadmap.view", "roadmap.update",
   "monitoring.update",
   "users.manage", "org.admin",
@@ -51,7 +60,8 @@ const ROLE_PERMISSIONS: Record<string, OrgPermission[]> = {
     "evidence.approve", "evidence.edit",
     "controls.edit",
     "poam.create", "poam.edit", "poam.close",
-    "tasks.create", "tasks.edit",
+    "tasks.create", "tasks.edit", "tasks.assign", "tasks.start", "tasks.block",
+    "tasks.close", "tasks.reopen", "tasks.cancel", "tasks.view_activity",
     "roadmap.view", "roadmap.update",
     "monitoring.update",
     "reports.generate", "preassessment.run", "ssp.edit",
@@ -60,15 +70,18 @@ const ROLE_PERMISSIONS: Record<string, OrgPermission[]> = {
     "evidence.edit",
     "controls.edit",
     "poam.create", "poam.edit",
-    "tasks.create", "tasks.edit",
+    "tasks.create", "tasks.edit", "tasks.start", "tasks.block",
+    "tasks.close", "tasks.view_activity",
     "roadmap.view",
     "monitoring.update",
   ],
   reviewer: [
     "roadmap.view",
+    "tasks.view_activity",
   ],
   executive_viewer: [
     "roadmap.view",
+    "tasks.view_activity",
   ],
   assessor: [],
 };

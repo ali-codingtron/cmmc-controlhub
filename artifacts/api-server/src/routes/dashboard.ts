@@ -18,20 +18,79 @@ import {
   dfarsObligationStatusTable,
   organizationPackagesTable,
   compliancePackagesTable,
+  complianceRequirementsTable,
 } from "@workspace/db";
-import { eq, and, or, count, lte, gte, desc, sql, isNotNull, inArray, like } from "drizzle-orm";
+import { eq, and, or, count, lte, gte, desc, sql, isNotNull, isNull, inArray, like } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
+import { resolveOrgRoadmapProfile } from "../lib/roadmap-profile";
 
 const router = Router();
+
+/**
+ * Resolve the set of control IDs that apply to this org based on its active packages.
+ * Mirrors the same logic used in GET /controls.
+ * Returns null when no restriction applies (show all controls).
+ */
+async function resolveOrgControlIds(orgId: string): Promise<string[] | null> {
+  const orgPkgs = await db
+    .select({ packageId: compliancePackagesTable.id, packageKey: compliancePackagesTable.packageKey })
+    .from(organizationPackagesTable)
+    .innerJoin(compliancePackagesTable, eq(organizationPackagesTable.packageId, compliancePackagesTable.id))
+    .where(and(eq(organizationPackagesTable.organizationId, orgId), eq(organizationPackagesTable.isActive, true)));
+
+  if (!orgPkgs.length) return null;
+
+  const cmmcFarPkgIds = orgPkgs
+    .filter(p => p.packageKey.startsWith("CMMC_") || p.packageKey === "FAR_52_204_21")
+    .map(p => p.packageId);
+  const nistPkgIds = orgPkgs
+    .filter(p => p.packageKey.startsWith("NIST_800_171_"))
+    .map(p => p.packageId);
+  const mappedPkgIds = [...cmmcFarPkgIds, ...nistPkgIds];
+
+  if (!mappedPkgIds.length) return null; // DFARS-only or unknown package types
+
+  const reqs = await db
+    .select({ reqId: complianceRequirementsTable.requirementId, pkgId: complianceRequirementsTable.packageId })
+    .from(complianceRequirementsTable)
+    .where(inArray(complianceRequirementsTable.packageId, mappedPkgIds));
+
+  if (!reqs.length) return null;
+
+  const cmmcFarReqIds = reqs.filter(r => cmmcFarPkgIds.includes(r.pkgId)).map(r => r.reqId);
+  const nistReqIds = reqs.filter(r => nistPkgIds.includes(r.pkgId)).map(r => r.reqId);
+
+  const matched = await db
+    .selectDistinct({ id: controlsTable.id })
+    .from(controlsTable)
+    .where(
+      and(
+        eq(controlsTable.isActive, true),
+        or(
+          cmmcFarReqIds.length > 0 ? inArray(controlsTable.controlId, cmmcFarReqIds) : undefined,
+          nistReqIds.length > 0 ? inArray(controlsTable.nistRef as any, nistReqIds) : undefined
+        )
+      )
+    );
+
+  return matched.map(c => c.id);
+}
 
 router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
   const orgId = req.orgId;
 
+  // Resolve which controls are in scope for this org's packages (e.g. CMMC L1 = 17 controls)
+  const packageControlIds = orgId ? await resolveOrgControlIds(orgId) : null;
+  const controlFilter = and(
+    eq(controlsTable.isActive, true),
+    packageControlIds ? inArray(controlsTable.id, packageControlIds) : undefined
+  );
+
   const [controlStats] = await db
     .select({ total: count() })
     .from(controlsTable)
-    .where(eq(controlsTable.isActive, true));
+    .where(controlFilter);
 
   const assessmentStats = await db
     .select({
@@ -41,7 +100,12 @@ router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
     })
     .from(controlAssessmentsTable)
     .innerJoin(controlsTable, eq(controlsTable.id, controlAssessmentsTable.controlId))
-    .where(orgId ? eq(controlAssessmentsTable.organizationId, orgId) : undefined)
+    .where(
+      and(
+        orgId ? eq(controlAssessmentsTable.organizationId, orgId) : undefined,
+        packageControlIds ? inArray(controlsTable.id, packageControlIds) : undefined
+      )
+    )
     .groupBy(controlAssessmentsTable.status, controlsTable.level);
 
   const [evidenceStats] = await db
@@ -223,40 +287,74 @@ router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
   const staleEvidence = evidenceByStatus.find((e) => e.status === "stale");
   const pendingReview = evidenceByStatus.find((e) => e.status === "pending_review");
 
-  const [roadmapTotalStats] = await db
-    .select({ total: count() })
-    .from(roadmapActionsTable);
-  const [roadmapCompleteStats] = await db
-    .select({ total: count() })
-    .from(orgRoadmapProgressTable)
-    .where(
-      and(
-        orgId ? eq(orgRoadmapProgressTable.organizationId, orgId) : undefined,
-        eq(orgRoadmapProgressTable.status, "complete")
-      )
-    );
-  const [roadmapInProgressStats] = await db
-    .select({ total: count() })
-    .from(orgRoadmapProgressTable)
-    .where(
-      and(
-        orgId ? eq(orgRoadmapProgressTable.organizationId, orgId) : undefined,
-        or(
-          eq(orgRoadmapProgressTable.status, "in_progress"),
-          eq(orgRoadmapProgressTable.status, "evidence_needed"),
-          eq(orgRoadmapProgressTable.status, "ready_for_review")
-        )
-      )
-    );
-  const [roadmapBlockedStats] = await db
-    .select({ total: count() })
-    .from(orgRoadmapProgressTable)
-    .where(
-      and(
-        orgId ? eq(orgRoadmapProgressTable.organizationId, orgId) : undefined,
-        eq(orgRoadmapProgressTable.status, "blocked")
-      )
-    );
+  // ── Roadmap stats — scoped to org's assigned profile ─────────────────────────
+  const roadmapProfileKey = orgId ? await resolveOrgRoadmapProfile(orgId) : null;
+
+  // Get the set of action IDs that belong to this org's profile
+  let profileActionIds: string[] = [];
+  if (roadmapProfileKey) {
+    const profileFilter =
+      roadmapProfileKey === "CMMC_L2_R2"
+        ? or(
+            eq(roadmapActionsTable.profileKey, "CMMC_L2_R2"),
+            isNull(roadmapActionsTable.profileKey)
+          )
+        : eq(roadmapActionsTable.profileKey, roadmapProfileKey);
+
+    const profileRows = await db
+      .select({ id: roadmapActionsTable.id })
+      .from(roadmapActionsTable)
+      .where(profileFilter);
+    profileActionIds = profileRows.map((r) => r.id);
+  }
+
+  const roadmapTotalActions = profileActionIds.length;
+
+  const [roadmapCompleteStats] =
+    orgId && profileActionIds.length > 0
+      ? await db
+          .select({ total: count() })
+          .from(orgRoadmapProgressTable)
+          .where(
+            and(
+              eq(orgRoadmapProgressTable.organizationId, orgId),
+              inArray(orgRoadmapProgressTable.actionId, profileActionIds),
+              eq(orgRoadmapProgressTable.status, "complete")
+            )
+          )
+      : [{ total: 0 }];
+
+  const [roadmapInProgressStats] =
+    orgId && profileActionIds.length > 0
+      ? await db
+          .select({ total: count() })
+          .from(orgRoadmapProgressTable)
+          .where(
+            and(
+              eq(orgRoadmapProgressTable.organizationId, orgId),
+              inArray(orgRoadmapProgressTable.actionId, profileActionIds),
+              or(
+                eq(orgRoadmapProgressTable.status, "in_progress"),
+                eq(orgRoadmapProgressTable.status, "evidence_needed"),
+                eq(orgRoadmapProgressTable.status, "ready_for_review")
+              )
+            )
+          )
+      : [{ total: 0 }];
+
+  const [roadmapBlockedStats] =
+    orgId && profileActionIds.length > 0
+      ? await db
+          .select({ total: count() })
+          .from(orgRoadmapProgressTable)
+          .where(
+            and(
+              eq(orgRoadmapProgressTable.organizationId, orgId),
+              inArray(orgRoadmapProgressTable.actionId, profileActionIds),
+              eq(orgRoadmapProgressTable.status, "blocked")
+            )
+          )
+      : [{ total: 0 }];
 
   // DFARS obligation coverage — only populated when org has active DFARS packages
   let dfarsTotal = 0, dfarsCompliant = 0, dfarsGap = 0, dfarsInProgress = 0;
@@ -327,7 +425,7 @@ router.get("/dashboard/summary", requireAuth, requireOrg, async (req, res) => {
     controlsWithNarrative: Number(controlsWithNarrativeStats?.total ?? 0),
     activePolicies,
     activeProcedures,
-    roadmapTotalActions: Number(roadmapTotalStats?.total ?? 0),
+    roadmapTotalActions,
     roadmapCompleteActions: Number(roadmapCompleteStats?.total ?? 0),
     roadmapInProgressActions: Number(roadmapInProgressStats?.total ?? 0),
     roadmapBlockedActions: Number(roadmapBlockedStats?.total ?? 0),
@@ -359,6 +457,12 @@ const DOMAIN_CODE_MAP: Record<string, string> = {
 router.get("/dashboard/readiness-by-domain", requireAuth, requireOrg, async (req, res) => {
   const orgId = req.orgId;
 
+  const packageControlIds = orgId ? await resolveOrgControlIds(orgId) : null;
+  const controlFilter = and(
+    eq(controlsTable.isActive, true),
+    packageControlIds ? inArray(controlsTable.id, packageControlIds) : undefined
+  );
+
   const domains = await db.select().from(domainsTable).orderBy(domainsTable.sortOrder);
 
   const assessments = await db
@@ -375,13 +479,13 @@ router.get("/dashboard/readiness-by-domain", requireAuth, requireOrg, async (req
         orgId ? eq(controlAssessmentsTable.organizationId, orgId) : undefined
       )
     )
-    .where(eq(controlsTable.isActive, true))
+    .where(controlFilter)
     .groupBy(controlsTable.domainId, controlAssessmentsTable.status);
 
   const totalByDomain = await db
     .select({ domainId: controlsTable.domainId, cnt: count() })
     .from(controlsTable)
-    .where(eq(controlsTable.isActive, true))
+    .where(controlFilter)
     .groupBy(controlsTable.domainId);
 
   const result = domains

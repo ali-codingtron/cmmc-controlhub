@@ -14,6 +14,8 @@ import { organizationsTable } from "./organizations";
 export const taskStatusEnum = pgEnum("task_status", [
   "open",
   "in_progress",
+  "blocked",
+  "closed",
   "completed",
   "overdue",
   "cancelled",
@@ -75,6 +77,23 @@ export const tasksTable = pgTable("tasks", {
     .references(() => usersTable.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+
+  // Task lifecycle tracking
+  taskNumber: text("task_number"),
+  startDate: timestamp("start_date"),
+  closedDate: timestamp("closed_date"),
+  closureSummary: text("closure_summary"),
+  closedByUserId: text("closed_by_user_id").references(() => usersTable.id),
+  blockedReason: text("blocked_reason"),
+  blockedByUserId: text("blocked_by_user_id").references(() => usersTable.id),
+  blockedAt: timestamp("blocked_at"),
+  reopenedByUserId: text("reopened_by_user_id").references(() => usersTable.id),
+  reopenedAt: timestamp("reopened_at"),
+  reopenReason: text("reopen_reason"),
+  cancelledByUserId: text("cancelled_by_user_id").references(() => usersTable.id),
+  cancelledAt: timestamp("cancelled_at"),
+  cancellationReason: text("cancellation_reason"),
+  updatedByUserId: text("updated_by_user_id").references(() => usersTable.id),
 });
 
 export const taskControlLinksTable = pgTable("task_control_links", {
@@ -88,6 +107,22 @@ export const taskControlLinksTable = pgTable("task_control_links", {
   linkedAt: timestamp("linked_at").notNull().defaultNow(),
 });
 
+export const taskActivitiesTable = pgTable("task_activities", {
+  id: text("id").primaryKey(),
+  taskId: text("task_id")
+    .notNull()
+    .references(() => tasksTable.id, { onDelete: "cascade" }),
+  organizationId: text("organization_id"),
+  actingUserId: text("acting_user_id").references(() => usersTable.id),
+  actingUserName: text("acting_user_name"),
+  action: text("action").notNull(),
+  field: text("field"),
+  previousValue: text("previous_value"),
+  newValue: text("new_value"),
+  note: text("note"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const insertTaskSchema = createInsertSchema(tasksTable).omit({
   id: true,
   createdAt: true,
@@ -96,3 +131,4 @@ export const insertTaskSchema = createInsertSchema(tasksTable).omit({
 
 export type InsertTask = z.infer<typeof insertTaskSchema>;
 export type Task = typeof tasksTable.$inferSelect;
+export type TaskActivity = typeof taskActivitiesTable.$inferSelect;

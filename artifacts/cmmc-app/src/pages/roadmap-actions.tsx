@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useOrg } from "@/context/OrgContext";
@@ -54,6 +54,19 @@ function makeHeaders(orgId: string) {
     "X-Organization-ID": orgId,
     "Content-Type": "application/json",
   };
+}
+
+interface RoadmapProfile {
+  profileKey: string;
+  profileName: string;
+  title: string;
+  subtitle: string;
+  phases: Array<{
+    phase: number;
+    name: string;
+    icon: string;
+    description: string;
+  }>;
 }
 
 interface RoadmapAction {
@@ -388,14 +401,11 @@ function StartHerePanel({ actions }: { actions: RoadmapAction[] }) {
   const inProgress = actions.find((a) => a.status === "in_progress");
   const recommended =
     inProgress ??
+    // Recommend the first incomplete action in phase/sortOrder sequence,
+    // not the highest impact score — roadmap phases must be done in order.
     actions
       .filter((a) => a.status === "not_started")
-      .sort((a, b) => {
-        const po =
-          (PRIORITY_ORDER[a.priority] ?? 9) -
-          (PRIORITY_ORDER[b.priority] ?? 9);
-        return po !== 0 ? po : b.impactScore - a.impactScore;
-      })[0];
+      .sort((a, b) => a.sortOrder - b.sortOrder)[0];
 
   const allDone =
     actions.length > 0 &&
@@ -1074,6 +1084,19 @@ export default function RoadmapActions() {
     "impact"
   );
 
+  const { data: profile, isLoading: profileLoading } =
+    useQuery<RoadmapProfile | null>({
+      queryKey: ["roadmap-profile", activeOrg?.id],
+      enabled: !!activeOrg?.id,
+      queryFn: async () => {
+        const res = await fetch("/api/roadmap/profile", {
+          headers: makeHeaders(activeOrg!.id),
+        });
+        if (!res.ok) return null;
+        return res.json();
+      },
+    });
+
   const { data: actions = [], isLoading } = useQuery<RoadmapAction[]>({
     queryKey: ["roadmap-actions", activeOrg?.id],
     enabled: !!activeOrg?.id,
@@ -1085,6 +1108,35 @@ export default function RoadmapActions() {
       return res.json();
     },
   });
+
+  /** Phase display info derived from profile (falls back to static PHASE_INFO). */
+  const phaseDisplayInfo = useMemo<
+    Record<number, { name: string; icon: string; why: string }>
+  >(() => {
+    if (profile?.phases?.length) {
+      const map: Record<number, { name: string; icon: string; why: string }> =
+        {};
+      for (const p of profile.phases) {
+        map[p.phase] = { name: p.name, icon: p.icon, why: p.description };
+      }
+      return map;
+    }
+    return PHASE_INFO as Record<
+      number,
+      { name: string; icon: string; why: string }
+    >;
+  }, [profile]);
+
+  /** Unique phases present in the loaded actions, sorted ascending. */
+  const uniquePhases = useMemo(() => {
+    const seen: Record<number, string> = {};
+    for (const a of actions) {
+      if (seen[a.phase] === undefined) seen[a.phase] = a.phaseName;
+    }
+    return Object.entries(seen)
+      .map(([p, phaseName]) => ({ phase: Number(p), phaseName }))
+      .sort((a, b) => a.phase - b.phase);
+  }, [actions]);
 
   const filtered = actions
     .filter((a) => {
@@ -1116,7 +1168,13 @@ export default function RoadmapActions() {
     (a) => a.status === "in_progress"
   ).length;
   const totalBlocked = actions.filter((a) => a.status === "blocked").length;
-  const totalControls = actions.reduce((s, a) => s + a.controlsCount, 0);
+  // Count only actively-implemented controls (full + partial support).
+  // Excludes evidence_only links (used by assessment/affirmation actions that
+  // reference all controls as targets, not as implementation guidance).
+  const totalControls = actions.reduce(
+    (s, a) => s + a.fullSupportCount + a.partialSupportCount,
+    0
+  );
   const totalAttentionNeeded = actions.filter(
     (a) => a.status === "evidence_needed" || a.status === "blocked"
   ).length;
@@ -1128,6 +1186,33 @@ export default function RoadmapActions() {
       ? Math.round((totalComplete / actions.length) * 100)
       : 0;
 
+  // Show no-profile empty state once both queries settle
+  if (!isLoading && !profileLoading && profile === null) {
+    return (
+      <div className="p-6 max-w-7xl mx-auto">
+        <div className="flex items-start justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <Map className="h-6 w-6 text-primary" />
+              Implementation Roadmap
+            </h1>
+          </div>
+        </div>
+        <div className="rounded-lg border bg-card p-12 text-center space-y-3">
+          <Map className="h-10 w-10 text-muted-foreground/40 mx-auto" />
+          <h2 className="text-lg font-semibold text-muted-foreground">
+            No roadmap configured for this organization
+          </h2>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto">
+            An Implementation Roadmap is available for organizations assigned a
+            CMMC Level 1 or Level 2 compliance package. Contact your
+            administrator to assign a package.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Header */}
@@ -1135,17 +1220,19 @@ export default function RoadmapActions() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Map className="h-6 w-6 text-primary" />
-            Implementation Roadmap
+            {profile?.title ?? "Implementation Roadmap"}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Follow high-impact actions that build evidence and documentation
-            across multiple CMMC controls.
+            {profile?.subtitle ??
+              "Follow high-impact actions that build evidence and documentation across multiple controls."}
           </p>
-          <p className="text-xs text-muted-foreground mt-0.5 max-w-2xl">
-            Instead of working control-by-control, this roadmap groups related
-            implementation work into actions that support multiple CMMC controls
-            at once.
-          </p>
+          {!profile && (
+            <p className="text-xs text-muted-foreground mt-0.5 max-w-2xl">
+              Instead of working control-by-control, this roadmap groups related
+              implementation work into actions that support multiple controls at
+              once.
+            </p>
+          )}
         </div>
         <div className="flex gap-2 shrink-0">
           <Link href="/roadmap/coverage">
@@ -1209,7 +1296,7 @@ export default function RoadmapActions() {
             value: totalControls,
             icon: ShieldCheck,
             color: "text-primary",
-            tip: "Total CMMC L2 control references across all actions (may overlap between actions).",
+            tip: "Total control references across all actions (may overlap between actions).",
           },
           {
             label: "Overall Progress",
@@ -1294,9 +1381,9 @@ export default function RoadmapActions() {
       ) : (
         <>
           {/* Phase filter strips */}
-          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-            {[1, 2, 3, 4, 5, 6].map((p) => {
-              const info = PHASE_INFO[p];
+          <div className={cn("grid gap-2", uniquePhases.length <= 3 ? "grid-cols-3" : "grid-cols-3 md:grid-cols-6")}>
+            {uniquePhases.map(({ phase: p, phaseName }) => {
+              const info = phaseDisplayInfo[p];
               const pa = actions.filter((a) => a.phase === p);
               const done = pa.filter((a) => a.status === "complete").length;
               const pct =
@@ -1327,7 +1414,7 @@ export default function RoadmapActions() {
                     Phase {p}
                   </div>
                   <div className="text-xs font-medium truncate">
-                    {info.name}
+                    {info?.name ?? phaseName}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
                     {done}/{pa.length}

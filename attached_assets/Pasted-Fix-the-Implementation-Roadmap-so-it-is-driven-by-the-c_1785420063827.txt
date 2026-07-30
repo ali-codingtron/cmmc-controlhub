@@ -1,0 +1,869 @@
+Fix the Implementation Roadmap so it is driven by the compliance packages selected for each organization.
+
+Current issue:
+
+An organization that has only CMMC Level 1 selected is currently seeing the CMMC Level 2 Implementation Roadmap.
+
+The current roadmap contains Level 2 actions, controls, evidence requirements, and terminology that do not apply to a Level 1-only organization.
+
+This is misleading and must be corrected.
+
+Goal:
+
+The Implementation Roadmap must dynamically select the correct roadmap profile based on the active compliance packages assigned to the organization.
+
+Never show a Level 2 roadmap merely because no Level 1 roadmap profile exists.
+
+====================================================================
+1. PRODUCTION DATA SAFETY
+====================================================================
+
+Do not:
+
+- delete existing roadmap actions
+- delete roadmap progress
+- reset completed actions
+- delete evidence links
+- modify control statuses
+- modify evidence
+- modify SSP
+- modify monitoring
+- modify POA&M
+- change organization package assignments
+- re-seed existing organizations automatically
+- alter VTCCORP.US roadmap data
+- alter other production organization data
+
+Before making changes, run a read-only diagnostic.
+
+For every organization show:
+
+- organization name
+- active package keys
+- displayed roadmap profile
+- roadmap actions currently assigned
+- controls/requirements referenced by those actions
+- actions incompatible with the organization’s active packages
+- roadmap progress records
+- evidence links
+- checklist progress
+- whether the Roadmap module is enabled
+
+Specifically identify all organizations that:
+
+- have CMMC Level 1 only
+- currently have Level 2 roadmap actions
+- have progress recorded against incompatible actions
+
+Do not change data during the diagnostic.
+
+====================================================================
+2. VALIDATE THE CMMC LEVEL 1 PACKAGE
+====================================================================
+
+Review the current CMMC Level 1 package data.
+
+The current official CMMC model defines:
+
+- 15 canonical CMMC Level 1 security requirements
+- derived from the 15 basic safeguarding requirements in FAR 52.204-21
+
+The Level 1 assessment mapping may reference 17 NIST SP 800-171A requirement rows because one FAR safeguarding requirement is split into three phrases for assessment mapping.
+
+Do not automatically change production records during this repair.
+
+Generate a reconciliation report showing:
+
+- current Level 1 control count in Control HUB
+- canonical CMMC Level 1 requirement count
+- mapped NIST SP 800-171A requirement count
+- duplicate or split mappings
+- requirement IDs currently displayed as independent controls
+- recommended canonical structure
+
+Preferred model:
+
+Canonical CMMC Level 1 Requirements:
+15
+
+Assessment Mapping Rows:
+17 where required by the official assessment mapping
+
+Do not count assessment mapping rows as separate canonical CMMC Level 1 controls.
+
+Do not automatically merge or delete existing records without a separate reviewed migration.
+
+====================================================================
+3. CREATE ROADMAP PROFILES
+====================================================================
+
+Create a reusable Roadmap Profile model.
+
+Example:
+
+RoadmapProfile
+- id
+- profile_key
+- name
+- description
+- framework_key
+- package_key
+- package_version
+- roadmap_type
+- active
+- sort_order
+- created_at
+- updated_at
+
+Seed profiles such as:
+
+CMMC_L1_V2_13
+CMMC_L2_R2
+NIST_800_171_R2
+NIST_800_171_R3
+DFARS_7012
+CUSTOM
+
+Roadmap profile types:
+
+- IMPLEMENTATION
+- ASSESSMENT_PREPARATION
+- CONTRACT_OBLIGATION
+- TRANSITION
+- CUSTOM
+
+====================================================================
+4. ASSOCIATE ACTIONS WITH ROADMAP PROFILES
+====================================================================
+
+Every roadmap action must belong to one or more compatible roadmap profiles.
+
+Example:
+
+RoadmapActionTemplate
+- id
+- action_key
+- title
+- purpose
+- phase
+- priority
+- effort
+- roadmap_profile_id
+- required_package_keys
+- excluded_package_keys
+- applicable_requirement_ids
+- minimum_level
+- maximum_level
+- sort_order
+- active
+
+Do not use one global set of 12 Level 2 actions for every organization.
+
+An action must be displayed only when:
+
+- its roadmap profile is active for the organization
+- its required package is assigned
+- its level is compatible
+- it is not excluded by the current package configuration
+
+====================================================================
+5. ROADMAP PROFILE RESOLUTION
+====================================================================
+
+Create one central resolver:
+
+resolveOrganizationRoadmapProfile(organizationId)
+
+Resolution rules:
+
+A. CMMC Level 1 only:
+
+Use:
+CMMC_L1_V2_13
+
+B. CMMC Level 2 selected:
+
+Use:
+CMMC_L2_R2
+
+C. NIST SP 800-171 Rev. 2 without CMMC:
+
+Use:
+NIST_800_171_R2
+
+D. DFARS selected with NIST/CMMC:
+
+Use:
+- implementation roadmap from the implementation package
+- additional DFARS obligation actions
+- deduplicate overlapping work
+
+E. Multiple implementation packages:
+
+Merge compatible actions using action_key and canonical requirement mappings.
+
+F. No compatible roadmap profile:
+
+Do not fall back to Level 2.
+
+Show:
+
+“No implementation roadmap is currently configured for the organization’s selected compliance packages.”
+
+For Global Admins show:
+
+“Configure Roadmap Profile”
+
+Normal users should not see incompatible actions.
+
+====================================================================
+6. CREATE A CMMC LEVEL 1 ROADMAP
+====================================================================
+
+Create a dedicated:
+
+CMMC Level 1 Implementation Roadmap
+
+Purpose:
+
+“Guide the organization through implementation and validation of the basic safeguarding requirements used to protect Federal Contract Information.”
+
+This roadmap must:
+
+- focus on FCI
+- contain only Level 1 requirements
+- avoid CUI-specific implementation claims
+- avoid Level 2-specific requirements
+- avoid C3PAO terminology
+- support annual self-assessment readiness
+- require all applicable Level 1 requirements to be MET
+- not use POA&M as a Level 1 completion mechanism
+
+Recommended phases:
+
+Phase 1:
+Scope and Inventory
+
+Phase 2:
+Logical Access and Authentication
+
+Phase 3:
+Physical and Media Protection
+
+Phase 4:
+Boundary and Public-System Protection
+
+Phase 5:
+System Integrity
+
+Phase 6:
+Self-Assessment and Affirmation
+
+====================================================================
+7. LEVEL 1 ROADMAP ACTIONS
+====================================================================
+
+Create approximately these Level 1 roadmap actions.
+
+--------------------------------------------------------------------
+ACTION 1 — DEFINE FCI SCOPE AND SYSTEM INVENTORY
+--------------------------------------------------------------------
+
+Purpose:
+
+Identify where FCI is processed, stored, or transmitted and document the systems, users, devices, facilities, and external connections within the Level 1 assessment scope.
+
+Expected outputs:
+
+- FCI scope statement
+- system inventory
+- user inventory
+- device inventory
+- network boundary summary
+- public-facing system inventory
+- assessment scope approval
+
+Do not require a Level 2 CUI SSP unless the organization separately selected a package that requires one.
+
+--------------------------------------------------------------------
+ACTION 2 — CONFIGURE AUTHORIZED ACCESS
+--------------------------------------------------------------------
+
+Support Level 1 access-control requirements.
+
+Include:
+
+- identify authorized users
+- identify authorized devices
+- restrict system access
+- restrict transactions and functions
+- control external system connections
+- control information posted to public systems
+
+Expected evidence:
+
+- authorized-user list
+- device inventory
+- access-role matrix
+- external connection review
+- public-information review procedure
+- access validation test
+
+--------------------------------------------------------------------
+ACTION 3 — IMPLEMENT IDENTIFICATION AND AUTHENTICATION
+--------------------------------------------------------------------
+
+Include:
+
+- identify users
+- identify processes acting on behalf of users
+- identify devices
+- authenticate users, processes, and devices before access
+
+Expected evidence:
+
+- user account export
+- device inventory
+- authentication policy
+- login test results
+- account ownership records
+
+Do not automatically add Level 2 MFA requirements unless another active package requires them.
+
+--------------------------------------------------------------------
+ACTION 4 — PROTECT AND SANITIZE MEDIA
+--------------------------------------------------------------------
+
+Include:
+
+- identify media containing FCI
+- protect media
+- sanitize or destroy media before disposal or reuse
+- document sanitization methods and records
+
+Expected evidence:
+
+- media handling procedure
+- media inventory
+- sanitization record
+- disposal certificate or test record
+
+--------------------------------------------------------------------
+ACTION 5 — CONTROL PHYSICAL ACCESS
+--------------------------------------------------------------------
+
+Include:
+
+- limit physical access
+- escort visitors
+- monitor visitor activity
+- maintain physical-access logs
+- manage physical-access devices
+
+Expected evidence:
+
+- authorized physical-access list
+- visitor log
+- escort procedure
+- key/badge inventory
+- facility-access review
+
+Where one canonical CMMC Level 1 requirement maps to multiple NIST assessment rows, show the rows as assessment objectives rather than separate roadmap controls.
+
+--------------------------------------------------------------------
+ACTION 6 — PROTECT SYSTEM BOUNDARIES AND PUBLIC COMPONENTS
+--------------------------------------------------------------------
+
+Include:
+
+- monitor and protect external boundaries
+- monitor and protect key internal boundaries
+- separate publicly accessible components from internal systems where applicable
+
+Expected evidence:
+
+- network diagram
+- firewall configuration
+- boundary-rule review
+- public-facing system inventory
+- segmentation test
+
+--------------------------------------------------------------------
+ACTION 7 — MAINTAIN SYSTEM AND INFORMATION INTEGRITY
+--------------------------------------------------------------------
+
+Include:
+
+- identify and correct system flaws
+- provide malicious-code protection
+- update malicious-code protection
+- perform periodic scans
+- perform real-time scans of externally sourced files
+
+Expected evidence:
+
+- patch/update report
+- vulnerability or flaw-remediation record
+- antivirus status
+- malware update status
+- periodic scan results
+- real-time protection configuration
+
+--------------------------------------------------------------------
+ACTION 8 — COMPLETE LEVEL 1 SELF-ASSESSMENT AND AFFIRMATION
+--------------------------------------------------------------------
+
+Include:
+
+- verify every Level 1 requirement is MET
+- verify supporting evidence
+- conduct required examine/interview/test activities
+- record assessment scope
+- record CAGE codes
+- prepare SPRS submission information
+- prepare affirmation
+- retain assessment artifacts for the required retention period
+
+Important:
+
+Level 1 does not permit POA&M use to achieve Final Level 1 status.
+
+If a requirement is Not Met:
+
+- mark the roadmap action Attention Needed
+- create a Task or internal remediation action if supported
+- do not represent the organization as Level 1 complete
+- do not create a formal CMMC Level 1 POA&M completion path
+
+====================================================================
+8. LEVEL-SPECIFIC TERMINOLOGY
+====================================================================
+
+For Level 1 organizations, use:
+
+- Federal Contract Information
+- FCI Environment
+- Level 1 Self-Assessment
+- Basic Safeguarding Requirements
+- MET / NOT MET
+- Annual Affirmation
+- Assessment Artifacts
+
+Do not use Level 2-only language such as:
+
+- CUI Enclave, unless independently applicable
+- 110 controls
+- NIST SP 800-171 implementation score
+- C3PAO assessment preparation
+- Level 2 POA&M closeout
+- FIPS requirement
+- advanced audit requirements
+- 14-domain Level 2 completion
+- full Level 2 SSP requirement
+
+Do not show Level 2 evidence requirements to a Level 1-only organization.
+
+====================================================================
+9. LEVEL 1 COMPLETION LOGIC
+====================================================================
+
+Level 1 roadmap completion must reflect Level 1 rules.
+
+A Level 1 roadmap is complete only when:
+
+- all required Level 1 actions are complete
+- every applicable Level 1 requirement is MET
+- no Level 1 requirement remains Not Met
+- required evidence is linked
+- self-assessment is completed
+- affirmation preparation is complete
+- artifact-retention record exists
+
+Do not allow:
+
+Conditional Level 1
+
+Do not allow:
+
+Level 1 POA&M completion
+
+Do not calculate Level 1 completion from Level 2 statuses.
+
+====================================================================
+10. UPDATE ROADMAP HEADER AND COUNTS
+====================================================================
+
+For a Level 1-only organization, show:
+
+CMMC Level 1 Implementation Roadmap
+
+Subtitle:
+
+“Implement and validate the basic safeguards used to protect Federal Contract Information.”
+
+Show:
+
+- Level 1 actions
+- Level 1 requirements supported
+- MET requirements
+- NOT MET requirements
+- evidence coverage
+- self-assessment status
+- affirmation status
+
+Do not show:
+
+- 110 controls
+- 12 Level 2 priority actions
+- Level 2 domain coverage
+- CUI-specific impact scores
+
+====================================================================
+11. PACKAGE-AWARE ACTION FILTERING
+====================================================================
+
+Every Roadmap page must use the resolved profile:
+
+- Priority Actions
+- Guided View
+- List View
+- Phase View
+- Coverage Matrix
+- Roadmap Progress
+- Action Detail
+- dashboard roadmap widget
+- roadmap reports
+- roadmap evidence requirements
+
+Do not filter only in the frontend.
+
+The backend must return only actions compatible with the organization’s active roadmap profile.
+
+====================================================================
+12. COVERAGE MATRIX
+====================================================================
+
+For Level 1 organizations, the Coverage Matrix must include only:
+
+- Level 1 canonical requirements
+- their applicable assessment mappings/objectives
+- Level 1 roadmap actions
+
+Do not display all 110 Level 2 requirements.
+
+If the app retains 17 NIST assessment mapping rows, label them clearly as:
+
+Assessment Mappings
+
+Do not label them:
+
+17 CMMC Level 1 Controls
+
+Preferred display:
+
+15 Level 1 Requirements
+17 Assessment Mappings
+
+====================================================================
+13. MULTI-PACKAGE ORGANIZATIONS
+====================================================================
+
+When an organization selects both:
+
+- CMMC Level 1
+- FAR 52.204-21
+
+Do not duplicate roadmap actions.
+
+Use canonical requirement mappings.
+
+When an organization selects:
+
+- CMMC Level 2
+- CMMC Level 1
+
+Use the Level 2 roadmap because Level 2 includes the higher requirement set for the same scope.
+
+Do not show two separate copies of common actions.
+
+When an organization selects:
+
+- CMMC Level 1
+- DFARS obligations
+
+Show:
+
+- Level 1 implementation actions
+- applicable DFARS obligation actions
+
+Do not add Level 2 actions unless the Level 2/NIST package is selected.
+
+====================================================================
+14. ORGANIZATION ROADMAP CONFIGURATION
+====================================================================
+
+Keep the Implementation Roadmap optional per organization.
+
+The module should appear only when:
+
+- OrganizationFeature IMPLEMENTATION_ROADMAP is enabled
+- a compatible roadmap profile exists
+
+Global Admin-only configuration:
+
+Organizations > Edit Organization > Modules
+
+Show:
+
+Implementation Roadmap:
+Enabled / Disabled
+
+Resolved Profile:
+CMMC Level 1 v2.13
+
+Active Packages:
+CMMC Level 1 Self-Assessment
+
+If no profile exists, show:
+
+“No compatible roadmap profile is available.”
+
+Do not enable a Level 2 fallback.
+
+====================================================================
+15. EXISTING INCOMPATIBLE ROADMAP DATA
+====================================================================
+
+For a Level 1-only organization that already has Level 2 roadmap records:
+
+Do not delete them.
+
+Do not show them to normal users.
+
+Mark them internally as:
+
+INCOMPATIBLE_WITH_ACTIVE_PROFILE
+
+or filter them through the organization roadmap-profile assignment.
+
+Generate an admin report:
+
+Incompatible_Roadmap_Actions.xlsx
+
+Columns:
+
+- Organization
+- Action ID
+- Action Title
+- Original Profile
+- Active Packages
+- Progress
+- Evidence Links
+- Owner
+- Due Date
+- Recommended Action
+
+Recommended actions:
+
+- Keep Hidden as Historical
+- Reassign to Compatible Profile
+- Archive After Review
+- Delete Only Through Separate Approved Cleanup
+
+Do not automatically archive or delete completed work.
+
+====================================================================
+16. ROADMAP INITIALIZATION
+====================================================================
+
+When enabling the roadmap or changing packages:
+
+Run a dry-run preview.
+
+Show:
+
+- selected package
+- resolved roadmap profile
+- actions to create
+- actions already present
+- actions to retain
+- incompatible actions
+- evidence links affected
+- no data to be deleted
+
+Use an idempotent initialization process.
+
+Unique key:
+
+organization_id + roadmap_profile_id + action_key
+
+Do not create duplicate actions if initialization is run more than once.
+
+====================================================================
+17. DASHBOARD BEHAVIOR
+====================================================================
+
+For a Level 1 organization:
+
+Dashboard roadmap widget should show:
+
+CMMC Level 1 Roadmap
+
+Example:
+
+3 of 8 Actions Complete
+
+Requirements:
+10 of 15 MET
+
+Self-Assessment:
+Not Started
+
+Do not show Level 2 action or 110-control counts.
+
+If the Roadmap module is disabled:
+
+Hide the roadmap dashboard widget.
+
+Do not alter any other dashboard data.
+
+====================================================================
+18. HELP TEXT
+====================================================================
+
+Add package-aware helper text.
+
+For Level 1:
+
+“The Level 1 roadmap supports implementation and annual self-assessment of the basic safeguarding requirements used to protect Federal Contract Information. Every applicable requirement must be MET; Level 1 does not permit a POA&M as a path to final status.”
+
+For Level 2:
+
+Use the existing Level 2 implementation explanation.
+
+Do not show the same help text for every package.
+
+====================================================================
+19. AUDIT LOGGING
+====================================================================
+
+Log:
+
+- roadmap profile resolved
+- roadmap profile changed
+- incompatible action hidden
+- Level 1 roadmap initialized
+- package change evaluated
+- roadmap dry run completed
+- roadmap actions seeded
+- roadmap module enabled/disabled
+- roadmap initialization failed
+
+Include:
+
+- user
+- organization
+- active packages
+- previous profile
+- new profile
+- action counts
+- reason
+- timestamp
+- success/failure
+
+====================================================================
+20. ACCEPTANCE TESTS
+====================================================================
+
+Test A — Level 1 Only:
+
+Create or configure an organization with only:
+
+CMMC Level 1 Self-Assessment
+
+Expected:
+
+- Level 1 roadmap appears
+- only Level 1 actions appear
+- no Level 2 actions appear
+- no 110-control language appears
+- no Level 2 POA&M workflow appears
+
+Test B — Level 2:
+
+Organization selects:
+
+CMMC Level 2
+
+Expected:
+
+- current Level 2 roadmap appears
+- Level 1 roadmap is not duplicated
+
+Test C — Level 1 + FAR:
+
+Expected:
+
+- overlapping actions are deduplicated
+- one logical roadmap is shown
+
+Test D — Level 1 + DFARS:
+
+Expected:
+
+- Level 1 actions appear
+- applicable DFARS obligation actions appear
+- no unrelated Level 2 actions appear
+
+Test E — No Compatible Profile:
+
+Expected:
+
+- no Level 2 fallback
+- clear configuration message
+- no misleading roadmap actions
+
+Test F — Existing Incorrect Data:
+
+Level 1 organization currently has Level 2 actions.
+
+Expected:
+
+- existing records are preserved
+- incompatible actions are hidden
+- admin diagnostic identifies them
+- normal user sees only the Level 1 roadmap
+
+Test G — Disabled Roadmap:
+
+Expected:
+
+- roadmap navigation and dashboard references are hidden
+- existing data is retained
+
+Test H — Requirement Count:
+
+Expected:
+
+- app distinguishes canonical Level 1 requirements from assessment mapping rows
+- it does not automatically treat 17 assessment mappings as 17 canonical CMMC requirements
+
+Test I — Production Safety:
+
+No existing control, evidence, SSP, monitoring, POA&M, package, or roadmap progress record is deleted or overwritten.
+
+====================================================================
+21. MOST IMPORTANT RULES
+====================================================================
+
+1. Never show the CMMC Level 2 roadmap to a Level 1-only organization.
+
+2. Roadmap actions must be resolved from active organization packages.
+
+3. If no compatible profile exists, show no roadmap rather than falling back to Level 2.
+
+4. CMMC Level 1 and CMMC Level 2 require different roadmap actions, evidence, terminology, and completion logic.
+
+5. Existing incompatible production roadmap data must be preserved and hidden until reviewed.
+
+6. The app must distinguish the 15 canonical CMMC Level 1 requirements from the 17 assessment mapping rows.

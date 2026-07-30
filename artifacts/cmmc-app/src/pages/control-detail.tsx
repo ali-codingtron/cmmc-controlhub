@@ -3,13 +3,12 @@ import { useQueryClient, useQuery } from "@tanstack/react-query";
 import {
   useGetControl,
   useGetControlEvidence,
-  useGetControlTasks,
   useGetControlPoams,
   getGetControlQueryKey,
   getGetControlEvidenceQueryKey,
-  getGetControlTasksQueryKey,
   getGetControlPoamsQueryKey,
 } from "@workspace/api-client-react";
+import { ControlTasksTab } from "@/components/tasks/ControlTasksTab";
 import { useOrg } from "@/context/OrgContext";
 import { useIsAssessor } from "@/lib/auth";
 import { EvidencePreviewModal } from "@/components/EvidencePreviewModal";
@@ -862,106 +861,6 @@ function BulkUploadEvidenceDialog({
   );
 }
 
-// ─── Add Task Dialog ────────────────────────────────────────────────────────
-
-interface AddTaskDialogProps {
-  open: boolean;
-  onClose: () => void;
-  controlId: string;
-  orgId: string | null | undefined;
-  onSaved: () => void;
-}
-
-function AddTaskDialog({ open, onClose, controlId, orgId, onSaved }: AddTaskDialogProps) {
-  const { toast } = useToast();
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    title: "",
-    description: "",
-    priority: "medium",
-    dueDate: "",
-    assignee: "",
-  });
-
-  const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
-
-  const handleSave = async () => {
-    if (!form.title) {
-      toast({ title: "Title is required", variant: "destructive" });
-      return;
-    }
-    setSaving(true);
-    try {
-      const res = await fetch("/api/tasks", {
-        method: "POST",
-        headers: apiHeaders(orgId),
-        body: JSON.stringify({
-          title: form.title,
-          description: form.description,
-          priority: form.priority,
-          dueDate: form.dueDate || undefined,
-          controlIds: [controlId],
-        }),
-      });
-      if (!res.ok) {
-        const e = await res.json();
-        throw new Error(e.error ?? "Failed to save task");
-      }
-      toast({ title: "Task added" });
-      setForm({ title: "", description: "", priority: "medium", dueDate: "", assignee: "" });
-      onSaved();
-      onClose();
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Add Task</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3 py-1">
-          <div>
-            <Label>Title *</Label>
-            <Input value={form.title} onChange={(e) => set("title")(e.target.value)} placeholder="Task title" />
-          </div>
-          <div>
-            <Label>Description</Label>
-            <Textarea value={form.description} onChange={(e) => set("description")(e.target.value)} placeholder="What needs to be done?" rows={3} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>Priority</Label>
-              <Select value={form.priority} onValueChange={set("priority")}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {TASK_PRIORITIES.map((p) => (
-                    <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Due Date</Label>
-              <Input type="date" value={form.dueDate} onChange={(e) => set("dueDate")(e.target.value)} />
-            </div>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving || !form.title}>
-            {saving ? "Saving..." : "Save Task"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 // ─── Add POA&M Dialog ───────────────────────────────────────────────────────
 
 interface AddPoamDialogProps {
@@ -1217,8 +1116,8 @@ export default function ControlDetail({ id }: { id: string }) {
 
   const { data: control, isLoading: isLoadingControl } = useGetControl(id);
   const { data: evidence = [] } = useGetControlEvidence(id);
-  const { data: tasks = [] } = useGetControlTasks(id);
   const { data: poams = [] } = useGetControlPoams(id);
+  const [taskActiveCount, setTaskActiveCount] = useState(0);
 
   // Implementation form state - seeded from fetched data
   const [narrative, setNarrative] = useState<string | null>(null);
@@ -1228,7 +1127,6 @@ export default function ControlDetail({ id }: { id: string }) {
   // Dialog states
   const [showAddEvidence, setShowAddEvidence] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
-  const [showAddTask, setShowAddTask] = useState(false);
   const [showAddPoam, setShowAddPoam] = useState(false);
 
   // Evidence bulk selection
@@ -1397,9 +1295,6 @@ export default function ControlDetail({ id }: { id: string }) {
   const invalidateEvidence = () => {
     queryClient.invalidateQueries({ queryKey: getGetControlEvidenceQueryKey(id) });
   };
-  const invalidateTasks = () => {
-    queryClient.invalidateQueries({ queryKey: getGetControlTasksQueryKey(id) });
-  };
   const invalidatePoams = () => {
     queryClient.invalidateQueries({ queryKey: getGetControlPoamsQueryKey(id) });
   };
@@ -1441,7 +1336,7 @@ export default function ControlDetail({ id }: { id: string }) {
           <TabsTrigger value="implementation">Implementation</TabsTrigger>
           <TabsTrigger value="configure">Configure</TabsTrigger>
           <TabsTrigger value="evidence">Evidence ({evidence.length})</TabsTrigger>
-          <TabsTrigger value="tasks">Tasks ({tasks.length})</TabsTrigger>
+          <TabsTrigger value="tasks">Tasks ({taskActiveCount})</TabsTrigger>
           <TabsTrigger value="poams">POA&Ms ({poams.length})</TabsTrigger>
           <TabsTrigger value="monitoring">Monitoring</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
@@ -2067,65 +1962,13 @@ export default function ControlDetail({ id }: { id: string }) {
 
         {/* ── Tasks Tab ── */}
         <TabsContent value="tasks" className="mt-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-base">Tasks</h3>
-            {!isAssessor && (
-              <Button size="sm" onClick={() => setShowAddTask(true)}>
-                <Plus className="h-4 w-4 mr-1" />
-                Add Task
-              </Button>
-            )}
-          </div>
-
-          {tasks.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <CheckSquare className="h-10 w-10 mx-auto mb-3 text-muted-foreground/40" />
-                <p className="text-muted-foreground font-medium">No tasks have been added for this control yet.</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Create tasks to track remediation work, reviews, and compliance activities.
-                </p>
-                {!isAssessor && (
-                  <Button className="mt-4" size="sm" onClick={() => setShowAddTask(true)}>
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add Task
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-2">
-              {tasks.map((task: any) => (
-                <Card key={task.id}>
-                  <CardContent className="py-3 flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{task.title}</p>
-                      {task.description && (
-                        <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{task.description}</p>
-                      )}
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <StatusBadge status={task.status} />
-                        <RiskBadge level={task.priority} />
-                        {task.dueDate && (
-                          <span className="text-xs text-muted-foreground flex items-center gap-0.5">
-                            <Calendar className="h-3 w-3" />
-                            {formatDate(task.dueDate)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-
-          <AddTaskDialog
-            open={showAddTask}
-            onClose={() => setShowAddTask(false)}
+          <ControlTasksTab
             controlId={id}
+            controlLabel={(control as any).controlId ?? id}
+            controlTitle={(control as any).title ?? ""}
             orgId={activeOrg?.id}
-            onSaved={invalidateTasks}
+            isReadOnly={isAssessor}
+            onCountChange={setTaskActiveCount}
           />
         </TabsContent>
 

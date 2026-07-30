@@ -1158,6 +1158,19 @@ async function migrateCertificationTables() {
   }
 }
 
+async function migrateRoadmapProfileKey() {
+  // profile_key was added to roadmap_actions in the L1 roadmap profile feature.
+  // Production databases provisioned before this release won't have the column,
+  // so seedRoadmapActions() would crash trying to reference it.
+  try {
+    await db.execute(sql.raw(
+      `ALTER TABLE roadmap_actions ADD COLUMN IF NOT EXISTS profile_key text`
+    ));
+  } catch (_e) {
+    // Already exists — safe to ignore
+  }
+}
+
 export async function runStartupSeed() {
   try {
     await migrateSsoTable();
@@ -1166,6 +1179,7 @@ export async function runStartupSeed() {
     await migrateCertificationTables();
     await migrateBreakGlassColumns();
     await migrateAuditEnum();
+    await migrateRoadmapProfileKey();
     await seedDomainControls();
     await seedInitialAdmin();
     await seedBreakGlassAccount();
