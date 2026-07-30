@@ -46,6 +46,16 @@ import {
   Wand2,
   DatabaseZap,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -209,6 +219,7 @@ function Step7L2({
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [overwriteExisting, setOverwriteExisting] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   // Count how many narrative keys are already filled
   const filledCount = Object.entries(values).filter(
@@ -359,7 +370,13 @@ function Step7L2({
           <Button
             variant="outline"
             size="sm"
-            onClick={handleImport}
+            onClick={() => {
+              if (overwriteExisting && filledCount > 0) {
+                setShowConfirmDialog(true);
+              } else {
+                handleImport();
+              }
+            }}
             disabled={importing || !draftId}
             className="gap-2"
           >
@@ -378,6 +395,43 @@ function Step7L2({
           )}
         </CardContent>
       </Card>
+
+      {/* Overwrite confirmation dialog */}
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Replace existing narratives?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>
+                  This will overwrite{" "}
+                  <strong className="text-foreground">
+                    {filledCount} existing narrative{filledCount === 1 ? "" : "s"}
+                  </strong>{" "}
+                  in this draft with content from SSP Mappings. Any hand-written text will be
+                  permanently replaced and cannot be recovered.
+                </p>
+                <p>Are you sure you want to continue?</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={() => {
+                setShowConfirmDialog(false);
+                handleImport();
+              }}
+            >
+              Yes, overwrite narratives
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Fallback workflow */}
       <div className="rounded-lg border bg-muted/30 p-5 space-y-3 text-sm">
