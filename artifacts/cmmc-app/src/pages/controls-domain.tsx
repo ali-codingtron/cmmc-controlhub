@@ -239,12 +239,18 @@ export default function ControlDomain({ code }: { code: string }) {
                           <TableCell><StatusCell status={c.status} /></TableCell>
                           <TableCell className="text-center">
                             <Tooltip>
-                              <TooltipTrigger>
-                                <span className={cn("text-xs font-medium", evBad ? "text-red-600" : "text-green-700")}>
+                              <TooltipTrigger asChild>
+                                <Link
+                                  href={`/controls/${c.id}?tab=evidence${evBad || ((c.evidenceCount ?? 0) > (c.approvedEvidenceCount ?? 0)) ? "&evStatus=pending_review" : ""}`}
+                                  className={cn("text-xs font-medium hover:underline", evBad ? "text-red-600" : (c.evidenceCount ?? 0) > (c.approvedEvidenceCount ?? 0) ? "text-amber-600" : "text-green-700")}
+                                >
                                   {c.approvedEvidenceCount}/{c.evidenceCount}
-                                </span>
+                                </Link>
                               </TooltipTrigger>
-                              <TooltipContent>{c.approvedEvidenceCount} approved, {(c.evidenceCount ?? 0) - (c.approvedEvidenceCount ?? 0)} pending/other</TooltipContent>
+                              <TooltipContent>
+                                {c.approvedEvidenceCount} approved, {(c.evidenceCount ?? 0) - (c.approvedEvidenceCount ?? 0)} pending/other
+                                {(c.evidenceCount ?? 0) > (c.approvedEvidenceCount ?? 0) && <span className="block text-amber-300 mt-0.5">Click to view pending items</span>}
+                              </TooltipContent>
                             </Tooltip>
                           </TableCell>
                           <TableCell className="text-center">

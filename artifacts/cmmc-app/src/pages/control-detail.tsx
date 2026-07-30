@@ -1113,6 +1113,10 @@ export default function ControlDetail({ id }: { id: string }) {
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
   const isAssessor = useIsAssessor();
+  const [activeTab, setActiveTab] = useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    return p.get("tab") || "implementation";
+  });
 
   const { data: control, isLoading: isLoadingControl } = useGetControl(id);
   const { data: evidence = [] } = useGetControlEvidence(id);
@@ -1143,7 +1147,10 @@ export default function ControlDetail({ id }: { id: string }) {
   };
   const [evSearch, setEvSearch] = useState("");
   const [evType, setEvType] = useState("all");
-  const [evStatus, setEvStatus] = useState("all");
+  const [evStatus, setEvStatus] = useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    return p.get("evStatus") || "all";
+  });
   const [evExpiration, setEvExpiration] = useState("all");
   const [sortBy, setSortBy] = useState("collectedAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -1331,7 +1338,7 @@ export default function ControlDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      <Tabs defaultValue="implementation" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList>
           <TabsTrigger value="implementation">Implementation</TabsTrigger>
           <TabsTrigger value="configure">Configure</TabsTrigger>
