@@ -7,7 +7,7 @@
  */
 import { useEffect, useState } from "react";
 import { Shield } from "lucide-react";
-import carmetechLogo from "@assets/Carme_Tech_Logo_Official_1779981155506.png";
+import carmetechLogo from "@assets/carme-logo-no-bg.png";
 
 const CONSULTATION_HREF =
   "mailto:info@carmetechnology.com?subject=Control%20HUB%20Consultation%20Request";
@@ -74,8 +74,7 @@ export default function DemoApp() {
         <img
           src={carmetechLogo}
           alt="Carme Technology"
-          className="h-8 rounded"
-          style={{ background: "#1C1A0A" }}
+          className="h-8"
         />
       </div>
 

@@ -62,7 +62,7 @@ export function ReportShell({ title, subtitle, children, csvRows, csvFilename, r
             <img
               src="/assets/control-hub-icon.png"
               alt="Control HUB"
-              className="h-12 w-12 rounded-xl object-cover"
+              className="h-12 w-12 rounded-xl object-contain"
             />
           </div>
         </div>

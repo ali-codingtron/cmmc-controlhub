@@ -36,3 +36,9 @@ id = "QsJ1tom-9D9q6BzgV2qwZ"
 uri = "file://generated-guides/Control_HUB_Complete_User_Guide.pdf"
 type = "pdf"
 title = "Control HUB — Complete User Guide"
+
+[[outputs]]
+id = "Jv7wLBBVRoyUYbRYiDkoL"
+uri = "file://attached_assets/carme-logo-no-bg.png"
+type = "image"
+title = "Carme Technology Compliance Logo (no background, clean)"

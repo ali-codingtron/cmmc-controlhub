@@ -1,3 +1,7 @@
 <svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="180" height="180" rx="36" fill="#FF3C00"/>
+  <rect width="180" height="180" rx="36" fill="#0D1B2E"/>
+  <!-- Shield shape -->
+  <path d="M90 28L44 46V90C44 118 65 141 90 152C115 141 136 118 136 90V46L90 28Z" fill="#1E3A5F" stroke="#2E6BD4" stroke-width="3"/>
+  <!-- Gold chevron/check mark -->
+  <path d="M70 88L83 102L112 72" stroke="#C9A84C" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

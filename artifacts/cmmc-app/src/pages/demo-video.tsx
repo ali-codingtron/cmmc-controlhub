@@ -2,7 +2,7 @@ import { useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ExternalLink } from "lucide-react";
-import carmetechLogo from "@assets/Carme_Tech_Logo_Official_1779981155506.png";
+import carmetechLogo from "@assets/carme-logo-no-bg.png";
 
 const CONSULTATION_HREF = "mailto:info@carmetechnology.com?subject=Control%20HUB%20Consultation%20Request";
 
@@ -115,8 +115,7 @@ export default function DemoVideo() {
             <img
               src={carmetechLogo}
               alt="Carme Technology"
-              className="h-8 rounded"
-              style={{ background: "#1C1A0A" }}
+              className="h-8"
             />
           </div>
           <a
@@ -212,8 +211,7 @@ export default function DemoVideo() {
             <img
               src={carmetechLogo}
               alt="Carme Technology"
-              className="h-7 rounded"
-              style={{ background: "#1C1A0A" }}
+              className="h-7"
             />
           </div>
           <div className="flex gap-4 text-xs text-slate-600">

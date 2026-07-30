@@ -33,7 +33,7 @@ import { useListOrgPackages } from "@workspace/api-client-react";
 import { useState, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import carmetechLogo from "@assets/Carme_Tech_Logo_Official_1779981155506.png";
+import carmetechLogo from "@assets/carme-logo-no-bg.png";
 
 const roadmapItems = [
   { href: "/roadmap", label: "Priority Actions" },
@@ -193,7 +193,7 @@ export function Sidebar() {
         <img
           src="/assets/control-hub-icon.png"
           alt="Control HUB"
-          className="h-7 w-7 rounded-lg object-cover shrink-0"
+          className="h-7 w-7 rounded-lg object-contain shrink-0"
         />
         <span className="font-semibold tracking-tight">Control HUB</span>
       </div>
@@ -448,7 +448,7 @@ export function Sidebar() {
 
       {isDemoMode && (
         <div className="px-3 pb-2">
-          <div className="rounded-lg overflow-hidden" style={{ background: "#1C1A0A", border: "1px solid rgba(201,168,76,0.2)" }}>
+          <div className="rounded-lg overflow-hidden flex items-center justify-center p-1">
             <img src={carmetechLogo} alt="Carme Technology" className="w-full object-contain" style={{ maxHeight: 52 }} />
           </div>
         </div>

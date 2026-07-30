@@ -604,7 +604,7 @@ export default function Login() {
           <img
             src="/assets/control-hub-icon.png"
             alt="Control HUB"
-            className="h-14 w-14 rounded-2xl object-cover shadow-md"
+            className="h-14 w-14 rounded-2xl object-contain"
           />
           <div className="text-center">
             <h1 className="text-2xl font-bold tracking-tight">Control HUB</h1>
@@ -651,7 +651,7 @@ export default function Login() {
           <img
             src="/assets/control-hub-icon.png"
             alt="Control HUB"
-            className="h-14 w-14 rounded-2xl object-cover shadow-md shrink-0"
+            className="h-14 w-14 rounded-2xl object-contain shrink-0"
           />
           <div className="space-y-0.5">
             <h1 className="text-2xl font-bold tracking-tight">Sign in to your account</h1>
@@ -809,7 +809,7 @@ export default function Login() {
             <img
               src="/assets/control-hub-icon.png"
               alt="Control HUB"
-              className="h-10 w-10 rounded-xl object-cover shadow-lg shadow-blue-900/40"
+              className="h-10 w-10 rounded-xl object-contain shadow-lg shadow-blue-900/40"
             />
             <span className="text-white font-bold text-xl tracking-tight">Control HUB</span>
           </div>

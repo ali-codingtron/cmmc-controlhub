@@ -6,7 +6,7 @@ import {
   Users, ExternalLink, ClipboardList, RadarIcon, BookOpen,
   TrendingUp, Zap, Building2, Info, Target, ChevronDown,
 } from "lucide-react";
-import carmetechLogo from "@assets/Carme_Tech_Logo_Official_1779981155506.png";
+import carmetechLogo from "@assets/carme-logo-no-bg.png";
 
 const CONSULTATION_HREF = "mailto:info@carmetechnology.com?subject=Control%20HUB%20Consultation%20Request";
 
@@ -108,7 +108,7 @@ export default function DemoLanding() {
             <span className="font-bold text-lg text-white tracking-tight">Control HUB</span>
             <span className="hidden sm:flex items-center gap-1 text-xs text-slate-500 font-medium">
               <span className="text-slate-600 mx-1">·</span>
-              <img src={carmetechLogo} alt="Carme Technology" className="h-8 rounded" style={{ background: "#1C1A0A" }} />
+              <img src={carmetechLogo} alt="Carme Technology" className="h-8" />
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -521,7 +521,7 @@ export default function DemoLanding() {
               <div className="flex items-center gap-2">
                 <img src="/assets/control-hub-icon.png" alt="Control HUB" className="h-7 w-7 rounded-md" />
                 <span className="font-bold text-sm text-white">Control HUB</span>
-                <img src={carmetechLogo} alt="Carme Technology" className="h-8 rounded" style={{ background: "#1C1A0A" }} />
+                <img src={carmetechLogo} alt="Carme Technology" className="h-8" />
               </div>
               <p className="text-[11px] text-slate-600">Demo uses synthetic sample data only. Not legal advice.</p>
             </div>

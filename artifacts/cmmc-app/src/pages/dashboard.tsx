@@ -293,7 +293,7 @@ export default function Dashboard() {
             <img
               src="/assets/control-hub-icon.png"
               alt="Control HUB"
-              className="h-8 w-8 rounded-lg object-cover shrink-0 hidden sm:block"
+              className="h-8 w-8 rounded-lg object-contain shrink-0 hidden sm:block"
             />
             <h1 className="text-2xl font-bold tracking-tight">{activeOrg?.name ?? "—"} Compliance Dashboard</h1>
             {activeOrg?.cmmcTargetLevel && (
