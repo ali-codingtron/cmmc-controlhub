@@ -5,6 +5,7 @@ import { useOrg } from "@/context/OrgContext";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -727,6 +728,727 @@ function ProgressSummaryPanel({
   );
 }
 
+// ── OverrideDialog ───────────────────────────────────────────────────────────
+function OverrideDialog({
+  open,
+  onClose,
+  onSubmit,
+  isPending,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (data: { justification: string; approvedBy: string; approvedDate: string }) => void;
+  isPending: boolean;
+}) {
+  const [justification, setJustification] = useState("");
+  const [approvedBy, setApprovedBy] = useState("");
+  const [approvedDate, setApprovedDate] = useState("");
+
+  const canSubmit = justification.trim() && approvedBy.trim() && approvedDate;
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Record Legacy Completion Override</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label>Justification <span className="text-red-400">*</span></Label>
+            <Textarea
+              placeholder="Explain why this action is marked complete despite missing prerequisites…"
+              value={justification}
+              onChange={(e) => setJustification(e.target.value)}
+              className="min-h-20 resize-none text-sm"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Approved By <span className="text-red-400">*</span></Label>
+            <Input
+              placeholder="Name of approver"
+              value={approvedBy}
+              onChange={(e) => setApprovedBy(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Approved Date <span className="text-red-400">*</span></Label>
+            <Input
+              type="date"
+              value={approvedDate}
+              onChange={(e) => setApprovedDate(e.target.value)}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            disabled={!canSubmit || isPending}
+            onClick={() => onSubmit({ justification, approvedBy, approvedDate })}
+          >
+            {isPending ? "Saving…" : "Submit Override"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── UploadEvidenceModal ───────────────────────────────────────────────────────
+function UploadEvidenceModal({
+  open,
+  onClose,
+  item,
+  actionId,
+  orgId,
+  controlLinks,
+  onSuccess,
+}: {
+  open: boolean;
+  onClose: () => void;
+  item: EvidenceItem | null;
+  actionId: string;
+  orgId: string;
+  controlLinks: ControlLink[];
+  onSuccess: () => void;
+}) {
+  const { toast } = useToast();
+  const [title, setTitle] = useState(item?.title ?? "");
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+
+  // Sync title when item changes
+  const itemId = item?.id;
+  useState(() => {
+    if (item) setTitle(item.title);
+  });
+
+  const handleSubmit = async () => {
+    if (!file || !item) return;
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const token = localStorage.getItem("auth_token");
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("title", title || item.title);
+      formData.append("evidenceType", item.evidenceType);
+      formData.append("suggestedFilename", item.suggestedFilename || file.name);
+
+      const uploadRes = await fetch("/api/evidence", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "X-Organization-ID": orgId,
+        },
+        body: formData,
+      });
+      if (!uploadRes.ok) {
+        const err = await uploadRes.json().catch(() => ({})) as any;
+        throw new Error(err.error || "Upload failed");
+      }
+      const newEvidence = await uploadRes.json() as { id: string };
+
+      // Link to the roadmap evidence item
+      const linkRes = await fetch(`/api/roadmap/evidence-items/${item.id}/link`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "X-Organization-ID": orgId,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ evidenceId: newEvidence.id }),
+      });
+      if (!linkRes.ok) throw new Error("Evidence uploaded but linking failed");
+
+      toast({ title: "Evidence uploaded and linked" });
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      setUploadError(err.message ?? "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  if (!item) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Upload Evidence for {item.title}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label>Title</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Type</Label>
+              <div className="text-sm font-mono bg-muted/30 border rounded px-2 py-1.5">{item.evidenceType}</div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Suggested Filename</Label>
+              <div className="text-xs font-mono bg-muted/30 border rounded px-2 py-1.5 truncate">{item.suggestedFilename || "—"}</div>
+            </div>
+          </div>
+          {controlLinks.length > 0 && (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Linked Controls</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {controlLinks.map((c) => (
+                  <span
+                    key={c.id}
+                    className="text-[10px] font-mono px-2 py-0.5 rounded border border-primary/30 bg-primary/10 text-primary"
+                  >
+                    {c.controlRef}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <Label>File <span className="text-red-400">*</span></Label>
+            <Input
+              type="file"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              className="text-sm"
+            />
+          </div>
+          {uploadError && (
+            <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded p-2">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+              {uploadError}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={uploading}>Cancel</Button>
+          <Button disabled={!file || uploading} onClick={handleSubmit} className="gap-1.5">
+            <Upload className="h-3.5 w-3.5" />
+            {uploading ? "Uploading…" : "Upload & Link"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── NextStepActionBar ─────────────────────────────────────────────────────────
+function NextStepActionBar({
+  localStatus,
+  computedProgress,
+  userRole,
+  onTabChange,
+  onReopenAction,
+  onSubmitForReview,
+  onApproveComplete,
+  isSaving,
+}: {
+  localStatus: string;
+  computedProgress: ComputedProgress;
+  userRole: string | undefined;
+  onTabChange: (tab: string) => void;
+  onReopenAction: () => void;
+  onSubmitForReview: () => void;
+  onApproveComplete: () => void;
+  isSaving: boolean;
+}) {
+  const { stages, readyToComplete, missing } = computedProgress;
+  const isPrivileged = userRole === "admin" || userRole === "compliance_manager";
+  const [showMissing, setShowMissing] = useState(false);
+
+  let content: React.ReactNode = null;
+
+  if (localStatus === "complete") {
+    if (isPrivileged) {
+      content = (
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-full gap-1.5 text-xs"
+          onClick={onReopenAction}
+          disabled={isSaving}
+        >
+          <ArrowRight className="h-3.5 w-3.5 rotate-180" />
+          Reopen Action
+        </Button>
+      );
+    }
+  } else if (stages.understand !== "complete") {
+    content = (
+      <Button
+        size="sm"
+        className="w-full gap-1.5 text-xs"
+        onClick={() => onTabChange("overview")}
+      >
+        <BookOpen className="h-3.5 w-3.5" />
+        Acknowledge Overview
+        <ChevronRight className="h-3 w-3 ml-auto" />
+      </Button>
+    );
+  } else if (stages.steps !== "complete") {
+    content = (
+      <Button
+        size="sm"
+        className="w-full gap-1.5 text-xs"
+        onClick={() => onTabChange("procedure")}
+      >
+        <ListOrdered className="h-3.5 w-3.5" />
+        Go to First Incomplete Step
+        <ChevronRight className="h-3 w-3 ml-auto" />
+      </Button>
+    );
+  } else if (stages.evidence !== "complete") {
+    content = (
+      <Button
+        size="sm"
+        className="w-full gap-1.5 text-xs"
+        onClick={() => onTabChange("evidence")}
+      >
+        <FolderSearch className="h-3.5 w-3.5" />
+        Upload Missing Evidence
+        <ChevronRight className="h-3 w-3 ml-auto" />
+      </Button>
+    );
+  } else if (stages.validate !== "complete") {
+    content = (
+      <Button
+        size="sm"
+        className="w-full gap-1.5 text-xs"
+        onClick={() => onTabChange("test")}
+      >
+        <TestTube className="h-3.5 w-3.5" />
+        Record Validation Result
+        <ChevronRight className="h-3 w-3 ml-auto" />
+      </Button>
+    );
+  } else if (!readyToComplete) {
+    content = (
+      <div className="space-y-2">
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-full gap-1.5 text-xs border-yellow-500/30 text-yellow-300"
+          onClick={() => setShowMissing((v) => !v)}
+          disabled
+        >
+          <AlertTriangle className="h-3.5 w-3.5" />
+          What&apos;s Missing ({missing.length} item{missing.length !== 1 ? "s" : ""})
+        </Button>
+        {showMissing && missing.length > 0 && (
+          <ul className="text-[11px] space-y-0.5 text-muted-foreground pl-2">
+            {missing.map((m, i) => <li key={i}>• {m}</li>)}
+          </ul>
+        )}
+      </div>
+    );
+  } else if (localStatus !== "ready_for_review") {
+    content = (
+      <Button
+        size="sm"
+        className="w-full gap-1.5 text-xs bg-primary"
+        onClick={onSubmitForReview}
+        disabled={isSaving}
+      >
+        <Send className="h-3.5 w-3.5" />
+        Submit for Review
+      </Button>
+    );
+  } else if (isPrivileged) {
+    content = (
+      <Button
+        size="sm"
+        className="w-full gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white"
+        onClick={onApproveComplete}
+        disabled={isSaving}
+      >
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        Approve Complete
+      </Button>
+    );
+  } else {
+    content = (
+      <Button size="sm" variant="outline" className="w-full gap-1.5 text-xs" disabled>
+        <Clock className="h-3.5 w-3.5" />
+        Awaiting Approval
+      </Button>
+    );
+  }
+
+  if (!content) return null;
+
+  return (
+    <div className="space-y-2">
+      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+        <Zap className="h-3 w-3 text-primary" />
+        Next Step
+      </div>
+      {content}
+    </div>
+  );
+}
+
+const STATUS_DISPLAY_CONFIG: Record<
+  string,
+  { label: string; color: string; bg: string; borderColor: string }
+> = {
+  not_started: {
+    label: "Not Started",
+    color: "text-muted-foreground",
+    bg: "bg-muted/30",
+    borderColor: "border-border",
+  },
+  in_progress: {
+    label: "In Progress",
+    color: "text-blue-400",
+    bg: "bg-blue-500/10",
+    borderColor: "border-blue-500/30",
+  },
+  evidence_needed: {
+    label: "Evidence Needed",
+    color: "text-amber-400",
+    bg: "bg-amber-500/10",
+    borderColor: "border-amber-500/30",
+  },
+  ready_for_review: {
+    label: "Ready for Review",
+    color: "text-primary",
+    bg: "bg-primary/10",
+    borderColor: "border-primary/30",
+  },
+  complete: {
+    label: "Complete",
+    color: "text-emerald-400",
+    bg: "bg-emerald-500/10",
+    borderColor: "border-emerald-500/30",
+  },
+  blocked: {
+    label: "Blocked",
+    color: "text-red-400",
+    bg: "bg-red-500/10",
+    borderColor: "border-red-500/30",
+  },
+};
+
+function ActionProgressPanel({
+  computedProgress,
+  progress,
+  localOwner,
+  localTargetDate,
+  localNotes,
+  localStatus,
+  overrideJustification,
+  canUpdateStatus,
+  canMarkComplete,
+  userRole,
+  setLocalOwner,
+  setLocalTargetDate,
+  setLocalNotes,
+  setLocalStatus,
+  setOverrideJustification,
+  onSaveProgress,
+  onReopenAction,
+  onSubmitForReview,
+  onApproveComplete,
+  isSaving,
+  onTabChange,
+}: {
+  computedProgress: ComputedProgress;
+  progress: Progress | null;
+  localOwner: string | null;
+  localTargetDate: string | null;
+  localNotes: string | null;
+  localStatus: string;
+  overrideJustification: string;
+  canUpdateStatus: boolean;
+  canMarkComplete: boolean;
+  userRole: string | undefined;
+  setLocalOwner: (v: string) => void;
+  setLocalTargetDate: (v: string) => void;
+  setLocalNotes: (v: string) => void;
+  setLocalStatus: (v: string | null) => void;
+  setOverrideJustification: (v: string) => void;
+  onSaveProgress: () => void;
+  onReopenAction: () => void;
+  onSubmitForReview: () => void;
+  onApproveComplete: () => void;
+  isSaving: boolean;
+  onTabChange: (tab: string) => void;
+}) {
+  const { percent, stages, steps, evidence, readyToComplete, missing } = computedProgress;
+  const statusCfg = STATUS_DISPLAY_CONFIG[localStatus] ?? STATUS_DISPLAY_CONFIG.not_started;
+
+  return (
+    <div className="rounded-lg border bg-card overflow-hidden">
+      {/* Card header */}
+      <div className="p-4 border-b bg-muted/20 flex items-center gap-2">
+        <ClipboardCheck className="h-4 w-4 text-primary" />
+        <h3 className="font-semibold text-sm">Action Progress</h3>
+      </div>
+
+      <div className="p-4 space-y-4">
+        {/* Big percent + bar */}
+        <div className="space-y-2">
+          <div className="flex items-end justify-between">
+            <span className="text-3xl font-bold tabular-nums">{percent}%</span>
+            <span
+              className={cn(
+                "text-xs font-semibold px-2 py-0.5 rounded border",
+                statusCfg.bg,
+                statusCfg.color,
+                statusCfg.borderColor
+              )}
+            >
+              {statusCfg.label}
+            </span>
+          </div>
+          <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <div
+              className={cn(
+                "h-full rounded-full transition-all",
+                readyToComplete ? "bg-emerald-500" : "bg-primary"
+              )}
+              style={{ width: `${percent}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Stage breakdown */}
+        <div className="space-y-2">
+          {/* Understand */}
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Lightbulb className="h-3.5 w-3.5" />
+              Understand
+            </div>
+            {stages.understand === "complete" ? (
+              <span className="flex items-center gap-1 text-emerald-400 font-medium">
+                <CheckCircle2 className="h-3 w-3" />
+                Complete
+              </span>
+            ) : (
+              <span className="text-muted-foreground">Incomplete</span>
+            )}
+          </div>
+
+          {/* Steps */}
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <ListOrdered className="h-3.5 w-3.5" />
+              Steps
+            </div>
+            <span
+              className={cn(
+                "font-medium",
+                steps.total > 0 && steps.completed === steps.total
+                  ? "text-emerald-400"
+                  : "text-foreground/70"
+              )}
+            >
+              {steps.completed} / {steps.total} complete
+            </span>
+          </div>
+
+          {/* Evidence */}
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <FolderSearch className="h-3.5 w-3.5" />
+              Evidence
+            </div>
+            <span
+              className={cn(
+                "font-medium",
+                evidence.total > 0 && evidence.completed === evidence.total
+                  ? "text-emerald-400"
+                  : "text-foreground/70"
+              )}
+            >
+              {evidence.completed} / {evidence.total} linked
+            </span>
+          </div>
+
+          {/* Validation */}
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <TestTube className="h-3.5 w-3.5" />
+              Validation
+            </div>
+            {stages.validate === "complete" ? (
+              <span className="flex items-center gap-1 text-emerald-400 font-medium">
+                <CheckCircle2 className="h-3 w-3" />
+                Complete
+              </span>
+            ) : (
+              <span className="text-muted-foreground">Incomplete</span>
+            )}
+          </div>
+
+          {/* Review */}
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <ClipboardList className="h-3.5 w-3.5" />
+              Review
+            </div>
+            {stages.review === "complete" ? (
+              <span className="flex items-center gap-1 text-emerald-400 font-medium">
+                <CheckCircle2 className="h-3 w-3" />
+                Complete
+              </span>
+            ) : stages.review === "in_progress" ? (
+              <span className="flex items-center gap-1 text-blue-400 font-medium">
+                <Clock className="h-3 w-3" />
+                In Progress
+              </span>
+            ) : (
+              <span className="text-muted-foreground">Not Started</span>
+            )}
+          </div>
+        </div>
+
+        <div className="border-t border-border" />
+
+        {/* Next step action bar */}
+        <NextStepActionBar
+          localStatus={localStatus}
+          computedProgress={computedProgress}
+          userRole={userRole}
+          onTabChange={onTabChange}
+          onReopenAction={onReopenAction}
+          onSubmitForReview={onSubmitForReview}
+          onApproveComplete={onApproveComplete}
+          isSaving={isSaving}
+        />
+
+        <div className="border-t border-border" />
+
+        {/* Assignment fields */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Assignment
+            </div>
+            {!canUpdateStatus && <Lock className="h-3 w-3 text-muted-foreground" />}
+          </div>
+
+          <Select
+            value={localStatus}
+            onValueChange={setLocalStatus}
+            disabled={!canUpdateStatus}
+          >
+            <SelectTrigger className="h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTIONS.filter(
+                (o) => o.value !== "complete"
+              ).map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <div className="flex items-center gap-1.5">
+            <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <Input
+              placeholder="Owner"
+              value={localOwner ?? ""}
+              onChange={(e) => setLocalOwner(e.target.value)}
+              className="h-8 text-sm"
+              disabled={!canUpdateStatus}
+            />
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <Input
+              type="date"
+              value={localTargetDate ?? ""}
+              onChange={(e) => setLocalTargetDate(e.target.value)}
+              className="h-8 text-sm"
+              disabled={!canUpdateStatus}
+            />
+          </div>
+
+          <Textarea
+            placeholder="Notes…"
+            value={localNotes ?? ""}
+            onChange={(e) => setLocalNotes(e.target.value)}
+            className="text-sm min-h-16 resize-none"
+            disabled={!canUpdateStatus}
+          />
+
+          {localStatus === "complete" && !readyToComplete && (
+            <div className="space-y-1.5 rounded border border-yellow-500/30 bg-yellow-500/5 p-2">
+              <div className="text-[11px] font-semibold text-yellow-300 flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                Prerequisites not met
+              </div>
+              <div className="text-[10px] text-muted-foreground leading-snug">
+                {missing.join("; ")}
+              </div>
+              <Textarea
+                placeholder="Override justification (required)…"
+                value={overrideJustification}
+                onChange={(e) => setOverrideJustification(e.target.value)}
+                className="text-xs min-h-14 resize-none"
+              />
+            </div>
+          )}
+
+          <Button
+            size="sm"
+            className="w-full"
+            onClick={onSaveProgress}
+            disabled={
+              isSaving ||
+              !canUpdateStatus ||
+              (localStatus === "complete" &&
+                !readyToComplete &&
+                !overrideJustification.trim())
+            }
+          >
+            Save Progress
+          </Button>
+        </div>
+
+        {/* How progress is calculated tooltip */}
+        <div className="border-t border-border pt-2">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors">
+                  <HelpCircle className="h-3 w-3 shrink-0" />
+                  How progress is calculated
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs text-xs space-y-1 p-3">
+                <p className="font-semibold mb-1">Stage Weights</p>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                  <span className="text-muted-foreground">Understand</span>
+                  <span className="font-medium">10%</span>
+                  <span className="text-muted-foreground">Steps</span>
+                  <span className="font-medium">35%</span>
+                  <span className="text-muted-foreground">Evidence &amp; Docs</span>
+                  <span className="font-medium">25%</span>
+                  <span className="text-muted-foreground">Validation</span>
+                  <span className="font-medium">15%</span>
+                  <span className="text-muted-foreground">Checklist/Review</span>
+                  <span className="font-medium">15%</span>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const RESULT_CONFIG: Record<
   string,
   { label: string; Icon: typeof CheckCircle2; color: string; bg: string }
@@ -900,56 +1622,81 @@ function ValidationPanel({
 function EvidenceLinkPicker({
   orgId,
   roadmapEvidenceItemId,
+  requirementTitle,
+  alreadyLinkedIds,
   onLinked,
 }: {
   orgId: string;
   roadmapEvidenceItemId: string;
+  requirementTitle: string;
+  alreadyLinkedIds: Set<string>;
   onLinked: () => void;
 }) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  const { data: results = [], isFetching } = useQuery<
-    Array<{ id: string; title: string; evidenceType: string; status: string }>
+  const { data: allEvidence = [], isFetching } = useQuery<
+    Array<{ id: string; title: string; evidenceType: string; status: string; uploadedAt?: string; owner?: string; createdAt?: string }>
   >({
-    queryKey: ["evidence-picker", orgId, search],
+    queryKey: ["evidence", orgId],
     enabled: open && !!orgId,
     queryFn: async () => {
-      const params = new URLSearchParams();
-      if (search) params.set("search", search);
-      const res = await fetch(`/api/evidence?${params.toString()}`, {
-        headers: makeHeaders(orgId),
-      });
-      if (!res.ok) throw new Error("Failed to search evidence");
+      const res = await fetch("/api/evidence", { headers: makeHeaders(orgId) });
+      if (!res.ok) throw new Error("Failed to load evidence");
       const data = await res.json();
       return Array.isArray(data) ? data : (data.items ?? []);
     },
   });
 
+  const filtered = allEvidence.filter((ev) => {
+    if (search && !ev.title.toLowerCase().includes(search.toLowerCase())) return false;
+    if (typeFilter !== "all" && ev.evidenceType !== typeFilter) return false;
+    if (statusFilter !== "all" && ev.status !== statusFilter) return false;
+    return true;
+  });
+
+  const evidenceTypes = Array.from(new Set(allEvidence.map((e) => e.evidenceType).filter(Boolean)));
+
   const linkMutation = useMutation({
-    mutationFn: async (evidenceId: string) => {
-      const res = await fetch(
-        `/api/roadmap/evidence-items/${roadmapEvidenceItemId}/link`,
-        {
-          method: "POST",
-          headers: makeHeaders(orgId),
-          body: JSON.stringify({ evidenceId }),
-        }
+    mutationFn: async (evidenceIds: string[]) => {
+      await Promise.all(
+        evidenceIds.map((evidenceId) =>
+          fetch(`/api/roadmap/evidence-items/${roadmapEvidenceItemId}/link`, {
+            method: "POST",
+            headers: makeHeaders(orgId),
+            body: JSON.stringify({ evidenceId }),
+          }).then((r) => { if (!r.ok) throw new Error("Failed to link evidence"); })
+        )
       );
-      if (!res.ok) throw new Error("Failed to link evidence");
     },
     onSuccess: () => {
-      toast({ title: "Evidence linked" });
+      toast({ title: `${selected.size} evidence item${selected.size !== 1 ? "s" : ""} linked` });
+      queryClient.invalidateQueries({ queryKey: ["roadmap-action"] });
       setOpen(false);
       setSearch("");
+      setSelected(new Set());
       onLinked();
     },
     onError: () => toast({ title: "Failed to link evidence", variant: "destructive" }),
   });
 
+  const toggleSelect = (id: string) => {
+    if (alreadyLinkedIds.has(id)) return;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setSearch(""); setSelected(new Set()); } }}>
       <Button
         variant="outline"
         size="sm"
@@ -959,53 +1706,127 @@ function EvidenceLinkPicker({
         <Link2 className="h-3.5 w-3.5" />
         Link Existing
       </Button>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-3xl flex flex-col max-h-[80vh]">
         <DialogHeader>
-          <DialogTitle>Link Evidence from Repository</DialogTitle>
+          <DialogTitle>Link Existing Evidence to {requirementTitle}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
-          <div className="relative">
+
+        {/* Filters */}
+        <div className="flex gap-2 flex-wrap shrink-0">
+          <div className="relative flex-1 min-w-48">
             <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search evidence by title…"
+              placeholder="Search evidence…"
               className="pl-8 h-8 text-sm"
             />
           </div>
-          <div className="max-h-72 overflow-y-auto divide-y border rounded">
-            {isFetching ? (
-              <div className="p-4 text-center text-xs text-muted-foreground">Searching…</div>
-            ) : results.length === 0 ? (
-              <div className="p-4 text-center text-xs text-muted-foreground">
-                No evidence found. Upload it first from the Evidence module.
-              </div>
-            ) : (
-              results.map((ev) => (
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="h-8 text-sm w-40">
+              <SelectValue placeholder="All types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All types</SelectItem>
+              {evidenceTypes.map((t) => (
+                <SelectItem key={t} value={t}>{t}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-8 text-sm w-36">
+              <SelectValue placeholder="All statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="archived">Archived</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Evidence list */}
+        <div className="flex-1 overflow-y-auto border rounded divide-y min-h-0">
+          {isFetching ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">Loading evidence…</div>
+          ) : filtered.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">
+              No evidence found matching your filters.
+            </div>
+          ) : (
+            filtered.map((ev) => {
+              const isLinked = alreadyLinkedIds.has(ev.id);
+              const isSelected = selected.has(ev.id);
+              return (
                 <div
                   key={ev.id}
-                  className="p-2.5 flex items-center justify-between gap-2 hover:bg-muted/20"
+                  onClick={() => toggleSelect(ev.id)}
+                  className={cn(
+                    "flex items-center gap-3 p-3 cursor-pointer transition-colors",
+                    isLinked
+                      ? "opacity-60 cursor-default"
+                      : isSelected
+                      ? "bg-primary/10 border-l-2 border-l-primary"
+                      : "hover:bg-muted/20"
+                  )}
                 >
-                  <div className="min-w-0">
-                    <div className="text-xs font-medium truncate">{ev.title}</div>
-                    <div className="text-[10px] text-muted-foreground">
-                      {ev.evidenceType} · {ev.status}
+                  <Checkbox
+                    checked={isLinked || isSelected}
+                    disabled={isLinked}
+                    onCheckedChange={() => toggleSelect(ev.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate">{ev.title}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {ev.uploadedAt || ev.createdAt
+                        ? new Date(ev.uploadedAt || ev.createdAt!).toLocaleDateString()
+                        : "—"}
+                      {ev.owner ? ` · ${ev.owner}` : ""}
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs shrink-0"
-                    disabled={linkMutation.isPending}
-                    onClick={() => linkMutation.mutate(ev.id)}
-                  >
-                    Link
-                  </Button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded border bg-muted/30 border-border text-muted-foreground">
+                      {ev.evidenceType}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-[10px] px-1.5 py-0.5 rounded border font-medium",
+                        ev.status === "active"
+                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                          : "bg-slate-500/10 border-slate-500/30 text-slate-400"
+                      )}
+                    >
+                      {ev.status}
+                    </span>
+                    {isLinked && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded border bg-primary/10 border-primary/30 text-primary font-semibold">
+                        Linked
+                      </span>
+                    )}
+                  </div>
                 </div>
-              ))
-            )}
-          </div>
+              );
+            })
+          )}
         </div>
+
+        {/* Footer */}
+        <DialogFooter className="flex items-center justify-between shrink-0 pt-2">
+          <span className="text-xs text-muted-foreground">
+            {selected.size > 0 ? `${selected.size} selected` : "Select items to link"}
+          </span>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button
+              disabled={selected.size === 0 || linkMutation.isPending}
+              onClick={() => linkMutation.mutate(Array.from(selected))}
+            >
+              {linkMutation.isPending ? "Linking…" : `Link Selected Evidence${selected.size > 0 ? ` (${selected.size})` : ""}`}
+            </Button>
+          </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -1796,6 +2617,9 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
   const [overrideJustification, setOverrideJustification] = useState("");
   const [initialized, setInitialized] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
+  const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
+  const [inconsistencyDismissed, setInconsistencyDismissed] = useState(false);
+  const [uploadModalItem, setUploadModalItem] = useState<EvidenceItem | null>(null);
 
   const canEdit =
     user?.role === "admin" || user?.role === "compliance_manager";
@@ -1952,6 +2776,84 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
     });
   };
 
+  const handleSubmitForReview = () => {
+    setLocalStatus("ready_for_review");
+    progressMutation.mutate({
+      status: "ready_for_review",
+      owner: localOwner || null,
+      targetDate: localTargetDate || null,
+      notes: localNotes || null,
+    });
+  };
+
+  const handleApproveComplete = () => {
+    if (!canMarkComplete) {
+      toast({ title: "Only admins or compliance managers can mark complete", variant: "destructive" });
+      return;
+    }
+    setLocalStatus("complete");
+    progressMutation.mutate({
+      status: "complete",
+      owner: localOwner || null,
+      targetDate: localTargetDate || null,
+      notes: localNotes || null,
+    });
+  };
+
+  // ── Consistency check ─────────────────────────────────────────────────────
+  const { data: consistencyData } = useQuery<{
+    hasInconsistency: boolean;
+    missing: string[];
+  }>({
+    queryKey: ["roadmap-consistency", id, activeOrg?.id],
+    enabled: !!activeOrg?.id && !!id,
+    queryFn: async () => {
+      const res = await fetch(`/api/roadmap/actions/${id}/consistency`, {
+        headers: makeHeaders(activeOrg!.id),
+      });
+      if (!res.ok) return { hasInconsistency: false, missing: [] };
+      return res.json();
+    },
+  });
+
+  const reopenMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/roadmap/actions/${id}/reopen`, {
+        method: "POST",
+        headers: makeHeaders(activeOrg!.id),
+      });
+      if (!res.ok) throw new Error("Failed to reopen action");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["roadmap-action", id] });
+      queryClient.invalidateQueries({ queryKey: ["roadmap-actions"] });
+      queryClient.invalidateQueries({ queryKey: ["roadmap-consistency", id] });
+      toast({ title: "Action reopened" });
+      setLocalStatus("in_progress");
+    },
+    onError: (err: Error) =>
+      toast({ title: "Failed to reopen", description: err.message, variant: "destructive" }),
+  });
+
+  const overrideMutation = useMutation({
+    mutationFn: async (data: { justification: string; approvedBy: string; approvedDate: string }) => {
+      const res = await fetch(`/api/roadmap/actions/${id}/override`, {
+        method: "POST",
+        headers: makeHeaders(activeOrg!.id),
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to record override");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["roadmap-consistency", id] });
+      queryClient.invalidateQueries({ queryKey: ["roadmap-action", id] });
+      toast({ title: "Override recorded" });
+      setOverrideDialogOpen(false);
+    },
+    onError: (err: Error) =>
+      toast({ title: "Failed to record override", description: err.message, variant: "destructive" }),
+  });
+
   if (isLoading || !action) {
     return (
       <div className="flex justify-center py-24">
@@ -1967,636 +2869,707 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
       : 0;
 
   const currentStatus = localStatus ?? action.progress?.status ?? "not_started";
+  const statusCfgHeader = STATUS_DISPLAY_CONFIG[currentStatus] ?? STATUS_DISPLAY_CONFIG.not_started;
+
+  const showInconsistency =
+    !inconsistencyDismissed &&
+    consistencyData?.hasInconsistency === true &&
+    action.progress?.status === "complete";
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
-      {/* Back + header */}
-      <div>
-        <Link href="/roadmap">
-          <button className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4 transition-colors">
-            <ArrowLeft className="h-4 w-4" />
-            Implementation Roadmap
-          </button>
-        </Link>
+    <div className="p-4 md:p-6 max-w-7xl mx-auto">
+      {/* Back nav */}
+      <Link href="/roadmap">
+        <button className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4 transition-colors">
+          <ArrowLeft className="h-4 w-4" />
+          Implementation Roadmap
+        </button>
+      </Link>
 
-        <div className="flex flex-wrap items-start gap-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-2 mb-1">
-              <h1 className="text-xl font-bold">{action.title}</h1>
+      {/* Completion inconsistency warning */}
+      {showInconsistency && (
+        <Card className="mb-5 border-amber-500/40 bg-amber-500/5">
+          <div className="p-4 space-y-3">
+            <div className="flex items-center gap-2 text-amber-400 font-semibold text-sm">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              Completion Inconsistency Detected
+            </div>
+            <p className="text-xs text-muted-foreground">
+              This action is marked complete but the following items are missing:
+            </p>
+            <ul className="space-y-0.5">
+              {(consistencyData?.missing ?? []).map((m, i) => (
+                <li key={i} className="text-xs text-amber-300">• {m}</li>
+              ))}
+            </ul>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {canEdit && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+                  disabled={reopenMutation.isPending}
+                  onClick={() => reopenMutation.mutate()}
+                >
+                  <ArrowRight className="h-3.5 w-3.5 rotate-180" />
+                  Reopen Action
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => setOverrideDialogOpen(true)}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Record Legacy Override
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-muted-foreground"
+                onClick={() => setInconsistencyDismissed(true)}
+              >
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Two-column layout */}
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+
+        {/* ── LEFT COLUMN ── */}
+        <div className="flex-1 min-w-0 space-y-5">
+
+          {/* Action header */}
+          <div className="space-y-3">
+            <h1 className="text-xl font-bold leading-tight">{action.title}</h1>
+
+            {/* Metadata badge row */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Phase */}
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded border bg-card border-border text-muted-foreground">
+                Phase {action.phase}: {action.phaseName}
+              </span>
+
+              {/* Priority */}
               <span
                 className={cn(
-                  "text-[10px] font-semibold px-2 py-0.5 rounded border uppercase tracking-wide",
+                  "text-[11px] font-semibold px-2 py-0.5 rounded border uppercase tracking-wide",
                   PRIORITY_COLORS[action.priority]
                 )}
               >
                 {action.priority}
               </span>
-            </div>
-            <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
-              <span className="font-medium text-foreground/70">{action.category}</span>
-              <span>Phase {action.phase}: {action.phaseName}</span>
-              <span className="capitalize">{action.effort} effort</span>
-              <span className="flex items-center gap-1">
-                <Zap className="h-3.5 w-3.5 text-primary" />
-                Impact Score: <strong className="text-foreground">{action.impactScore}</strong>
+
+              {/* Effort */}
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded border bg-card border-border text-muted-foreground capitalize">
+                {action.effort} effort
               </span>
+
+              {/* Status */}
+              <span
+                className={cn(
+                  "text-[11px] font-semibold px-2 py-0.5 rounded border",
+                  statusCfgHeader.bg,
+                  statusCfgHeader.color,
+                  statusCfgHeader.borderColor
+                )}
+              >
+                {statusCfgHeader.label}
+              </span>
+
+              {/* Controls count */}
+              <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                {action.controls.length} control{action.controls.length !== 1 ? "s" : ""}
+              </span>
+
+              {/* Progress % */}
+              <span className="flex items-center gap-1 text-[11px] font-semibold text-foreground/70">
+                <Zap className="h-3.5 w-3.5 text-primary" />
+                {action.computedProgress.percent}% complete
+              </span>
+
+              {/* Owner if set */}
+              {action.progress?.owner && (
+                <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <User className="h-3.5 w-3.5" />
+                  {action.progress.owner}
+                </span>
+              )}
+
+              {/* Due date if set */}
+              {action.progress?.targetDate && (
+                <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <Clock className="h-3.5 w-3.5" />
+                  {new Date(action.progress.targetDate).toLocaleDateString()}
+                </span>
+              )}
             </div>
           </div>
 
-          {/* Progress panels */}
-          <div className="w-80 shrink-0 space-y-3">
-            <ProgressSummaryPanel
-              computedProgress={action.computedProgress}
+          {/* Stage tracker */}
+          <div className="rounded-lg border bg-card p-4">
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+              Where You Are
+            </div>
+            <StageTracker
+              stages={action.computedProgress.stages}
               onTabChange={setActiveTab}
             />
-            <div className="rounded-lg border bg-card p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Assignment
-                </div>
-                {!canUpdateStatus && (
-                  <Lock className="h-3 w-3 text-muted-foreground" />
-                )}
-              </div>
-              <Select
-                value={currentStatus}
-                onValueChange={setLocalStatus}
-                disabled={!canUpdateStatus}
-              >
-                <SelectTrigger className="h-8 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {STATUS_OPTIONS.filter(
-                    (o) => o.value !== "complete" || canMarkComplete
-                  ).map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                placeholder="Owner"
-                value={localOwner ?? ""}
-                onChange={(e) => setLocalOwner(e.target.value)}
-                className="h-8 text-sm"
-                disabled={!canUpdateStatus}
-              />
-              <Input
-                type="date"
-                value={localTargetDate ?? ""}
-                onChange={(e) => setLocalTargetDate(e.target.value)}
-                className="h-8 text-sm"
-                disabled={!canUpdateStatus}
-              />
-              <Textarea
-                placeholder="Notes…"
-                value={localNotes ?? ""}
-                onChange={(e) => setLocalNotes(e.target.value)}
-                className="text-sm min-h-16 resize-none"
-                disabled={!canUpdateStatus}
-              />
-              {localStatus === "complete" &&
-                !action.computedProgress.readyToComplete && (
-                  <div className="space-y-1.5 rounded border border-yellow-500/30 bg-yellow-500/5 p-2">
-                    <div className="text-[11px] font-semibold text-yellow-300 flex items-center gap-1">
-                      <AlertTriangle className="h-3 w-3" />
-                      Prerequisites not met
-                    </div>
-                    <div className="text-[10px] text-muted-foreground leading-snug">
-                      {action.computedProgress.missing.join("; ")}
-                    </div>
-                    <Textarea
-                      placeholder="Override justification (required)…"
-                      value={overrideJustification}
-                      onChange={(e) => setOverrideJustification(e.target.value)}
-                      className="text-xs min-h-14 resize-none"
-                    />
-                  </div>
-                )}
-              <Button
-                size="sm"
-                className="w-full"
-                onClick={handleSaveProgress}
-                disabled={
-                  progressMutation.isPending ||
-                  !canUpdateStatus ||
-                  (localStatus === "complete" &&
-                    !action.computedProgress.readyToComplete &&
-                    !overrideJustification.trim())
-                }
-              >
-                Save Progress
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Stage progress tracker */}
-      <div className="rounded-lg border bg-card p-4">
-        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-          Where You Are
-        </div>
-        <StageTracker
-          stages={action.computedProgress.stages}
-          onTabChange={setActiveTab}
-        />
-      </div>
-
-      {/* Next Step banner */}
-      <NextStepBanner
-        status={currentStatus}
-        computedProgress={action.computedProgress}
-        onTabChange={setActiveTab}
-      />
-
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="flex-wrap h-auto gap-1">
-          <TabsTrigger value="overview" className="gap-1.5">
-            <Lightbulb className="h-3.5 w-3.5" />
-            Overview
-          </TabsTrigger>
-          <TabsTrigger value="procedure" className="gap-1.5">
-            <ListOrdered className="h-3.5 w-3.5" />
-            Steps
-          </TabsTrigger>
-          <TabsTrigger value="evidence" className="gap-1.5">
-            <FolderSearch className="h-3.5 w-3.5" />
-            Evidence to Collect ({action.evidenceItems.length})
-          </TabsTrigger>
-          <TabsTrigger value="documents" className="gap-1.5">
-            <FileText className="h-3.5 w-3.5" />
-            Documents Needed ({action.documents.length})
-          </TabsTrigger>
-          <TabsTrigger value="test" className="gap-1.5">
-            <TestTube className="h-3.5 w-3.5" />
-            Validation
-          </TabsTrigger>
-          <TabsTrigger value="controls" className="gap-1.5">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            Controls Supported ({action.controls.length})
-          </TabsTrigger>
-          <TabsTrigger value="checklist" className="gap-1.5">
-            <CheckSquare className="h-3.5 w-3.5" />
-            Checklist ({completedChecklist}/{action.checklistItems.length})
-          </TabsTrigger>
-        </TabsList>
-
-        {/* A. Overview = Purpose + Why */}
-        <TabsContent value="overview" className="space-y-4">
-          <div
-            className={cn(
-              "rounded-lg border p-4 flex flex-wrap items-center justify-between gap-3",
-              action.progress?.understandAckAt
-                ? "border-emerald-500/30 bg-emerald-500/5"
-                : "border-blue-500/30 bg-blue-500/5"
-            )}
-          >
-            {action.progress?.understandAckAt ? (
-              <div className="flex items-center gap-2 text-sm text-emerald-300">
-                <CheckCircle2 className="h-4 w-4 shrink-0" />
-                <span>
-                  Acknowledged on{" "}
-                  {new Date(action.progress.understandAckAt).toLocaleString()}
-                </span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 text-sm text-blue-300">
-                <Info className="h-4 w-4 shrink-0" />
-                <span>
-                  Acknowledge that you've read this overview to start tracking your progress.
-                </span>
-              </div>
-            )}
-            {!action.progress?.understandAckAt && (
-              <Button
-                size="sm"
-                className="gap-1.5 shrink-0"
-                disabled={!canUpdateStatus || understandMutation.isPending}
-                onClick={() => understandMutation.mutate()}
-              >
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Acknowledge Overview
-              </Button>
-            )}
           </div>
 
-          <div className="rounded-lg border bg-card p-5 space-y-4">
-            <div>
-              <div className="flex items-center gap-2 text-sm font-semibold mb-2">
-                <Target className="h-4 w-4 text-primary" />
-                Purpose
-              </div>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                {action.purpose}
-              </p>
-            </div>
-            <hr className="border-border" />
-            <div>
-              <div className="flex items-center gap-2 text-sm font-semibold mb-2">
-                <Lightbulb className="h-4 w-4 text-yellow-400" />
-                Why This Action Matters
-              </div>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                {action.whyItMatters}
-              </p>
-            </div>
-          </div>
-
-          {/* Quick stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[
-              { label: "Controls Linked", value: action.controls.length },
-              {
-                label: "Full Support",
-                value: action.controls.filter((c) => c.supportType === "full_support").length,
-              },
-              { label: "Evidence Items", value: action.evidenceItems.length },
-              { label: "Documents Required", value: action.documents.length },
-            ].map((s) => (
-              <div key={s.label} className="rounded-lg border bg-card p-3 text-center">
-                <div className="text-2xl font-bold">{s.value}</div>
-                <div className="text-xs text-muted-foreground">{s.label}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* What you will produce */}
-          <WhatYouWillProduce
-            evidenceItems={action.evidenceItems}
-            documents={action.documents}
-            controlsCount={action.controls.length}
+          {/* Next step banner */}
+          <NextStepBanner
+            status={currentStatus}
+            computedProgress={action.computedProgress}
+            onTabChange={setActiveTab}
           />
-        </TabsContent>
 
-        {/* B. Controls */}
-        <TabsContent value="controls">
-          <div className="rounded-lg border bg-card overflow-hidden">
-            <div className="p-4 border-b bg-muted/20">
-              <h3 className="font-semibold text-sm flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-primary" />
-                Linked CMMC Controls
-              </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Completing this action supports the following controls. Controls will not be automatically marked Implemented — readiness rules must be satisfied.
-              </p>
-            </div>
-            <div className="divide-y">
-              {action.controls.map((ctrl) => (
-                <div
-                  key={ctrl.id}
-                  className="p-4 flex items-start gap-3 hover:bg-muted/20 transition-colors"
-                >
-                  <div className="shrink-0 w-28">
-                    <Link href={`/controls/${ctrl.controlId}`}>
-                      <span className="font-mono text-sm font-bold text-primary hover:underline cursor-pointer">
-                        {ctrl.controlRef}
-                      </span>
-                    </Link>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">{ctrl.level}</div>
+          {/* Tabs */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+            <TabsList className="flex-wrap h-auto gap-1">
+              <TabsTrigger value="overview" className="gap-1.5">
+                <Lightbulb className="h-3.5 w-3.5" />
+                Overview
+              </TabsTrigger>
+              <TabsTrigger value="procedure" className="gap-1.5">
+                <ListOrdered className="h-3.5 w-3.5" />
+                Steps
+              </TabsTrigger>
+              <TabsTrigger value="evidence" className="gap-1.5">
+                <FolderSearch className="h-3.5 w-3.5" />
+                Evidence ({action.evidenceItems.length})
+              </TabsTrigger>
+              <TabsTrigger value="documents" className="gap-1.5">
+                <FileText className="h-3.5 w-3.5" />
+                Documents ({action.documents.length})
+              </TabsTrigger>
+              <TabsTrigger value="test" className="gap-1.5">
+                <TestTube className="h-3.5 w-3.5" />
+                Validation
+              </TabsTrigger>
+              <TabsTrigger value="controls" className="gap-1.5">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Controls ({action.controls.length})
+              </TabsTrigger>
+              <TabsTrigger value="checklist" className="gap-1.5">
+                <CheckSquare className="h-3.5 w-3.5" />
+                Checklist ({completedChecklist}/{action.checklistItems.length})
+              </TabsTrigger>
+            </TabsList>
+
+            {/* A. Overview */}
+            <TabsContent value="overview" className="space-y-4">
+              <div
+                className={cn(
+                  "rounded-lg border p-4 flex flex-wrap items-center justify-between gap-3",
+                  action.progress?.understandAckAt
+                    ? "border-emerald-500/30 bg-emerald-500/5"
+                    : "border-blue-500/30 bg-blue-500/5"
+                )}
+              >
+                {action.progress?.understandAckAt ? (
+                  <div className="flex items-center gap-2 text-sm text-emerald-300">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    <span>
+                      Acknowledged on{" "}
+                      {new Date(action.progress.understandAckAt).toLocaleString()}
+                    </span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium">{ctrl.controlTitle}</div>
-                    <div className="text-xs text-muted-foreground">{ctrl.domain}</div>
-                  </div>
-                  <span
-                    className={cn(
-                      "shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded border",
-                      SUPPORT_TYPE_COLORS[ctrl.supportType]
-                    )}
-                  >
-                    {SUPPORT_TYPE_LABELS[ctrl.supportType]}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-3 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3 flex gap-2 text-xs text-blue-300">
-            <Info className="h-4 w-4 shrink-0 mt-0.5" />
-            <span>
-              A control becomes <strong>Candidate for Implemented</strong> only when: SSP narrative exists, required evidence is approved, required documents are active, testing is complete, and no blocking POA&M exists.
-            </span>
-          </div>
-        </TabsContent>
-
-        {/* C. Operating Procedure — detailed expandable step cards */}
-        <TabsContent value="procedure">
-          {activeOrg?.id && (
-            <ProcedureStepsSection
-              actionId={id}
-              orgId={activeOrg.id}
-              fallbackText={action.operatingProcedure}
-              canEdit={canEdit}
-              canUpdateStatus={canUpdateStatus}
-            />
-          )}
-        </TabsContent>
-
-        {/* D. Test Procedure */}
-        <TabsContent value="test" className="space-y-4">
-          {activeOrg?.id && (
-            <ValidationPanel
-              actionId={id}
-              orgId={activeOrg.id}
-              progress={action.progress}
-              canValidate={canValidate}
-            />
-          )}
-          <div className="rounded-lg border bg-card p-5">
-            <div className="flex items-center gap-2 text-sm font-semibold mb-4">
-              <TestTube className="h-4 w-4 text-primary" />
-              Test Procedure
-            </div>
-            <p className="text-xs text-muted-foreground mb-4">
-              Perform these tests to validate that the action was completed correctly.
-            </p>
-            <StepList text={action.testProcedure} />
-          </div>
-        </TabsContent>
-
-        {/* E. Evidence */}
-        <TabsContent value="evidence">
-          <div className="rounded-lg border bg-card overflow-hidden">
-            <div className="p-4 border-b bg-muted/20">
-              <h3 className="font-semibold text-sm flex items-center gap-2">
-                <FolderSearch className="h-4 w-4 text-primary" />
-                Evidence to Capture
-              </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Upload new evidence or link existing evidence from the repository to each item below.
-              </p>
-            </div>
-            <div className="divide-y">
-              {action.evidenceItems.map((ev, idx) => {
-                const linked = ev.links.length > 0;
-                return (
-                  <div key={ev.id} className="p-4 space-y-2">
-                    <div className="flex items-start gap-3">
-                      <span
-                        className={cn(
-                          "shrink-0 w-6 h-6 rounded-full border text-xs font-bold flex items-center justify-center mt-0.5",
-                          linked
-                            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                            : "bg-primary/10 border-primary/20 text-primary"
-                        )}
-                      >
-                        {linked ? <CheckCircle2 className="h-3.5 w-3.5" /> : idx + 1}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <div className="font-medium text-sm">{ev.title}</div>
-                          <span
-                            className={cn(
-                              "text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0",
-                              ev.isRequired
-                                ? "bg-red-500/10 text-red-300 border-red-500/30"
-                                : "bg-slate-500/10 text-slate-300 border-slate-500/30"
-                            )}
-                          >
-                            {ev.isRequired ? "Required" : "Optional"}
-                          </span>
-                        </div>
-                        {ev.description && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {ev.description}
-                          </p>
-                        )}
-                        <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
-                          <span className="bg-muted px-2 py-0.5 rounded">{ev.evidenceType}</span>
-                          <span>{ev.sourceSystem}</span>
-                        </div>
-                        <div className="mt-2 text-xs text-muted-foreground">
-                          <span className="font-medium text-foreground/70">Must show:</span> {ev.mustShow}
-                        </div>
-                        <div className="mt-1.5 flex items-center gap-2">
-                          <span className="text-xs font-mono bg-muted/50 border px-2 py-0.5 rounded text-muted-foreground">
-                            {ev.suggestedFilename}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="shrink-0 flex flex-col gap-1.5 items-stretch">
-                        <Link href="/evidence/upload">
-                          <Button variant="outline" size="sm" className="gap-1.5 w-full">
-                            <Upload className="h-3.5 w-3.5" />
-                            Upload New
-                          </Button>
-                        </Link>
-                        {canUpdateStatus && activeOrg?.id && (
-                          <EvidenceLinkPicker
-                            orgId={activeOrg.id}
-                            roadmapEvidenceItemId={ev.id}
-                            onLinked={() =>
-                              queryClient.invalidateQueries({
-                                queryKey: ["roadmap-action", id],
-                              })
-                            }
-                          />
-                        )}
-                      </div>
-                    </div>
-                    {ev.links.length > 0 && (
-                      <div className="ml-9 space-y-1">
-                        <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
-                          Linked Evidence
-                        </div>
-                        {ev.links.map((link) => {
-                          const info = evidenceIndexMap.get(link.evidenceId);
-                          return (
-                            <div
-                              key={link.id}
-                              className="flex items-center justify-between gap-2 text-xs bg-muted/20 rounded px-2 py-1.5"
-                            >
-                              <Link href={`/evidence/${link.evidenceId}`}>
-                                <span className="text-primary hover:underline cursor-pointer truncate">
-                                  {info?.title ?? link.evidenceId}
-                                </span>
-                              </Link>
-                              {canUpdateStatus && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 px-1.5 text-muted-foreground hover:text-red-400"
-                                  disabled={unlinkEvidenceMutation.isPending}
-                                  onClick={() =>
-                                    unlinkEvidenceMutation.mutate({
-                                      itemId: ev.id,
-                                      evidenceId: link.evidenceId,
-                                    })
-                                  }
-                                >
-                                  <Unlink className="h-3 w-3" />
-                                </Button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                    <div className="ml-9 text-xs text-muted-foreground">
-                      <span className="font-medium text-foreground/60">Linked controls:</span>{" "}
-                      {action.controls.map((c) => c.controlRef).join(", ")}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </TabsContent>
-
-        {/* F. Documents */}
-        <TabsContent value="documents">
-          <div className="rounded-lg border bg-card overflow-hidden">
-            <div className="p-4 border-b bg-muted/20">
-              <h3 className="font-semibold text-sm flex items-center gap-2">
-                <FileText className="h-4 w-4 text-primary" />
-                Documents to Create or Update
-              </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                These documents must exist, be current, and be approved to fully satisfy the linked controls.
-              </p>
-            </div>
-            <div className="divide-y">
-              {action.documents.map((doc, idx) => (
-                <div key={doc.id} className="p-4 flex items-center gap-3">
-                  <span className="shrink-0 w-6 h-6 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold flex items-center justify-center">
-                    {idx + 1}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm">{doc.title}</div>
-                    <div className="text-xs text-muted-foreground capitalize">{doc.docType}</div>
-                  </div>
-                  <Link href="/documents/list">
-                    <Button variant="outline" size="sm" className="gap-1.5 shrink-0">
-                      <ExternalLink className="h-3.5 w-3.5" />
-                      Open Docs
-                    </Button>
-                  </Link>
-                </div>
-              ))}
-            </div>
-          </div>
-        </TabsContent>
-
-        {/* G. Checklist */}
-        <TabsContent value="checklist">
-          <div className="rounded-lg border bg-card overflow-hidden">
-            <div className="p-4 border-b bg-muted/20 flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-sm flex items-center gap-2">
-                  <ClipboardCheck className="h-4 w-4 text-primary" />
-                  Completion Checklist
-                </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {completedChecklist} of {action.checklistItems.length} items complete ({checkPct}%)
-                </p>
-              </div>
-              <div className="text-right">
-                {checkPct === 100 ? (
-                  <span className="text-xs text-emerald-400 font-medium">✓ All items complete</span>
                 ) : (
-                  <span className="text-xs text-muted-foreground">{action.checklistItems.length - completedChecklist} remaining</span>
+                  <div className="flex items-center gap-2 text-sm text-blue-300">
+                    <Info className="h-4 w-4 shrink-0" />
+                    <span>
+                      Acknowledge that you've read this overview to start tracking your progress.
+                    </span>
+                  </div>
+                )}
+                {!action.progress?.understandAckAt && (
+                  <Button
+                    size="sm"
+                    className="gap-1.5 shrink-0"
+                    disabled={!canUpdateStatus || understandMutation.isPending}
+                    onClick={() => understandMutation.mutate()}
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Acknowledge Overview
+                  </Button>
                 )}
               </div>
-            </div>
-            <div className="divide-y">
-              {action.checklistItems
-                .sort((a, b) => a.sortOrder - b.sortOrder)
-                .map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-start gap-3 p-4 hover:bg-muted/20 transition-colors"
-                  >
-                    <Checkbox
-                      checked={item.completed}
-                      disabled={!canUpdateStatus}
-                      onCheckedChange={(checked) => {
-                        checklistMutation.mutate({
-                          itemId: item.id,
-                          completed: !!checked,
-                        });
-                      }}
-                      className="mt-0.5"
-                    />
-                    <div className="flex-1 min-w-0 space-y-1.5">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span
-                          className={cn(
-                            "text-sm leading-relaxed",
-                            item.completed
-                              ? "line-through text-muted-foreground"
-                              : "text-foreground"
-                          )}
-                        >
-                          {item.label}
-                        </span>
-                        <span
-                          className={cn(
-                            "text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0",
-                            item.isRequired
-                              ? "bg-red-500/10 text-red-300 border-red-500/30"
-                              : "bg-slate-500/10 text-slate-300 border-slate-500/30"
-                          )}
-                        >
-                          {item.isRequired ? "Required" : "Optional"}
-                        </span>
-                      </div>
-                      {item.completedBy && (
-                        <div className="text-[10px] text-muted-foreground">
-                          Completed by {item.completedBy}
-                        </div>
-                      )}
-                      <Input
-                        defaultValue={item.notes ?? ""}
-                        disabled={!canUpdateStatus}
-                        placeholder="Add a note (optional)…"
-                        className="h-7 text-xs"
-                        onBlur={(e) => {
-                          const value = e.target.value;
-                          if (value !== (item.notes ?? "")) {
-                            checklistMutation.mutate({
-                              itemId: item.id,
-                              completed: item.completed,
-                              notes: value || null,
-                            });
-                          }
-                        }}
-                      />
-                    </div>
+
+              <div className="rounded-lg border bg-card p-5 space-y-4">
+                <div>
+                  <div className="flex items-center gap-2 text-sm font-semibold mb-2">
+                    <Target className="h-4 w-4 text-primary" />
+                    Purpose
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {action.purpose}
+                  </p>
+                </div>
+                <hr className="border-border" />
+                <div>
+                  <div className="flex items-center gap-2 text-sm font-semibold mb-2">
+                    <Lightbulb className="h-4 w-4 text-yellow-400" />
+                    Why This Action Matters
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {action.whyItMatters}
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick stats */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: "Controls Linked", value: action.controls.length },
+                  {
+                    label: "Full Support",
+                    value: action.controls.filter((c) => c.supportType === "full_support").length,
+                  },
+                  { label: "Evidence Items", value: action.evidenceItems.length },
+                  { label: "Documents Required", value: action.documents.length },
+                ].map((s) => (
+                  <div key={s.label} className="rounded-lg border bg-card p-3 text-center">
+                    <div className="text-2xl font-bold">{s.value}</div>
+                    <div className="text-xs text-muted-foreground">{s.label}</div>
                   </div>
                 ))}
-            </div>
-          </div>
-
-          {checkPct === 100 && currentStatus !== "complete" && (
-            <div className="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-emerald-300">
-                <CheckSquare className="h-4 w-4 shrink-0" />
-                All checklist items complete. Mark this action as Ready for Review?
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20"
-                disabled={!canUpdateStatus || progressMutation.isPending}
-                onClick={() => {
-                  setLocalStatus("ready_for_review");
-                  progressMutation.mutate({
-                    status: "ready_for_review",
-                    owner: localOwner || null,
-                    targetDate: localTargetDate || null,
-                    notes: localNotes || null,
-                  });
-                }}
-              >
-                Mark Ready for Review
-              </Button>
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+
+              <WhatYouWillProduce
+                evidenceItems={action.evidenceItems}
+                documents={action.documents}
+                controlsCount={action.controls.length}
+              />
+            </TabsContent>
+
+            {/* B. Controls */}
+            <TabsContent value="controls">
+              <div className="rounded-lg border bg-card overflow-hidden">
+                <div className="p-4 border-b bg-muted/20">
+                  <h3 className="font-semibold text-sm flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-primary" />
+                    Linked CMMC Controls
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Completing this action supports the following controls. Controls will not be automatically marked Implemented — readiness rules must be satisfied.
+                  </p>
+                </div>
+                <div className="divide-y">
+                  {action.controls.map((ctrl) => (
+                    <div
+                      key={ctrl.id}
+                      className="p-4 flex items-start gap-3 hover:bg-muted/20 transition-colors"
+                    >
+                      <div className="shrink-0 w-28">
+                        <Link href={`/controls/${ctrl.controlId}`}>
+                          <span className="font-mono text-sm font-bold text-primary hover:underline cursor-pointer">
+                            {ctrl.controlRef}
+                          </span>
+                        </Link>
+                        <div className="text-[10px] text-muted-foreground mt-0.5">{ctrl.level}</div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium">{ctrl.controlTitle}</div>
+                        <div className="text-xs text-muted-foreground">{ctrl.domain}</div>
+                      </div>
+                      <span
+                        className={cn(
+                          "shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded border",
+                          SUPPORT_TYPE_COLORS[ctrl.supportType]
+                        )}
+                      >
+                        {SUPPORT_TYPE_LABELS[ctrl.supportType]}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-3 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3 flex gap-2 text-xs text-blue-300">
+                <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>
+                  A control becomes <strong>Candidate for Implemented</strong> only when: SSP narrative exists, required evidence is approved, required documents are active, testing is complete, and no blocking POA&M exists.
+                </span>
+              </div>
+            </TabsContent>
+
+            {/* C. Procedure steps */}
+            <TabsContent value="procedure">
+              {activeOrg?.id && (
+                <ProcedureStepsSection
+                  actionId={id}
+                  orgId={activeOrg.id}
+                  fallbackText={action.operatingProcedure}
+                  canEdit={canEdit}
+                  canUpdateStatus={canUpdateStatus}
+                />
+              )}
+            </TabsContent>
+
+            {/* D. Test / Validation */}
+            <TabsContent value="test" className="space-y-4">
+              {activeOrg?.id && (
+                <ValidationPanel
+                  actionId={id}
+                  orgId={activeOrg.id}
+                  progress={action.progress}
+                  canValidate={canValidate}
+                />
+              )}
+              <div className="rounded-lg border bg-card p-5">
+                <div className="flex items-center gap-2 text-sm font-semibold mb-4">
+                  <TestTube className="h-4 w-4 text-primary" />
+                  Test Procedure
+                </div>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Perform these tests to validate that the action was completed correctly.
+                </p>
+                <StepList text={action.testProcedure} />
+              </div>
+            </TabsContent>
+
+            {/* E. Evidence */}
+            <TabsContent value="evidence">
+              <div className="rounded-lg border bg-card overflow-hidden">
+                <div className="p-4 border-b bg-muted/20">
+                  <h3 className="font-semibold text-sm flex items-center gap-2">
+                    <FolderSearch className="h-4 w-4 text-primary" />
+                    Evidence to Capture
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Upload new evidence or link existing evidence from the repository to each item below.
+                  </p>
+                </div>
+                <div className="divide-y">
+                  {action.evidenceItems.map((ev, idx) => {
+                    const linked = ev.links.length > 0;
+                    return (
+                      <div key={ev.id} className="p-4 space-y-2">
+                        <div className="flex items-start gap-3">
+                          <span
+                            className={cn(
+                              "shrink-0 w-6 h-6 rounded-full border text-xs font-bold flex items-center justify-center mt-0.5",
+                              linked
+                                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                                : "bg-primary/10 border-primary/20 text-primary"
+                            )}
+                          >
+                            {linked ? <CheckCircle2 className="h-3.5 w-3.5" /> : idx + 1}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <div className="font-medium text-sm">{ev.title}</div>
+                              <span
+                                className={cn(
+                                  "text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0",
+                                  ev.isRequired
+                                    ? "bg-red-500/10 text-red-300 border-red-500/30"
+                                    : "bg-slate-500/10 text-slate-300 border-slate-500/30"
+                                )}
+                              >
+                                {ev.isRequired ? "Required" : "Optional"}
+                              </span>
+                            </div>
+                            {ev.description && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {ev.description}
+                              </p>
+                            )}
+                            <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
+                              <span className="bg-muted px-2 py-0.5 rounded">{ev.evidenceType}</span>
+                              <span>{ev.sourceSystem}</span>
+                            </div>
+                            <div className="mt-2 text-xs text-muted-foreground">
+                              <span className="font-medium text-foreground/70">Must show:</span> {ev.mustShow}
+                            </div>
+                            <div className="mt-1.5 flex items-center gap-2">
+                              <span className="text-xs font-mono bg-muted/50 border px-2 py-0.5 rounded text-muted-foreground">
+                                {ev.suggestedFilename}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="shrink-0 flex flex-col gap-1.5 items-stretch">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1.5 w-full"
+                              onClick={() => setUploadModalItem(ev)}
+                            >
+                              <Upload className="h-3.5 w-3.5" />
+                              Upload New Evidence
+                            </Button>
+                            {canUpdateStatus && activeOrg?.id && (
+                              <EvidenceLinkPicker
+                                orgId={activeOrg.id}
+                                roadmapEvidenceItemId={ev.id}
+                                requirementTitle={ev.title}
+                                alreadyLinkedIds={new Set(ev.links.map((l) => l.evidenceId))}
+                                onLinked={() =>
+                                  queryClient.invalidateQueries({
+                                    queryKey: ["roadmap-action", id],
+                                  })
+                                }
+                              />
+                            )}
+                          </div>
+                        </div>
+                        {ev.links.length > 0 && (
+                          <div className="ml-9 space-y-1">
+                            <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                              Linked Evidence
+                            </div>
+                            {ev.links.map((link) => {
+                              const info = evidenceIndexMap.get(link.evidenceId);
+                              return (
+                                <div
+                                  key={link.id}
+                                  className="flex items-center justify-between gap-2 text-xs bg-muted/20 rounded px-2 py-1.5"
+                                >
+                                  <Link href={`/evidence/${link.evidenceId}`}>
+                                    <span className="text-primary hover:underline cursor-pointer truncate">
+                                      {info?.title ?? link.evidenceId}
+                                    </span>
+                                  </Link>
+                                  {canUpdateStatus && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 px-1.5 text-muted-foreground hover:text-red-400"
+                                      disabled={unlinkEvidenceMutation.isPending}
+                                      onClick={() =>
+                                        unlinkEvidenceMutation.mutate({
+                                          itemId: ev.id,
+                                          evidenceId: link.evidenceId,
+                                        })
+                                      }
+                                    >
+                                      <Unlink className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <div className="ml-9 text-xs text-muted-foreground">
+                          <span className="font-medium text-foreground/60">Linked controls:</span>{" "}
+                          {action.controls.map((c) => c.controlRef).join(", ")}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* F. Documents */}
+            <TabsContent value="documents">
+              <div className="rounded-lg border bg-card overflow-hidden">
+                <div className="p-4 border-b bg-muted/20">
+                  <h3 className="font-semibold text-sm flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-primary" />
+                    Documents to Create or Update
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    These documents must exist, be current, and be approved to fully satisfy the linked controls.
+                  </p>
+                </div>
+                <div className="divide-y">
+                  {action.documents.map((doc, idx) => (
+                    <div key={doc.id} className="p-4 flex items-center gap-3">
+                      <span className="shrink-0 w-6 h-6 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold flex items-center justify-center">
+                        {idx + 1}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm">{doc.title}</div>
+                        <div className="text-xs text-muted-foreground capitalize">{doc.docType}</div>
+                      </div>
+                      <Link href="/documents/list">
+                        <Button variant="outline" size="sm" className="gap-1.5 shrink-0">
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          Open Docs
+                        </Button>
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* G. Checklist */}
+            <TabsContent value="checklist">
+              <div className="rounded-lg border bg-card overflow-hidden">
+                <div className="p-4 border-b bg-muted/20 flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-sm flex items-center gap-2">
+                      <ClipboardCheck className="h-4 w-4 text-primary" />
+                      Completion Checklist
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {completedChecklist} of {action.checklistItems.length} items complete ({checkPct}%)
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    {checkPct === 100 ? (
+                      <span className="text-xs text-emerald-400 font-medium">✓ All items complete</span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">{action.checklistItems.length - completedChecklist} remaining</span>
+                    )}
+                  </div>
+                </div>
+                <div className="divide-y">
+                  {action.checklistItems
+                    .sort((a, b) => a.sortOrder - b.sortOrder)
+                    .map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-start gap-3 p-4 hover:bg-muted/20 transition-colors"
+                      >
+                        <Checkbox
+                          checked={item.completed}
+                          disabled={!canUpdateStatus}
+                          onCheckedChange={(checked) => {
+                            checklistMutation.mutate({
+                              itemId: item.id,
+                              completed: !!checked,
+                            });
+                          }}
+                          className="mt-0.5"
+                        />
+                        <div className="flex-1 min-w-0 space-y-1.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span
+                              className={cn(
+                                "text-sm leading-relaxed",
+                                item.completed
+                                  ? "line-through text-muted-foreground"
+                                  : "text-foreground"
+                              )}
+                            >
+                              {item.label}
+                            </span>
+                            <span
+                              className={cn(
+                                "text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0",
+                                item.isRequired
+                                  ? "bg-red-500/10 text-red-300 border-red-500/30"
+                                  : "bg-slate-500/10 text-slate-300 border-slate-500/30"
+                              )}
+                            >
+                              {item.isRequired ? "Required" : "Optional"}
+                            </span>
+                          </div>
+                          {item.completedBy && (
+                            <div className="text-[10px] text-muted-foreground">
+                              Completed by {item.completedBy}
+                            </div>
+                          )}
+                          <Input
+                            defaultValue={item.notes ?? ""}
+                            disabled={!canUpdateStatus}
+                            placeholder="Add a note (optional)…"
+                            className="h-7 text-xs"
+                            onBlur={(e) => {
+                              const value = e.target.value;
+                              if (value !== (item.notes ?? "")) {
+                                checklistMutation.mutate({
+                                  itemId: item.id,
+                                  completed: item.completed,
+                                  notes: value || null,
+                                });
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              {checkPct === 100 && currentStatus !== "complete" && (
+                <div className="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm text-emerald-300">
+                    <CheckSquare className="h-4 w-4 shrink-0" />
+                    All checklist items complete. Mark this action as Ready for Review?
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20"
+                    disabled={!canUpdateStatus || progressMutation.isPending}
+                    onClick={() => {
+                      setLocalStatus("ready_for_review");
+                      progressMutation.mutate({
+                        status: "ready_for_review",
+                        owner: localOwner || null,
+                        targetDate: localTargetDate || null,
+                        notes: localNotes || null,
+                      });
+                    }}
+                  >
+                    Mark Ready for Review
+                  </Button>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </div>
+
+        {/* ── RIGHT COLUMN ── */}
+        <div className="w-full lg:w-80 xl:w-96 shrink-0 sticky top-6 self-start">
+          <ActionProgressPanel
+            computedProgress={action.computedProgress}
+            progress={action.progress}
+            localOwner={localOwner}
+            localTargetDate={localTargetDate}
+            localNotes={localNotes}
+            localStatus={currentStatus}
+            overrideJustification={overrideJustification}
+            canUpdateStatus={canUpdateStatus}
+            canMarkComplete={canMarkComplete}
+            userRole={user?.role}
+            setLocalOwner={setLocalOwner}
+            setLocalTargetDate={setLocalTargetDate}
+            setLocalNotes={setLocalNotes}
+            setLocalStatus={setLocalStatus}
+            setOverrideJustification={setOverrideJustification}
+            onSaveProgress={handleSaveProgress}
+            onReopenAction={() => reopenMutation.mutate()}
+            onSubmitForReview={handleSubmitForReview}
+            onApproveComplete={handleApproveComplete}
+            isSaving={progressMutation.isPending || reopenMutation.isPending}
+            onTabChange={setActiveTab}
+          />
+        </div>
+      </div>
+
+      {/* Upload Evidence Modal */}
+      {activeOrg?.id && (
+        <UploadEvidenceModal
+          open={!!uploadModalItem}
+          onClose={() => setUploadModalItem(null)}
+          item={uploadModalItem}
+          actionId={id}
+          orgId={activeOrg.id}
+          controlLinks={action.controls}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ["roadmap-action", id, activeOrg.id] });
+          }}
+        />
+      )}
+
+      {/* Override Dialog */}
+      <OverrideDialog
+        open={overrideDialogOpen}
+        onClose={() => setOverrideDialogOpen(false)}
+        onSubmit={(data) => overrideMutation.mutate(data)}
+        isPending={overrideMutation.isPending}
+      />
     </div>
   );
 }

@@ -15,3 +15,4 @@
 - [organization_users duplicates](membership-duplicates.md) — onConflictDoNothing is a no-op without a unique index; repair order (diagnose → fix writer → collapse in reads → delete → constraint last).
 - [Smart Evidence Mapping](smart-evidence-mapping.md) — local-only analysis engine (no external AI); controlsTable needs LEFT JOIN domainsTable for domain name; confidence tiers + scoring rules.
 - [CMMC L1 ↔ FAR 52.204-21 crosswalk](cmmc-l1-far-crosswalk.md) — 17 equivalent rows missing; nothingToDo guard in seedCrosswalkRequirements skipped them; fix pattern for adding future crosswalk pairs.
+- [Roadmap module architecture](roadmap-module.md) — Completion guard, optional module system, visual redesign; fail-open feature flags; missing record = enabled.

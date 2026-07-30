@@ -23,6 +23,8 @@ import {
   Search,
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
+  ChevronUp,
   Target,
   TrendingUp,
   CheckCircle2,
@@ -85,14 +87,8 @@ const PRIORITY_ORDER: Record<string, number> = {
   low: 3,
 };
 
-const PHASE_COLORS: Record<number, string> = {
-  1: "bg-purple-500/20 text-purple-300 border-purple-500/30",
-  2: "bg-blue-500/20 text-blue-300 border-blue-500/30",
-  3: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30",
-  4: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
-  5: "bg-orange-500/20 text-orange-300 border-orange-500/30",
-  6: "bg-rose-500/20 text-rose-300 border-rose-500/30",
-};
+// Neutral phase badge — same style for all phases
+const PHASE_BADGE_CLS = "bg-muted text-foreground border";
 
 const PHASE_INFO: Record<
   number,
@@ -142,37 +138,37 @@ const STATUS_CONFIG: Record<
   not_started: {
     icon: <Circle className="h-3 w-3" />,
     label: "Not Started",
-    cls: "text-slate-400",
+    cls: "text-muted-foreground",
     description: "No work has begun on this action.",
   },
   in_progress: {
     icon: <Clock className="h-3 w-3" />,
     label: "In Progress",
-    cls: "text-blue-400",
+    cls: "text-blue-500",
     description: "Work has started on this action.",
   },
   evidence_needed: {
     icon: <FileSearch className="h-3 w-3" />,
     label: "Evidence Needed",
-    cls: "text-yellow-400",
+    cls: "text-amber-500",
     description: "Steps may be complete but required evidence is missing.",
   },
   ready_for_review: {
     icon: <Target className="h-3 w-3" />,
     label: "Ready for Review",
-    cls: "text-purple-400",
+    cls: "text-primary",
     description: "Action appears complete and needs reviewer approval.",
   },
   complete: {
     icon: <CheckCircle2 className="h-3 w-3" />,
     label: "Complete",
-    cls: "text-emerald-400",
+    cls: "text-emerald-500",
     description: "Action completed and reviewed.",
   },
   blocked: {
     icon: <Ban className="h-3 w-3" />,
     label: "Blocked",
-    cls: "text-red-400",
+    cls: "text-red-500",
     description: "Cannot continue due to an open issue or dependency.",
   },
 };
@@ -192,16 +188,19 @@ function InfoTooltip({ text }: { text: string }) {
 
 function PriorityBadge({ priority }: { priority: string }) {
   const cfg: Record<string, string> = {
-    critical: "bg-red-500/20 text-red-300 border-red-500/30",
-    high: "bg-orange-500/20 text-orange-300 border-orange-500/30",
-    medium: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
-    low: "bg-slate-500/20 text-slate-300 border-slate-500/30",
+    critical:
+      "bg-red-100 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800",
+    high: "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800",
+    medium:
+      "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800",
+    low: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700",
   };
   return (
     <span
       className={cn(
         "text-[10px] font-semibold px-2 py-0.5 rounded border uppercase tracking-wide",
-        cfg[priority] ?? "bg-slate-500/20 text-slate-300"
+        cfg[priority] ??
+          "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700"
       )}
     >
       {priority}
@@ -221,12 +220,12 @@ function StatusBadge({ status }: { status: string }) {
 
 function EffortBadge({ effort }: { effort: string }) {
   const colors: Record<string, string> = {
-    low: "text-emerald-400",
-    medium: "text-yellow-400",
-    high: "text-red-400",
+    low: "text-emerald-500",
+    medium: "text-amber-500",
+    high: "text-red-500",
   };
   return (
-    <span className={cn("text-xs capitalize", colors[effort] ?? "text-slate-400")}>
+    <span className={cn("text-xs capitalize", colors[effort] ?? "text-muted-foreground")}>
       {effort} effort
     </span>
   );
@@ -238,20 +237,18 @@ function ImpactLabel({ score }: { score: number }) {
       ? {
           label: "High Impact",
           short: "High",
-          color:
-            "text-emerald-400 bg-emerald-500/10 border-emerald-500/30",
+          color: "text-emerald-500 bg-emerald-500/10 border-emerald-500/30",
         }
       : score >= 35
       ? {
           label: "Medium Impact",
           short: "Med",
-          color:
-            "text-yellow-400 bg-yellow-500/10 border-yellow-500/30",
+          color: "text-amber-500 bg-amber-500/10 border-amber-500/30",
         }
       : {
           label: "Lower Impact",
           short: "Low",
-          color: "text-slate-400 bg-slate-500/10 border-slate-500/30",
+          color: "text-muted-foreground bg-muted/50 border-border",
         };
 
   return (
@@ -303,8 +300,7 @@ function ActionCard({ action }: { action: RoadmapAction }) {
       <div
         className={cn(
           "rounded-lg border bg-card hover:bg-muted/30 transition-colors cursor-pointer group",
-          action.status === "complete" &&
-            "border-emerald-500/20 bg-emerald-950/10",
+          action.status === "complete" && "border-emerald-500/20",
           action.status === "blocked" && "border-red-500/20"
         )}
       >
@@ -318,7 +314,7 @@ function ActionCard({ action }: { action: RoadmapAction }) {
               <span
                 className={cn(
                   "text-[10px] font-medium px-2 py-0.5 rounded border",
-                  PHASE_COLORS[action.phase]
+                  PHASE_BADGE_CLS
                 )}
               >
                 Phase {action.phase}: {action.phaseName}
@@ -373,10 +369,10 @@ function ActionCard({ action }: { action: RoadmapAction }) {
                 action.status === "not_started"
                   ? "border-primary/40 text-primary bg-primary/10 group-hover:bg-primary/20"
                   : action.status === "complete"
-                  ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10"
+                  ? "border-emerald-500/30 text-emerald-500 bg-emerald-500/10"
                   : action.status === "ready_for_review"
-                  ? "border-purple-500/30 text-purple-300 bg-purple-500/10"
-                  : "border-blue-500/40 text-blue-300 bg-blue-500/10 group-hover:bg-blue-500/20"
+                  ? "border-primary/30 text-primary bg-primary/10"
+                  : "border-blue-500/40 text-blue-500 bg-blue-500/10 group-hover:bg-blue-500/20"
               )}
             >
               {ctaLabel}
@@ -409,11 +405,11 @@ function StartHerePanel({ actions }: { actions: RoadmapAction[] }) {
 
   if (allDone) {
     return (
-      <div className="rounded-lg border border-emerald-500/30 bg-emerald-950/20 p-5">
+      <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-5">
         <div className="flex items-center gap-3">
-          <CheckCircle2 className="h-8 w-8 text-emerald-400 shrink-0" />
+          <CheckCircle2 className="h-8 w-8 text-emerald-500 shrink-0" />
           <div>
-            <div className="font-bold text-emerald-300">Roadmap Complete!</div>
+            <div className="font-bold text-emerald-600 dark:text-emerald-400">Roadmap Complete!</div>
             <div className="text-sm text-muted-foreground mt-0.5">
               All actions are complete or ready for review. Prepare your
               assessment package.
@@ -439,8 +435,18 @@ function StartHerePanel({ actions }: { actions: RoadmapAction[] }) {
         )
       : 0;
 
+  const ctaLabel =
+    recommended.status === "not_started"
+      ? "Start Action"
+      : recommended.status === "complete" || recommended.status === "ready_for_review"
+      ? "View Details"
+      : "Continue";
+
   return (
     <div className="rounded-lg border border-primary/30 bg-primary/5 p-5 space-y-4">
+      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+        Recommended Next Action
+      </div>
       <div className="flex items-start gap-3">
         <div className="shrink-0 rounded-lg bg-primary/15 border border-primary/30 p-2.5">
           <Play className="h-5 w-5 text-primary" />
@@ -453,20 +459,45 @@ function StartHerePanel({ actions }: { actions: RoadmapAction[] }) {
           </div>
           <h3 className="font-bold text-base">{recommended.title}</h3>
           <div className="flex flex-wrap gap-2 mt-1.5">
-            <span className="text-xs text-muted-foreground">
+            <span
+              className={cn(
+                "text-[10px] font-medium px-2 py-0.5 rounded border",
+                PHASE_BADGE_CLS
+              )}
+            >
               Phase {recommended.phase}: {recommended.phaseName}
             </span>
             <PriorityBadge priority={recommended.priority} />
             <EffortBadge effort={recommended.effort} />
+            <StatusBadge status={recommended.status} />
           </div>
+          {recommended.owner && (
+            <div className="text-xs text-muted-foreground mt-1">
+              Owner: {recommended.owner}
+            </div>
+          )}
+          {recommended.targetDate && (
+            <div className="text-xs text-muted-foreground">
+              Due: {recommended.targetDate}
+            </div>
+          )}
         </div>
         <Link href={`/roadmap/${recommended.id}`} className="shrink-0">
           <Button size="sm" className="gap-2 h-9">
-            {isResuming ? "Continue Action" : "Start This Action"}
+            {ctaLabel}
             <ArrowRight className="h-3.5 w-3.5" />
           </Button>
         </Link>
       </div>
+
+      {recommended.checklistTotal > 0 && (
+        <div className="flex items-center gap-2 pt-1">
+          <Progress value={checkPct} className="h-1.5 flex-1" />
+          <span className="text-xs text-muted-foreground shrink-0">
+            {recommended.checklistCompleted}/{recommended.checklistTotal} steps
+          </span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t border-primary/15">
         <div>
@@ -493,35 +524,20 @@ function StartHerePanel({ actions }: { actions: RoadmapAction[] }) {
             {recommended.domains.length !== 1 ? "s" : ""}.
           </p>
         </div>
-        {recommended.checklistTotal > 0 ? (
-          <div>
-            <div className="text-xs font-semibold text-muted-foreground mb-1">
-              Progress
-            </div>
-            <div className="flex items-center gap-2">
-              <Progress value={checkPct} className="h-1.5 flex-1" />
-              <span className="text-xs text-muted-foreground shrink-0">
-                {recommended.checklistCompleted}/{recommended.checklistTotal}{" "}
-                steps
-              </span>
-            </div>
+        <div>
+          <div className="text-xs font-semibold text-muted-foreground mb-1">
+            Impact Score
           </div>
-        ) : (
-          <div>
-            <div className="text-xs font-semibold text-muted-foreground mb-1">
-              Impact Score
-            </div>
-            <p className="text-xs text-foreground/70">
-              {recommended.impactScore} points —{" "}
-              {recommended.impactScore >= 60
-                ? "High"
-                : recommended.impactScore >= 35
-                ? "Medium"
-                : "Lower"}{" "}
-              impact
-            </p>
-          </div>
-        )}
+          <p className="text-xs text-foreground/70">
+            {recommended.impactScore} points —{" "}
+            {recommended.impactScore >= 60
+              ? "High"
+              : recommended.impactScore >= 35
+              ? "Medium"
+              : "Lower"}{" "}
+            impact
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -595,8 +611,7 @@ function GuidedView({ actions }: { actions: RoadmapAction[] }) {
       <div
         className={cn(
           "rounded-lg border bg-card p-6 space-y-5",
-          current.status === "complete" &&
-            "border-emerald-500/20 bg-emerald-950/10",
+          current.status === "complete" && "border-emerald-500/20",
           current.status === "blocked" && "border-red-500/20"
         )}
       >
@@ -609,7 +624,7 @@ function GuidedView({ actions }: { actions: RoadmapAction[] }) {
               <span
                 className={cn(
                   "text-[10px] font-medium px-2 py-0.5 rounded border",
-                  PHASE_COLORS[current.phase]
+                  PHASE_BADGE_CLS
                 )}
               >
                 Phase {current.phase}: {current.phaseName}
@@ -731,7 +746,7 @@ function GuidedView({ actions }: { actions: RoadmapAction[] }) {
                   <span
                     className={cn(
                       "shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded border",
-                      PHASE_COLORS[a.phase]
+                      PHASE_BADGE_CLS
                     )}
                   >
                     Phase {a.phase}
@@ -758,104 +773,149 @@ function PhaseView({
   actions: RoadmapAction[];
   onSwitchToList: (phase: string) => void;
 }) {
+  const [showEmptyPhases, setShowEmptyPhases] = useState(false);
+
+  const phases = [1, 2, 3, 4, 5, 6].filter((p) => {
+    const phaseActions = actions.filter((a) => a.phase === p);
+    if (phaseActions.length === 0 && !showEmptyPhases) return false;
+    return true;
+  });
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-      {[1, 2, 3, 4, 5, 6].map((p) => {
-        const info = PHASE_INFO[p];
-        const phaseActions = actions.filter((a) => a.phase === p);
-        const completeCount = phaseActions.filter(
-          (a) => a.status === "complete"
-        ).length;
-        const nextAction =
-          phaseActions.find((a) => a.status === "in_progress") ??
-          phaseActions.find((a) => a.status === "not_started");
-        const pct =
-          phaseActions.length > 0
-            ? Math.round((completeCount / phaseActions.length) * 100)
-            : 0;
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowEmptyPhases((v) => !v)}
+          className="text-xs"
+        >
+          {showEmptyPhases ? "Hide Empty Phases" : "Show Empty Phases"}
+        </Button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {phases.map((p) => {
+          const info = PHASE_INFO[p];
+          const phaseActions = actions.filter((a) => a.phase === p);
+          const completeCount = phaseActions.filter(
+            (a) => a.status === "complete"
+          ).length;
+          const nextAction =
+            phaseActions.find((a) => a.status === "in_progress") ??
+            phaseActions.find((a) => a.status === "not_started");
+          const pct =
+            phaseActions.length > 0
+              ? Math.round((completeCount / phaseActions.length) * 100)
+              : 0;
+          const isEmpty = phaseActions.length === 0;
 
-        return (
-          <div
-            key={p}
-            className={cn(
-              "rounded-lg border bg-card p-4 space-y-3",
-              pct > 0 && pct < 100 && "border-primary/30",
-              pct === 100 &&
-                "border-emerald-500/30 bg-emerald-950/10"
-            )}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span
-                    className={cn(
-                      "text-[10px] font-bold px-2 py-0.5 rounded border",
-                      PHASE_COLORS[p]
+          return (
+            <div
+              key={p}
+              className={cn(
+                "rounded-lg border bg-card p-4 space-y-3",
+                pct > 0 && pct < 100 && "border-primary/30",
+                pct === 100 && phaseActions.length > 0 && "border-emerald-500/30"
+              )}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span
+                      className={cn(
+                        "text-[10px] font-bold px-2 py-0.5 rounded border",
+                        PHASE_BADGE_CLS
+                      )}
+                    >
+                      Phase {p}
+                    </span>
+                    {pct === 100 && phaseActions.length > 0 && (
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
                     )}
-                  >
-                    Phase {p}
-                  </span>
-                  {pct === 100 && (
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                  )}
+                  </div>
+                  <div className="font-semibold text-sm">
+                    {info.icon} {info.name}
+                  </div>
                 </div>
-                <div className="font-semibold text-sm">
-                  {info.icon} {info.name}
-                </div>
-              </div>
-              <div className="text-right shrink-0">
-                <div className="text-sm font-bold">
-                  {completeCount}/{phaseActions.length}
-                </div>
-                <div className="text-xs text-muted-foreground">complete</div>
-              </div>
-            </div>
-
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              {info.why}
-            </p>
-
-            <Progress value={pct} className="h-1.5" />
-
-            {nextAction && pct < 100 && (
-              <div className="text-xs">
-                <span className="text-muted-foreground">Next: </span>
-                <Link href={`/roadmap/${nextAction.id}`}>
-                  <span className="text-primary hover:underline cursor-pointer">
-                    {nextAction.title}
-                  </span>
-                </Link>
-              </div>
-            )}
-
-            <div className="space-y-1 pt-1 border-t border-border">
-              {phaseActions.slice(0, 5).map((a) => {
-                const s =
-                  STATUS_CONFIG[a.status] ?? STATUS_CONFIG.not_started;
-                return (
-                  <Link key={a.id} href={`/roadmap/${a.id}`}>
-                    <div className="flex items-center gap-2 text-xs hover:bg-muted/30 px-1 py-1 rounded transition-colors">
-                      <span className={s.cls}>{s.icon}</span>
-                      <span className="flex-1 truncate text-foreground/80">
-                        {a.title}
-                      </span>
-                      <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                {isEmpty ? (
+                  <div className="text-right shrink-0">
+                    <div className="text-xs text-muted-foreground italic">
+                      No actions
                     </div>
-                  </Link>
-                );
-              })}
-              {phaseActions.length > 5 && (
-                <button
-                  onClick={() => onSwitchToList(String(p))}
-                  className="text-xs text-primary hover:underline pl-1 pt-0.5"
-                >
-                  +{phaseActions.length - 5} more actions →
-                </button>
+                  </div>
+                ) : (
+                  <div className="text-right shrink-0">
+                    <div className="text-sm font-bold">
+                      {completeCount}/{phaseActions.length}
+                    </div>
+                    <div className="text-xs text-muted-foreground">complete</div>
+                  </div>
+                )}
+              </div>
+
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {info.why}
+              </p>
+
+              {isEmpty ? (
+                <div className="text-xs text-muted-foreground italic">
+                  No actions assigned to this phase.
+                </div>
+              ) : (
+                <>
+                  <Progress value={pct} className="h-1.5" />
+
+                  {nextAction && pct < 100 && (
+                    <div className="text-xs">
+                      <span className="text-muted-foreground">Next: </span>
+                      <Link href={`/roadmap/${nextAction.id}`}>
+                        <span className="text-primary hover:underline cursor-pointer">
+                          {nextAction.title}
+                        </span>
+                      </Link>
+                    </div>
+                  )}
+
+                  <div className="space-y-1 pt-1 border-t border-border">
+                    {phaseActions.slice(0, 5).map((a) => {
+                      const s =
+                        STATUS_CONFIG[a.status] ?? STATUS_CONFIG.not_started;
+                      return (
+                        <Link key={a.id} href={`/roadmap/${a.id}`}>
+                          <div className="flex items-center gap-2 text-xs hover:bg-muted/30 px-1 py-1 rounded transition-colors">
+                            <span className={s.cls}>{s.icon}</span>
+                            <span className="flex-1 truncate text-foreground/80">
+                              {a.title}
+                            </span>
+                            <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                          </div>
+                        </Link>
+                      );
+                    })}
+                    {phaseActions.length > 5 && (
+                      <button
+                        onClick={() => onSwitchToList(String(p))}
+                        className="text-xs text-primary hover:underline pl-1 pt-0.5"
+                      >
+                        +{phaseActions.length - 5} more actions →
+                      </button>
+                    )}
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs"
+                    onClick={() => onSwitchToList(String(p))}
+                  >
+                    View Phase
+                  </Button>
+                </>
               )}
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -902,65 +962,103 @@ const ROADMAP_BENEFITS = [
   "Creates a repeatable implementation path for each organization",
 ];
 
-function RoadmapOverviewPanel() {
-  return (
-    <div className="rounded-lg border bg-card p-5 space-y-5">
-      <div>
-        <h2 className="text-sm font-semibold flex items-center gap-2">
-          <Info className="h-4 w-4 text-primary" />
-          How the Implementation Roadmap Works
-        </h2>
-        <p className="text-sm text-muted-foreground mt-2 leading-relaxed max-w-4xl">
-          The Implementation Roadmap groups related CMMC work into
-          high-impact actions. Instead of working control-by-control, each
-          action helps produce evidence, documents, monitoring records, and
-          validation results that support multiple CMMC controls at once.
-        </p>
-        <p className="text-sm text-muted-foreground mt-2 leading-relaxed max-w-4xl">
-          Start with the recommended first action, follow the guided steps,
-          upload the required evidence, complete validation, and then mark
-          the action ready for review. Control HUB will show which controls
-          are supported and what gaps remain.
-        </p>
-      </div>
+function HowItWorksPanel() {
+  const storageKey = "roadmap_howto_collapsed";
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      return stored === null ? true : stored === "true";
+    } catch {
+      return true;
+    }
+  });
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1 border-t border-border">
-        {ROADMAP_STEPS.map((step, i) => (
-          <div key={step.title} className="flex flex-col items-center text-center gap-1.5 pt-4">
-            <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-              <step.icon className="h-4 w-4 text-primary" />
-            </div>
-            <div className="text-xs font-semibold">
-              {i + 1}. {step.title}
-            </div>
-            <div className="text-[11px] text-muted-foreground leading-snug">
-              {step.desc}
-            </div>
+  function toggle() {
+    const next = !collapsed;
+    setCollapsed(next);
+    try {
+      localStorage.setItem(storageKey, String(next));
+    } catch {
+      // ignore
+    }
+  }
+
+  return (
+    <div className="rounded-lg border bg-card">
+      <button
+        onClick={toggle}
+        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-muted/30 transition-colors rounded-lg"
+      >
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <Info className="h-4 w-4 text-primary shrink-0" />
+          How This Roadmap Works
+        </div>
+        <div className="flex items-center gap-2">
+          {collapsed && (
+            <span className="text-xs text-muted-foreground hidden sm:block">
+              Group related work into high-impact actions across 6 phases
+            </span>
+          )}
+          {collapsed ? (
+            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+          ) : (
+            <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
+          )}
+        </div>
+      </button>
+
+      {!collapsed && (
+        <div className="px-5 pb-5 space-y-5 border-t border-border pt-4">
+          <div>
+            <p className="text-sm text-muted-foreground leading-relaxed max-w-4xl">
+              The Implementation Roadmap groups related CMMC work into
+              high-impact actions. Instead of working control-by-control, each
+              action helps produce evidence, documents, monitoring records, and
+              validation results that support multiple CMMC controls at once.
+            </p>
+            <p className="text-sm text-muted-foreground mt-2 leading-relaxed max-w-4xl">
+              Start with the recommended first action, follow the guided steps,
+              upload the required evidence, complete validation, and then mark
+              the action ready for review. Control HUB will show which controls
+              are supported and what gaps remain.
+            </p>
           </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
-function WhyUseRoadmapPanel() {
-  return (
-    <div className="rounded-lg border border-primary/20 bg-primary/5 p-5">
-      <h2 className="text-sm font-semibold flex items-center gap-2 mb-3">
-        <Lightbulb className="h-4 w-4 text-primary" />
-        Why Use This Roadmap?
-      </h2>
-      <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1.5">
-        {ROADMAP_BENEFITS.map((b) => (
-          <li
-            key={b}
-            className="flex items-start gap-2 text-xs text-muted-foreground"
-          >
-            <CheckCircle2 className="h-3.5 w-3.5 text-primary/70 mt-0.5 shrink-0" />
-            <span>{b}</span>
-          </li>
-        ))}
-      </ul>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1 border-t border-border">
+            {ROADMAP_STEPS.map((step, i) => (
+              <div key={step.title} className="flex flex-col items-center text-center gap-1.5 pt-4">
+                <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <step.icon className="h-4 w-4 text-primary" />
+                </div>
+                <div className="text-xs font-semibold">
+                  {i + 1}. {step.title}
+                </div>
+                <div className="text-[11px] text-muted-foreground leading-snug">
+                  {step.desc}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="border-t border-border pt-4">
+            <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
+              <Lightbulb className="h-4 w-4 text-primary" />
+              Why Use This Roadmap?
+            </h3>
+            <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1.5">
+              {ROADMAP_BENEFITS.map((b) => (
+                <li
+                  key={b}
+                  className="flex items-start gap-2 text-xs text-muted-foreground"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5 text-primary/70 mt-0.5 shrink-0" />
+                  <span>{b}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1019,6 +1117,12 @@ export default function RoadmapActions() {
   ).length;
   const totalBlocked = actions.filter((a) => a.status === "blocked").length;
   const totalControls = actions.reduce((s, a) => s + a.controlsCount, 0);
+  const totalAttentionNeeded = actions.filter(
+    (a) => a.status === "evidence_needed" || a.status === "blocked"
+  ).length;
+  const totalReadyForReview = actions.filter(
+    (a) => a.status === "ready_for_review"
+  ).length;
   const overallPct =
     actions.length > 0
       ? Math.round((totalComplete / actions.length) * 100)
@@ -1059,14 +1163,11 @@ export default function RoadmapActions() {
         </div>
       </div>
 
-      {/* How the Roadmap Works */}
-      <RoadmapOverviewPanel />
-
-      {/* Why Use This Roadmap? */}
-      <WhyUseRoadmapPanel />
+      {/* Collapsible How It Works */}
+      <HowItWorksPanel />
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
         {[
           {
             label: "Total Actions",
@@ -1079,28 +1180,42 @@ export default function RoadmapActions() {
             label: "Complete",
             value: totalComplete,
             icon: CheckCircle2,
-            color: "text-emerald-400",
+            color: "text-emerald-500",
             tip: "Actions fully completed and reviewed.",
           },
           {
             label: "In Progress",
             value: totalInProgress,
             icon: Clock,
-            color: "text-blue-400",
+            color: "text-blue-500",
             tip: "Actions you have started but not yet finished.",
+          },
+          {
+            label: "Attention Needed",
+            value: totalAttentionNeeded,
+            icon: AlertTriangle,
+            color: "text-amber-500",
+            tip: "Actions blocked or needing evidence.",
+          },
+          {
+            label: "Ready for Review",
+            value: totalReadyForReview,
+            icon: Target,
+            color: "text-primary",
+            tip: "Actions ready for reviewer approval.",
           },
           {
             label: "Controls Covered",
             value: totalControls,
-            icon: Target,
-            color: "text-purple-400",
+            icon: ShieldCheck,
+            color: "text-primary",
             tip: "Total CMMC L2 control references across all actions (may overlap between actions).",
           },
           {
             label: "Overall Progress",
             value: `${overallPct}%`,
             icon: TrendingUp,
-            color: "text-yellow-400",
+            color: "text-primary",
             tip: "Percentage of actions marked complete.",
           },
         ].map((kpi) => (
@@ -1197,7 +1312,7 @@ export default function RoadmapActions() {
                     )
                   }
                   className={cn(
-                    "rounded-lg border p-3 text-left transition-colors hover:bg-muted/50",
+                    "rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/50",
                     filterPhase === String(p)
                       ? "ring-2 ring-primary bg-muted/30"
                       : ""
@@ -1206,7 +1321,7 @@ export default function RoadmapActions() {
                   <div
                     className={cn(
                       "text-[10px] font-bold px-1.5 py-0.5 rounded border w-fit mb-1",
-                      PHASE_COLORS[p]
+                      PHASE_BADGE_CLS
                     )}
                   >
                     Phase {p}
@@ -1326,9 +1441,9 @@ export default function RoadmapActions() {
       {/* Blocked warning */}
       {totalBlocked > 0 && (
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-4 flex items-center gap-3">
-          <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
+          <AlertTriangle className="h-5 w-5 text-red-500 shrink-0" />
           <div className="text-sm">
-            <span className="font-medium text-red-300">
+            <span className="font-medium text-red-600 dark:text-red-400">
               {totalBlocked} action{totalBlocked > 1 ? "s are" : " is"}{" "}
               blocked.
             </span>

@@ -13,6 +13,7 @@ import {
   Award,
   Pencil,
   Loader2,
+  Map as MapIcon,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useOrg } from "@/context/OrgContext";
@@ -421,10 +422,75 @@ function EditOrgDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
   const [loaded, setLoaded] = useState(false);
+
+  // Feature action state
+  const [featureActionDialog, setFeatureActionDialog] = useState<{
+    action: "enable" | "disable";
+  } | null>(null);
+  const [featureChangeReason, setFeatureChangeReason] = useState("");
+  const [featureActionLoading, setFeatureActionLoading] = useState(false);
+
+  // Fetch org features
+  const { data: orgFeatures = [], refetch: refetchFeatures } = useQuery<Array<{ featureKey: string; enabled: boolean }>>({
+    queryKey: ["org-features", orgId],
+    queryFn: async () => {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch(`/api/organizations/${orgId}/features`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "X-Organization-ID": orgId,
+        },
+      });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: open && !!orgId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const roadmapFeature = orgFeatures.find((f) => f.featureKey === "IMPLEMENTATION_ROADMAP");
+  const isRoadmapEnabled = roadmapFeature?.enabled ?? true;
+
+  async function handleFeatureToggle() {
+    setFeatureActionLoading(true);
+    try {
+      const token = localStorage.getItem("auth_token");
+      const newEnabled = featureActionDialog?.action === "enable";
+      const r = await fetch(`/api/organizations/${orgId}/features/IMPLEMENTATION_ROADMAP`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "X-Organization-ID": orgId,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ enabled: newEnabled, changeReason: featureChangeReason }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error ?? "Failed to update feature");
+      }
+      toast({
+        title: newEnabled ? "Roadmap module enabled" : "Roadmap module disabled",
+        description: newEnabled
+          ? "The Implementation Roadmap module is now enabled for this organization."
+          : "The Implementation Roadmap module has been disabled.",
+      });
+      setFeatureActionDialog(null);
+      setFeatureChangeReason("");
+      refetchFeatures();
+      queryClient.invalidateQueries({ queryKey: ["org-features", orgId] });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setFeatureActionLoading(false);
+    }
+  }
 
   // Fetch full org data when dialog opens
   const { data: fullOrg, isLoading } = useQuery({
@@ -605,6 +671,58 @@ function EditOrgDialog({
                 />
               </div>
             </div>
+
+            {/* Modules — only shown for Global Admins */}
+            {user?.role === "admin" && (
+              <div>
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3 pb-1.5 border-b">
+                  Modules
+                </h3>
+                <div className="rounded-lg border border-border p-4 flex items-start gap-4">
+                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <MapIcon className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold">Implementation Roadmap</span>
+                      {isRoadmapEnabled ? (
+                        <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-[10px] px-2 py-0.5">
+                          Enabled
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-muted-foreground text-[10px] px-2 py-0.5">
+                          Disabled
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                      Guided implementation actions and evidence collection workflow for CMMC compliance.
+                    </p>
+                    <div className="mt-3">
+                      {isRoadmapEnabled ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-7 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+                          onClick={() => setFeatureActionDialog({ action: "disable" })}
+                        >
+                          Disable Module
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-7 text-emerald-600 border-emerald-200 hover:bg-emerald-50 hover:border-emerald-300"
+                          onClick={() => setFeatureActionDialog({ action: "enable" })}
+                        >
+                          Enable Module
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -615,6 +733,55 @@ function EditOrgDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Feature action confirmation dialog */}
+      {featureActionDialog && (
+        <Dialog open={!!featureActionDialog} onOpenChange={() => { setFeatureActionDialog(null); setFeatureChangeReason(""); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <MapIcon className="h-4 w-4 text-primary" />
+                {featureActionDialog.action === "enable" ? "Enable" : "Disable"} Implementation Roadmap
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              {featureActionDialog.action === "disable" ? (
+                <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 text-sm text-amber-800 dark:text-amber-400">
+                  <p className="font-semibold mb-1">⚠ This will hide the Roadmap module</p>
+                  <p>Users will no longer see the Implementation Roadmap in their sidebar or dashboard. Existing roadmap data is preserved and can be re-enabled at any time.</p>
+                </div>
+              ) : (
+                <div className="rounded-md bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-3 text-sm text-emerald-800 dark:text-emerald-400">
+                  <p className="font-semibold mb-1">Enable Implementation Roadmap</p>
+                  <p>Users with compliance manager or reviewer access will see the Implementation Roadmap in the sidebar and dashboard.</p>
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label className="text-xs">Change Reason (optional)</Label>
+                <textarea
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                  rows={2}
+                  value={featureChangeReason}
+                  onChange={(e) => setFeatureChangeReason(e.target.value)}
+                  placeholder="Reason for this change (for audit log)"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setFeatureActionDialog(null); setFeatureChangeReason(""); }} disabled={featureActionLoading}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleFeatureToggle}
+                disabled={featureActionLoading}
+                variant={featureActionDialog.action === "disable" ? "destructive" : "default"}
+              >
+                {featureActionLoading ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />Saving…</> : featureActionDialog.action === "enable" ? "Enable Module" : "Disable Module"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </Dialog>
   );
 }

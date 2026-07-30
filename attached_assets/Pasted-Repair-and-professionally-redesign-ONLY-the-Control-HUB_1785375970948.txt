@@ -1,0 +1,1305 @@
+Repair and professionally redesign ONLY the Control HUB Implementation Roadmap module.
+
+I provided a video showing the current workflow.
+
+The Implementation Roadmap contains functional, visual, progress-calculation, and organization-configuration issues.
+
+Observed issues:
+
+1. The visual design uses too many unrelated pastel colors across phase cards, banners, statistics, tabs, badges, progress sections, and action cards.
+
+2. An action can be manually set to Complete even though the page shows blocking conditions such as:
+   - Overview not acknowledged
+   - Required steps incomplete
+   - Required evidence not uploaded or linked
+   - Validation not completed
+
+3. The “Where You Are” tracker may display Review & Complete as the current stage even when earlier stages are incomplete.
+
+4. Roadmap Progress can show 100% based primarily on manually selected action statuses even when the underlying implementation requirements are incomplete.
+
+5. Selecting Upload New from Evidence to Collect leaves the roadmap and opens a generic `/evidence/upload` page.
+
+6. The generic upload page is not functional:
+   - no usable file-selection workflow
+   - roadmap action context is lost
+   - evidence requirement context is lost
+   - linked controls are not preselected
+   - no return to the original action
+   - the upload does not reliably satisfy the roadmap evidence requirement
+
+7. Link Existing opens a narrow, low-contrast modal:
+   - Link buttons are visually unclear
+   - selection state is unclear
+   - the modal is difficult to scan
+   - evidence metadata is insufficient
+   - there is no prominent final “Link Selected Evidence” action
+   - the list is cramped and relies on a narrow internal scrollbar
+
+8. The action-detail page has excessive blank space and an awkwardly detached assignment panel.
+
+9. Empty phases can show confusing values such as `0/0 Complete`.
+
+10. Some organizations may not need the Implementation Roadmap, but the module is always visible.
+
+Goal:
+
+Make the Implementation Roadmap:
+
+- visually restrained and professional
+- functionally connected to Evidence
+- accurate in its progress calculations
+- impossible to mark Complete accidentally
+- easy to navigate
+- optional per organization
+- safe for existing production data
+
+====================================================================
+1. STRICT SCOPE
+====================================================================
+
+Change only:
+
+- Implementation Roadmap navigation
+- Priority Actions
+- Coverage Matrix
+- Roadmap Progress
+- Roadmap Action Detail
+- Roadmap stage tracker
+- Roadmap evidence-requirement workflow
+- Upload New integration from the roadmap
+- Link Existing integration from the roadmap
+- organization-level Roadmap module configuration
+- roadmap-specific permissions and audit events
+
+Do not redesign:
+
+- Evidence Repository
+- Evidence Detail
+- Controls Library
+- general Control Detail layout
+- Documentation
+- SSP
+- Monitoring Tracker
+- POA&M
+- Pre-Assessment
+- Reports
+- Framework Crosswalk
+- Users and Roles
+- Dashboard, except hiding the roadmap widget when the module is disabled
+
+It is acceptable to reuse existing Evidence upload, preview, download, and control-mapping services.
+
+Do not build another independent evidence-storage system.
+
+====================================================================
+2. PRODUCTION DATA SAFETY
+====================================================================
+
+Do not:
+
+- delete existing roadmap actions
+- change existing roadmap statuses automatically
+- reset roadmap progress
+- delete roadmap checklist responses
+- delete linked evidence
+- change existing evidence statuses
+- remove evidence-control mappings
+- duplicate files
+- re-seed existing organizations
+- alter VTCCORP.US roadmap data
+- alter APEX Solutions roadmap data
+- alter CarmeTechnology roadmap data
+- modify control statuses
+- modify SSP, POA&M, or monitoring records
+
+Before changing completion logic, run a read-only diagnostic showing:
+
+- action count by organization
+- action statuses
+- overview acknowledgement state
+- required steps completed / total
+- required evidence satisfied / total
+- documents satisfied / total
+- validation state
+- checklist completed / total
+- actions marked Complete with unmet requirements
+- overall progress calculation source
+- stage-tracker calculation source
+- Upload New route/component currently used
+- Link Existing API and relationship currently used
+
+Do not alter records during this diagnostic.
+
+====================================================================
+3. HANDLE EXISTING “COMPLETE BUT INCOMPLETE” RECORDS SAFELY
+====================================================================
+
+Some production actions may already be marked Complete even though the new completion criteria are not satisfied.
+
+Do not automatically reopen or downgrade those actions.
+
+Instead, flag them as:
+
+Completion Inconsistency
+
+Show an authorized-user warning:
+
+“This action is marked Complete, but some underlying roadmap requirements are incomplete.”
+
+List the missing items.
+
+Options for a Global Admin or Compliance Manager:
+
+- Review and Reopen Action
+- Record Legacy Completion Override
+- Dismiss After Validation
+
+Legacy Completion Override must require:
+
+- justification
+- approved by
+- approved date
+- audit log
+
+Do not silently change historical production statuses.
+
+Apply the corrected completion rules to all future status changes.
+
+====================================================================
+4. CREATE A RESTRAINED VISUAL THEME
+====================================================================
+
+Use a neutral enterprise design.
+
+Primary palette:
+
+- Main background: existing soft slate application background
+- Card background: white
+- Primary text: dark navy/slate
+- Secondary text: slate gray
+- Primary action: Control HUB blue
+- Success: green only for completed states
+- Warning: amber only for items needing attention
+- Error/blocker: red only for actual blockers
+- Neutral/inactive: gray
+
+Do not use full-card pastel backgrounds for every phase.
+
+Do not use purple, cyan, pink, green, amber, and blue simultaneously as major card backgrounds.
+
+Use color as a semantic signal, not decoration.
+
+Recommended phase-card design:
+
+- white card
+- subtle gray border
+- small phase badge
+- navy title
+- blue progress bar
+- semantic status icon
+- no tinted full-card background
+
+Use the same visual treatment across:
+
+- Guided View
+- List View
+- Phase View
+- Coverage Matrix
+- Roadmap Progress
+- Action Detail
+
+====================================================================
+5. COLOR ACCESSIBILITY
+====================================================================
+
+Ensure:
+
+- normal text contrast meets WCAG AA
+- buttons have clear hover and focus states
+- color is not the only status indicator
+- every color-coded state also has an icon and text
+- disabled controls remain readable
+- outline buttons have visible borders
+- selected rows have a clear non-color-only indicator
+
+Use:
+
+Green check icon + “Complete”
+
+Amber warning icon + “Attention Needed”
+
+Red blocker icon + “Blocked”
+
+Gray circle icon + “Not Started”
+
+Blue progress icon + “In Progress”
+
+====================================================================
+6. SIMPLIFY PRIORITY ACTIONS PAGE
+====================================================================
+
+Keep the useful explanation, but reduce visual clutter.
+
+Recommended layout:
+
+A. Page Header
+
+- Implementation Roadmap
+- concise subtitle
+- Coverage Matrix
+- Roadmap Progress
+
+B. Compact “How It Works” section
+
+Use one collapsible panel rather than multiple large colored panels.
+
+Collapsed by default after the user has viewed it once.
+
+C. Roadmap Summary
+
+Cards:
+
+- Total Actions
+- Complete
+- In Progress
+- Attention Needed
+- Controls Supported
+- Overall Progress
+
+Use white cards with consistent icons.
+
+D. Recommended Next Action
+
+Show one clear card:
+
+- action title
+- why it is recommended
+- current stage
+- progress
+- owner
+- due date
+- Start / Continue button
+
+E. Action Views
+
+- Guided
+- List
+- Phase
+
+Use neutral segmented buttons.
+
+====================================================================
+7. SIMPLIFY PHASE VIEW
+====================================================================
+
+Phase cards should show:
+
+- phase number
+- phase title
+- short purpose
+- actions completed / total
+- phase progress
+- next incomplete action
+- View Phase button
+
+Do not use a different large background color for every phase.
+
+If a phase has no actions:
+
+Do not show:
+
+0/0 Complete
+
+Use:
+
+No actions assigned
+
+Display it as a neutral state.
+
+Optionally hide empty phases behind:
+
+Show Empty Phases
+
+Default:
+Off
+
+====================================================================
+8. IMPROVE COVERAGE MATRIX
+====================================================================
+
+Use a neutral matrix.
+
+Requirements:
+
+- sticky control column
+- sticky action headings
+- clear legend
+- readable cell spacing
+- tooltips on every mapped cell
+- clickable cells
+- no reliance on color alone
+
+Mapping indicators:
+
+- Full Support: solid check icon
+- Partial Support: half-filled or labeled icon
+- Evidence Support: document/evidence icon
+- Monitoring Support: activity icon
+- No Mapping: blank
+
+Use one primary blue plus semantic icons.
+
+Do not use several saturated colors without explanation.
+
+====================================================================
+9. IMPROVE ROADMAP PROGRESS PAGE
+====================================================================
+
+Use neutral white phase sections with blue progress bars.
+
+Show:
+
+- Overall Roadmap Progress
+- Actions Complete
+- Actions In Progress
+- Attention Needed
+- Ready for Review
+- Blocked
+
+For each phase:
+
+- phase name
+- progress percentage
+- action count
+- action status
+- next step
+- owner
+- due date
+
+Do not calculate 100% from the manual action status alone.
+
+====================================================================
+10. RESTRUCTURE ACTION DETAIL LAYOUT
+====================================================================
+
+The current page leaves excessive blank space and detaches the assignment panel from the content.
+
+Use a responsive two-column layout.
+
+Desktop:
+
+Left:
+- action header
+- stage tracker
+- tabs
+- action content
+
+Right:
+- sticky Action Progress panel
+
+Recommended widths:
+
+- main content: flexible
+- progress panel: approximately 320–360 pixels
+
+Mobile/tablet:
+
+- stack the progress panel above the tabs
+
+Do not leave a large empty center area merely because the right panel is short.
+
+Header should show:
+
+- Action Title
+- Phase
+- Priority
+- Effort
+- Status
+- Owner
+- Due Date
+- Controls Supported
+- Overall Progress
+
+====================================================================
+11. REPLACE THE CURRENT MANUAL COMPLETION MODEL
+====================================================================
+
+Do not allow the Status dropdown to set Complete without validation.
+
+Use statuses:
+
+- Not Started
+- In Progress
+- Evidence Needed
+- Ready for Review
+- Complete
+- Blocked
+- Not Applicable, where allowed
+
+Status behavior:
+
+Not Started:
+No work has begun.
+
+In Progress:
+Overview acknowledged or at least one step started.
+
+Evidence Needed:
+Required configuration steps are complete, but evidence or documents are missing.
+
+Ready for Review:
+All required work is complete and awaiting authorized review.
+
+Complete:
+Authorized reviewer has confirmed the action.
+
+Blocked:
+A recorded issue prevents progress.
+
+Not Applicable:
+Requires justification and authorized approval.
+
+Do not show Complete as an unrestricted dropdown option.
+
+====================================================================
+12. DERIVE STAGE PROGRESS FROM ACTUAL DATA
+====================================================================
+
+The “Where You Are” tracker must be based on actual completion criteria.
+
+Stages:
+
+1. Understand
+2. Perform Steps
+3. Upload Evidence
+4. Validate
+5. Review & Complete
+
+Stage 1 — Understand
+
+Complete when:
+- overview acknowledgement is recorded
+
+Stage 2 — Perform Steps
+
+Complete when:
+- every required step is Complete or approved Not Applicable
+
+Stage 3 — Upload Evidence
+
+Complete when:
+- every required evidence requirement has at least one qualifying linked Evidence record
+
+Stage 4 — Validate
+
+Complete when:
+- validation result is Passed or approved Passed with Exception
+
+Stage 5 — Review & Complete
+
+Complete when:
+- stages 1–4 are complete
+- required documents are satisfied
+- required checklist items are complete
+- no unresolved blockers remain
+- an authorized reviewer marks the action Complete
+
+Do not highlight Stage 5 merely because the manual action status currently says Complete.
+
+====================================================================
+13. ACTION PROGRESS CALCULATION
+====================================================================
+
+Calculate progress from actual components.
+
+Show the breakdown:
+
+- Overview: Complete / Incomplete
+- Steps: X / Y
+- Evidence: X / Y
+- Documents: X / Y
+- Validation: Complete / Incomplete
+- Checklist: X / Y
+- Blockers: X
+
+Use a documented weighted formula or equal-stage calculation.
+
+Recommended stage-based calculation:
+
+- Understand: 10%
+- Steps: 35%
+- Evidence and Documents: 25%
+- Validation: 15%
+- Checklist / Review: 15%
+
+Do not allow a manually entered status to force the progress to 100%.
+
+Display the calculation in a tooltip:
+
+“How progress is calculated”
+
+====================================================================
+14. ACTION COMPLETION BUTTONS
+====================================================================
+
+Replace the ambiguous status behavior with contextual actions.
+
+Buttons may include:
+
+- Start Action
+- Acknowledge Overview
+- Go to First Incomplete Step
+- Upload Missing Evidence
+- Complete Validation
+- Submit for Review
+- Approve Complete
+- Report Blocker
+- Reopen Action
+
+Submit for Review becomes available only when required work is satisfied.
+
+Approve Complete is available only to roles with roadmap approval permission.
+
+If completion is blocked, show exactly what is missing.
+
+Example:
+
+“Cannot submit this action for review yet.”
+
+Missing:
+
+- 3 required steps
+- 2 required evidence items
+- validation result
+- 1 checklist item
+
+====================================================================
+15. FIX UPLOAD NEW
+====================================================================
+
+Do not navigate from the roadmap to the broken generic `/evidence/upload` page.
+
+Use the same working Evidence upload component/service used by the Evidence Repository or control Evidence tab.
+
+Open a context-aware modal or drawer directly from the roadmap.
+
+Modal title:
+
+Upload Evidence for [Evidence Requirement Name]
+
+Example:
+
+Upload Evidence for System Security Plan (SSP)
+
+Prefill:
+
+- Evidence Title
+- Evidence Type
+- Status = Draft
+- Description
+- Suggested Filename
+- Roadmap Action ID
+- Roadmap Evidence Requirement ID
+- Primary Control
+- All linked controls listed by the roadmap requirement
+- Organization ID from the current organization context
+- Return location
+
+Required fields:
+
+- File
+- Title
+- Evidence Type
+- Status
+- Linked Controls
+
+Optional:
+
+- Description
+- Collection Date
+- Review Date
+- Owner
+- Assessor Summary
+- Internal Notes
+- Tags
+
+Display:
+
+“This evidence will be linked to the roadmap requirement and the following controls.”
+
+Show all controls as chips.
+
+Allow authorized users to remove or add controls before upload.
+
+====================================================================
+16. UPLOAD NEW TRANSACTION
+====================================================================
+
+When the roadmap upload is confirmed:
+
+1. Validate authorization.
+2. Validate the selected organization.
+3. Store the file using the existing private Evidence storage service.
+4. Create one Evidence record.
+5. Create one evidence-to-control mapping per selected control.
+6. Link the Evidence record to the roadmap evidence requirement.
+7. Commit all records transactionally.
+8. Update the evidence-requirement status.
+9. Recalculate the roadmap action progress.
+10. Return the user to the same roadmap action and Evidence to Collect tab.
+11. Highlight the newly uploaded evidence.
+12. Show success notification.
+
+Do not:
+
+- create duplicate physical files
+- create one Evidence record per control
+- lose the roadmap context
+- redirect to a generic upload page
+
+If any step fails:
+
+- roll back the database records
+- clean up the new file where safe
+- retain the previous roadmap state
+- show a clear error
+
+====================================================================
+17. UPLOAD NEW SUCCESS BEHAVIOR
+====================================================================
+
+After a successful upload:
+
+The evidence requirement should display:
+
+- Linked
+- Evidence Title
+- Evidence Status
+- Preview
+- Download
+- Open Evidence
+- Unlink, if permitted
+
+The action’s evidence count should update immediately.
+
+The stage tracker should update if the evidence requirement is now satisfied.
+
+Do not require a full browser refresh.
+
+====================================================================
+18. FIX LINK EXISTING MODAL
+====================================================================
+
+Replace the current narrow modal with a professional evidence selector.
+
+Recommended width:
+
+800–900 pixels
+
+Maximum height:
+
+75–80% of viewport
+
+Layout:
+
+Header:
+- Link Existing Evidence
+- evidence requirement name
+- required evidence type
+- expected controls
+
+Search and Filters:
+- Search
+- Evidence Type
+- Status
+- Control
+- Owner
+- Date
+
+Evidence list columns/cards:
+
+- selection checkbox
+- title
+- type
+- status
+- linked controls
+- uploaded date
+- owner
+- preview action
+
+Use clear selected-row styling:
+
+- visible checkbox
+- blue left border or background tint
+- check icon
+- selected count
+
+Do not place faint white “Link” buttons on each row.
+
+Use a fixed footer:
+
+- Selected: X
+- Cancel
+- Link Selected Evidence
+
+Primary button:
+
+Link Selected Evidence
+
+Secondary button:
+
+Cancel
+
+Use high-contrast buttons consistent with Control HUB.
+
+====================================================================
+19. LINK EXISTING BEHAVIOR
+====================================================================
+
+Allow one or more Evidence records to be linked to a roadmap evidence requirement.
+
+Show only Evidence from the selected organization.
+
+Exclude by default:
+
+- Archived
+- Superseded
+- deleted
+- inaccessible
+- records the user cannot view
+
+If Evidence is already linked:
+
+Show:
+
+Already Linked
+
+Disable duplicate selection.
+
+When the user confirms:
+
+1. Create roadmap-evidence relationship records.
+2. Do not copy the physical file.
+3. Do not create a new Evidence record.
+4. Verify or add the required evidence-to-control mappings after user confirmation.
+5. Recalculate roadmap progress.
+6. Update the requirement card.
+7. Close the modal.
+8. Show success notification.
+
+If the selected Evidence is missing some controls required by the roadmap item, show:
+
+“This evidence is not currently linked to all controls supported by this roadmap requirement.”
+
+Options:
+
+- Add Missing Control Links and Continue
+- Link to Roadmap Only
+- Cancel
+
+Default recommendation:
+
+Add Missing Control Links and Continue
+
+Do not add mappings silently without informing the user.
+
+====================================================================
+20. ROADMAP EVIDENCE RELATIONSHIP
+====================================================================
+
+Use a many-to-many relationship between roadmap evidence requirements and Evidence records.
+
+Example model:
+
+RoadmapEvidenceLink
+- id
+- organization_id
+- roadmap_action_id
+- roadmap_evidence_requirement_id
+- evidence_id
+- linked_by
+- linked_at
+- notes
+
+Enforce uniqueness:
+
+roadmap_evidence_requirement_id + evidence_id
+
+Do not use filename matching as the relationship.
+
+Do not duplicate Evidence records.
+
+====================================================================
+21. EVIDENCE REQUIREMENT STATUS
+====================================================================
+
+Each Evidence to Collect item should have a clear status:
+
+- Missing
+- Linked — Draft
+- Linked — Pending Review
+- Satisfied
+- Needs Update
+- Not Applicable
+
+Recommended satisfaction rule:
+
+Satisfied when at least one linked Evidence record:
+
+- exists
+- is accessible
+- has an allowed current lifecycle state
+- has a qualifying review status according to organization policy
+
+Do not treat Archived or Superseded evidence as satisfying current requirements by default.
+
+Not Applicable requires:
+
+- justification
+- approved by
+- approved date
+
+====================================================================
+22. OPTIONAL MODULE ARCHITECTURE
+====================================================================
+
+Make Implementation Roadmap optional per organization.
+
+Use an organization-level feature record.
+
+Recommended model:
+
+OrganizationFeature
+- id
+- organization_id
+- feature_key
+- enabled
+- initialized
+- enabled_by
+- enabled_at
+- disabled_by
+- disabled_at
+- change_reason
+- created_at
+- updated_at
+
+Feature key:
+
+IMPLEMENTATION_ROADMAP
+
+Enforce uniqueness:
+
+organization_id + feature_key
+
+Only platform Global Admins may enable or disable this module.
+
+Do not let organization-specific roles change module availability.
+
+====================================================================
+23. EXISTING ORGANIZATION DEFAULT
+====================================================================
+
+Do not hide the roadmap from any existing production organization during deployment.
+
+For existing organizations:
+
+- missing feature record should resolve as Enabled
+or
+- create enabled records through a reviewed, non-destructive migration
+
+No current organization’s navigation should change automatically.
+
+For new organizations:
+
+Add an explicit organization-creation option:
+
+Enable Implementation Roadmap
+
+Recommended helper text:
+
+“Use the roadmap when the organization needs guided implementation actions, evidence collection, validation, and progress tracking. Disable it for organizations that only need control, evidence, SSP, monitoring, or assessment functionality.”
+
+Recommended default:
+
+Enabled
+
+Allow the Global Admin to change it before creating the organization.
+
+====================================================================
+24. MODULE SETTINGS
+====================================================================
+
+Add Global Admin-only configuration under:
+
+Organizations > Edit Organization > Modules
+
+or:
+
+Organizations > Organization Configuration
+
+Show:
+
+Implementation Roadmap
+
+Status:
+
+- Enabled
+- Disabled
+
+Description:
+
+“Provides guided implementation actions, evidence requirements, validation, coverage, and roadmap progress.”
+
+When disabling, show:
+
+“Disabling this module hides the roadmap from users. Existing roadmap actions, progress, evidence links, and history will be preserved.”
+
+Require:
+
+- change reason
+- confirmation
+
+Button:
+
+Disable Module
+
+When enabling:
+
+If roadmap data already exists:
+- restore visibility
+
+If no roadmap data exists:
+- show the actions that will be initialized
+- seed idempotently from the organization’s active packages after confirmation
+
+Do not initialize duplicate actions.
+
+====================================================================
+25. DISABLED MODULE BEHAVIOR
+====================================================================
+
+When Implementation Roadmap is disabled:
+
+Hide:
+
+- Impl. Roadmap sidebar item
+- Priority Actions
+- Coverage Matrix
+- Roadmap Progress
+- roadmap dashboard card
+- roadmap recommended actions
+- roadmap links in other modules
+- roadmap-specific report options, if any
+
+Do not delete:
+
+- actions
+- checklist responses
+- evidence requirements
+- evidence links
+- progress
+- owners
+- due dates
+- notes
+- audit history
+
+Protect backend routes.
+
+Direct roadmap URLs should return a controlled unavailable response:
+
+“Implementation Roadmap is not enabled for this organization.”
+
+Do not rely only on frontend hiding.
+
+Global Admins should manage the setting from the Organizations administration area, not from the disabled roadmap route.
+
+====================================================================
+26. RE-ENABLE BEHAVIOR
+====================================================================
+
+When re-enabled:
+
+- restore the sidebar item
+- restore existing actions and progress
+- restore existing evidence links
+- restore dashboard references
+- do not reset completion status
+- do not re-seed duplicate actions
+- audit the reactivation
+
+If the organization’s selected packages changed while disabled:
+
+Show a dry-run comparison:
+
+- existing actions
+- suggested new actions
+- obsolete actions
+- mapping changes
+
+Do not automatically delete old actions.
+
+====================================================================
+27. PERMISSIONS
+====================================================================
+
+Use existing organization-specific permissions.
+
+Suggested roadmap capabilities:
+
+- roadmap.view
+- roadmap.update
+- roadmap.complete_steps
+- roadmap.upload_evidence
+- roadmap.link_evidence
+- roadmap.validate
+- roadmap.submit_review
+- roadmap.approve_complete
+- roadmap.override_completion
+- roadmap.configure_module
+
+Assign:
+
+roadmap.configure_module:
+Platform Global Admin only
+
+Assessor Read-Only:
+
+- may view enabled roadmap data if granted
+- may view linked evidence
+- may not upload, link, edit, validate, or complete actions
+
+Backend authorization is required.
+
+====================================================================
+28. AUDIT LOGGING
+====================================================================
+
+Log:
+
+- roadmap module enabled
+- roadmap module disabled
+- roadmap initialized
+- overview acknowledged
+- step status changed
+- evidence upload started
+- evidence uploaded from roadmap
+- existing evidence linked
+- evidence unlinked
+- missing control mappings added
+- validation completed
+- action submitted for review
+- action approved complete
+- action reopened
+- completion override recorded
+- completion inconsistency detected
+- upload failed
+- link failed
+
+Include:
+
+- user
+- organization
+- roadmap action
+- evidence requirement
+- evidence ID
+- previous state
+- new state
+- reason
+- timestamp
+- success/failure
+
+Do not log file contents.
+
+====================================================================
+29. ERROR HANDLING
+====================================================================
+
+Upload failure:
+
+“The evidence could not be uploaded. No evidence record or roadmap link was created.”
+
+Link failure:
+
+“The selected evidence could not be linked. No roadmap changes were applied.”
+
+Progress calculation failure:
+
+“Roadmap progress is temporarily unavailable. Existing action data remains unchanged.”
+
+Module configuration failure:
+
+“The module setting could not be changed. The current setting remains active.”
+
+Do not expose:
+
+- stack traces
+- storage keys
+- database errors
+- internal IDs unnecessarily
+
+====================================================================
+30. AUTOMATED TESTS
+====================================================================
+
+Add frontend and backend tests.
+
+Visual/state tests:
+
+- phase cards use neutral design
+- status colors are semantic
+- empty phases do not show 0/0 Complete
+- link modal has accessible contrast
+- selected evidence is visually clear
+- keyboard focus is visible
+
+Completion tests:
+
+- action cannot be marked Complete with blockers
+- stage tracker uses actual requirement state
+- manual status cannot force 100%
+- Ready for Review requires all prerequisites
+- authorized reviewer can approve Complete
+- existing inconsistent Complete action is flagged, not automatically changed
+
+Upload tests:
+
+- Upload New opens context-aware uploader
+- file input is present and functional
+- title/type/control mappings are prefilled
+- one Evidence record is created
+- file appears under all selected controls
+- roadmap requirement is satisfied
+- user returns to the original action
+- failed upload rolls back
+
+Link tests:
+
+- modal shows same-organization evidence
+- multi-select works
+- already-linked evidence is disabled
+- Link Selected Evidence works
+- no duplicate file or Evidence record is created
+- roadmap progress updates
+- missing control-link confirmation works
+
+Optional-module tests:
+
+- existing organizations remain enabled
+- disabled organization has no roadmap navigation
+- disabled route is protected
+- roadmap data remains in database
+- re-enable restores prior data
+- only Global Admin can toggle the module
+
+====================================================================
+31. ACCEPTANCE TESTS
+====================================================================
+
+Test A — Visual Design:
+
+Open Priority Actions, Phase View, Roadmap Progress, Coverage Matrix, and Action Detail.
+
+Expected:
+
+- restrained navy/slate/white design
+- blue as the main accent
+- green/amber/red only for semantic states
+- no excessive pastel full-card backgrounds
+- readable contrast
+
+Test B — Upload New:
+
+Open an action > Evidence to Collect > Upload New.
+
+Expected:
+
+- context-aware evidence uploader opens
+- file can be selected
+- requirement title/type are prefilled
+- linked controls are preselected
+- upload succeeds
+- evidence appears in the requirement and linked controls
+- user returns to the same roadmap action
+
+Test C — Link Existing:
+
+Select Link Existing.
+
+Expected:
+
+- wide professional modal
+- searchable/filterable evidence list
+- clear selected state
+- fixed footer
+- high-contrast Link Selected Evidence button
+- selected evidence links successfully
+
+Test D — Completion Guard:
+
+Open an action with missing steps or evidence.
+
+Expected:
+
+- Complete cannot be selected
+- missing requirements are listed
+- tracker does not jump to Review & Complete
+
+Test E — Legacy Completion:
+
+Open an existing action marked Complete but missing underlying requirements.
+
+Expected:
+
+- status is not automatically changed
+- Completion Inconsistency warning appears
+- authorized users may review, reopen, or record an override
+
+Test F — Disable Module:
+
+As Global Admin, disable Implementation Roadmap for APEX Solutions.
+
+Expected:
+
+- sidebar item disappears for APEX Solutions
+- roadmap dashboard content disappears
+- direct roadmap route is unavailable
+- existing roadmap data remains stored
+- other organizations are unaffected
+
+Test G — Re-enable Module:
+
+Re-enable it.
+
+Expected:
+
+- sidebar and pages return
+- prior progress and evidence links remain
+- no duplicate actions are created
+
+Test H — Unauthorized Toggle:
+
+Organization Admin attempts to disable the module.
+
+Expected:
+
+- no toggle is visible
+- direct API request returns HTTP 403
+
+Test I — Production Safety:
+
+No existing controls, evidence files, evidence statuses, SSP data, monitoring records, POA&M records, or organization data are deleted or overwritten.
+
+====================================================================
+32. MOST IMPORTANT RULES
+====================================================================
+
+1. Roadmap progress must come from actual completed work, not solely from a manually selected status.
+
+2. Upload New must use the existing functional Evidence infrastructure while preserving roadmap context.
+
+3. Link Existing must link one existing Evidence record without copying or duplicating it.
+
+4. The roadmap must be optional per organization and controlled only by platform Global Admins.
+
+5. Disabling the roadmap hides the module but never deletes its data.

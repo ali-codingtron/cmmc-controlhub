@@ -4,6 +4,7 @@ import {
   boolean,
   timestamp,
   pgEnum,
+  unique,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -78,6 +79,35 @@ export const organizationUsersTable = pgTable("organization_users", {
   invitedAt: timestamp("invited_at"),
   joinedAt: timestamp("joined_at").defaultNow(),
 });
+
+export const orgFeatureKeyEnum = pgEnum("org_feature_key", [
+  "IMPLEMENTATION_ROADMAP",
+]);
+
+export const organizationFeaturesTable = pgTable(
+  "organization_features",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizationsTable.id, { onDelete: "cascade" }),
+    featureKey: orgFeatureKeyEnum("feature_key").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    initialized: boolean("initialized").notNull().default(false),
+    enabledBy: text("enabled_by").references(() => usersTable.id, {
+      onDelete: "set null",
+    }),
+    enabledAt: timestamp("enabled_at"),
+    disabledBy: text("disabled_by").references(() => usersTable.id, {
+      onDelete: "set null",
+    }),
+    disabledAt: timestamp("disabled_at"),
+    changeReason: text("change_reason"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [unique("uq_org_feature").on(t.organizationId, t.featureKey)]
+);
 
 export const insertOrganizationSchema = createInsertSchema(
   organizationsTable

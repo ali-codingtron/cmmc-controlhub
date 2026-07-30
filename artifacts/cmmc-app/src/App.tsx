@@ -5,6 +5,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { OrgProvider, useOrg } from "@/context/OrgContext";
 import { DemoModeProvider } from "@/context/DemoModeContext";
+import { RoadmapFeatureProvider, useRoadmapFeature } from "@/context/RoadmapFeatureContext";
+import { Map } from "lucide-react";
 import { Layout } from "@/components/layout/layout";
 import NotFound from "@/pages/not-found";
 import DemoLanding from "@/pages/demo-landing";
@@ -121,6 +123,27 @@ function RoadmapOnly({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function RoadmapDisabledPage() {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center p-6">
+      <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+        <Map className="h-8 w-8 text-muted-foreground" />
+      </div>
+      <h2 className="text-xl font-semibold">Implementation Roadmap Not Enabled</h2>
+      <p className="text-muted-foreground max-w-md">
+        The Implementation Roadmap module is not enabled for this organization.
+        A Global Administrator can enable it from the organization settings.
+      </p>
+    </div>
+  );
+}
+
+function RoadmapRouteGuard({ children }: { children: React.ReactNode }) {
+  const { isRoadmapEnabled } = useRoadmapFeature();
+  if (!isRoadmapEnabled) return <RoadmapDisabledPage />;
+  return <>{children}</>;
+}
+
 function AppRoutes() {
   return (
     <Switch>
@@ -219,16 +242,16 @@ function AppRoutes() {
               <Route path="/reports/audit" component={ReportsAudit} />
               <Route path="/reports/ssp" component={ReportsSsp} />
               <Route path="/roadmap">
-                {() => <RoadmapOnly><RoadmapActions /></RoadmapOnly>}
+                {() => <RoadmapOnly><RoadmapRouteGuard><RoadmapActions /></RoadmapRouteGuard></RoadmapOnly>}
               </Route>
               <Route path="/roadmap/coverage">
-                {() => <RoadmapOnly><RoadmapCoverage /></RoadmapOnly>}
+                {() => <RoadmapOnly><RoadmapRouteGuard><RoadmapCoverage /></RoadmapRouteGuard></RoadmapOnly>}
               </Route>
               <Route path="/roadmap/progress">
-                {() => <RoadmapOnly><RoadmapProgress /></RoadmapOnly>}
+                {() => <RoadmapOnly><RoadmapRouteGuard><RoadmapProgress /></RoadmapRouteGuard></RoadmapOnly>}
               </Route>
               <Route path="/roadmap/:id">
-                {(params: { id: string }) => <RoadmapOnly><RoadmapActionDetail id={params.id} /></RoadmapOnly>}
+                {(params: { id: string }) => <RoadmapOnly><RoadmapRouteGuard><RoadmapActionDetail id={params.id} /></RoadmapRouteGuard></RoadmapOnly>}
               </Route>
               <Route path="/pre-assessment">
                 {() => <Redirect to="/pre-assessment/history" />}
@@ -266,11 +289,13 @@ function App() {
       <TooltipProvider>
         <AuthProvider>
           <OrgProvider>
-            <DemoModeProvider>
-              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-                <AppRoutes />
-              </WouterRouter>
-            </DemoModeProvider>
+            <RoadmapFeatureProvider>
+              <DemoModeProvider>
+                <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                  <AppRoutes />
+                </WouterRouter>
+              </DemoModeProvider>
+            </RoadmapFeatureProvider>
           </OrgProvider>
         </AuthProvider>
         <Toaster />

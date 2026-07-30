@@ -29,6 +29,7 @@ export const roadmapStatusEnum = pgEnum("roadmap_status", [
   "ready_for_review",
   "complete",
   "blocked",
+  "not_applicable",
 ]);
 
 export const roadmapSupportTypeEnum = pgEnum("roadmap_support_type", [
@@ -140,6 +141,8 @@ export const orgRoadmapProgressTable = pgTable("org_roadmap_progress", {
   validatedAt: timestamp("validated_at"),
   validationNotes: text("validation_notes"),
   overrideJustification: text("override_justification"),
+  overrideApprovedBy: text("override_approved_by"),
+  overrideApprovedAt: timestamp("override_approved_at"),
   completedAt: timestamp("completed_at"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

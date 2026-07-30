@@ -6,6 +6,7 @@ import {
 } from "@workspace/api-client-react";
 import { useOrg } from "@/context/OrgContext";
 import { useIsAssessor } from "@/lib/auth";
+import { useRoadmapFeature } from "@/context/RoadmapFeatureContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Link } from "wouter";
@@ -194,6 +195,7 @@ function SkeletonDashboard() {
 export default function Dashboard() {
   const { activeOrg, isLoading: orgLoading } = useOrg();
   const isAssessor = useIsAssessor();
+  const { isRoadmapEnabled } = useRoadmapFeature();
   const queryClient = useQueryClient();
   const { data: summary, isLoading: summaryLoading } = useGetDashboardSummary({
     query: { enabled: !!activeOrg } as any,
@@ -569,8 +571,8 @@ export default function Dashboard() {
         </Link>
       )}
 
-      {/* ── Implementation Roadmap tile — hidden for assessors ──── */}
-      {!isAssessor && (
+      {/* ── Implementation Roadmap tile — hidden for assessors and when disabled ──── */}
+      {!isAssessor && isRoadmapEnabled && (
         <Link href="/roadmap" className="block">
           <Card className="border border-border/60 shadow-sm hover:shadow-md transition-shadow">
             <CardContent className="p-4 flex items-center gap-4 flex-wrap">

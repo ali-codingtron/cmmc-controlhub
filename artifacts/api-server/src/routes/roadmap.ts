@@ -14,6 +14,7 @@ import {
   roadmapProcedureStepsTable,
   orgProcedureStepProgressTable,
   evidenceItemsTable,
+  organizationFeaturesTable,
 } from "@workspace/db";
 import { eq, and, inArray, asc } from "drizzle-orm";
 import { z } from "zod";
@@ -28,16 +29,48 @@ import {
   type RoadmapResult,
   type RoadmapStatus,
 } from "../lib/roadmap-progress";
+import { logAudit } from "../lib/audit";
 
 const router = Router();
 
 const ADMIN_ROLES = new Set(["admin", "compliance_manager"]);
+
+// Check if IMPLEMENTATION_ROADMAP feature is enabled for this org
+// Missing record = enabled (default)
+async function requireRoadmapEnabled(
+  req: import("express").Request,
+  res: import("express").Response,
+  next: import("express").NextFunction
+): Promise<void> {
+  const orgId = req.orgId;
+  if (!orgId) { next(); return; }
+  try {
+    const feature = await db
+      .select({ enabled: organizationFeaturesTable.enabled })
+      .from(organizationFeaturesTable)
+      .where(
+        and(
+          eq(organizationFeaturesTable.organizationId, orgId),
+          eq(organizationFeaturesTable.featureKey, "IMPLEMENTATION_ROADMAP")
+        )
+      )
+      .limit(1);
+    if (feature.length > 0 && !feature[0]!.enabled) {
+      res.status(403).json({ error: "Implementation Roadmap is not enabled for this organization." });
+      return;
+    }
+    next();
+  } catch {
+    next(); // fail open — don't break roadmap if feature check errors
+  }
+}
 
 // ── List Actions ──────────────────────────────────────────────────────────────
 router.get(
   "/roadmap/actions",
   requireAuth,
   requireOrg,
+  requireRoadmapEnabled,
   async (req, res) => {
     const orgId = req.orgId!;
 
@@ -213,6 +246,7 @@ router.get(
   "/roadmap/actions/:id",
   requireAuth,
   requireOrg,
+  requireRoadmapEnabled,
   async (req, res) => {
     const { id } = req.params as Record<string, string>;
     const orgId = req.orgId!;
@@ -397,6 +431,7 @@ const updateProgressSchema = z.object({
       "ready_for_review",
       "complete",
       "blocked",
+      "not_applicable",
     ])
     .optional(),
   owner: z.string().nullable().optional(),
@@ -407,12 +442,15 @@ const updateProgressSchema = z.object({
     .optional(),
   notes: z.string().nullable().optional(),
   overrideJustification: z.string().nullable().optional(),
+  overrideApprovedBy: z.string().nullable().optional(),
+  overrideApprovedAt: z.string().nullable().optional(),
 });
 
 router.patch(
   "/roadmap/actions/:id/progress",
   requireAuth,
   requireOrg,
+  requireRoadmapEnabled,
   requireNotAssessor,
   async (req, res) => {
     const { id } = req.params as Record<string, string>;
@@ -423,8 +461,16 @@ router.patch(
       res.status(422).json({ error: "Invalid input", issues: parsed.error.issues });
       return;
     }
-    const { status, owner, targetDate, result, notes, overrideJustification } =
-      parsed.data;
+    const {
+      status,
+      owner,
+      targetDate,
+      result,
+      notes,
+      overrideJustification,
+      overrideApprovedBy,
+      overrideApprovedAt,
+    } = parsed.data;
 
     const [action] = await db
       .select()
@@ -435,6 +481,25 @@ router.patch(
       res.status(404).json({ error: "Action not found" });
       return;
     }
+
+    // ── not_applicable gate ────────────────────────────────────────────────────
+    if (status === "not_applicable") {
+      if (!ADMIN_ROLES.has(req.authUser!.role)) {
+        res.status(403).json({
+          error: "Only admins or compliance managers can mark an action not applicable",
+        });
+        return;
+      }
+      if (!overrideJustification) {
+        res.status(422).json({
+          error: "overrideJustification is required to mark an action not applicable",
+        });
+        return;
+      }
+    }
+
+    // ── complete gate ──────────────────────────────────────────────────────────
+    let isOverrideComplete = false;
 
     if (status === "complete") {
       if (!ADMIN_ROLES.has(req.authUser!.role)) {
@@ -507,12 +572,19 @@ router.patch(
         status: "complete",
       });
 
-      if (!computed.readyToComplete && !overrideJustification) {
-        res.status(422).json({
-          error: "Prerequisites not met to mark this action complete",
-          missing: computed.missing,
-        });
-        return;
+      if (!computed.readyToComplete) {
+        if (
+          !overrideJustification ||
+          !overrideApprovedBy ||
+          !overrideApprovedAt
+        ) {
+          res.status(409).json({
+            error: "Action requirements not met",
+            missing: computed.missing,
+          });
+          return;
+        }
+        isOverrideComplete = true;
       }
     }
 
@@ -527,6 +599,11 @@ router.patch(
       )
       .limit(1);
 
+    const overrideApprovedAtDate =
+      isOverrideComplete && overrideApprovedAt
+        ? new Date(overrideApprovedAt)
+        : undefined;
+
     if (existing.length > 0) {
       await db
         .update(orgRoadmapProgressTable)
@@ -537,6 +614,8 @@ router.patch(
           ...(result !== undefined && { result: result as any }),
           ...(notes !== undefined && { notes }),
           ...(overrideJustification !== undefined && { overrideJustification }),
+          ...(isOverrideComplete && overrideApprovedBy !== undefined && { overrideApprovedBy: overrideApprovedBy ?? null }),
+          ...(isOverrideComplete && overrideApprovedAtDate !== undefined && { overrideApprovedAt: overrideApprovedAtDate }),
           ...(status === "complete" && { completedAt: new Date() }),
           updatedAt: new Date(),
         })
@@ -557,10 +636,294 @@ router.patch(
         result: (result as any) ?? null,
         notes: notes ?? null,
         overrideJustification: overrideJustification ?? null,
+        ...(isOverrideComplete && overrideApprovedBy !== undefined && { overrideApprovedBy: overrideApprovedBy ?? null }),
+        ...(isOverrideComplete && overrideApprovedAtDate !== undefined && { overrideApprovedAt: overrideApprovedAtDate }),
         completedAt: status === "complete" ? new Date() : null,
         updatedAt: new Date(),
       });
     }
+
+    // ── Audit log ──────────────────────────────────────────────────────────────
+    if (status === "complete") {
+      if (isOverrideComplete) {
+        await logAudit(req, "complete", "roadmap_action", id, {
+          entityLabel: action.title,
+          newValue: {
+            action: "roadmap_completion_override_recorded",
+            overrideJustification,
+            overrideApprovedBy,
+            overrideApprovedAt,
+          },
+        });
+      } else {
+        await logAudit(req, "complete", "roadmap_action", id, {
+          entityLabel: action.title,
+          newValue: { action: "action_approved_complete" },
+        });
+      }
+    } else if (status === "not_applicable") {
+      await logAudit(req, "status_changed", "roadmap_action", id, {
+        entityLabel: action.title,
+        newValue: {
+          action: "roadmap_action_not_applicable_set",
+          overrideJustification,
+        },
+      });
+    }
+
+    res.json({ ok: true });
+  }
+);
+
+// ── Consistency Check ─────────────────────────────────────────────────────────
+router.get(
+  "/roadmap/actions/:id/consistency",
+  requireAuth,
+  requireOrg,
+  async (req, res) => {
+    const { id } = req.params as Record<string, string>;
+    const orgId = req.orgId!;
+
+    const [action] = await db
+      .select()
+      .from(roadmapActionsTable)
+      .where(eq(roadmapActionsTable.id, id))
+      .limit(1);
+    if (!action) {
+      res.status(404).json({ error: "Action not found" });
+      return;
+    }
+
+    const [existingProgress] = await db
+      .select()
+      .from(orgRoadmapProgressTable)
+      .where(
+        and(
+          eq(orgRoadmapProgressTable.organizationId, orgId),
+          eq(orgRoadmapProgressTable.actionId, id)
+        )
+      )
+      .limit(1);
+
+    const [steps, evidenceItems, evidenceLinks, checklistItems, checklistProgress] =
+      await Promise.all([
+        db
+          .select()
+          .from(roadmapProcedureStepsTable)
+          .where(eq(roadmapProcedureStepsTable.actionId, id)),
+        db
+          .select()
+          .from(roadmapActionEvidenceItemsTable)
+          .where(eq(roadmapActionEvidenceItemsTable.actionId, id)),
+        db
+          .select()
+          .from(orgRoadmapEvidenceLinksTable)
+          .where(eq(orgRoadmapEvidenceLinksTable.organizationId, orgId)),
+        db
+          .select()
+          .from(roadmapActionChecklistItemsTable)
+          .where(eq(roadmapActionChecklistItemsTable.actionId, id)),
+        db
+          .select()
+          .from(orgRoadmapChecklistProgressTable)
+          .where(eq(orgRoadmapChecklistProgressTable.organizationId, orgId)),
+      ]);
+
+    const stepProgress = await db
+      .select()
+      .from(orgProcedureStepProgressTable)
+      .where(eq(orgProcedureStepProgressTable.organizationId, orgId));
+
+    const computed = computeRoadmapProgress({
+      understandAckAt: existingProgress?.understandAckAt ?? null,
+      requiredStepIds: steps.filter((s) => s.isRequired).map((s) => s.id),
+      stepStatusById: new Map(
+        stepProgress.map((p) => [p.stepId, p.status as ProcedureStepStatus])
+      ),
+      requiredEvidenceItemIds: evidenceItems
+        .filter((e) => e.isRequired)
+        .map((e) => e.id),
+      linkedEvidenceItemIds: new Set(
+        evidenceLinks.map((l) => l.roadmapEvidenceItemId)
+      ),
+      requiredChecklistItemIds: checklistItems
+        .filter((i) => i.isRequired)
+        .map((i) => i.id),
+      completedChecklistItemIds: new Set(
+        checklistProgress.filter((p) => p.completed).map((p) => p.checklistItemId)
+      ),
+      validatedAt: existingProgress?.validatedAt ?? null,
+      result: (existingProgress?.result ?? null) as RoadmapResult,
+      status: (existingProgress?.status ?? "not_started") as RoadmapStatus,
+    });
+
+    const currentStatus = existingProgress?.status ?? "not_started";
+    const hasInconsistency = currentStatus === "complete" && !computed.readyToComplete;
+
+    res.json({
+      hasInconsistency,
+      missing: computed.missing,
+      actionId: id,
+      status: currentStatus,
+    });
+  }
+);
+
+// ── Record Override (without changing status) ─────────────────────────────────
+const overrideSchema = z.object({
+  justification: z.string().min(1),
+  approvedBy: z.string().min(1),
+  approvedDate: z.string().min(1),
+});
+
+router.post(
+  "/roadmap/actions/:id/override",
+  requireAuth,
+  requireOrg,
+  async (req, res) => {
+    const { id } = req.params as Record<string, string>;
+    const orgId = req.orgId!;
+
+    if (!ADMIN_ROLES.has(req.authUser!.role)) {
+      res.status(403).json({
+        error: "Only admins or compliance managers can record an override",
+      });
+      return;
+    }
+
+    const parsed = overrideSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(422).json({ error: "Invalid input", issues: parsed.error.issues });
+      return;
+    }
+    const { justification, approvedBy, approvedDate } = parsed.data;
+    const approvedDateParsed = new Date(approvedDate);
+
+    const [action] = await db
+      .select()
+      .from(roadmapActionsTable)
+      .where(eq(roadmapActionsTable.id, id))
+      .limit(1);
+    if (!action) {
+      res.status(404).json({ error: "Action not found" });
+      return;
+    }
+
+    const existing = await db
+      .select()
+      .from(orgRoadmapProgressTable)
+      .where(
+        and(
+          eq(orgRoadmapProgressTable.organizationId, orgId),
+          eq(orgRoadmapProgressTable.actionId, id)
+        )
+      )
+      .limit(1);
+
+    if (existing.length > 0) {
+      await db
+        .update(orgRoadmapProgressTable)
+        .set({
+          overrideJustification: justification,
+          overrideApprovedBy: approvedBy,
+          overrideApprovedAt: approvedDateParsed,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(orgRoadmapProgressTable.organizationId, orgId),
+            eq(orgRoadmapProgressTable.actionId, id)
+          )
+        );
+    } else {
+      await db.insert(orgRoadmapProgressTable).values({
+        id: randomUUID(),
+        organizationId: orgId,
+        actionId: id,
+        status: "not_started",
+        overrideJustification: justification,
+        overrideApprovedBy: approvedBy,
+        overrideApprovedAt: approvedDateParsed,
+        updatedAt: new Date(),
+      });
+    }
+
+    await logAudit(req, "complete", "roadmap_action", id, {
+      entityLabel: action.title,
+      newValue: {
+        action: "roadmap_completion_override_recorded",
+        actionId: id,
+        justification,
+        approvedBy,
+        approvedDate,
+      },
+    });
+
+    res.json({ ok: true });
+  }
+);
+
+// ── Reopen Action ─────────────────────────────────────────────────────────────
+router.post(
+  "/roadmap/actions/:id/reopen",
+  requireAuth,
+  requireOrg,
+  async (req, res) => {
+    const { id } = req.params as Record<string, string>;
+    const orgId = req.orgId!;
+
+    if (!ADMIN_ROLES.has(req.authUser!.role)) {
+      res.status(403).json({
+        error: "Only admins or compliance managers can reopen an action",
+      });
+      return;
+    }
+
+    const [action] = await db
+      .select()
+      .from(roadmapActionsTable)
+      .where(eq(roadmapActionsTable.id, id))
+      .limit(1);
+    if (!action) {
+      res.status(404).json({ error: "Action not found" });
+      return;
+    }
+
+    const existing = await db
+      .select()
+      .from(orgRoadmapProgressTable)
+      .where(
+        and(
+          eq(orgRoadmapProgressTable.organizationId, orgId),
+          eq(orgRoadmapProgressTable.actionId, id)
+        )
+      )
+      .limit(1);
+
+    if (existing.length === 0) {
+      res.status(404).json({ error: "No progress record found" });
+      return;
+    }
+
+    await db
+      .update(orgRoadmapProgressTable)
+      .set({
+        status: "in_progress",
+        completedAt: null,
+        result: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(orgRoadmapProgressTable.organizationId, orgId),
+          eq(orgRoadmapProgressTable.actionId, id)
+        )
+      );
+
+    await logAudit(req, "reopened", "roadmap_action", id, {
+      entityLabel: action.title,
+      newValue: { action: "roadmap_action_reopened", actionId: id },
+    });
 
     res.json({ ok: true });
   }
@@ -887,6 +1250,7 @@ router.get(
   "/roadmap/coverage-matrix",
   requireAuth,
   requireOrg,
+  requireRoadmapEnabled,
   async (req, res) => {
     const orgId = req.orgId!;
     const { domain } = req.query as { domain?: string };
