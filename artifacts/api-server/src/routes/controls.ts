@@ -182,6 +182,11 @@ router.get("/controls", requireAuth, requireOrg, async (req, res) => {
   let taskCounts: Record<string, number> = {};
   let poamCounts: Record<string, number> = {};
 
+  // Statuses that count as active evidence — mirrors the detail endpoint's ACTIVE_STATUSES.
+  // Archived evidence is intentionally excluded from counts so the total shown in the list
+  // matches the number of items visible on the control detail page.
+  const EVIDENCE_ACTIVE_STATUSES = ["draft", "needs_classification", "pending_review", "approved", "assessor_ready", "rejected", "stale", "superseded"] as const;
+
   if (controlIds.length > 0) {
     const evRows = await db
       .select({ controlId: evidenceControlLinksTable.controlId, cnt: count() })
@@ -190,7 +195,8 @@ router.get("/controls", requireAuth, requireOrg, async (req, res) => {
       .where(
         and(
           inArray(evidenceControlLinksTable.controlId, controlIds),
-          orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined
+          orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined,
+          inArray(evidenceItemsTable.status, EVIDENCE_ACTIVE_STATUSES as unknown as string[])
         )
       )
       .groupBy(evidenceControlLinksTable.controlId);

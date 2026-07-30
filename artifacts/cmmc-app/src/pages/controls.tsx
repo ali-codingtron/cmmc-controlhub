@@ -426,15 +426,15 @@ function DetailedTable({ controls, activePackages }: { controls: Control[]; acti
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Link
-                          href={`/controls/${c.id}?tab=evidence${evWarn ? "&evStatus=pending_review" : ""}`}
+                          href={`/controls/${c.id}?tab=evidence`}
                           className={cn("text-xs font-medium hover:underline", evBad ? "text-red-600" : evWarn ? "text-amber-600" : "text-green-700")}
                         >
                           {c.approvedEvidenceCount}/{c.evidenceCount}
                         </Link>
                       </TooltipTrigger>
                       <TooltipContent>
-                        {c.approvedEvidenceCount} approved, {(c.evidenceCount ?? 0) - (c.approvedEvidenceCount ?? 0)} pending/other
-                        {evWarn && <span className="block text-amber-300 mt-0.5">Click to view pending items</span>}
+                        {c.approvedEvidenceCount} approved, {(c.evidenceCount ?? 0) - (c.approvedEvidenceCount ?? 0)} not yet approved
+                        {evWarn && <span className="block text-amber-300 mt-0.5">Click to review evidence</span>}
                       </TooltipContent>
                     </Tooltip>
                   </TableCell>
