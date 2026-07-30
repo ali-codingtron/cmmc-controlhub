@@ -44,6 +44,7 @@ import {
   ClipboardList,
   Eye,
   Wand2,
+  DatabaseZap,
 } from "lucide-react";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -180,6 +181,186 @@ function Field({
           className="text-sm"
         />
       )}
+    </div>
+  );
+}
+
+// ── Step 7 L2 sub-component ────────────────────────────────────────────────────
+
+interface ImportResult {
+  imported: number;
+  skipped: number;
+  total: number;
+}
+
+function Step7L2({
+  draftId,
+  orgId,
+  values,
+  setValues,
+}: {
+  draftId: string | null;
+  orgId: string | undefined;
+  values: Record<string, string>;
+  setValues: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+}) {
+  const { toast } = useToast();
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+
+  // Count how many narrative keys are already filled
+  const filledCount = Object.entries(values).filter(
+    ([k, v]) => k.endsWith("_IMPLEMENTATION_NARRATIVE") && v?.trim()
+  ).length;
+
+  async function handleImport() {
+    if (!draftId || !orgId) {
+      toast({ title: "Save the draft first before importing", variant: "destructive" });
+      return;
+    }
+    setImporting(true);
+    try {
+      const token = localStorage.getItem("auth_token");
+      const r = await fetch(`/api/ssp/prefill-drafts/${draftId}/import-mappings`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          "X-Organization-ID": orgId,
+        },
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || "Import failed");
+      }
+      const data = await r.json() as { imported: number; skipped: number; total: number; draft: { valuesJson: string } };
+      // Merge new values into local state
+      try {
+        const merged = JSON.parse(data.draft.valuesJson) as Record<string, string>;
+        setValues(merged);
+      } catch {
+        // ignore parse failure — server saved it, local state stays
+      }
+      setImportResult({ imported: data.imported, skipped: data.skipped, total: data.total });
+      if (data.imported > 0) {
+        toast({
+          title: `${data.imported} narrative${data.imported === 1 ? "" : "s"} imported`,
+          description: `${data.skipped > 0 ? `${data.skipped} already-filled field${data.skipped === 1 ? "" : "s"} preserved. ` : ""}These will be injected into the generated DOCX.`,
+        });
+      } else {
+        toast({
+          title: "No new narratives found",
+          description: "Your SSP Mappings page has no narratives yet, or all fields were already filled.",
+        });
+      }
+    } catch (e) {
+      toast({
+        title: "Import failed",
+        description: e instanceof Error ? e.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold">Level 2 — Requirement Narratives</h2>
+        <p className="text-sm text-muted-foreground">
+          The CMMC Level 2 template contains all 110 NIST SP 800-171 requirements. If you
+          have already entered implementation narratives on the SSP Mappings page, import
+          them here to pre-populate the generated document.
+        </p>
+      </div>
+
+      {/* Import card */}
+      <Card className="border-blue-200">
+        <CardContent className="pt-5 pb-5 space-y-4">
+          <div className="flex items-start gap-3">
+            <DatabaseZap className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 space-y-1">
+              <p className="font-medium text-sm">Import from SSP Mappings</p>
+              <p className="text-xs text-muted-foreground">
+                Reads your organization's primary SSP document's control mappings and pulls
+                each implementation narrative into the draft. Fields you have already filled
+                will not be overwritten.
+              </p>
+            </div>
+          </div>
+
+          {filledCount > 0 && !importResult && (
+            <div className="rounded-md bg-green-50 border border-green-200 px-3 py-2 text-green-800 text-xs flex items-center gap-2">
+              <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" />
+              <span>{filledCount} narrative{filledCount === 1 ? "" : "s"} already in this draft.</span>
+            </div>
+          )}
+
+          {importResult && (
+            <div className={`rounded-md border px-3 py-2 text-xs flex items-start gap-2 ${
+              importResult.imported > 0
+                ? "bg-green-50 border-green-200 text-green-800"
+                : "bg-amber-50 border-amber-200 text-amber-800"
+            }`}>
+              <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+              <span>
+                {importResult.imported > 0 ? (
+                  <>
+                    <strong>{importResult.imported} of 110</strong> narratives imported.
+                    {importResult.skipped > 0 && ` ${importResult.skipped} existing field${importResult.skipped === 1 ? "" : "s"} preserved.`}
+                  </>
+                ) : (
+                  <>No new narratives to import — SSP Mappings page is empty or all fields already filled.</>
+                )}
+              </span>
+            </div>
+          )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleImport}
+            disabled={importing || !draftId}
+            className="gap-2"
+          >
+            {importing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <DatabaseZap className="h-4 w-4" />
+            )}
+            {importing ? "Importing…" : importResult ? "Re-import from SSP Mappings" : "Import from SSP Mappings"}
+          </Button>
+
+          {!draftId && (
+            <p className="text-xs text-muted-foreground">
+              Click Next or Save on a previous step to create the draft first.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Fallback workflow */}
+      <div className="rounded-lg border bg-muted/30 p-5 space-y-3 text-sm">
+        <p className="font-medium">If you haven't filled the Mappings page yet</p>
+        <ol className="list-decimal list-inside space-y-1.5 text-muted-foreground">
+          <li>Generate the pre-filled template now to get the shell document.</li>
+          <li>Open <strong>SSP → Mappings</strong> in Control HUB and enter narratives there.</li>
+          <li>Return to this wizard and click <em>Import from SSP Mappings</em> to pull them in.</li>
+          <li>Re-generate the document to get the fully pre-populated DOCX.</li>
+        </ol>
+        <Button variant="outline" size="sm" asChild>
+          <a href="/ssp/mappings">Open SSP Mappings →</a>
+        </Button>
+      </div>
+
+      <div className="rounded-md border border-amber-100 bg-amber-50/60 px-4 py-3 text-amber-800 text-xs flex items-start gap-2">
+        <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+        <span>
+          Do not assert Met or Not Applicable for any requirement unless supported by actual
+          implementation, scope rationale, and supporting evidence.
+        </span>
+      </div>
     </div>
   );
 }
@@ -739,34 +920,12 @@ export default function SspPrefillWizard() {
   function renderStep7() {
     if (!isL1) {
       return (
-        <div className="space-y-6">
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold">Level 2 — Requirement Narratives</h2>
-            <p className="text-sm text-muted-foreground">
-              The CMMC Level 2 template contains all 110 NIST SP 800-171 requirements.
-              Use the SSP Mappings page to enter implementation narratives before generating.
-            </p>
-          </div>
-          <div className="rounded-lg border bg-blue-50/60 border-blue-200 p-5 space-y-3 text-sm">
-            <p className="font-medium text-blue-900">Recommended workflow for Level 2</p>
-            <ol className="list-decimal list-inside space-y-1.5 text-blue-800">
-              <li>Complete all wizard steps and generate the pre-filled blank template.</li>
-              <li>Open the template in Microsoft Word.</li>
-              <li>Use <strong>SSP → Mappings</strong> in Control HUB as reference while completing each requirement section.</li>
-              <li>Copy your implementation narratives from the Mappings page into the Word document.</li>
-            </ol>
-          </div>
-          <div className="rounded-md border border-amber-100 bg-amber-50/60 px-4 py-3 text-amber-800 text-xs flex items-start gap-2">
-            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
-            <span>
-              Do not assert Met or Not Applicable for any requirement unless supported by actual
-              implementation, scope rationale, and supporting evidence.
-            </span>
-          </div>
-          <Button variant="outline" size="sm" asChild>
-            <a href="/ssp/mappings">Open SSP Mappings →</a>
-          </Button>
-        </div>
+        <Step7L2
+          draftId={draftId}
+          orgId={activeOrg?.id}
+          values={values}
+          setValues={setValues}
+        />
       );
     }
 

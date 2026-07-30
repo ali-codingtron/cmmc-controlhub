@@ -11,7 +11,7 @@ import { logAudit } from "../lib/audit";
 import { randomUUID } from "crypto";
 import { parseSSPDocument } from "../lib/ssp-parser";
 import { generateSSPDocx } from "../lib/ssp-export";
-import { resolveCompatibleSSPTemplates, getSSPTemplate, buildPlaceholderValues } from "../lib/ssp-template-registry";
+import { resolveCompatibleSSPTemplates, getSSPTemplate, buildPlaceholderValues, controlRefToL2NarrativeKeys } from "../lib/ssp-template-registry";
 import { applyPrefillToDocx } from "../lib/ssp-prefill-engine";
 import { objectStorageClient, ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 
@@ -512,6 +512,106 @@ router.delete("/ssp/prefill-drafts/:draftId", requireAuth, requireOrg, async (re
     entityLabel: existing.title,
   });
   res.status(204).end();
+});
+
+// ── Prefill draft: import narratives from SSP Mappings ───────────────────────
+router.post("/ssp/prefill-drafts/:draftId/import-mappings", requireAuth, requireOrg, async (req, res): Promise<void> => {
+  const orgId = (req as any).orgId as string;
+  const { draftId } = req.params as { draftId: string };
+
+  // Load draft
+  const [draft] = await db
+    .select()
+    .from(sspPrefillDraftsTable)
+    .where(and(eq(sspPrefillDraftsTable.id, draftId), eq(sspPrefillDraftsTable.organizationId, orgId)))
+    .limit(1);
+  if (!draft) {
+    res.status(404).json({ error: "Draft not found" });
+    return;
+  }
+
+  // Only meaningful for L2 templates
+  const tmpl = getSSPTemplate(draft.templateKey);
+  if (!tmpl || tmpl.cmmcLevel !== 2) {
+    res.status(400).json({ error: "Import from mappings is only supported for Level 2 SSP drafts." });
+    return;
+  }
+
+  // Find primary SSP document
+  const [primary] = await db
+    .select({ id: sspDocumentsTable.id })
+    .from(sspDocumentsTable)
+    .where(and(eq(sspDocumentsTable.organizationId, orgId), eq(sspDocumentsTable.isPrimary, true)))
+    .limit(1);
+
+  if (!primary) {
+    res.status(404).json({ error: "No primary SSP document found. Upload and set an SSP as primary before importing." });
+    return;
+  }
+
+  // Fetch all mappings with a non-empty narrative
+  const mappings = await db
+    .select({
+      controlRef: sspControlMappingsTable.controlRef,
+      implementationNarrative: sspControlMappingsTable.implementationNarrative,
+    })
+    .from(sspControlMappingsTable)
+    .where(
+      and(
+        eq(sspControlMappingsTable.sspDocumentId, primary.id),
+        ne(sspControlMappingsTable.implementationNarrative, "")
+      )
+    );
+
+  // Parse current draft values
+  let currentValues: Record<string, string> = {};
+  try {
+    currentValues = JSON.parse(draft.valuesJson) as Record<string, string>;
+  } catch {
+    // start fresh
+  }
+
+  let imported = 0;
+  let skipped = 0; // already had a value — do not overwrite
+
+  for (const m of mappings) {
+    const narrative = m.implementationNarrative?.trim();
+    if (!narrative) continue;
+
+    // Derive both placeholder key variants the L2 DOCX template uses:
+    //   1. "AC_L2_3_1_1_IMPLEMENTATION_NARRATIVE"  (domain+L2+ref — used in numbered sections)
+    //   2. "REQ_3_1_1_IMPLEMENTATION_NARRATIVE"    (ref-only alias  — used in summary tables)
+    // Always normalizes L1-tagged refs (e.g. AC.L1-3.1.1) to L2 keys so
+    // controls canonicalized as L1 in ssp_control_mappings still populate correctly.
+    const [domainKey, reqKey] = controlRefToL2NarrativeKeys(m.controlRef);
+
+    // Use the domain key as the canonical storage key (req key is an alias).
+    // Skip if either variant is already filled — preserve user-entered content.
+    if (currentValues[domainKey]?.trim() || currentValues[reqKey]?.trim()) {
+      skipped++;
+    } else {
+      currentValues[domainKey] = narrative;
+      // Emit alias key only when it differs (avoids duplicate for fallback path)
+      if (reqKey !== domainKey) {
+        currentValues[reqKey] = narrative;
+      }
+      imported++;
+    }
+  }
+
+  // Save updated draft
+  const [updated] = await db
+    .update(sspPrefillDraftsTable)
+    .set({ valuesJson: JSON.stringify(currentValues), updatedAt: new Date() })
+    .where(eq(sspPrefillDraftsTable.id, draftId))
+    .returning();
+
+  await logAudit(req, "ssp_prefill_mappings_imported", "ssp_prefill_draft", draftId, {
+    entityLabel: draft.title,
+    newValue: { imported, skipped, total: mappings.length },
+  });
+
+  res.json({ imported, skipped, total: mappings.length, draft: updated });
 });
 
 // ── Prefill draft: generate DOCX ──────────────────────────────────────────────

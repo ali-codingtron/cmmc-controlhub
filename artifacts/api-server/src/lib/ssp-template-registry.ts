@@ -327,8 +327,58 @@ export function buildPlaceholderValues(
     SI_L1_B_1_XV_ASSESSMENT_NOTES: v("status_SI_L1_3_14_5") ? statusLabel("status_SI_L1_3_14_5") : "",
 
     // ── L2 requirement narratives (NIST ref format) ───────────────────────
-    // Populated from the SSP Mappings page workflow (110 requirements).
-    // The wizard does not collect L2 narratives directly; users fill them in
-    // the Word document using the SSP → Mappings page as reference.
+    // Populated via the "Import from SSP Mappings" button on wizard Step 7.
+    // Wizard stores them as:
+    //   AC_L2_3_1_1_IMPLEMENTATION_NARRATIVE  (domain + L2 + ref)
+    //   REQ_3_1_1_IMPLEMENTATION_NARRATIVE     (ref-only alias)
+    // Both pattern families appear as DOCX placeholder tokens in the L2 template.
+    // Pass through any key that:
+    //   (a) ends in _IMPLEMENTATION_NARRATIVE, AND
+    //   (b) is NOT one of the hardcoded L1 Roman-numeral keys above
+    //       (those all contain _B_1_ in their name — e.g. AC_L1_B_1_I_...).
+    ...Object.fromEntries(
+      Object.entries(wizardValues)
+        .filter(([k]) =>
+          k.endsWith("_IMPLEMENTATION_NARRATIVE") &&
+          !k.includes("_B_1_") // exclude hardcoded L1 Roman-numeral keys
+        )
+        .map(([k, val]) => [k, (val ?? "").toString().trim()])
+    ),
   };
+}
+
+/**
+ * Convert a NIST control ref to the two wizard/DOCX placeholder keys used
+ * for L2 implementation narratives. Always emits L2-tagged keys regardless
+ * of whether the source ref is tagged L1 or L2, because:
+ *   - The L2 DOCX template exclusively uses L2-tagged placeholders
+ *   - Some controls are stored in ssp_control_mappings with L1 refs even
+ *     in an L2 org context (canonicalized during SSP parse)
+ *
+ * Returns two keys:
+ *   1. "{DOMAIN}_L2_{MAJOR}_{MINOR}_{PATCH}_IMPLEMENTATION_NARRATIVE"
+ *      e.g. "AC_L2_3_1_1_IMPLEMENTATION_NARRATIVE"
+ *   2. "REQ_{MAJOR}_{MINOR}_{PATCH}_IMPLEMENTATION_NARRATIVE"
+ *      e.g. "REQ_3_1_1_IMPLEMENTATION_NARRATIVE"
+ * Both variants appear as placeholder tokens in the L2 DOCX template.
+ */
+export function controlRefToL2NarrativeKeys(controlRef: string): [string, string] {
+  // Accepts: "AC.L2-3.1.1", "AC.L1-3.1.1", "AC-3.1.1" etc.
+  // Step 1: extract domain and numeric ref
+  const m = controlRef.match(/^([A-Z]{2,4})[._-]L[12][._-](\d+\.\d+\.\d+)$/);
+  if (m) {
+    const domain = m[1];
+    const numParts = m[2].replace(/\./g, "_"); // "3.1.1" → "3_1_1"
+    return [
+      `${domain}_L2_${numParts}_IMPLEMENTATION_NARRATIVE`,
+      `REQ_${numParts}_IMPLEMENTATION_NARRATIVE`,
+    ];
+  }
+  // Fallback: replace dots and dashes generically, force L1→L2
+  const normalized = controlRef
+    .replace(/\.L1-/g, "_L2_")
+    .replace(/\.L2-/g, "_L2_")
+    .replace(/\./g, "_")
+    .replace(/-/g, "_");
+  return [`${normalized}_IMPLEMENTATION_NARRATIVE`, `${normalized}_IMPLEMENTATION_NARRATIVE`];
 }
