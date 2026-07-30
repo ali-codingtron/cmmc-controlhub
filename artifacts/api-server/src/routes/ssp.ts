@@ -518,6 +518,7 @@ router.delete("/ssp/prefill-drafts/:draftId", requireAuth, requireOrg, async (re
 router.post("/ssp/prefill-drafts/:draftId/import-mappings", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = (req as any).orgId as string;
   const { draftId } = req.params as { draftId: string };
+  const overwrite = req.body?.overwrite === true;
 
   // Load draft
   const [draft] = await db
@@ -572,7 +573,8 @@ router.post("/ssp/prefill-drafts/:draftId/import-mappings", requireAuth, require
   }
 
   let imported = 0;
-  let skipped = 0; // already had a value — do not overwrite
+  let skipped = 0;     // already had a value and overwrite=false
+  let overwritten = 0; // already had a value but overwrite=true replaced it
 
   for (const m of mappings) {
     const narrative = m.implementationNarrative?.trim();
@@ -585,17 +587,19 @@ router.post("/ssp/prefill-drafts/:draftId/import-mappings", requireAuth, require
     // controls canonicalized as L1 in ssp_control_mappings still populate correctly.
     const [domainKey, reqKey] = controlRefToL2NarrativeKeys(m.controlRef);
 
-    // Use the domain key as the canonical storage key (req key is an alias).
-    // Skip if either variant is already filled — preserve user-entered content.
-    if (currentValues[domainKey]?.trim() || currentValues[reqKey]?.trim()) {
+    const alreadyFilled = !!(currentValues[domainKey]?.trim() || currentValues[reqKey]?.trim());
+
+    if (alreadyFilled && !overwrite) {
+      // Preserve user-entered content when overwrite mode is off
       skipped++;
     } else {
+      if (alreadyFilled) overwritten++;
+      else imported++;
       currentValues[domainKey] = narrative;
       // Emit alias key only when it differs (avoids duplicate for fallback path)
       if (reqKey !== domainKey) {
         currentValues[reqKey] = narrative;
       }
-      imported++;
     }
   }
 
@@ -608,10 +612,10 @@ router.post("/ssp/prefill-drafts/:draftId/import-mappings", requireAuth, require
 
   await logAudit(req, "ssp_prefill_mappings_imported", "ssp_prefill_draft", draftId, {
     entityLabel: draft.title,
-    newValue: { imported, skipped, total: mappings.length },
+    newValue: { imported, skipped, overwritten, total: mappings.length },
   });
 
-  res.json({ imported, skipped, total: mappings.length, draft: updated });
+  res.json({ imported, skipped, overwritten, total: mappings.length, draft: updated });
 });
 
 // ── Prefill draft: generate DOCX ──────────────────────────────────────────────

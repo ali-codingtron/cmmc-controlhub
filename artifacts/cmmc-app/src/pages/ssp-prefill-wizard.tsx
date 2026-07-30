@@ -190,6 +190,7 @@ function Field({
 interface ImportResult {
   imported: number;
   skipped: number;
+  overwritten: number;
   total: number;
 }
 
@@ -207,6 +208,7 @@ function Step7L2({
   const { toast } = useToast();
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [overwriteExisting, setOverwriteExisting] = useState(false);
 
   // Count how many narrative keys are already filled
   const filledCount = Object.entries(values).filter(
@@ -228,12 +230,13 @@ function Step7L2({
           Authorization: `Bearer ${token}`,
           "X-Organization-ID": orgId,
         },
+        body: JSON.stringify({ overwrite: overwriteExisting }),
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
         throw new Error((err as { error?: string }).error || "Import failed");
       }
-      const data = await r.json() as { imported: number; skipped: number; total: number; draft: { valuesJson: string } };
+      const data = await r.json() as { imported: number; skipped: number; overwritten: number; total: number; draft: { valuesJson: string } };
       // Merge new values into local state
       try {
         const merged = JSON.parse(data.draft.valuesJson) as Record<string, string>;
@@ -241,11 +244,15 @@ function Step7L2({
       } catch {
         // ignore parse failure — server saved it, local state stays
       }
-      setImportResult({ imported: data.imported, skipped: data.skipped, total: data.total });
-      if (data.imported > 0) {
+      setImportResult({ imported: data.imported, skipped: data.skipped, overwritten: data.overwritten ?? 0, total: data.total });
+      const newCount = data.imported + (data.overwritten ?? 0);
+      if (newCount > 0) {
+        const parts: string[] = [];
+        if (data.imported > 0) parts.push(`${data.imported} new`);
+        if ((data.overwritten ?? 0) > 0) parts.push(`${data.overwritten} overwritten`);
         toast({
-          title: `${data.imported} narrative${data.imported === 1 ? "" : "s"} imported`,
-          description: `${data.skipped > 0 ? `${data.skipped} already-filled field${data.skipped === 1 ? "" : "s"} preserved. ` : ""}These will be injected into the generated DOCX.`,
+          title: `${newCount} narrative${newCount === 1 ? "" : "s"} imported`,
+          description: `${parts.join(", ")}${data.skipped > 0 ? `. ${data.skipped} field${data.skipped === 1 ? "" : "s"} preserved.` : "."}`,
         });
       } else {
         toast({
@@ -284,11 +291,36 @@ function Step7L2({
               <p className="font-medium text-sm">Import from SSP Mappings</p>
               <p className="text-xs text-muted-foreground">
                 Reads your organization's primary SSP document's control mappings and pulls
-                each implementation narrative into the draft. Fields you have already filled
-                will not be overwritten.
+                each implementation narrative into the draft.{" "}
+                {overwriteExisting
+                  ? "All matching fields will be replaced with SSP Mappings content."
+                  : "Fields you have already filled will not be overwritten."}
               </p>
             </div>
           </div>
+
+          {/* Overwrite toggle */}
+          <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
+            <input
+              type="checkbox"
+              checked={overwriteExisting}
+              onChange={(e) => {
+                setOverwriteExisting(e.target.checked);
+                setImportResult(null);
+              }}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm font-medium">Overwrite existing narratives</span>
+          </label>
+          {overwriteExisting && (
+            <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-amber-800 text-xs flex items-start gap-2">
+              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+              <span>
+                Any narratives you have already entered in this draft will be replaced with
+                content from SSP Mappings. This cannot be undone.
+              </span>
+            </div>
+          )}
 
           {filledCount > 0 && !importResult && (
             <div className="rounded-md bg-green-50 border border-green-200 px-3 py-2 text-green-800 text-xs flex items-center gap-2">
@@ -299,16 +331,23 @@ function Step7L2({
 
           {importResult && (
             <div className={`rounded-md border px-3 py-2 text-xs flex items-start gap-2 ${
-              importResult.imported > 0
+              importResult.imported > 0 || importResult.overwritten > 0
                 ? "bg-green-50 border-green-200 text-green-800"
                 : "bg-amber-50 border-amber-200 text-amber-800"
             }`}>
               <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
               <span>
-                {importResult.imported > 0 ? (
+                {importResult.imported > 0 || importResult.overwritten > 0 ? (
                   <>
-                    <strong>{importResult.imported} of 110</strong> narratives imported.
-                    {importResult.skipped > 0 && ` ${importResult.skipped} existing field${importResult.skipped === 1 ? "" : "s"} preserved.`}
+                    {importResult.imported > 0 && (
+                      <><strong>{importResult.imported}</strong> narrative{importResult.imported === 1 ? "" : "s"} imported. </>
+                    )}
+                    {importResult.overwritten > 0 && (
+                      <><strong>{importResult.overwritten}</strong> narrative{importResult.overwritten === 1 ? "" : "s"} overwritten. </>
+                    )}
+                    {importResult.skipped > 0 && (
+                      <>{importResult.skipped} existing field{importResult.skipped === 1 ? "" : "s"} preserved.</>
+                    )}
                   </>
                 ) : (
                   <>No new narratives to import — SSP Mappings page is empty or all fields already filled.</>
