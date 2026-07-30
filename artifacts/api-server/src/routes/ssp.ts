@@ -3,7 +3,7 @@ import multer from "multer";
 import path from "path";
 import { unlink, readFile, access as fsAccess } from "fs/promises";
 import { createReadStream } from "fs";
-import { db, sspDocumentsTable, sspSectionsTable, sspControlMappingsTable, controlsTable, controlAssessmentsTable, evidenceControlLinksTable, evidenceItemsTable } from "@workspace/db";
+import { db, sspDocumentsTable, sspSectionsTable, sspControlMappingsTable, sspPrefillDraftsTable, controlsTable, controlAssessmentsTable, evidenceControlLinksTable, evidenceItemsTable, organizationPackagesTable, compliancePackagesTable, organizationsTable } from "@workspace/db";
 import { eq, and, desc, count, isNotNull, isNull, sql, ne } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
@@ -11,6 +11,8 @@ import { logAudit } from "../lib/audit";
 import { randomUUID } from "crypto";
 import { parseSSPDocument } from "../lib/ssp-parser";
 import { generateSSPDocx } from "../lib/ssp-export";
+import { resolveCompatibleSSPTemplates, getSSPTemplate, buildPlaceholderValues } from "../lib/ssp-template-registry";
+import { applyPrefillToDocx } from "../lib/ssp-prefill-engine";
 import { objectStorageClient, ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 
 const objectStorageService = new ObjectStorageService();
@@ -266,6 +268,320 @@ router.post("/ssp", requireAuth, requireOrg, upload.single("file"), async (req, 
     .returning();
 
   res.status(201).json(created);
+});
+
+// ── List compatible SSP templates for this org ────────────────────────────────
+router.get("/ssp/templates", requireAuth, requireOrg, async (req, res): Promise<void> => {
+  const orgId = (req as any).orgId as string;
+
+  const pkgRows = await db
+    .select({ packageKey: compliancePackagesTable.packageKey })
+    .from(organizationPackagesTable)
+    .innerJoin(
+      compliancePackagesTable,
+      eq(organizationPackagesTable.packageId, compliancePackagesTable.id)
+    )
+    .where(
+      and(
+        eq(organizationPackagesTable.organizationId, orgId),
+        eq(organizationPackagesTable.isActive, true)
+      )
+    );
+
+  const packageKeys = pkgRows.map((r) => r.packageKey);
+  const templates = resolveCompatibleSSPTemplates(packageKeys);
+  res.json(templates);
+});
+
+// ── Generic SSP template download (by templateKey) ───────────────────────────
+router.get("/ssp/templates/:templateKey/download", requireAuth, requireOrg, async (req, res): Promise<void> => {
+  const orgId = (req as any).orgId as string;
+  const { templateKey } = req.params as { templateKey: string };
+
+  // Normalise legacy "cmmc-l2-nist-r2" slug used by the old hardcoded route
+  const resolvedKey =
+    templateKey === "cmmc-l2-nist-r2"
+      ? "CMMC_L2_NIST_R2_SSP"
+      : templateKey;
+
+  const tmpl = getSSPTemplate(resolvedKey);
+  if (!tmpl) {
+    res.status(404).json({ error: "Template not found" });
+    return;
+  }
+
+  // Verify this org has a compatible package for the requested template
+  const pkgRows = await db
+    .select({ packageKey: compliancePackagesTable.packageKey })
+    .from(organizationPackagesTable)
+    .innerJoin(
+      compliancePackagesTable,
+      eq(organizationPackagesTable.packageId, compliancePackagesTable.id)
+    )
+    .where(
+      and(
+        eq(organizationPackagesTable.organizationId, orgId),
+        eq(organizationPackagesTable.isActive, true)
+      )
+    );
+  const packageKeys = pkgRows.map((r) => r.packageKey);
+  const compatible = resolveCompatibleSSPTemplates(packageKeys);
+  if (!compatible.some((t) => t.templateKey === resolvedKey)) {
+    res.status(403).json({ error: "This template is not available for your compliance package." });
+    return;
+  }
+
+  const templatePath = path.resolve(
+    __dirname,
+    "data",
+    "templates",
+    "ssp",
+    tmpl.assetFilename
+  );
+
+  try {
+    await fsAccess(templatePath);
+  } catch {
+    req.log.warn({ templateKey: resolvedKey }, "SSP template file not found");
+    res.status(503).json({
+      error: "The SSP template is temporarily unavailable. Contact your Control HUB administrator.",
+    });
+    return;
+  }
+
+  await logAudit(req, "ssp_template_downloaded", "ssp_template", resolvedKey, {
+    entityLabel: tmpl.name,
+    newValue: { success: true, filename: tmpl.assetFilename, version: tmpl.templateVersion },
+  });
+
+  res.setHeader(
+    "Content-Type",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  );
+  res.setHeader("Content-Disposition", `attachment; filename="${tmpl.downloadFilename}"`);
+  createReadStream(templatePath).pipe(res);
+});
+
+// ── Prefill draft: list ───────────────────────────────────────────────────────
+router.get("/ssp/prefill-drafts", requireAuth, requireOrg, async (req, res): Promise<void> => {
+  const orgId = (req as any).orgId as string;
+  const drafts = await db
+    .select()
+    .from(sspPrefillDraftsTable)
+    .where(eq(sspPrefillDraftsTable.organizationId, orgId))
+    .orderBy(desc(sspPrefillDraftsTable.updatedAt));
+  res.json(drafts);
+});
+
+// ── Prefill draft: create ─────────────────────────────────────────────────────
+router.post("/ssp/prefill-drafts", requireAuth, requireOrg, async (req, res): Promise<void> => {
+  const orgId = (req as any).orgId as string;
+  const userId = (req as any).userId as string | undefined;
+  const { templateKey, title, valuesJson, wizardStep } = req.body as {
+    templateKey?: string;
+    title?: string;
+    valuesJson?: string;
+    wizardStep?: number;
+  };
+
+  if (!templateKey || !getSSPTemplate(templateKey)) {
+    res.status(400).json({ error: "Invalid templateKey" });
+    return;
+  }
+
+  const [draft] = await db
+    .insert(sspPrefillDraftsTable)
+    .values({
+      id: randomUUID(),
+      organizationId: orgId,
+      templateKey,
+      title: title?.trim() || `SSP Pre-fill Draft — ${new Date().toLocaleDateString()}`,
+      valuesJson: valuesJson ?? "{}",
+      wizardStep: wizardStep ?? 1,
+      createdBy: userId,
+    })
+    .returning();
+
+  await logAudit(req, "ssp_prefill_draft_created", "ssp_prefill_draft", draft.id, {
+    entityLabel: draft.title,
+    newValue: { templateKey },
+  });
+  res.status(201).json(draft);
+});
+
+// ── Prefill draft: get ────────────────────────────────────────────────────────
+router.get("/ssp/prefill-drafts/:draftId", requireAuth, requireOrg, async (req, res): Promise<void> => {
+  const orgId = (req as any).orgId as string;
+  const { draftId } = req.params as { draftId: string };
+
+  const [draft] = await db
+    .select()
+    .from(sspPrefillDraftsTable)
+    .where(
+      and(eq(sspPrefillDraftsTable.id, draftId), eq(sspPrefillDraftsTable.organizationId, orgId))
+    )
+    .limit(1);
+
+  if (!draft) {
+    res.status(404).json({ error: "Draft not found" });
+    return;
+  }
+  res.json(draft);
+});
+
+// ── Prefill draft: update ─────────────────────────────────────────────────────
+router.patch("/ssp/prefill-drafts/:draftId", requireAuth, requireOrg, async (req, res): Promise<void> => {
+  const orgId = (req as any).orgId as string;
+  const { draftId } = req.params as { draftId: string };
+
+  const [existing] = await db
+    .select({ id: sspPrefillDraftsTable.id })
+    .from(sspPrefillDraftsTable)
+    .where(
+      and(eq(sspPrefillDraftsTable.id, draftId), eq(sspPrefillDraftsTable.organizationId, orgId))
+    )
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "Draft not found" });
+    return;
+  }
+
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (req.body.title !== undefined) updates.title = req.body.title;
+  if (req.body.valuesJson !== undefined) updates.valuesJson = req.body.valuesJson;
+  if (req.body.wizardStep !== undefined) updates.wizardStep = req.body.wizardStep;
+  if (req.body.status !== undefined) updates.status = req.body.status;
+
+  const [updated] = await db
+    .update(sspPrefillDraftsTable)
+    .set(updates)
+    .where(eq(sspPrefillDraftsTable.id, draftId))
+    .returning();
+
+  res.json(updated);
+});
+
+// ── Prefill draft: delete ─────────────────────────────────────────────────────
+router.delete("/ssp/prefill-drafts/:draftId", requireAuth, requireOrg, async (req, res): Promise<void> => {
+  const orgId = (req as any).orgId as string;
+  const { draftId } = req.params as { draftId: string };
+
+  const [existing] = await db
+    .select({ id: sspPrefillDraftsTable.id, title: sspPrefillDraftsTable.title })
+    .from(sspPrefillDraftsTable)
+    .where(
+      and(eq(sspPrefillDraftsTable.id, draftId), eq(sspPrefillDraftsTable.organizationId, orgId))
+    )
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "Draft not found" });
+    return;
+  }
+
+  await db
+    .delete(sspPrefillDraftsTable)
+    .where(eq(sspPrefillDraftsTable.id, draftId));
+
+  await logAudit(req, "ssp_prefill_draft_deleted", "ssp_prefill_draft", draftId, {
+    entityLabel: existing.title,
+  });
+  res.status(204).end();
+});
+
+// ── Prefill draft: generate DOCX ──────────────────────────────────────────────
+router.post("/ssp/prefill-drafts/:draftId/generate", requireAuth, requireOrg, async (req, res): Promise<void> => {
+  const orgId = (req as any).orgId as string;
+  const { draftId } = req.params as { draftId: string };
+
+  const [draft] = await db
+    .select()
+    .from(sspPrefillDraftsTable)
+    .where(
+      and(eq(sspPrefillDraftsTable.id, draftId), eq(sspPrefillDraftsTable.organizationId, orgId))
+    )
+    .limit(1);
+  if (!draft) {
+    res.status(404).json({ error: "Draft not found" });
+    return;
+  }
+
+  const tmpl = getSSPTemplate(draft.templateKey);
+  if (!tmpl) {
+    res.status(400).json({ error: "Template definition not found" });
+    return;
+  }
+
+  const templatePath = path.resolve(
+    __dirname,
+    "data",
+    "templates",
+    "ssp",
+    tmpl.assetFilename
+  );
+
+  let templateBuffer: Buffer;
+  try {
+    templateBuffer = await readFile(templatePath);
+  } catch {
+    res.status(503).json({
+      error: "The SSP template is temporarily unavailable. Contact your Control HUB administrator.",
+    });
+    return;
+  }
+
+  let wizardValues: Record<string, string> = {};
+  try {
+    wizardValues = JSON.parse(draft.valuesJson) as Record<string, string>;
+  } catch {
+    // fallback to empty
+  }
+
+  const placeholderValues = buildPlaceholderValues(wizardValues);
+  const outputBuffer = applyPrefillToDocx(templateBuffer, placeholderValues);
+
+  const orgName = wizardValues.organizationShortName || wizardValues.organizationName || "SSP";
+  const safeName = orgName.replace(/[^a-zA-Z0-9_\-]/g, "_").slice(0, 40);
+  const downloadFilename = `${safeName}_${tmpl.cmmcLevel === 1 ? "L1" : "L2"}_SSP_Draft.docx`;
+
+  await logAudit(req, "ssp_prefill_generated", "ssp_prefill_draft", draftId, {
+    entityLabel: draft.title,
+    newValue: { templateKey: draft.templateKey, filename: downloadFilename },
+  });
+
+  res.setHeader(
+    "Content-Type",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  );
+  res.setHeader("Content-Disposition", `attachment; filename="${downloadFilename}"`);
+  res.send(outputBuffer);
+});
+
+// ── Prefill draft: get org profile for auto-fill ──────────────────────────────
+router.get("/ssp/prefill-org-profile", requireAuth, requireOrg, async (req, res): Promise<void> => {
+  const orgId = (req as any).orgId as string;
+
+  const [org] = await db
+    .select({
+      name: organizationsTable.name,
+      legalName: organizationsTable.legalName,
+      shortName: organizationsTable.shortName,
+      cageCode: organizationsTable.cageCode,
+      uei: organizationsTable.uei,
+      industry: organizationsTable.industry,
+      primaryContact: organizationsTable.primaryContact,
+      organizationAddress: organizationsTable.organizationAddress,
+      assessmentScope: organizationsTable.assessmentScope,
+    })
+    .from(organizationsTable)
+    .where(eq(organizationsTable.id, orgId))
+    .limit(1);
+
+  if (!org) {
+    res.status(404).json({ error: "Organization not found" });
+    return;
+  }
+
+  res.json(org);
 });
 
 // ── SSP Template Download (global, auth-only, no org required) ───────────────

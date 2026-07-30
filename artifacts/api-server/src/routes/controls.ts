@@ -196,7 +196,7 @@ router.get("/controls", requireAuth, requireOrg, async (req, res) => {
         and(
           inArray(evidenceControlLinksTable.controlId, controlIds),
           orgId ? eq(evidenceItemsTable.organizationId, orgId) : undefined,
-          inArray(evidenceItemsTable.status, EVIDENCE_ACTIVE_STATUSES as unknown as string[])
+          inArray(evidenceItemsTable.status, EVIDENCE_ACTIVE_STATUSES as readonly string[] as readonly ("assessor_ready" | "draft" | "pending_review" | "approved" | "rejected" | "stale" | "superseded" | "archived" | "needs_classification")[])
         )
       )
       .groupBy(evidenceControlLinksTable.controlId);

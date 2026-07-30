@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, integer, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, integer, pgEnum, jsonb } from "drizzle-orm/pg-core";
 import { organizationsTable } from "./organizations";
 import { controlsTable } from "./controls";
 
@@ -43,6 +43,21 @@ export const sspSectionsTable = pgTable("ssp_sections", {
   content: text("content").notNull().default(""),
   sortOrder: integer("sort_order").notNull().default(0),
   isComplete: boolean("is_complete").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const sspPrefillDraftsTable = pgTable("ssp_prefill_drafts", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organizationsTable.id, { onDelete: "cascade" }),
+  templateKey: text("template_key").notNull(),
+  title: text("title").notNull(),
+  status: text("status").notNull().default("in_progress"), // in_progress | complete
+  wizardStep: integer("wizard_step").notNull().default(1),
+  valuesJson: text("values_json").notNull().default("{}"),
+  createdBy: text("created_by"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

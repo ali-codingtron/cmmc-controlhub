@@ -42,6 +42,7 @@ import SspSections from "@/pages/ssp-sections";
 import SspMappings from "@/pages/ssp-mappings";
 import SspDocuments from "@/pages/ssp-documents";
 import SspExport from "@/pages/ssp-export";
+import SspPrefillWizard from "@/pages/ssp-prefill-wizard";
 import ReportsExecutive from "@/pages/reports-executive";
 import ReportsGap from "@/pages/reports-gap";
 import ReportsControls from "@/pages/reports-controls";
@@ -225,6 +226,7 @@ function AppRoutes() {
                 {() => <Redirect to="/ssp/overview" />}
               </Route>
               <Route path="/ssp/overview" component={SspOverview} />
+              <Route path="/ssp/prefill-wizard" component={SspPrefillWizard} />
               <Route path="/ssp/sections" component={SspSections} />
               <Route path="/ssp/mappings" component={SspMappings} />
               <Route path="/ssp/documents" component={SspDocuments} />

@@ -18,3 +18,4 @@
 - [Roadmap module architecture](roadmap-module.md) — Completion guard, optional module system, visual redesign; fail-open feature flags; missing record = enabled.
 - [Control-scoped Task Lifecycle](control-tasks.md) — Nested task router, TASK-XXXX generation, activity table, drizzle transaction typing pitfalls, schema rebuild steps.
 - [Roadmap profile system](roadmap-profile.md) — profile_key on roadmap_actions; L1/L2 resolution from packages; idempotent seed; filter pattern; lucide Map icon vs JS Map conflict.
+- [SSP module upgrade](ssp-module-upgrade.md) — package-aware template registry, prefill wizard, DOCX engine; actual placeholder key naming (Roman numerals for L1, NIST ref for L2).

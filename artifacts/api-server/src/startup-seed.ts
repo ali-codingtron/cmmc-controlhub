@@ -1158,6 +1158,28 @@ async function migrateCertificationTables() {
   }
 }
 
+async function migrateSspPrefillDrafts() {
+  // ssp_prefill_drafts was added in the SSP module upgrade. Safe to run on every boot.
+  try {
+    await db.execute(sql.raw(`
+      CREATE TABLE IF NOT EXISTS ssp_prefill_drafts (
+        id text PRIMARY KEY,
+        organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        template_key text NOT NULL,
+        title text NOT NULL,
+        status text NOT NULL DEFAULT 'in_progress',
+        wizard_step integer NOT NULL DEFAULT 1,
+        values_json text NOT NULL DEFAULT '{}',
+        created_by text,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )
+    `));
+  } catch (_e) {
+    // Already exists — safe to ignore
+  }
+}
+
 async function migrateRoadmapProfileKey() {
   // profile_key was added to roadmap_actions in the L1 roadmap profile feature.
   // Production databases provisioned before this release won't have the column,
@@ -1180,6 +1202,7 @@ export async function runStartupSeed() {
     await migrateBreakGlassColumns();
     await migrateAuditEnum();
     await migrateRoadmapProfileKey();
+    await migrateSspPrefillDrafts();
     await seedDomainControls();
     await seedInitialAdmin();
     await seedBreakGlassAccount();

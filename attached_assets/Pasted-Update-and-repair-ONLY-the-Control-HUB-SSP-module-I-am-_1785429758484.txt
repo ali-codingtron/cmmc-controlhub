@@ -1,0 +1,1131 @@
+Update and repair ONLY the Control HUB SSP module.
+
+I am adding two reusable template assets to the project:
+
+1. CMMC Level 1:
+
+assets/templates/ssp/Control_HUB_CMMC_Level_1_FCI_SSP_Template.docx
+
+2. CMMC Level 2:
+
+assets/templates/ssp/Control_HUB_CMMC_L2_NIST_800-171_SSP_Template.docx
+
+Current problem:
+
+An organization with only CMMC Level 1 selected currently sees the CMMC Level 2 / NIST SP 800-171 template.
+
+That is incorrect.
+
+The CMMC Level 1 organization handles FCI and should see the CMMC Level 1 FCI SSP template.
+
+The CMMC Level 2 template is designed for CUI, NIST SP 800-171 Rev. 2, all 110 requirements, NIST SP 800-171A, DFARS, and Level 2 assessment support.
+
+Goal:
+
+1. Make SSP templates package-aware.
+2. Never show an incompatible SSP template.
+3. Allow users to download a blank template.
+4. Allow authorized users to prefill organization-specific information before downloading a new DOCX.
+5. Preserve the original master template files.
+6. Do not change any existing production SSP or compliance data.
+
+====================================================================
+1. STRICT SCOPE
+====================================================================
+
+Change only:
+
+- SSP Overview
+- SSP template cards
+- SSP template selection
+- blank-template download
+- template-prefill workflow
+- prefilled DOCX generation
+- optional prefilled-document preview
+- SSP template registry
+- SSP-prefill authorization and audit events
+
+Do not redesign or modify:
+
+- Controls
+- Evidence
+- Documentation
+- Monitoring
+- POA&M
+- Implementation Roadmap
+- Pre-Assessment
+- Reports
+- Framework Crosswalk
+- Users and Roles
+- organization profiles
+- organization package assignments
+- certification records
+- existing uploaded SSPs
+
+Do not overwrite, replace, delete, or migrate any existing organization SSP.
+
+====================================================================
+2. RUN A READ-ONLY DIAGNOSTIC FIRST
+====================================================================
+
+Before changing production behavior, inspect:
+
+- how the existing Level 2 template is registered
+- whether the template is hardcoded
+- whether SSP Overview reads organization package assignments
+- whether the L2 template card is displayed for every organization
+- current SSP template download routes
+- current SSP permissions
+- current package keys used for CMMC Level 1 and Level 2
+- existing SSP records and uploaded SSP files
+
+Report for each organization:
+
+- organization name
+- active package keys
+- CMMC target level
+- currently displayed template
+- whether the displayed template is compatible
+- existing SSP record count
+- existing uploaded SSP file count
+
+Do not modify records during the diagnostic.
+
+====================================================================
+3. CREATE AN SSP TEMPLATE REGISTRY
+====================================================================
+
+Create a global, read-only SSP template registry.
+
+Suggested model:
+
+SSPTemplate
+- id
+- template_key
+- name
+- short_description
+- framework
+- package_keys
+- framework_version
+- cmmc_level
+- protected_information_type
+- template_version
+- asset_path
+- file_name
+- format
+- active
+- recommended
+- placeholder_manifest
+- created_at
+- updated_at
+
+Seed these templates:
+
+Template 1:
+
+template_key:
+CMMC_L1_FCI_SSP_V2_13
+
+name:
+CMMC Level 1 FCI System Security Plan Template
+
+package_keys:
+- CMMC_L1_SELF
+- FAR_52_204_21
+
+cmmc_level:
+1
+
+protected_information_type:
+FCI
+
+template_version:
+1.0
+
+asset_path:
+assets/templates/ssp/Control_HUB_CMMC_Level_1_FCI_SSP_Template.docx
+
+file_name:
+Control_HUB_CMMC_Level_1_FCI_SSP_Template.docx
+
+Template 2:
+
+template_key:
+CMMC_L2_NIST_R2_SSP
+
+name:
+CMMC Level 2 / NIST SP 800-171 System Security Plan Template
+
+package_keys:
+- CMMC_L2_SELF
+- NIST_800_171_R2
+- CMMC_L2_C3PAO, if that package still exists
+
+cmmc_level:
+2
+
+protected_information_type:
+CUI
+
+template_version:
+1.0
+
+asset_path:
+assets/templates/ssp/Control_HUB_CMMC_L2_NIST_800-171_SSP_Template.docx
+
+file_name:
+Control_HUB_CMMC_L2_NIST_800-171_SSP_Template.docx
+
+Treat both files as immutable application assets.
+
+Do not store the master templates as organization Evidence records.
+
+Do not count template files in:
+
+- Evidence totals
+- SSP totals
+- document totals
+- readiness calculations
+- control evidence counts
+
+====================================================================
+4. CREATE A PACKAGE-AWARE TEMPLATE RESOLVER
+====================================================================
+
+Create one backend service:
+
+resolveCompatibleSSPTemplates(organizationId)
+
+The resolver must read the organization’s active package assignments.
+
+Rules:
+
+A. CMMC Level 1 only:
+
+Active package includes:
+- CMMC_L1_SELF
+or
+- FAR_52_204_21
+
+And does not include Level 2/NIST 800-171.
+
+Return:
+
+CMMC Level 1 FCI SSP Template
+
+Do not return the Level 2 template.
+
+B. CMMC Level 2 or NIST SP 800-171 Rev. 2:
+
+Active package includes:
+- CMMC_L2_SELF
+- CMMC_L2_C3PAO, where applicable
+- NIST_800_171_R2
+
+Return:
+
+CMMC Level 2 / NIST SP 800-171 SSP Template
+
+C. Both Level 1 and Level 2:
+
+Return the compatible templates.
+
+Mark Level 2 as recommended for the Level 2/CUI scope.
+
+Do not imply that the same SSP automatically covers separate FCI and CUI assessment scopes.
+
+D. No compatible package:
+
+Return no template.
+
+Show:
+
+“No SSP template is currently configured for the organization’s selected compliance packages.”
+
+Do not fall back to Level 2.
+
+Use canonical package keys.
+
+Do not match packages only by display name.
+
+====================================================================
+5. FIX THE SSP OVERVIEW PAGE
+====================================================================
+
+The SSP Overview must dynamically reflect the selected organization.
+
+Replace the current static Level 2 template card with:
+
+SSP Template Resources
+
+For a Level 1-only organization, show:
+
+Title:
+
+CMMC Level 1 FCI System Security Plan Template
+
+Description:
+
+“Download an optional best-practice System Security Plan for documenting the organization’s Federal Contract Information environment, assessment boundary, safeguards, Level 1 requirements, evidence, and annual self-assessment support.”
+
+Badges:
+
+- CMMC L1
+- FAR 52.204-21
+- FCI
+- 15 Requirements
+- DOCX
+
+Template facts:
+
+- Framework: CMMC Level 1
+- Information Type: Federal Contract Information
+- Requirements: 15 canonical requirements
+- Assessment Mappings: 17 NIST SP 800-171A mappings
+- Template Version: 1.0
+- Editable: Yes
+- SSP Requirement: Optional best practice
+
+Warning:
+
+“An SSP is recommended as a Level 1 best practice but is not required for the Level 1 self-assessment. The organization remains responsible for maintaining sufficient implementation and assessment evidence.”
+
+Buttons:
+
+- Download Blank Template
+- Prefill & Download
+- View Template Contents
+
+For a Level 2 organization, retain the Level 2 card but use accurate Level 2 wording.
+
+Do not show:
+
+- CMMC L2
+- NIST 800-171 R2
+- CUI
+- DFARS
+- 110 Requirements
+
+on a Level 1-only template card.
+
+====================================================================
+6. DOWNLOAD BLANK TEMPLATE
+====================================================================
+
+Download Blank Template should stream the original master DOCX with placeholders intact.
+
+Suggested routes:
+
+GET /api/ssp/templates/cmmc-l1-fci/download
+
+GET /api/ssp/templates/cmmc-l2-nist-r2/download
+
+The route must:
+
+1. Require authentication.
+2. Resolve the selected organization.
+3. Verify the template is compatible with the organization.
+4. Verify SSP template-download permission.
+5. Locate the server-side template asset.
+6. Stream the original DOCX.
+7. Record an audit event.
+8. Make no database changes.
+
+Content type:
+
+application/vnd.openxmlformats-officedocument.wordprocessingml.document
+
+Do not:
+
+- modify the master
+- create an SSP record
+- create Evidence
+- prefill data
+- change controls
+- change organization data
+
+====================================================================
+7. ADD PREFILL & DOWNLOAD
+====================================================================
+
+Add:
+
+Prefill & Download
+
+This opens a guided SSP-prefill workflow.
+
+Do not immediately download the blank template.
+
+Recommended steps:
+
+1. Template and Scope
+2. Organization Profile
+3. Document Control
+4. System and Assessment Scope
+5. Architecture and Services
+6. Requirements and Evidence
+7. Assessment Status
+8. Review and Download
+
+Display progress and allow users to save a draft.
+
+====================================================================
+8. STEP 1 — TEMPLATE AND SCOPE
+====================================================================
+
+Show:
+
+- Template Name
+- CMMC Level
+- Framework Version
+- Information Type: FCI or CUI
+- Requirement Count
+- Selected Organization
+- Active Compliance Packages
+- Assessment Scope Name
+
+For Level 1, show:
+
+“CMMC Level 1 applies to systems that process, store, or transmit FCI.”
+
+For Level 2, show:
+
+“CMMC Level 2 / NIST SP 800-171 applies to the organization’s applicable CUI environment.”
+
+The user must confirm:
+
+- correct organization
+- correct template
+- correct system or assessment scope
+
+Do not allow a Level 1-only organization to select the Level 2 template.
+
+====================================================================
+9. STEP 2 — ORGANIZATION PROFILE
+====================================================================
+
+Auto-fill from the organization profile where available:
+
+- Organization Name
+- Legal Name
+- Short Name
+- Organization Logo
+- Address
+- CAGE Code or Codes
+- UEI
+- Primary Contact Name
+- Primary Contact Title
+- Primary Contact Email
+- Primary Contact Phone
+- Industry
+- Website
+
+Show a source indicator next to every value:
+
+- Organization Profile
+- Control HUB Data
+- User Entered
+- Missing
+- Needs Review
+
+The wizard must not update the stored organization profile.
+
+Manual changes in the SSP wizard apply only to the generated document.
+
+Only a platform Global Admin may update the actual organization profile through the separate organization-profile feature.
+
+====================================================================
+10. STEP 3 — DOCUMENT CONTROL
+====================================================================
+
+Fields:
+
+- Document Title
+- Document Number
+- Revision Number
+- Revision Date
+- Effective Date
+- Prepared By
+- Reviewed By
+- Approved By
+- Authorized By
+- Classification
+- Authoritative SSP Repository
+- Assessment Support Label
+
+Suggested defaults:
+
+Level 1 Classification:
+CONTROLLED DOCUMENT
+
+Level 1 Assessment Support Label:
+CMMC LEVEL 1 SELF-ASSESSMENT SUPPORT
+
+Level 2 Assessment Support Label:
+CMMC LEVEL 2 / NIST SP 800-171 ASSESSMENT SUPPORT
+
+Do not automatically use CUI markings for Level 1.
+
+All values remain editable before generation.
+
+====================================================================
+11. STEP 4 — SYSTEM AND ASSESSMENT SCOPE
+====================================================================
+
+Auto-fill where data is available:
+
+- System or Environment Name
+- Assessment Scope Name
+- Assessment Target
+- Business and FCI/CUI Use Case
+- Primary Location
+- In-Scope Systems
+- In-Scope People and Roles
+- Facilities and Locations
+- External Service Providers
+- Specialized Assets
+- Out-of-Scope Assets
+- System Operational Model
+- Prohibited Paths
+- Current Scope and Asset Inventory Reference
+
+For Level 1:
+
+Use FCI terminology.
+
+Do not use CUI-enclave terminology unless the user specifically entered it for another active package.
+
+For Level 2:
+
+Use CUI scope and asset-category terminology from the Level 2 template.
+
+Do not infer an assessment boundary merely from the user’s Microsoft tenant.
+
+Require human confirmation.
+
+====================================================================
+12. STEP 5 — ARCHITECTURE AND SERVICES
+====================================================================
+
+Fields should include:
+
+- Identity and Access Architecture
+- Endpoint Security Architecture
+- Malware Protection Architecture
+- Network and Boundary Architecture
+- Physical and Media Protection
+- External Systems and Cloud Services
+- External Service Provider Responsibilities
+- Evidence Management Platform Scope Decision
+- Data-Flow Narrative
+
+Allow the user to select existing authorized Evidence records for:
+
+- Network Diagram
+- FCI or CUI Data-Flow Diagram
+- Asset Inventory
+- External Service Provider Register
+- Responsibility Matrix
+
+Do not embed an evidence file automatically without user confirmation.
+
+For image-based diagrams:
+
+- copy the selected authorized image into the generated DOCX
+- preserve aspect ratio
+- apply page-width limits
+- include the evidence title and date as a caption
+
+If no diagram is selected:
+
+- retain the professional template placeholder
+- show a warning before generation
+
+====================================================================
+13. STEP 6 — ROLES AND RESPONSIBILITIES
+====================================================================
+
+Auto-fill responsible users only when Control HUB has an explicit organization assignment.
+
+Possible roles:
+
+- System Owner / Authorizing Official
+- Security Officer / System Administrator
+- Compliance Reviewer
+- Primary Contact
+- Authorized User Group
+- Facilities / Physical Security
+- External Service Provider Responsible Party
+- Independent Reviewer
+- Management / HR
+
+Do not select people based only on account creation order or platform role.
+
+Show:
+
+- selected person
+- title
+- organization role
+- source
+- missing status
+
+Allow manual document-only overrides.
+
+Do not change Users & Roles from this wizard.
+
+====================================================================
+14. STEP 7 — REQUIREMENTS AND EVIDENCE
+====================================================================
+
+For each requirement in the selected template, allow Control HUB to prefill:
+
+- Requirement ID
+- Requirement Text
+- Current Implementation Narrative
+- Evidence/Test Expectations
+- Linked Evidence Titles
+- Original Filenames
+- Evidence Dates
+- Evidence Owners
+- Evidence Statuses
+- Monitoring References
+- Reviewer Notes
+- Current Control HUB Status
+
+Level 1:
+
+Use the 15 canonical CMMC Level 1 requirements and their 17 NIST SP 800-171A assessment mappings.
+
+Level 2:
+
+Use the 110 NIST SP 800-171 Rev. 2 requirements and the corresponding Level 2 fields in the attached template.
+
+Evidence should be summarized by metadata by default.
+
+Do not insert raw screenshots, logs, exports, or CUI content directly into the SSP unless the user explicitly selects them.
+
+Each prefilled narrative remains editable in the wizard.
+
+Changes apply to the generated SSP only unless the user separately chooses:
+
+“Update Control HUB Implementation Narrative”
+
+That optional update must be a separate, explicit action with its own permission and confirmation.
+
+Do not silently overwrite control narratives.
+
+====================================================================
+15. STEP 8 — ASSESSMENT STATUS
+====================================================================
+
+Do not infer or automatically assert compliance.
+
+Do not mark a requirement MET merely because:
+
+- the control status says Implemented
+- evidence exists
+- the roadmap action is Complete
+- the tenant scan passed
+- a document is linked
+
+Level 1 status options:
+
+- MET
+- NOT MET
+- NOT APPLICABLE
+
+NOT APPLICABLE requires:
+
+- applicability rationale
+- scope evidence
+- approved by
+- approval date
+
+Level 1 rules:
+
+- no CMMC Level 1 POA&M path
+- a NOT MET result prevents Final Level 1 (Self)
+- do not claim Final status until the user confirms the assessment results
+- SPRS and affirmation fields remain blank unless the user enters confirmed information
+
+Level 2:
+
+Use the status and POA&M rules applicable to the organization’s selected Level 2 assessment mode.
+
+Show all prefilled statuses as:
+
+Needs Confirmation
+
+until an authorized user reviews them.
+
+====================================================================
+16. REVIEW SCREEN
+====================================================================
+
+Before generating, show:
+
+Prefill Summary
+
+Cards:
+
+- Organization Fields Complete
+- Document-Control Fields Complete
+- Scope Fields Complete
+- Architecture Fields Complete
+- Requirements Reviewed
+- Evidence Summaries Added
+- Assessment Statuses Confirmed
+- Required Placeholders Remaining
+- Optional Placeholders Remaining
+
+Provide filters:
+
+- Missing Required
+- Needs Review
+- Auto-Filled
+- Manually Entered
+- Requirement Narratives
+- Evidence
+- Assessment Statuses
+
+Do not generate a supposedly completed SSP with unresolved required placeholders.
+
+====================================================================
+17. PLACEHOLDER PROCESSING
+====================================================================
+
+Build a robust DOCX placeholder engine.
+
+It must replace placeholders in:
+
+- body paragraphs
+- tables
+- nested tables
+- headers
+- footers
+- captions
+- text boxes, where supported
+- repeated requirement sections
+
+It must support placeholders that Word has split across multiple XML runs.
+
+Do not use a simple one-run string-replacement method.
+
+The engine should:
+
+1. Load a copy of the master template.
+2. Discover all `{{PLACEHOLDER}}` tokens.
+3. Reconstruct tokens split across runs.
+4. Replace the token while preserving surrounding formatting.
+5. Insert multiline text safely.
+6. Insert images for approved image placeholders.
+7. Preserve tables, page breaks, headers, footers, orientations, and styles.
+8. Validate that the DOCX opens.
+9. Report unresolved placeholders.
+10. Never modify the master template.
+
+====================================================================
+18. REQUIRED AND OPTIONAL PLACEHOLDERS
+====================================================================
+
+Maintain a placeholder manifest per template.
+
+Each placeholder should have:
+
+- placeholder_key
+- display_label
+- section
+- data_type
+- required
+- default_source
+- source_field
+- allow_manual_override
+- validation_rule
+- sensitive
+- repeatable
+- help_text
+
+Examples:
+
+{{ORGANIZATION_LEGAL_NAME}}
+required = true
+source = organization.legal_name
+
+{{CAGE_CODES}}
+required = true where contractually applicable
+source = organization.cage_codes
+
+{{SYSTEM_ENVIRONMENT_NAME}}
+required = true
+source = SSP prefill wizard
+
+{{AC_L2_3_1_1_IMPLEMENTATION_NARRATIVE}}
+required = true for completed Level 2 SSP
+source = organization requirement narrative
+
+{{PE_L1_B_1_I_IMPLEMENTATION_NARRATIVE}}
+required = true for completed Level 1 SSP
+source = organization requirement narrative
+
+{{NETWORK_AND_FCI_DATA_FLOW_NARRATIVE}}
+required = true
+source = wizard/system scope
+
+Blank-template downloads retain all placeholders.
+
+Prefilled downloads should not retain unresolved required placeholders.
+
+====================================================================
+19. PREFILL DRAFTS
+====================================================================
+
+Allow authorized users to save prefill work as a draft.
+
+Suggested model:
+
+SSPPrefillDraft
+- id
+- organization_id
+- template_id
+- scope_name
+- status
+- values_json
+- source_metadata_json
+- unresolved_placeholders
+- created_by
+- created_at
+- updated_by
+- updated_at
+- row_version
+
+Statuses:
+
+- Draft
+- Ready for Review
+- Generated
+- Cancelled
+
+A prefill draft is not an approved SSP.
+
+Do not count it as:
+
+- Evidence
+- an uploaded SSP
+- an approved document
+- a readiness artifact
+
+====================================================================
+20. GENERATE AND DOWNLOAD
+====================================================================
+
+After validation, generate a new DOCX from a copy of the master.
+
+Suggested filenames:
+
+Level 1:
+
+{Organization_Short_Name}_CMMC_Level_1_FCI_SSP_{Revision_Date}.docx
+
+Level 2:
+
+{Organization_Short_Name}_CMMC_Level_2_NIST_800-171_SSP_{Revision_Date}.docx
+
+Provide:
+
+- Preview
+- Download DOCX
+- Save Draft
+- Return to Edit
+
+Optional:
+
+- Generate PDF Preview
+
+The editable DOCX remains the primary output.
+
+Downloading the prefilled template should not automatically create an approved SSP record.
+
+Add an optional, unchecked action:
+
+Save Generated File as Draft SSP in Control HUB
+
+If selected:
+
+- create a Draft SSP record
+- preserve the generated DOCX
+- do not mark it Approved
+- do not change control statuses
+- do not replace the current SSP without explicit approval
+
+====================================================================
+21. MASTER-TEMPLATE PROTECTION
+====================================================================
+
+Never edit the files stored under:
+
+assets/templates/ssp/
+
+Each generation must:
+
+1. Read the master.
+2. Copy it to temporary private storage.
+3. Apply prefill values to the copy.
+4. Validate the copy.
+5. stream or store the generated copy.
+6. clean up temporary files.
+
+Do not let organization users edit or replace global master templates.
+
+Only a Global Admin may install a new global template version.
+
+====================================================================
+22. PERMISSIONS
+====================================================================
+
+Add or use:
+
+- ssp.view
+- ssp.template_download
+- ssp.prefill
+- ssp.generate
+- ssp.save_draft
+- ssp.approve
+- ssp.manage_global_templates
+
+Recommended:
+
+Global Admin:
+all permissions
+
+Organization Admin:
+download, prefill, generate, save draft for assigned organizations
+
+Compliance Manager:
+download, prefill, generate, save draft
+
+IT Contributor:
+download; prefill only if explicitly granted
+
+Reviewer:
+view and review prefill drafts where granted
+
+Executive Viewer:
+download blank template or view only according to policy
+
+Assessor Read-Only:
+download blank template and view approved SSP where permitted
+cannot modify prefill data
+
+Demo Viewer:
+follow current demo-download policy
+
+ssp.manage_global_templates:
+Global Admin only
+
+Backend authorization is required.
+
+====================================================================
+23. AUDIT LOGGING
+====================================================================
+
+Log:
+
+- compatible templates resolved
+- blank template downloaded
+- prefill draft created
+- prefill draft opened
+- organization data populated
+- requirement narrative populated
+- evidence metadata populated
+- prefill value changed
+- assessment status confirmed
+- preview generated
+- DOCX generated
+- DOCX downloaded
+- generated file saved as Draft SSP
+- generation failed
+- unauthorized template attempted
+
+Include:
+
+- user
+- organization
+- template key
+- template version
+- scope name
+- generated filename
+- unresolved-placeholder count
+- timestamp
+- success/failure
+
+Do not log:
+
+- full SSP content
+- raw evidence content
+- passwords
+- secrets
+- tokens
+- recovery keys
+
+====================================================================
+24. PRODUCTION DATA SAFETY
+====================================================================
+
+Do not:
+
+- alter existing SSP records
+- replace existing SSP files
+- change control statuses
+- change implementation narratives without explicit confirmation
+- change evidence mappings
+- change organization packages
+- modify organization profile data
+- reset SSP sections
+- re-seed organizations
+- modify VTCCORP.US data
+- modify OnCall247 data
+- modify APEX Solutions data
+- modify CarmeTechnology data
+
+Allowed:
+
+- global template registry
+- global read-only template assets
+- package-aware template resolver
+- new prefill-draft records
+- generated DOCX copies
+- new audit events
+
+====================================================================
+25. ACCEPTANCE TESTS
+====================================================================
+
+Test A — CMMC Level 1 Organization:
+
+Select OnCall247 with only CMMC Level 1 active.
+
+Expected:
+
+- Level 1 FCI SSP template is shown
+- Level 2 template is not shown
+- card says 15 requirements and FCI
+- card does not say 110 requirements, CUI, or Level 2
+
+Test B — CMMC Level 2 Organization:
+
+Select an organization with CMMC Level 2/NIST SP 800-171.
+
+Expected:
+
+- Level 2 template is shown
+- Level 1-only card is not used as the default
+
+Test C — No Fallback:
+
+Select an organization without a compatible package.
+
+Expected:
+
+- no Level 2 fallback
+- clear configuration message
+
+Test D — Blank Level 1 Download:
+
+Click Download Blank Template.
+
+Expected:
+
+- the Level 1 DOCX downloads
+- placeholders remain
+- all 15 requirements are present
+- 17 assessment mappings are present
+- no production record is created
+
+Test E — Level 1 Prefill:
+
+Click Prefill & Download for OnCall247.
+
+Expected:
+
+- OnCall247 organization values populate
+- the wizard uses FCI terminology
+- Level 1 controls and objective mappings appear
+- user can review every value
+- generated DOCX retains professional formatting
+
+Test F — Level 2 Prefill:
+
+Run prefill for a Level 2 organization.
+
+Expected:
+
+- organization data fills the Level 2 template
+- applicable control narratives are available for the 110 requirements
+- linked evidence metadata can be selected
+- no requirement is marked MET automatically
+
+Test G — Manual Override:
+
+Change organization name in the SSP wizard.
+
+Expected:
+
+- generated document uses the override
+- stored organization profile remains unchanged
+
+Test H — Missing Required Placeholder:
+
+Leave a required system-scope field blank.
+
+Expected:
+
+- final generation is blocked
+- exact missing field is identified
+
+Test I — Master Protection:
+
+Generate three documents.
+
+Expected:
+
+- master template checksum remains unchanged
+- each generated output is a separate file
+
+Test J — Existing SSP Safety:
+
+Review existing SSP records before and after.
+
+Expected:
+
+- no existing SSP, evidence, control, monitoring, POA&M, package, or organization record changes
+
+Test K — Formatting:
+
+Open generated Word files.
+
+Expected:
+
+- cover page retained
+- tables retained
+- headers and footers retained
+- page orientation retained
+- diagrams retain aspect ratio
+- no unresolved required placeholders
+- no clipped text
+- document opens without repair warnings
+
+====================================================================
+26. MOST IMPORTANT RULES
+====================================================================
+
+1. A Level 1-only organization must never see the Level 2 template as its default SSP resource.
+
+2. Template selection must be based on active organization packages.
+
+3. Download Blank Template leaves placeholders intact and changes no data.
+
+4. Prefill & Download generates a copy and never modifies the master template.
+
+5. Prefilled compliance statuses require human confirmation.
+
+6. The SSP wizard must not update organization profiles, controls, evidence, or existing SSP records unless the user performs a separate, explicit, authorized action.

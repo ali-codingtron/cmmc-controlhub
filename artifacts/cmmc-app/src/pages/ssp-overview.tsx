@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   FileText,
   ShieldCheck,
@@ -25,7 +25,26 @@ import {
   Download,
   FileDown,
   AlertTriangle,
+  Wand2,
+  Shield,
+  Info,
 } from "lucide-react";
+
+interface SSPTemplate {
+  templateKey: string;
+  name: string;
+  shortDescription: string;
+  framework: string;
+  cmmcLevel: 1 | 2;
+  protectedInfoType: "FCI" | "CUI";
+  templateVersion: string;
+  downloadFilename: string;
+  badges: string[];
+  templateFacts: { label: string; value: string }[];
+  warningText?: string;
+  sections: string[];
+  recommended: boolean;
+}
 
 interface SspDocument {
   id: string;
@@ -102,11 +121,13 @@ const TEMPLATE_SECTIONS = [
 function TemplateContentsDialog({
   open,
   onClose,
+  template,
   onDownload,
   downloading,
 }: {
   open: boolean;
   onClose: () => void;
+  template: SSPTemplate;
   onDownload: () => void;
   downloading: boolean;
 }) {
@@ -116,23 +137,21 @@ function TemplateContentsDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileDown className="h-5 w-5 text-blue-600" />
-            CMMC L2 / NIST SP 800-171 SSP Template
+            {template.name}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 text-sm">
           <div className="flex flex-wrap gap-1.5">
-            {["CMMC L2", "NIST 800-171 R2", "NIST 800-171A", "DFARS", "DOCX"].map((b) => (
+            {template.badges.map((b) => (
               <Badge key={b} variant="secondary" className="text-xs">{b}</Badge>
             ))}
           </div>
 
-          <p className="text-muted-foreground">
-            This template contains the following sections:
-          </p>
+          <p className="text-muted-foreground">This template contains the following sections:</p>
 
           <ul className="space-y-1.5">
-            {TEMPLATE_SECTIONS.map((s) => (
+            {template.sections.map((s) => (
               <li key={s} className="flex items-start gap-2 text-sm">
                 <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 text-green-500 flex-shrink-0" />
                 <span>{s}</span>
@@ -140,13 +159,19 @@ function TemplateContentsDialog({
             ))}
           </ul>
 
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-800 text-xs space-y-1">
-            <p className="font-medium">Important notice</p>
+          {template.warningText && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-800 text-xs space-y-1">
+              <p className="font-medium">Important notice</p>
+              <p>{template.warningText}</p>
+            </div>
+          )}
+
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-800 text-xs">
+            <p className="font-medium mb-1">No compliance assertions included</p>
             <p>
-              The template contains no compliance assertion. Each organization must
-              replace the placeholders, document its actual implementation, identify
-              supporting evidence, complete status determinations, and obtain the
-              required approval.
+              Each organization must replace the placeholders, document its actual
+              implementation, identify supporting evidence, complete status determinations,
+              and obtain the required approval.
             </p>
           </div>
 
@@ -157,11 +182,9 @@ function TemplateContentsDialog({
               ) : (
                 <Download className="h-4 w-4 mr-2" />
               )}
-              Download SSP Template
+              Download Template
             </Button>
-            <Button variant="outline" onClick={onClose}>
-              Close
-            </Button>
+            <Button variant="outline" onClick={onClose}>Close</Button>
           </div>
         </div>
       </DialogContent>
@@ -169,45 +192,45 @@ function TemplateContentsDialog({
   );
 }
 
-function SspResourcesCard() {
-  const { activeOrg } = useOrg();
+function SspTemplateCard({
+  template,
+  orgId,
+}: {
+  template: SSPTemplate;
+  orgId: string;
+}) {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [downloading, setDownloading] = useState(false);
   const [contentsOpen, setContentsOpen] = useState(false);
 
   async function handleDownload() {
     setDownloading(true);
     try {
-      const r = await fetch("/api/ssp/templates/cmmc-l2-nist-r2/download", {
-        headers: apiHeaders(activeOrg?.id),
+      const r = await fetch(`/api/ssp/templates/${template.templateKey}/download`, {
+        headers: apiHeaders(orgId),
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
         throw new Error(
           (err as { error?: string }).error ||
-            "The SSP template is temporarily unavailable. Contact your Control HUB administrator."
+            "The SSP template is temporarily unavailable."
         );
       }
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "Control_HUB_CMMC_L2_NIST_800-171_SSP_Template.docx";
+      a.download = template.downloadFilename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast({
-        title: "Template downloaded",
-        description: "CMMC L2 / NIST SP 800-171 SSP Template",
-      });
+      toast({ title: "Template downloaded", description: template.name });
     } catch (e: unknown) {
       toast({
         title: "Download failed",
-        description:
-          e instanceof Error
-            ? e.message
-            : "The SSP template is temporarily unavailable. Contact your Control HUB administrator.",
+        description: e instanceof Error ? e.message : "Template unavailable.",
         variant: "destructive",
       });
     } finally {
@@ -215,83 +238,140 @@ function SspResourcesCard() {
     }
   }
 
+  const borderColor = template.cmmcLevel === 1 ? "border-emerald-200" : "border-blue-200";
+  const bgGradient = template.cmmcLevel === 1
+    ? "bg-gradient-to-br from-emerald-50/60 to-white"
+    : "bg-gradient-to-br from-blue-50/60 to-white";
+  const iconBg = template.cmmcLevel === 1 ? "bg-emerald-100" : "bg-blue-100";
+  const iconColor = template.cmmcLevel === 1 ? "text-emerald-700" : "text-blue-700";
+
   return (
     <>
       <TemplateContentsDialog
         open={contentsOpen}
         onClose={() => setContentsOpen(false)}
+        template={template}
         onDownload={handleDownload}
         downloading={downloading}
       />
 
-      <Card className="border-blue-200 bg-gradient-to-br from-blue-50/60 to-white">
+      <Card className={`${borderColor} ${bgGradient}`}>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <div className="p-1.5 bg-blue-100 rounded-md">
-              <FileDown className="h-4 w-4 text-blue-700" />
+            <div className={`p-1.5 ${iconBg} rounded-md`}>
+              {template.cmmcLevel === 1
+                ? <Shield className={`h-4 w-4 ${iconColor}`} />
+                : <FileDown className={`h-4 w-4 ${iconColor}`} />
+              }
             </div>
-            Start with the Control HUB SSP Template
+            <span>{template.name}</span>
+            {template.recommended && (
+              <Badge className="ml-auto text-xs bg-blue-600">Recommended</Badge>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Download a reusable CMMC Level 2 and NIST SP 800-171 System Security Plan. The
-            template includes system-boundary sections, security architecture, all 110
-            requirement narratives, evidence and test fields, DFARS status tracking, and
-            NIST SP 800-171A assessment objectives.
+            {template.shortDescription}
           </p>
 
           <div className="flex flex-wrap gap-1.5">
-            {["CMMC L2", "NIST 800-171 R2", "NIST 800-171A", "DFARS", "DOCX"].map((b) => (
+            {template.badges.map((b) => (
               <Badge key={b} variant="secondary" className="text-xs">{b}</Badge>
             ))}
           </div>
 
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground py-1">
-            <span><span className="font-medium text-foreground">Framework:</span> CMMC Level 2</span>
-            <span><span className="font-medium text-foreground">Format:</span> Microsoft Word DOCX</span>
-            <span><span className="font-medium text-foreground">Requirements:</span> NIST SP 800-171 Rev. 2</span>
-            <span><span className="font-medium text-foreground">Version:</span> 1.0</span>
-            <span><span className="font-medium text-foreground">Procedures:</span> NIST SP 800-171A</span>
-            <span><span className="font-medium text-foreground">Editable:</span> Yes</span>
-            <span><span className="font-medium text-foreground">Contract:</span> DFARS</span>
-            <span><span className="font-medium text-foreground">Org Assertions:</span> None</span>
+            {template.templateFacts.map((f) => (
+              <span key={f.label}>
+                <span className="font-medium text-foreground">{f.label}:</span> {f.value}
+              </span>
+            ))}
           </div>
 
-          <div className="flex gap-2 pt-1">
-            <Button onClick={handleDownload} disabled={downloading} size="sm">
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Button
+              size="sm"
+              onClick={() => navigate(`/ssp/prefill-wizard?templateKey=${template.templateKey}`)}
+            >
+              <Wand2 className="h-3.5 w-3.5 mr-1.5" />
+              Pre-fill &amp; Generate
+            </Button>
+            <Button onClick={handleDownload} disabled={downloading} variant="outline" size="sm">
               {downloading ? (
                 <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
               ) : (
                 <Download className="h-3.5 w-3.5 mr-1.5" />
               )}
-              Download SSP Template
+              Blank Template
             </Button>
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
               onClick={() => setContentsOpen(true)}
             >
-              View Template Contents
+              <Info className="h-3.5 w-3.5 mr-1.5" />
+              Contents
             </Button>
           </div>
 
-          <p className="text-xs text-muted-foreground">
-            Download the editable Word template, replace the organization placeholders,
-            complete the implementation and evidence sections, and upload the completed SSP
-            through the existing SSP upload workflow.
-          </p>
-
-          <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50/80 px-3 py-2 text-amber-800 text-xs">
-            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
-            <span>
-              Do not mark a requirement Met or Not Applicable unless the status is supported
-              by the organization's actual implementation, scope, rationale, and evidence.
-            </span>
-          </div>
+          {template.warningText && (
+            <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50/80 px-3 py-2 text-amber-800 text-xs">
+              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+              <span>{template.warningText}</span>
+            </div>
+          )}
         </CardContent>
       </Card>
     </>
+  );
+}
+
+function SspResourcesCard() {
+  const { activeOrg } = useOrg();
+
+  const { data: templates, isLoading } = useQuery<SSPTemplate[]>({
+    queryKey: ["ssp-templates", activeOrg?.id],
+    queryFn: async () => {
+      const r = await fetch("/api/ssp/templates", { headers: apiHeaders(activeOrg?.id) });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: !!activeOrg?.id,
+  });
+
+  if (isLoading) {
+    return (
+      <Card className="border-dashed">
+        <CardContent className="flex items-center gap-3 py-8 justify-center text-muted-foreground text-sm">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading SSP templates…
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!templates || templates.length === 0) {
+    return (
+      <Card className="border-dashed">
+        <CardContent className="py-8 text-center space-y-2">
+          <FileDown className="h-8 w-8 mx-auto text-muted-foreground/40" />
+          <p className="text-sm font-medium text-muted-foreground">No SSP templates available</p>
+          <p className="text-xs text-muted-foreground">
+            SSP templates become available once compliance packages are assigned to your organization.
+            Contact your administrator to assign CMMC Level 1 or Level 2 packages.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {templates.map((tmpl) => (
+        <SspTemplateCard key={tmpl.templateKey} template={tmpl} orgId={activeOrg?.id ?? ""} />
+      ))}
+    </div>
   );
 }
 
