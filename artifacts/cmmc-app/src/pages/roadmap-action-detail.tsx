@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrg } from "@/context/OrgContext";
@@ -2300,12 +2300,19 @@ function ProcedureStepCard({
             )}
 
             {step.suggestedFilename && (
-              <Link href="/evidence/upload">
-                <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs mt-1">
-                  <Upload className="h-3.5 w-3.5" />
-                  Upload Evidence for This Step
-                </Button>
-              </Link>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
+                <Camera className="h-3.5 w-3.5 shrink-0" />
+                Upload evidence for this step via the{" "}
+                <button
+                  onClick={() => {
+                    // Bubble up to the parent tab system via a custom DOM event
+                    document.dispatchEvent(new CustomEvent("roadmap-navigate-tab", { detail: "evidence" }));
+                  }}
+                  className="underline text-primary hover:text-primary/80 transition-colors cursor-pointer"
+                >
+                  Evidence tab
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -2626,6 +2633,16 @@ export default function RoadmapActionDetail({ id }: { id: string }) {
   const canMarkComplete = canEdit;
   const canUpdateStatus = user?.role !== "assessor";
   const canValidate = !!user?.role && VALIDATOR_ROLES.has(user.role);
+
+  // Listen for tab-navigation events dispatched by child components (e.g. ProcedureStepCard)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const tab = (e as CustomEvent<string>).detail;
+      if (tab) setActiveTab(tab);
+    };
+    document.addEventListener("roadmap-navigate-tab", handler);
+    return () => document.removeEventListener("roadmap-navigate-tab", handler);
+  }, []);
 
   const { data: action, isLoading } = useQuery<ActionDetail>({
     queryKey: ["roadmap-action", id, activeOrg?.id],

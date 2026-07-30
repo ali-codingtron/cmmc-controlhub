@@ -661,6 +661,11 @@ router.patch(
           newValue: { action: "action_approved_complete" },
         });
       }
+    } else if (status === "ready_for_review") {
+      await logAudit(req, "status_changed", "roadmap_action", id, {
+        entityLabel: action.title,
+        newValue: { action: "action_submitted_for_review" },
+      });
     } else if (status === "not_applicable") {
       await logAudit(req, "status_changed", "roadmap_action", id, {
         entityLabel: action.title,
@@ -991,6 +996,11 @@ router.post(
       });
     }
 
+    await logAudit(req, "acknowledged", "roadmap_action", id, {
+      entityLabel: action.title,
+      newValue: { action: "overview_acknowledged" },
+    });
+
     res.json({ ok: true });
   }
 );
@@ -1082,6 +1092,15 @@ router.post(
       });
     }
 
+    await logAudit(req, "validated", "roadmap_action", id, {
+      entityLabel: action.title,
+      newValue: {
+        action: "validation_result_recorded",
+        result,
+        validationNotes: validationNotes ?? null,
+      },
+    });
+
     res.json({ ok: true });
   }
 );
@@ -1152,6 +1171,15 @@ router.post(
         linkedBy: req.authUser!.id,
         linkedAt: new Date(),
       });
+
+      await logAudit(req, "link_added", "roadmap_evidence_item", itemId, {
+        entityLabel: roadmapEvidenceItem.title,
+        newValue: {
+          action: "evidence_linked_to_roadmap",
+          evidenceId: parsed.data.evidenceId,
+          roadmapEvidenceItemId: itemId,
+        },
+      });
     }
 
     res.json({ ok: true });
@@ -1167,6 +1195,13 @@ router.delete(
     const { itemId, evidenceId } = req.params as Record<string, string>;
     const orgId = req.orgId!;
 
+    // Look up the roadmap evidence item title for audit logging
+    const [roadmapEvidenceItem] = await db
+      .select({ title: roadmapActionEvidenceItemsTable.title })
+      .from(roadmapActionEvidenceItemsTable)
+      .where(eq(roadmapActionEvidenceItemsTable.id, itemId))
+      .limit(1);
+
     await db
       .delete(orgRoadmapEvidenceLinksTable)
       .where(
@@ -1176,6 +1211,15 @@ router.delete(
           eq(orgRoadmapEvidenceLinksTable.evidenceId, evidenceId)
         )
       );
+
+    await logAudit(req, "link_removed", "roadmap_evidence_item", itemId, {
+      entityLabel: roadmapEvidenceItem?.title ?? itemId,
+      newValue: {
+        action: "evidence_unlinked_from_roadmap",
+        evidenceId,
+        roadmapEvidenceItemId: itemId,
+      },
+    });
 
     res.json({ ok: true });
   }
