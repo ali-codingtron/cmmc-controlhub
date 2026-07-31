@@ -953,7 +953,6 @@ export default function Settings() {
       <ChangePasswordCard />
       <SecurityInfoCard />
       <SmartMappingCard />
-      <PreAssessmentModuleCard />
       <CertificationCard />
 
       <Card>

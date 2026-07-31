@@ -92,22 +92,10 @@ router.patch(
       return;
     }
 
-    // Access control per feature
+    // Both features require global admin
     const isGlobalAdmin = req.authUser?.role === "admin";
-    const isOrgAdmin = req.orgRole === "org_admin" || req.orgRole === "admin";
-
-    if (featureKey === "IMPLEMENTATION_ROADMAP" && !isGlobalAdmin) {
-      res.status(403).json({ error: "Only global administrators can toggle the Implementation Roadmap module" });
-      return;
-    }
-    if (featureKey === "PRE_ASSESSMENT" && !isGlobalAdmin && !isOrgAdmin) {
-      res.status(403).json({ error: "Only global administrators or organization administrators can toggle the Pre-Assessment module" });
-      return;
-    }
-
-    // Org scope: non-global-admins can only toggle their own org
-    if (!isGlobalAdmin && req.orgId !== orgId) {
-      res.status(403).json({ error: "Access denied" });
+    if (!isGlobalAdmin) {
+      res.status(403).json({ error: "Only global administrators can toggle modules" });
       return;
     }
 
