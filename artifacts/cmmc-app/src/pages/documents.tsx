@@ -50,7 +50,7 @@ interface TemplateCategory {
 
 const TEMPLATE_CATEGORIES: TemplateCategory[] = [
   {
-    key: "policy",
+    key: "POLICIES",
     label: "Policies",
     description: "Formal organizational policies establishing requirements and accountability.",
     icon: <BookOpen className="h-5 w-5" />,
@@ -58,7 +58,7 @@ const TEMPLATE_CATEGORIES: TemplateCategory[] = [
     color: "bg-blue-50 border-blue-200 text-blue-700",
   },
   {
-    key: "procedure",
+    key: "PROCEDURES",
     label: "Procedures",
     description: "Step-by-step operational procedures implementing policy requirements.",
     icon: <ClipboardList className="h-5 w-5" />,
@@ -66,7 +66,7 @@ const TEMPLATE_CATEGORIES: TemplateCategory[] = [
     color: "bg-green-50 border-green-200 text-green-700",
   },
   {
-    key: "standard",
+    key: "STANDARDS",
     label: "Standards",
     description: "Technical and configuration standards defining baseline requirements.",
     icon: <ShieldCheck className="h-5 w-5" />,
@@ -74,7 +74,7 @@ const TEMPLATE_CATEGORIES: TemplateCategory[] = [
     color: "bg-purple-50 border-purple-200 text-purple-700",
   },
   {
-    key: "plan",
+    key: "PLANS",
     label: "Plans",
     description: "Strategic and operational plans for security functions and programs.",
     icon: <Layers className="h-5 w-5" />,
@@ -82,7 +82,7 @@ const TEMPLATE_CATEGORIES: TemplateCategory[] = [
     color: "bg-orange-50 border-orange-200 text-orange-700",
   },
   {
-    key: "assessment",
+    key: "ASSESSMENTS_REPORTS",
     label: "Assessments & Reports",
     description: "Risk assessments, security reviews, audits, and evaluation reports.",
     icon: <BarChart3 className="h-5 w-5" />,
@@ -90,7 +90,7 @@ const TEMPLATE_CATEGORIES: TemplateCategory[] = [
     color: "bg-red-50 border-red-200 text-red-700",
   },
   {
-    key: "matrix",
+    key: "MATRICES_REGISTERS",
     label: "Matrices & Registers",
     description: "Structured control matrices, responsibility assignments, and asset registers.",
     icon: <Table2 className="h-5 w-5" />,
@@ -98,7 +98,7 @@ const TEMPLATE_CATEGORIES: TemplateCategory[] = [
     color: "bg-amber-50 border-amber-200 text-amber-700",
   },
   {
-    key: "form",
+    key: "FORMS_RECORDS",
     label: "Forms & Records",
     description: "Standardized forms, templates, and record-keeping documents.",
     icon: <FileQuestion className="h-5 w-5" />,
@@ -106,7 +106,7 @@ const TEMPLATE_CATEGORIES: TemplateCategory[] = [
     color: "bg-teal-50 border-teal-200 text-teal-700",
   },
   {
-    key: "architecture",
+    key: "ARCHITECTURE",
     label: "Architecture & Diagrams",
     description: "System architecture, data flow diagrams, and boundary documentation.",
     icon: <Network className="h-5 w-5" />,
@@ -114,7 +114,7 @@ const TEMPLATE_CATEGORIES: TemplateCategory[] = [
     color: "bg-indigo-50 border-indigo-200 text-indigo-700",
   },
   {
-    key: "ssp",
+    key: "SSP",
     label: "SSP & Long-Form",
     description: "System Security Plans and comprehensive multi-section controlled documents.",
     icon: <ScrollText className="h-5 w-5" />,
@@ -128,7 +128,7 @@ function categorizeTemplate(artifactTypeLabel: string, title: string): string {
   for (const cat of TEMPLATE_CATEGORIES) {
     if (cat.keywords.some((k) => text.includes(k))) return cat.key;
   }
-  return "other";
+  return "OTHER";
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -149,26 +149,32 @@ const WORKFLOW_STEPS = [
   {
     n: 1,
     icon: <Library className="h-5 w-5" />,
-    title: "Select a Template",
-    description: "Choose from 67+ CMMC L2 templates across 9 document categories.",
+    title: "Select Template",
+    description: "Choose from applicable compliance templates across document categories.",
   },
   {
     n: 2,
     icon: <Building2 className="h-5 w-5" />,
-    title: "Confirm Organization Information",
+    title: "Confirm Document Information",
     description: "Review org details, responsible roles, document number, version, and approver.",
   },
   {
     n: 3,
     icon: <CheckCircle2 className="h-5 w-5" />,
-    title: "Review & Auto-Fill",
-    description: "Complete any missing fields and inspect the formatted document before generation.",
+    title: "Review Auto-Filled Values",
+    description: "Complete any missing fields, grouped by section, before generating.",
   },
   {
     n: 4,
     icon: <FileStack className="h-5 w-5" />,
-    title: "Generate & Link",
-    description: "Create professional DOCX/PDF outputs and link automatically to CMMC controls.",
+    title: "Preview & Validate",
+    description: "Inspect the formatted document; all required fields must be resolved.",
+  },
+  {
+    n: 5,
+    icon: <TrendingUp className="h-5 w-5" />,
+    title: "Generate, Review & Link",
+    description: "Create professional DOCX/PDF outputs and link automatically to controls.",
   },
 ];
 
@@ -351,11 +357,22 @@ export default function DocumentationCenter() {
   const canEditProfile = user?.role === "admin" || activeOrg?.role === "org_admin";
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery({
-    queryKey: ["doc-template-library-list"],
+    queryKey: ["doc-template-library-list", orgId],
     queryFn: async () => {
       const r = await fetch("/api/doc-templates/library", { headers: authHeaders(orgId) });
       if (!r.ok) return [];
       return r.json() as Promise<any[]>;
+    },
+    enabled: !!orgId,
+  });
+
+  // Package-aware resolver — gives us applicable template counts and active package keys
+  const { data: resolverResult } = useQuery({
+    queryKey: ["doc-template-resolver", orgId],
+    queryFn: async () => {
+      const r = await fetch("/api/doc-templates/resolver", { headers: authHeaders(orgId) });
+      if (!r.ok) return null;
+      return r.json() as Promise<{ activePackageKeys: string[]; total: number; templates: any[] }>;
     },
     enabled: !!orgId,
   });
@@ -391,15 +408,22 @@ export default function DocumentationCenter() {
     enabled: !!orgId,
   });
 
-  const templateCount = templates.length;
+  // Use resolver count when available (package-aware), else fall back to full library
+  const templateCount = resolverResult?.total ?? templates.length;
   const totalDocs = docStats?.totalDocuments ?? 0;
   const totalDraft = docStats?.totalDraft ?? 0;
   const totalPending = docStats?.totalPendingReview ?? 0;
   const totalApproved = (docStats?.totalApproved ?? 0) + (docStats?.totalActive ?? 0);
 
-  // Category breakdown
+  // Package badges derived from org level or resolver result
+  const activePackageKeys = resolverResult?.activePackageKeys ?? [];
+  const isL1 = activeOrg?.cmmcTargetLevel === "L1" || activePackageKeys.some((k) => k.includes("L1") && !k.includes("L2"));
+  const isL2 = activeOrg?.cmmcTargetLevel === "L2" || activePackageKeys.some((k) => k.includes("L2"));
+
+  // Category breakdown — prefer resolver templates if available, else use library list
+  const catSourceTemplates: any[] = resolverResult?.templates?.length ? resolverResult.templates : templates;
   const catCounts = new Map<string, number>();
-  for (const t of templates) {
+  for (const t of catSourceTemplates) {
     const cat = categorizeTemplate(t.artifactTypeLabel ?? "", t.title ?? "");
     catCounts.set(cat, (catCounts.get(cat) ?? 0) + 1);
   }
@@ -443,6 +467,25 @@ export default function DocumentationCenter() {
             compliance documents. Generated documents are automatically stored as evidence and linked
             to their applicable controls.
           </p>
+          {/* Package badges */}
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {isL1 && (
+              <>
+                <Badge className="text-xs bg-blue-100 text-blue-700 border-blue-200">CMMC Level 1</Badge>
+                <Badge className="text-xs bg-blue-50 text-blue-600 border-blue-200">FCI</Badge>
+              </>
+            )}
+            {isL2 && (
+              <>
+                <Badge className="text-xs bg-indigo-100 text-indigo-700 border-indigo-200">CMMC Level 2</Badge>
+                <Badge className="text-xs bg-indigo-50 text-indigo-600 border-indigo-200">NIST SP 800-171</Badge>
+                <Badge className="text-xs bg-indigo-50 text-indigo-600 border-indigo-200">CUI</Badge>
+              </>
+            )}
+            {!isL1 && !isL2 && activeOrg && (
+              <Badge variant="outline" className="text-xs text-muted-foreground">No packages configured</Badge>
+            )}
+          </div>
         </div>
         <div className="flex gap-2 shrink-0">
           <Button variant="outline" asChild>
@@ -553,7 +596,7 @@ export default function DocumentationCenter() {
               const count = catCounts.get(cat.key) ?? 0;
               return (
                 <Card key={cat.key} className="hover:shadow-md transition-shadow cursor-pointer group">
-                  <Link href={`/documents/templates?type=${encodeURIComponent(cat.key)}`}>
+                  <Link href={`/documents/templates?category=${cat.key}`}>
                     <CardContent className="pt-4 pb-4">
                       <div className="flex items-start gap-3">
                         <div className={cn("h-9 w-9 rounded-lg flex items-center justify-center shrink-0 border", cat.color)}>

@@ -12,16 +12,19 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Search, Eye, FileDown, Plus, Archive, Library, Loader2, AlertTriangle,
-  RefreshCw, ChevronRight,
+  Search, Eye, Plus, Library, Loader2, AlertTriangle,
+  RefreshCw, X,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { useOrg } from "@/context/OrgContext";
 
-function authHeaders(): Record<string, string> {
+function authHeaders(orgId?: string): Record<string, string> {
   const token = localStorage.getItem("auth_token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  const h: Record<string, string> = {};
+  if (token) h["Authorization"] = `Bearer ${token}`;
+  if (orgId) h["X-Organization-ID"] = orgId;
+  return h;
 }
 
 interface TemplateRow {
@@ -57,39 +60,65 @@ function artifactColor(label: string | null): string {
   return TYPE_COLORS[base] ?? TYPE_COLORS[label] ?? "bg-slate-100 text-slate-700 border-slate-200";
 }
 
+// Maps uppercase stable category keys to artifactType filter strings
 const CATEGORY_TYPE_MAP: Record<string, string> = {
-  policy: "Policy",
-  procedure: "Procedure",
-  standard: "Standard",
-  plan: "Plan",
-  assessment: "Assessment",
-  matrix: "Matrix",
-  form: "Form",
-  architecture: "Architecture",
-  ssp: "SSP",
+  POLICIES: "Policy",
+  PROCEDURES: "Procedure",
+  STANDARDS: "Standard",
+  PLANS: "Plan",
+  ASSESSMENTS_REPORTS: "Assessment",
+  MATRICES_REGISTERS: "Matrix",
+  FORMS_RECORDS: "Form",
+  ARCHITECTURE: "Architecture",
+  SSP: "SSP",
 };
 
 export default function DocTemplateLibrary() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { activeOrg } = useOrg();
+  const orgId = activeOrg?.id;
   const [location] = useLocation();
 
-  const urlType = new URLSearchParams(location.split("?")[1] ?? "").get("type") ?? "";
-  const initialArtifactType = CATEGORY_TYPE_MAP[urlType] ?? "all";
+  // Read ?category= param (new) — fall back to legacy ?type= if present
+  const urlParams = new URLSearchParams(location.split("?")[1] ?? "");
+  const urlCategory = urlParams.get("category") ?? "";
+  const urlTypeLegacy = urlParams.get("type") ?? "";
+  const initialCategory = urlCategory || urlTypeLegacy;
+  const initialArtifactType = CATEGORY_TYPE_MAP[initialCategory.toUpperCase()] ?? (initialCategory ? initialCategory : "all");
 
   const [search, setSearch] = useState("");
   const [artifactType, setArtifactType] = useState(initialArtifactType);
   const [family, setFamily] = useState("all");
   const [controlRef, setControlRef] = useState("");
   const [importLoading, setImportLoading] = useState(false);
+  // Global Admins can view the full catalog instead of org-filtered
+  const [viewGlobalCatalog, setViewGlobalCatalog] = useState(false);
 
   useEffect(() => {
-    const t = new URLSearchParams(location.split("?")[1] ?? "").get("type") ?? "";
-    const mapped = CATEGORY_TYPE_MAP[t] ?? "all";
+    const p = new URLSearchParams(location.split("?")[1] ?? "");
+    const cat = p.get("category") ?? p.get("type") ?? "";
+    const mapped = CATEGORY_TYPE_MAP[cat.toUpperCase()] ?? (cat ? cat : "all");
     setArtifactType(mapped);
   }, [location]);
 
-  const { data: templates, isLoading, refetch } = useQuery<TemplateRow[]>({
+  // Resolver — package-aware templates for this org
+  const { data: resolverResult, isLoading: resolverLoading } = useQuery({
+    queryKey: ["doc-template-resolver", orgId],
+    queryFn: async () => {
+      const r = await fetch("/api/doc-templates/resolver", { headers: authHeaders(orgId) });
+      if (!r.ok) return null;
+      return r.json() as Promise<{
+        activePackageKeys: string[];
+        total: number;
+        templates: TemplateRow[];
+      }>;
+    },
+    enabled: !!orgId && !viewGlobalCatalog,
+  });
+
+  // Full global library (admin catalog view or fallback when no packages)
+  const { data: libraryTemplates, isLoading: libraryLoading, refetch } = useQuery<TemplateRow[]>({
     queryKey: ["doc-template-library", search, artifactType, family, controlRef],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -97,7 +126,7 @@ export default function DocTemplateLibrary() {
       if (artifactType && artifactType !== "all") params.set("artifactType", artifactType);
       if (family && family !== "all") params.set("family", family);
       if (controlRef) params.set("controlRef", controlRef);
-      const r = await fetch(`/api/doc-templates/library?${params}`, { headers: authHeaders() });
+      const r = await fetch(`/api/doc-templates/library?${params}`, { headers: authHeaders(orgId) });
       if (!r.ok) throw new Error(await r.text());
       return r.json();
     },
@@ -106,7 +135,7 @@ export default function DocTemplateLibrary() {
   const { data: families } = useQuery<string[]>({
     queryKey: ["doc-template-families"],
     queryFn: async () => {
-      const r = await fetch("/api/doc-templates/families", { headers: authHeaders() });
+      const r = await fetch("/api/doc-templates/families", { headers: authHeaders(orgId) });
       if (!r.ok) return [];
       return r.json();
     },
@@ -115,7 +144,7 @@ export default function DocTemplateLibrary() {
   const { data: artifactTypes } = useQuery<string[]>({
     queryKey: ["doc-template-artifact-types"],
     queryFn: async () => {
-      const r = await fetch("/api/doc-templates/artifact-types", { headers: authHeaders() });
+      const r = await fetch("/api/doc-templates/artifact-types", { headers: authHeaders(orgId) });
       if (!r.ok) return [];
       return r.json();
     },
@@ -127,7 +156,7 @@ export default function DocTemplateLibrary() {
     try {
       const r = await fetch("/api/admin/doc-templates/import", {
         method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        headers: { ...authHeaders(orgId), "Content-Type": "application/json" },
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error ?? "Import failed");
@@ -140,7 +169,55 @@ export default function DocTemplateLibrary() {
     }
   };
 
-  const isEmpty = !isLoading && (!templates || templates.length === 0);
+  // Determine which templates to display and filter
+  const useResolver = !viewGlobalCatalog && !!resolverResult && resolverResult.templates.length > 0;
+  const isLoading = viewGlobalCatalog ? libraryLoading : resolverLoading || libraryLoading;
+
+  // Apply client-side filters to resolver templates; global catalog uses server-side filters
+  let templates: TemplateRow[] = [];
+  if (useResolver) {
+    templates = resolverResult!.templates.filter((t) => {
+      const matchSearch = !search || t.title.toLowerCase().includes(search.toLowerCase()) || (t.sourceTemplateId ?? "").toLowerCase().includes(search.toLowerCase());
+      const matchType = artifactType === "all" || (t.artifactTypeLabel ?? "").toLowerCase().includes(artifactType.toLowerCase());
+      const matchFamily = family === "all" || t.family === family;
+      const matchControl = !controlRef || (t.linkedControls ?? []).some((c) =>
+        (c.controlRef ?? "").toLowerCase().includes(controlRef.toLowerCase()) ||
+        (c.nistRef ?? "").toLowerCase().includes(controlRef.toLowerCase())
+      );
+      return matchSearch && matchType && matchFamily && matchControl;
+    });
+  } else {
+    templates = libraryTemplates ?? [];
+  }
+
+  const isEmpty = !isLoading && templates.length === 0;
+
+  // Dynamic subtitle
+  const activePackageKeys = resolverResult?.activePackageKeys ?? [];
+  const isL1Only = activePackageKeys.some((k) => k.includes("L1")) && !activePackageKeys.some((k) => k.includes("L2"));
+  const isL2 = activePackageKeys.some((k) => k.includes("L2"));
+  const isMultiPackage = activePackageKeys.length > 2;
+
+  let subtitle = "";
+  if (viewGlobalCatalog) {
+    subtitle = `All documentation templates — ${templates.length} templates`;
+  } else if (isL1Only) {
+    subtitle = `CMMC Level 1 / FCI templates — ${useResolver ? resolverResult!.total : templates.length} applicable templates`;
+  } else if (isL2 && !isMultiPackage) {
+    subtitle = `CMMC Level 2 / NIST SP 800-171 templates — ${useResolver ? resolverResult!.total : templates.length} applicable templates`;
+  } else if (isMultiPackage) {
+    subtitle = `Documentation templates — ${useResolver ? resolverResult!.total : templates.length} applicable templates across ${activePackageKeys.length} packages`;
+  } else {
+    subtitle = `CMMC Level 2 document templates — ${templates.length} templates`;
+  }
+
+  // Active filter chips
+  const activeFilters: { label: string; clear?: () => void }[] = [];
+  if (search) activeFilters.push({ label: `Search: "${search}"`, clear: () => setSearch("") });
+  if (artifactType !== "all") activeFilters.push({ label: `Type: ${artifactType}`, clear: () => setArtifactType("all") });
+  if (family !== "all") activeFilters.push({ label: `Domain: ${family}`, clear: () => setFamily("all") });
+  if (controlRef) activeFilters.push({ label: `Control: ${controlRef}`, clear: () => setControlRef("") });
+  if (!viewGlobalCatalog && useResolver) activeFilters.push({ label: "Applicable to Current Organization" });
 
   return (
     <div className="space-y-6">
@@ -151,16 +228,23 @@ export default function DocTemplateLibrary() {
             <Library className="h-6 w-6 text-primary" />
             Template Library
           </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            CMMC Level 2 document templates — {templates?.length ?? 0} templates
-          </p>
+          <p className="text-muted-foreground text-sm mt-1">{subtitle}</p>
         </div>
         <div className="flex gap-2">
           {user?.role === "admin" && (
-            <Button variant="outline" size="sm" onClick={handleImport} disabled={importLoading}>
-              {importLoading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1.5" />}
-              Import / Refresh
-            </Button>
+            <>
+              <Button
+                variant={viewGlobalCatalog ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewGlobalCatalog((v) => !v)}
+              >
+                {viewGlobalCatalog ? "View Org Catalog" : "View Global Catalog"}
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleImport} disabled={importLoading}>
+                {importLoading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1.5" />}
+                Import / Refresh
+              </Button>
+            </>
           )}
           <Link href="/documents/generate">
             <Button size="sm">
@@ -204,6 +288,33 @@ export default function DocTemplateLibrary() {
               onChange={(e) => setControlRef(e.target.value)}
             />
           </div>
+          {/* Active filter chips */}
+          {activeFilters.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-3">
+              {activeFilters.map((f, i) => (
+                <Badge
+                  key={i}
+                  variant="secondary"
+                  className="text-xs flex items-center gap-1 cursor-default"
+                >
+                  {f.label}
+                  {f.clear && (
+                    <button onClick={f.clear} className="ml-0.5 hover:text-destructive">
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </Badge>
+              ))}
+              {activeFilters.some((f) => !!f.clear) && (
+                <button
+                  className="text-xs text-muted-foreground hover:text-foreground underline"
+                  onClick={() => { setSearch(""); setArtifactType("all"); setFamily("all"); setControlRef(""); }}
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -214,7 +325,7 @@ export default function DocTemplateLibrary() {
             <AlertTriangle className="h-10 w-10 text-orange-500 mx-auto mb-3" />
             <h3 className="font-semibold text-lg mb-1">No templates imported yet</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Click "Import / Refresh" to load the CMMC L2 Document Template Library (67 templates).
+              Click "Import / Refresh" to load the CMMC L2 Document Template Library.
             </p>
             <Button onClick={handleImport} disabled={importLoading}>
               {importLoading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1.5" />}
@@ -258,7 +369,7 @@ export default function DocTemplateLibrary() {
                           ))}
                         </TableRow>
                       ))
-                    : templates!.map((t) => (
+                    : templates.map((t) => (
                         <TableRow key={t.id} className="group">
                           <TableCell>
                             <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">
@@ -278,13 +389,13 @@ export default function DocTemplateLibrary() {
                           <TableCell className="text-sm text-muted-foreground">{t.family ?? "—"}</TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-1 max-w-48">
-                              {t.linkedControls.slice(0, 3).map((c, i) => (
+                              {(t.linkedControls ?? []).slice(0, 3).map((c, i) => (
                                 <Badge key={i} variant="outline" className="text-xs font-mono">
                                   {c.controlRef ?? c.nistRef}
                                 </Badge>
                               ))}
-                              {t.linkedControls.length > 3 && (
-                                <Badge variant="outline" className="text-xs">+{t.linkedControls.length - 3}</Badge>
+                              {(t.linkedControls ?? []).length > 3 && (
+                                <Badge variant="outline" className="text-xs">+{(t.linkedControls ?? []).length - 3}</Badge>
                               )}
                             </div>
                           </TableCell>

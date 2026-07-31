@@ -7,6 +7,7 @@ import {
   useRejectDocument,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,9 +18,12 @@ import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import {
   ArrowLeft, Edit, Save, X, CheckCircle2, XCircle, Send, Clock, History,
-  Download, Eye, AlertCircle, FileIcon,
+  Download, Eye, AlertCircle, FileIcon, Code2, ChevronDown, ChevronRight as ChevronRightIcon,
 } from "lucide-react";
 import { useOrg } from "@/context/OrgContext";
+import { useAuth } from "@/lib/auth";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 const DOC_STATUS_COLORS: Record<string, string> = {
   draft: "bg-gray-100 text-gray-700",
@@ -180,11 +184,13 @@ function DocFileCard({ docId, fileKey, fileName, fileSize }: {
 
 export default function DocumentDetail({ id }: { id: string }) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const { data: doc, isLoading, refetch } = useGetDocument(id);
 
   const [editing, setEditing] = useState(false);
   const [editBody, setEditBody] = useState("");
   const [editTitle, setEditTitle] = useState("");
+  const [rawSourceOpen, setRawSourceOpen] = useState(false);
 
   const [reviewDialog, setReviewDialog] = useState<"submit" | "approve" | "reject" | null>(null);
   const [dialogNotes, setDialogNotes] = useState("");
@@ -363,16 +369,47 @@ export default function DocumentDetail({ id }: { id: string }) {
           ) : fileKey ? (
             <DocFileCard docId={id} fileKey={fileKey} fileName={fileName} fileSize={fileSize} />
           ) : body ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Document Body</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="prose prose-sm max-w-none">
-                  <pre className="whitespace-pre-wrap text-sm font-sans leading-relaxed">{body}</pre>
-                </div>
-              </CardContent>
-            </Card>
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Document Body</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="prose prose-sm max-w-none overflow-y-auto max-h-[640px] rounded-md border bg-white p-5
+                    prose-headings:text-[#1a3a5c] prose-headings:font-semibold
+                    prose-h1:text-xl prose-h2:text-lg prose-h3:text-base
+                    prose-p:text-gray-700 prose-li:text-gray-700
+                    prose-strong:text-gray-900 prose-table:text-sm
+                    prose-code:text-primary prose-code:bg-muted prose-code:px-1 prose-code:rounded">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{body}</ReactMarkdown>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Raw source — admin only, collapsed */}
+              {user?.role === "admin" && (
+                <Collapsible open={rawSourceOpen} onOpenChange={setRawSourceOpen}>
+                  <Card className="border-dashed border-muted-foreground/30">
+                    <CollapsibleTrigger asChild>
+                      <CardHeader className="pb-2 cursor-pointer hover:bg-muted/30 rounded-t-lg transition-colors">
+                        <CardTitle className="text-xs flex items-center gap-1.5 text-muted-foreground font-normal">
+                          <Code2 className="h-3.5 w-3.5" />
+                          Technical Source (Admin Only)
+                          {rawSourceOpen ? <ChevronDown className="h-3.5 w-3.5 ml-auto" /> : <ChevronRightIcon className="h-3.5 w-3.5 ml-auto" />}
+                        </CardTitle>
+                      </CardHeader>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <CardContent>
+                        <pre className="text-xs bg-muted/50 rounded p-4 overflow-x-auto max-h-80 overflow-y-auto font-mono leading-relaxed whitespace-pre-wrap">
+                          {body.slice(0, 6000)}{body.length > 6000 ? "\n\n…[truncated]" : ""}
+                        </pre>
+                      </CardContent>
+                    </CollapsibleContent>
+                  </Card>
+                </Collapsible>
+              )}
+            </>
           ) : (
             <Card>
               <CardHeader>

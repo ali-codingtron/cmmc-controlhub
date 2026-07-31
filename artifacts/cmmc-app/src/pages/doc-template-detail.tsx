@@ -1,12 +1,19 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  Collapsible, CollapsibleContent, CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   ArrowLeft, Plus, FileText, Users, CheckSquare, BookOpen,
-  Table2, Shield, Loader2,
+  Table2, Shield, Loader2, ChevronDown, ChevronRight, Code2,
 } from "lucide-react";
+import { useAuth } from "@/lib/auth";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 function authHeaders() {
   const token = localStorage.getItem("auth_token");
@@ -27,6 +34,8 @@ const TYPE_COLORS: Record<string, string> = {
 export default function DocTemplateDetail({ id: propId }: { id?: string }) {
   const [matched, params] = useRoute("/documents/templates/:id");
   const id = propId ?? params?.id ?? "";
+  const { user } = useAuth();
+  const [rawSourceOpen, setRawSourceOpen] = useState(false);
 
   const { data: template, isLoading } = useQuery({
     queryKey: ["doc-template-detail", id],
@@ -71,6 +80,11 @@ export default function DocTemplateDetail({ id: propId }: { id?: string }) {
           <div className="flex items-center gap-2 mb-1">
             <code className="text-xs font-mono bg-muted px-2 py-0.5 rounded">{template.sourceTemplateId}</code>
             <Badge className={`text-xs ${badgeColor}`}>{template.artifactTypeLabel}</Badge>
+            {template.informationType && (
+              <Badge variant="outline" className="text-xs">
+                {template.informationType === "CUI" ? "CUI" : template.informationType === "FCI" ? "FCI" : template.informationType === "BOTH" ? "CUI / FCI" : template.informationType}
+              </Badge>
+            )}
           </div>
           <h1 className="text-2xl font-bold">{template.title}</h1>
           <p className="text-sm text-muted-foreground mt-1">{template.family} · Review: {FREQ_LABELS[template.reviewFrequency] ?? template.reviewFrequency}</p>
@@ -239,23 +253,51 @@ export default function DocTemplateDetail({ id: propId }: { id?: string }) {
         </Card>
       )}
 
-      {/* Markdown preview */}
+      {/* Rendered Markdown preview */}
       {markdown && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-1.5"><FileText className="h-4 w-4 text-primary" /> Template Preview (Markdown Source)</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-1.5">
+              <FileText className="h-4 w-4 text-primary" /> Sample Document Preview
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <pre className="text-xs bg-muted/50 rounded p-4 overflow-x-auto max-h-96 overflow-y-auto font-mono leading-relaxed whitespace-pre-wrap">
-              {markdown.slice(0, 4000)}{markdown.length > 4000 ? "\n\n…[truncated]" : ""}
-            </pre>
+            <div className="prose prose-sm max-w-none rounded-md border bg-white p-5 overflow-y-auto max-h-[520px]
+              prose-headings:text-[#1a3a5c] prose-headings:font-semibold
+              prose-h1:text-xl prose-h2:text-lg prose-h3:text-base
+              prose-p:text-gray-700 prose-li:text-gray-700
+              prose-strong:text-gray-900 prose-code:text-primary prose-code:bg-muted prose-code:px-1 prose-code:rounded">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {markdown.length > 8000 ? markdown.slice(0, 8000) + "\n\n…[preview truncated]" : markdown}
+              </ReactMarkdown>
+            </div>
           </CardContent>
         </Card>
       )}
+
+      {/* Raw source — admin only, collapsed */}
+      {markdown && user?.role === "admin" && (
+        <Collapsible open={rawSourceOpen} onOpenChange={setRawSourceOpen}>
+          <Card className="border-dashed border-muted-foreground/30">
+            <CollapsibleTrigger asChild>
+              <CardHeader className="pb-2 cursor-pointer hover:bg-muted/30 rounded-t-lg transition-colors">
+                <CardTitle className="text-xs flex items-center gap-1.5 text-muted-foreground font-normal">
+                  <Code2 className="h-3.5 w-3.5" />
+                  Technical Source (Admin Only)
+                  {rawSourceOpen ? <ChevronDown className="h-3.5 w-3.5 ml-auto" /> : <ChevronRight className="h-3.5 w-3.5 ml-auto" />}
+                </CardTitle>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent>
+                <pre className="text-xs bg-muted/50 rounded p-4 overflow-x-auto max-h-80 overflow-y-auto font-mono leading-relaxed whitespace-pre-wrap">
+                  {markdown.slice(0, 4000)}{markdown.length > 4000 ? "\n\n…[truncated]" : ""}
+                </pre>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+      )}
     </div>
   );
-}
-
-function ChevronRight({ className }: { className?: string }) {
-  return <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>;
 }
