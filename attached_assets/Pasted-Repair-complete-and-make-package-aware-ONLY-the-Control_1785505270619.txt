@@ -1,0 +1,1559 @@
+Repair, complete, and make package-aware ONLY the Control HUB Documentation module.
+
+I provided a video demonstrating the current behavior.
+
+Current observed problems:
+
+1. Documentation Overview says users can choose from 67+ CMMC Level 2 templates, regardless of the selected organization’s active compliance packages.
+
+2. Template Library displays:
+   “CMMC Level 2 document templates — 67 templates”
+   even when an organization may be CMMC Level 1 only.
+
+3. Clicking a category card such as Policies, Procedures, Standards, Plans, Assessments & Reports, or Matrices & Registers opens the full Template Library instead of applying the selected category filter.
+
+4. The Overview shows a four-step workflow, while Generate Document uses six steps. The terminology is inconsistent.
+
+5. Template Detail displays raw Markdown source to normal users instead of a professional sample-output preview.
+
+6. Generate Document allows unresolved placeholders to proceed to final generation.
+
+7. Generated documents visibly retain unresolved placeholders such as:
+   {{ACCESS_REVIEW_FREQUENCY}}
+   {{MALWARE_SCAN_FREQUENCY}}
+
+8. The generated-document detail page displays raw Markdown inside a dark “Document Body” panel instead of showing a rendered document preview.
+
+9. Submit for Review asks for a free-text “Reviewer ID,” does not reliably submit, and produces only:
+   “Action failed”
+
+10. There is no complete document-review lifecycle:
+    - no actual reviewer assignment
+    - no review queue
+    - no approve action
+    - no request-changes action
+    - no resubmission workflow
+    - no meaningful review history
+
+11. Some generated documents may display both Level 1 and Level 2 control links. Documents must only be mapped to requirements that are applicable to the selected organization and template.
+
+Goal:
+
+Create a professional, package-aware Documentation Center where:
+
+- CMMC Level 1 organizations see Level 1/FCI templates
+- CMMC Level 2 organizations see Level 2/CUI templates
+- category cards open filtered template results
+- required placeholders cannot remain unresolved
+- generated documents display as rendered DOCX/PDF documents
+- the review workflow actually works
+- generated documents remain linked to applicable controls through the existing Evidence architecture
+
+====================================================================
+1. STRICT SCOPE
+====================================================================
+
+Change only:
+
+- Documentation Overview
+- Template Categories
+- Template Library
+- Template Detail
+- Generate Document workflow
+- placeholder review and validation
+- document preview
+- generated-document detail
+- generated-document review lifecycle
+- documentation-specific permissions
+- documentation-specific audit logging
+- generated-document integration with existing Evidence records
+
+Do not redesign:
+
+- Controls Library
+- Control Detail pages
+- Evidence Repository
+- Evidence Detail
+- SSP
+- Monitoring Tracker
+- POA&M
+- Implementation Roadmap
+- Pre-Assessment
+- Reports
+- Framework Crosswalk
+- Users and Roles
+- organization profiles
+- compliance-package assignments
+
+It is acceptable to use the existing Evidence model and control-mapping service so generated documents remain available under applicable controls.
+
+Do not create a separate All Documents repository.
+
+====================================================================
+2. RUN A READ-ONLY DIAGNOSTIC FIRST
+====================================================================
+
+Before modifying production data, inspect and report:
+
+Templates:
+
+- total template count
+- templates by category
+- templates by artifact type
+- templates with explicit package applicability
+- templates with no package applicability
+- templates mapped to Level 1 requirements
+- templates mapped to Level 2 requirements
+- templates mapped to both Level 1 and Level 2 requirements
+- templates with mixed or incompatible control mappings
+- templates containing CUI language
+- templates containing FCI language
+- templates containing C3PAO language
+- templates containing POA&M language
+
+Generated documents:
+
+- total generated-document count
+- count by organization
+- count by lifecycle/review status
+- count containing unresolved placeholders
+- count with DOCX output
+- count with PDF output
+- count represented as Evidence
+- count linked to controls
+- count with mixed Level 1 and Level 2 mappings
+- count submitted for review
+- failed review-request count
+
+Review workflow:
+
+- review-request tables/models
+- review API endpoints
+- status values
+- reviewer lookup logic
+- notification logic
+- failure reason behind the current “Action failed” result
+
+Do not modify any data during this diagnostic.
+
+====================================================================
+3. PACKAGE-AWARE TEMPLATE ARCHITECTURE
+====================================================================
+
+Do not determine template availability from a generic organization target-level label alone.
+
+Use active organization package assignments.
+
+Create or extend a template registry similar to:
+
+DocumentTemplate
+- id
+- template_id
+- template_family_key
+- title
+- description
+- category_key
+- artifact_type
+- layout_profile
+- information_type
+- template_version
+- active
+- sort_order
+- source_format
+- created_at
+- updated_at
+
+DocumentTemplatePackage
+- id
+- template_id
+- package_key
+- applicability
+- is_recommended
+
+Applicability values:
+
+- EXACT
+- SHARED
+- OPTIONAL
+- REFERENCE_ONLY
+
+Information types:
+
+- FCI
+- CUI
+- BOTH
+- NOT_APPLICABLE
+
+Use stable package keys such as:
+
+- CMMC_L1_SELF
+- FAR_52_204_21
+- CMMC_L2_SELF
+- NIST_800_171_R2
+- DFARS_252_204_7012
+- CUSTOM
+
+Do not join templates to packages using display names.
+
+====================================================================
+4. TEMPLATE VARIANTS
+====================================================================
+
+Some document types apply to both Level 1 and Level 2 but require different language.
+
+Use template families and variants.
+
+Example:
+
+Template Family:
+ACCESS_CONTROL_POLICY
+
+Variants:
+
+- CMMC Level 1 / FCI
+- CMMC Level 2 / CUI
+
+The Level 1 variant should use:
+
+- Federal Contract Information
+- FCI environment
+- FAR 52.204-21
+- applicable Level 1 requirements
+- annual self-assessment terminology
+
+The Level 2 variant may use:
+
+- Controlled Unclassified Information
+- CUI environment/enclave
+- NIST SP 800-171 Revision 2
+- applicable Level 2 requirements
+- Level 2 assessment terminology
+
+Do not simply display the same CUI document to a Level 1 organization.
+
+Do not automatically replace existing templates.
+
+Preserve the existing 67 templates and classify them through a dry-run report before applying package tags.
+
+====================================================================
+5. INITIAL CMMC LEVEL 1 TEMPLATE SET
+====================================================================
+
+Create a dedicated, curated Level 1 template catalog.
+
+Level 1 templates must be based on FCI and the organization’s active CMMC Level 1/FAR requirements.
+
+Recommended initial templates:
+
+POLICIES
+
+1. L1-POL-001
+   CMMC Level 1 FCI Safeguarding Policy
+
+2. L1-AC-POL-001
+   Access Control and Authorized Use Policy
+
+3. L1-MP-POL-001
+   Media Protection and Sanitization Policy
+
+4. L1-PE-POL-001
+   Physical Protection Policy
+
+5. L1-SI-POL-001
+   System and Information Integrity Policy
+
+PROCEDURES
+
+6. L1-AC-PROC-001
+   Account, User, Device, and Access Authorization Procedure
+
+7. L1-AC-PROC-002
+   External Systems, Portable Storage, and Public Content Procedure
+
+8. L1-IA-PROC-001
+   Identification and Authentication Procedure
+
+9. L1-MP-PROC-001
+   Media Sanitization and Disposal Procedure
+
+10. L1-PE-PROC-001
+    Visitor Escort, Physical Access Logging, and Access Device Procedure
+
+11. L1-SC-PROC-001
+    Boundary Protection and Public System Separation Procedure
+
+12. L1-SI-PROC-001
+    Flaw Remediation, Malware Protection, Updating, and Scanning Procedure
+
+PLANS
+
+13. L1-SCOPE-001
+    FCI Scope, System Inventory, and Boundary Plan
+
+ASSESSMENTS AND REPORTS
+
+14. L1-ASSESS-001
+    CMMC Level 1 Self-Assessment Report
+
+15. L1-AFFIRM-001
+    Annual Affirmation Preparation Record
+
+MATRICES AND REGISTERS
+
+16. L1-AC-MAT-001
+    Authorized User, Device, Role, and Public Posting Matrix
+
+17. L1-ASSET-REG-001
+    FCI Asset, Service, and System Inventory Register
+
+18. L1-PE-REG-001
+    Physical Access, Visitor, and Access Device Register
+
+19. L1-EVID-REG-001
+    CMMC Level 1 Evidence and Assessment Artifact Register
+
+Do not include Level 2-only requirements in these templates.
+
+Do not include:
+
+- CUI enclave assertions
+- 110 requirement counts
+- C3PAO preparation
+- Level 2 POA&M workflow
+- FIPS-specific Level 2 requirements
+- Level 2 audit or incident-response requirements that are not part of the active Level 1 package
+
+A template may reference another selected package only when that package is also active for the organization.
+
+====================================================================
+6. TEMPLATE RESOLVER
+====================================================================
+
+Create one backend service:
+
+resolveAvailableDocumentationTemplates(organizationId)
+
+Rules:
+
+A. CMMC Level 1 / FAR only:
+
+Return:
+
+- Level 1 templates
+- package-neutral shared templates explicitly marked compatible
+
+Do not return Level 2/CUI templates.
+
+B. CMMC Level 2 / NIST SP 800-171:
+
+Return:
+
+- Level 2 templates
+- compatible shared templates
+
+C. Both Level 1 and Level 2:
+
+Return both compatible sets.
+
+Show package filters:
+
+- All Applicable
+- CMMC Level 1
+- CMMC Level 2
+- Shared
+
+Do not assume the same assessment scope.
+
+D. No supported package:
+
+Show:
+
+“No documentation templates are currently configured for this organization’s selected compliance packages.”
+
+Do not fall back to CMMC Level 2.
+
+====================================================================
+7. DOCUMENTATION OVERVIEW
+====================================================================
+
+Make the Overview package-aware.
+
+For a Level 1-only organization, show:
+
+Title:
+Documentation Center
+
+Subtitle:
+
+“Create controlled policies, procedures, plans, assessments, matrices, and records for the organization’s CMMC Level 1 Federal Contract Information environment.”
+
+Badges:
+
+- CMMC Level 1
+- FAR 52.204-21
+- FCI
+
+For Level 2:
+
+Use accurate CMMC Level 2 / NIST SP 800-171 / CUI wording.
+
+The Overview counts must use only templates compatible with the selected organization.
+
+Examples:
+
+- Available Templates
+- Generated This Month
+- Draft Documents
+- Pending Review
+- Approved
+- Total Generated
+
+Do not show 67 Available Templates to an L1 organization unless 67 templates are actually compatible with L1.
+
+====================================================================
+8. ALIGN THE WORKFLOW LABELS
+====================================================================
+
+The current Overview shows four steps while the generator shows six.
+
+Use the same workflow labels everywhere.
+
+Recommended five-stage workflow:
+
+1. Select Template
+2. Confirm Document Information
+3. Review Auto-Filled Values
+4. Preview and Validate
+5. Generate, Review, and Link
+
+Or retain six stages, but use identical stage names on:
+
+- Documentation Overview
+- Generate Document wizard
+- Help text
+- success screen
+
+Do not describe one workflow on Overview and show another inside the wizard.
+
+====================================================================
+9. FIX CATEGORY CARD NAVIGATION
+====================================================================
+
+Create stable category keys:
+
+- POLICIES
+- PROCEDURES
+- STANDARDS
+- PLANS
+- ASSESSMENTS_REPORTS
+- MATRICES_REGISTERS
+- FORMS_RECORDS
+- ARCHITECTURE_DIAGRAMS
+- LONG_FORM_DOCUMENTS
+
+When a user clicks a category card, navigate to:
+
+/documentation/templates?category=POLICIES
+
+or the corresponding category key.
+
+Also preserve the organization’s applicable package context.
+
+Example:
+
+/documentation/templates?category=POLICIES&package=CMMC_L1_SELF
+
+Expected behavior:
+
+- Template Library opens
+- selected category filter is active
+- only compatible templates in that category are shown
+- result count matches the category card
+- page heading indicates the selected category
+
+Example:
+
+Template Library
+Policies — 5 applicable templates
+
+Add:
+
+Clear Category
+Browse All Templates
+
+Browser Back should return to the Documentation Overview at the previous scroll position.
+
+====================================================================
+10. CATEGORY COUNTS
+====================================================================
+
+Calculate category-card counts from the exact same package-aware query used by Template Library.
+
+Do not:
+
+- hardcode category totals
+- count disabled templates
+- count incompatible Level 2 templates for a Level 1 organization
+- count duplicate variants more than once unless both are intentionally displayed
+
+If a category has no compatible templates:
+
+- show 0
+- disable the Browse action
+or
+- hide the empty category behind Show Empty Categories
+
+Do not open the full unfiltered library from an empty category.
+
+====================================================================
+11. TEMPLATE LIBRARY FILTERS
+====================================================================
+
+Add or retain filters:
+
+- Search
+- Category
+- Artifact Type
+- Framework / Package
+- Domain / Family
+- Control / Requirement
+- Information Type
+- Review Frequency
+- Layout Profile
+
+Display active filters as removable chips.
+
+Example:
+
+Category: Policies
+Package: CMMC Level 1
+
+The package filter must default to:
+
+Applicable to Current Organization
+
+Do not show unrelated global templates unless a Global Admin explicitly selects:
+
+View Global Template Catalog
+
+====================================================================
+12. TEMPLATE LIBRARY HEADER
+====================================================================
+
+Do not hardcode:
+
+“CMMC Level 2 document templates — 67 templates”
+
+Use dynamic wording.
+
+Examples:
+
+Level 1 organization:
+
+“CMMC Level 1 / FCI templates — 19 applicable templates”
+
+Level 2 organization:
+
+“CMMC Level 2 / NIST SP 800-171 templates — 67 applicable templates”
+
+Multi-package organization:
+
+“Documentation templates — 81 applicable templates across 3 packages”
+
+Use actual calculated counts.
+
+====================================================================
+13. TEMPLATE DETAIL
+====================================================================
+
+Template Detail should show:
+
+- Template ID
+- Title
+- Package applicability
+- Information type
+- Category
+- Artifact type
+- Layout profile
+- Review frequency
+- Purpose
+- Scope
+- Roles and responsibilities
+- Requirements/procedure steps
+- Required records
+- Required tables
+- Mapped controls
+- Output formats
+- expected placeholders
+- expected page range
+
+Add package badges.
+
+Example:
+
+CMMC L1
+FCI
+Access Control
+
+Do not display Level 2-only control mappings to a Level 1-only organization.
+
+====================================================================
+14. REPLACE RAW MARKDOWN PREVIEW
+====================================================================
+
+The current Template Detail exposes:
+
+Template Preview (Markdown Source)
+
+Do not display raw Markdown source as the normal user preview.
+
+Replace it with:
+
+Preview Sample Output
+
+Show a rendered synthetic PDF or rendered page preview.
+
+Normal users should see what the professional output will look like.
+
+Move raw source to:
+
+Technical Template Source
+
+Make it:
+
+- collapsed by default
+- visible only to platform Global Admins
+- clearly labeled as technical content
+
+Do not expose raw template source to Assessor, Reviewer, Executive Viewer, or normal organization users.
+
+====================================================================
+15. PRESERVE WORKING TEMPLATE SELECTION
+====================================================================
+
+The video shows that selecting Generate Document from Template Detail correctly preserves the selected template and moves into the generation flow.
+
+Preserve that behavior.
+
+Use a route such as:
+
+/documentation/generate?templateId=AC-PROC-001
+
+When entering from Template Detail:
+
+- selected template remains selected
+- user does not reselect it
+- package compatibility is validated
+- generation starts at Confirm Document Information
+
+When entering Generate Document directly from the sidebar:
+
+- do not retain a stale template from a prior session
+- start with no template selected
+- show only compatible organization templates
+
+====================================================================
+16. PACKAGE-AWARE GENERATION FIELDS
+====================================================================
+
+The generation wizard must use fields and terminology from the selected template package.
+
+For Level 1:
+
+Use:
+
+- FCI Environment Name
+- FCI Scope Name
+- Federal Contract Information
+- Level 1 Self-Assessment
+- FAR 52.204-21
+- applicable Level 1 requirements
+
+Do not default to:
+
+- CUI Environment
+- CUI Enclave
+- CMMC Level 2 controls
+- NIST SP 800-171 110-requirement language
+- Level 2 POA&M
+- C3PAO
+
+For Level 2:
+
+Use the appropriate CUI and NIST SP 800-171 terminology.
+
+Do not derive document terminology solely from a generic organization name.
+
+====================================================================
+17. IMPROVE PLACEHOLDER REVIEW
+====================================================================
+
+The current placeholder-review step is one long list.
+
+Group fields into sections:
+
+- Organization Information
+- Document Control
+- System / Scope
+- Roles and Responsibilities
+- Operational Settings
+- Review Frequencies
+- Retention Requirements
+- Package-Specific Fields
+- Control-Specific Fields
+
+For each field show:
+
+- user-friendly label
+- current value
+- placeholder key, in muted text
+- data source
+- required/optional status
+- validation status
+
+Data sources:
+
+- Organization Profile
+- Template Default
+- Control HUB Record
+- User Entered
+- Missing
+
+Add summary cards:
+
+- Required Fields Complete
+- Missing Required
+- Optional Missing
+- Auto-Filled
+- Manually Entered
+
+Add filter:
+
+Show Missing Only
+
+====================================================================
+18. PLACEHOLDER MANIFEST
+====================================================================
+
+Each template must have an explicit placeholder manifest.
+
+Example:
+
+TemplatePlaceholder
+- id
+- template_id
+- placeholder_key
+- display_label
+- section
+- data_type
+- required
+- default_source
+- default_value
+- validation_rule
+- help_text
+- package_key
+- allow_document_override
+- sort_order
+
+Examples:
+
+ACCESS_REVIEW_FREQUENCY
+required = true
+
+MALWARE_SCAN_FREQUENCY
+required = true
+
+ORGANIZATION_NAME
+required = true
+
+APPROVER_NAME
+required = true when review workflow is enabled
+
+OPTIONAL_REFERENCE
+required = false
+
+Do not infer required fields only by scanning for double braces at generation time.
+
+====================================================================
+19. BLOCK UNRESOLVED REQUIRED PLACEHOLDERS
+====================================================================
+
+The current workflow warns that placeholders remain but still permits generation.
+
+Correct this.
+
+Before final generation:
+
+- scan body
+- tables
+- nested tables
+- headers
+- footers
+- captions
+- repeated sections
+- DOCX XML runs
+- Markdown/source content
+
+If a required placeholder remains:
+
+Block generation.
+
+Show:
+
+“Document cannot be generated yet.”
+
+List:
+
+- placeholder
+- display name
+- section
+- suggested resolution
+
+Button:
+
+Return to Missing Fields
+
+Optional placeholders may be:
+
+- removed cleanly
+- replaced with an approved template default
+- displayed as “Not Applicable” only when the template defines that behavior
+
+Do not output raw `{{PLACEHOLDER}}` values in generated documents.
+
+====================================================================
+20. GENERATION QUALITY GATE
+====================================================================
+
+Do not display:
+
+Document Generated Successfully
+
+until all quality checks pass.
+
+Validate:
+
+- no unresolved required placeholders
+- document title exists
+- document number exists
+- version exists
+- effective date is valid
+- review date is valid
+- mapped controls are compatible
+- DOCX is non-empty
+- DOCX opens without repair warnings
+- PDF conversion succeeds, when PDF is required
+- page count is greater than zero
+- no template-source Markdown is exposed as the primary document
+- output files exist
+- Evidence record is created successfully
+- control mappings are created successfully
+
+If the PDF fails but DOCX succeeds:
+
+Show:
+
+“DOCX generated. PDF rendition failed.”
+
+Do not claim both formats succeeded.
+
+====================================================================
+21. PROFESSIONAL PREVIEW
+====================================================================
+
+The Preview step should display the actual rendered output.
+
+Use:
+
+- generated PDF preview
+or
+- high-fidelity page rendering
+
+Controls:
+
+- previous page
+- next page
+- page number
+- zoom
+- fit width
+- fullscreen
+
+Do not use a simplified HTML preview that materially differs from the final DOCX/PDF.
+
+Show unresolved-field warnings before generation.
+
+====================================================================
+22. GENERATED-DOCUMENT DETAIL
+====================================================================
+
+The current generated-document page displays raw Markdown in a dark Document Body panel.
+
+Replace the normal view with:
+
+Document Preview
+
+Show:
+
+- rendered PDF/pages
+- document title
+- template ID
+- package
+- version
+- status
+- author/owner
+- effective date
+- review date
+- linked controls
+- generated date
+- DOCX download
+- PDF download
+- Open in Evidence
+
+Do not display raw Markdown as the main content.
+
+Move raw source to an advanced, Global Admin-only section:
+
+Technical Source
+
+Collapsed by default.
+
+====================================================================
+23. CONTROL LINKING
+====================================================================
+
+Generated documents must link only to:
+
+- active organization requirements
+- requirements supported by the selected template
+- requirements compatible with the selected package
+
+For a Level 1-only organization:
+
+- link only to active Level 1/FAR requirements
+- do not add Level 2 controls
+- do not display mixed L1/L2 mappings
+
+For Level 2:
+
+- use the applicable Level 2/canonical requirements
+- do not add duplicate Level 1 aliases unless the UI intentionally displays a crosswalk
+
+Create:
+
+- one logical generated document
+- one Evidence record
+- one DOCX
+- one PDF rendition, where supported
+- one mapping per applicable control
+
+Do not duplicate physical files.
+
+====================================================================
+24. DOCUMENT REVIEW LIFECYCLE
+====================================================================
+
+Implement a real controlled-document review lifecycle.
+
+Statuses:
+
+- DRAFT
+- IN_REVIEW
+- CHANGES_REQUESTED
+- APPROVED
+- ARCHIVED
+
+Do not add a status transition that has no backend implementation.
+
+Valid transitions:
+
+DRAFT
+→ IN_REVIEW
+
+IN_REVIEW
+→ APPROVED
+
+IN_REVIEW
+→ CHANGES_REQUESTED
+
+CHANGES_REQUESTED
+→ IN_REVIEW
+
+DRAFT or CHANGES_REQUESTED
+→ ARCHIVED, when permitted
+
+Do not allow direct:
+
+DRAFT
+→ APPROVED
+
+unless a platform Global Admin uses a documented override with a reason.
+
+====================================================================
+25. SUBMIT FOR REVIEW
+====================================================================
+
+Replace the free-text Reviewer ID field.
+
+Use a searchable reviewer selector.
+
+Show only active users who:
+
+- have access to the selected organization
+- have documents.review permission
+- are not revoked or inactive
+
+Show:
+
+- reviewer name
+- email
+- organization role
+
+Require a reviewer unless the organization has a configured default reviewer.
+
+Fields:
+
+- Reviewer
+- Review Due Date
+- Submission Notes
+
+When Submit for Review is confirmed:
+
+1. Verify the document is Draft or Changes Requested.
+2. Verify no required placeholders remain.
+3. Verify the generated DOCX/PDF exists.
+4. Verify the reviewer has active organization access.
+5. Create a DocumentReviewRequest.
+6. Change document status to IN_REVIEW.
+7. Record submitted by/date.
+8. Notify the reviewer.
+9. Write audit events.
+10. Return the canonical saved status.
+
+Do not use a free-text reviewer identifier.
+
+====================================================================
+26. REVIEW REQUEST MODEL
+====================================================================
+
+Create or correct a model similar to:
+
+DocumentReviewRequest
+- id
+- organization_id
+- generated_document_id
+- evidence_id
+- reviewer_user_id
+- submitted_by_user_id
+- submitted_at
+- due_date
+- status
+- submission_notes
+- decision
+- decision_notes
+- decided_at
+- decided_by_user_id
+- created_at
+- updated_at
+- row_version
+
+Review statuses:
+
+- PENDING
+- APPROVED
+- CHANGES_REQUESTED
+- CANCELLED
+
+Enforce one active review request per document version.
+
+====================================================================
+27. REVIEWER ACTIONS
+====================================================================
+
+When the assigned reviewer opens the document, show:
+
+Review Document
+
+Actions:
+
+- Approve
+- Request Changes
+
+Approve requires:
+
+- optional approval note
+- confirmation
+
+Request Changes requires:
+
+- change-request details
+
+After approval:
+
+- document status becomes APPROVED
+- Evidence status becomes Approved, using the existing status model
+- approved by/date are recorded
+- review history is retained
+- author is notified
+
+After Request Changes:
+
+- document status becomes CHANGES_REQUESTED
+- requested changes are displayed to the author
+- document becomes editable
+- author may resubmit
+- prior review history remains
+
+Do not delete previous decisions.
+
+====================================================================
+28. REVIEW QUEUE
+====================================================================
+
+Make the Pending Review Overview card functional.
+
+Clicking Pending Review should open a Documentation review view containing:
+
+- Assigned to Me
+- Submitted by Me
+- All Pending, for authorized administrators
+- Changes Requested
+- Completed Reviews
+
+This does not need a new permanent sidebar item.
+
+It may open:
+
+/documentation/reviews
+
+or a review panel from Documentation Overview.
+
+Columns:
+
+- Document
+- Organization
+- Template
+- Submitted By
+- Assigned Reviewer
+- Submitted Date
+- Due Date
+- Status
+- Actions
+
+Actions:
+
+- Open Review
+- Preview
+- Download
+- Approve
+- Request Changes
+
+Use permissions.
+
+====================================================================
+29. ERROR HANDLING
+====================================================================
+
+Replace the generic:
+
+“Action failed”
+
+with specific errors.
+
+Examples:
+
+Reviewer invalid:
+
+“The selected reviewer does not have active access to this organization.”
+
+Missing output:
+
+“The document output is unavailable. Regenerate the document before submitting it for review.”
+
+Unresolved placeholders:
+
+“The document contains unresolved required fields and cannot be submitted.”
+
+API failure:
+
+“The document could not be submitted for review. No status changes were applied.”
+
+Unauthorized:
+
+“You do not have permission to submit this document for review.”
+
+Log technical details server-side.
+
+Do not expose stack traces or raw database errors.
+
+====================================================================
+30. REVIEW WORKFLOW FALLBACK
+====================================================================
+
+Do not leave a nonfunctional Submit for Review button visible.
+
+Until the complete backend review workflow passes automated tests:
+
+- hide the button behind a feature flag
+or
+- label it unavailable in non-production testing
+
+Do not deploy another button that only changes frontend state.
+
+====================================================================
+31. DOCUMENTATION OVERVIEW IMPROVEMENTS
+====================================================================
+
+Make the Overview useful after these changes.
+
+Show:
+
+- applicable package badges
+- compatible template count
+- generated this month
+- Draft
+- In Review
+- Changes Requested
+- Approved
+- recently generated documents
+- reviews assigned to the current user
+- document profile completion
+- package-aware categories
+
+Every summary card should be clickable and open the appropriate filtered view.
+
+Do not show counts that cannot be opened or verified.
+
+====================================================================
+32. ORGANIZATION DOCUMENT PROFILE
+====================================================================
+
+Keep the Organization Document Profile but make it package-aware.
+
+For Level 1, include fields such as:
+
+- FCI Environment Name
+- FCI Scope Name
+- primary location
+- organization identifiers
+- system owner
+- security/contact roles
+- default approver
+- default reviewer
+- default classification
+- annual review date
+
+For Level 2, include CUI/Level 2 fields.
+
+Do not use one shared “CUI Environment” value for a Level 1-only organization.
+
+Changes made during document generation should remain document-only overrides unless a platform Global Admin separately updates the organization profile.
+
+====================================================================
+33. PERMISSIONS
+====================================================================
+
+Use organization-specific capabilities:
+
+- templates.view
+- documents.generate
+- documents.edit_draft
+- documents.preview
+- documents.download
+- documents.submit_review
+- documents.review
+- documents.approve
+- documents.request_changes
+- documents.archive
+- documents.view_technical_source
+- documents.manage_global_templates
+
+Recommended:
+
+Global Admin:
+all permissions
+
+Organization Admin:
+generate, edit, submit, review, approve according to organization policy
+
+Compliance Manager:
+generate, edit, submit, review, approve if assigned
+
+IT Contributor:
+generate/edit drafts if granted
+cannot approve by default
+
+Reviewer:
+review assigned documents
+
+Executive Viewer:
+read-only approved documents
+
+Assessor Read-Only:
+read-only approved documents and supporting evidence
+
+documents.view_technical_source:
+Global Admin only
+
+documents.manage_global_templates:
+Global Admin only
+
+Backend authorization is required.
+
+====================================================================
+34. AUDIT LOGGING
+====================================================================
+
+Log:
+
+- template category opened
+- template viewed
+- template selected
+- placeholder auto-filled
+- placeholder manually changed
+- unresolved placeholder detected
+- generation blocked
+- DOCX generated
+- PDF generated
+- document previewed
+- document downloaded
+- review submitted
+- review submission failed
+- reviewer assigned
+- document approved
+- changes requested
+- document resubmitted
+- document archived
+- technical source viewed
+
+Include:
+
+- acting user
+- organization
+- template ID
+- package
+- generated-document ID
+- Evidence ID
+- reviewer
+- previous status
+- new status
+- timestamp
+- success/failure
+
+Do not log full document content.
+
+====================================================================
+35. PRODUCTION DATA SAFETY
+====================================================================
+
+Do not:
+
+- delete existing templates
+- delete existing generated documents
+- delete Evidence records
+- delete files
+- change existing control statuses
+- remove current control mappings
+- alter organization packages
+- replace existing template IDs
+- mass-change existing review statuses
+- overwrite generated files
+- modify SSP, monitoring, POA&M, or roadmap data
+
+Add new fields as nullable where necessary.
+
+Existing generated drafts must remain accessible.
+
+Before classifying the current 67 templates, provide:
+
+Documentation_Template_Applicability_Dry_Run.xlsx
+
+Columns:
+
+- Template ID
+- Title
+- Category
+- Existing Control Mappings
+- Existing CUI/FCI Terms
+- Proposed Package Applicability
+- Proposed Information Type
+- Proposed Variant Family
+- Conflicts
+- Recommended Action
+
+Do not run a destructive classification automatically.
+
+====================================================================
+36. AUTOMATED TESTS
+====================================================================
+
+Package tests:
+
+- L1 organization sees only L1/shared templates
+- L2 organization sees only L2/shared templates
+- multi-package organization can filter by package
+- no L2 fallback exists for L1
+- counts match available templates
+
+Category tests:
+
+- Policies card opens only Policies
+- Procedures card opens only Procedures
+- URL contains category filter
+- Browser Back returns to Overview
+- Browse All clears category
+- empty category does not open all templates
+
+Generation tests:
+
+- template-detail Generate preserves template selection
+- sidebar Generate starts without stale selection
+- L1 template uses FCI terminology
+- L2 template uses CUI terminology
+- incompatible template is denied
+- unresolved required placeholder blocks generation
+- no final DOCX contains `{{...}}`
+- DOCX and PDF are valid
+- one Evidence record is created
+- applicable control mappings are created
+
+Display tests:
+
+- generated-document page shows rendered preview
+- raw Markdown is not the default display
+- technical source is Global Admin-only
+- download actions work
+
+Review tests:
+
+- reviewer selector lists authorized organization users
+- free-text reviewer ID is not accepted
+- Submit for Review creates request
+- document becomes In Review
+- reviewer can approve
+- reviewer can request changes
+- changes can be resubmitted
+- history is preserved
+- failure rolls back all status changes
+- user receives a meaningful error
+
+====================================================================
+37. ACCEPTANCE TESTS
+====================================================================
+
+Test A — Level 1 Overview:
+
+Select a CMMC Level 1-only organization.
+
+Expected:
+
+- Documentation Overview shows CMMC L1/FAR/FCI badges
+- compatible Level 1 template count is displayed
+- Level 2/CUI template count is not displayed
+- category counts reflect Level 1 templates only
+
+Test B — Category Navigation:
+
+Click Policies.
+
+Expected:
+
+- Template Library opens filtered to Policies
+- only compatible policy templates appear
+- selected category is visible
+- result count matches the category card
+
+Test C — Level 1 Template:
+
+Generate the Level 1 Access Control and Authorized Use Policy.
+
+Expected:
+
+- document uses FCI terminology
+- only applicable Level 1 requirements are linked
+- no CUI, Level 2 POA&M, or C3PAO language appears
+- no Level 2 control links are created
+
+Test D — Required Placeholder:
+
+Leave ACCESS_REVIEW_FREQUENCY blank.
+
+Expected:
+
+- Preview identifies the missing field
+- Generate is blocked
+- no document or Evidence record is created
+
+Test E — Generated View:
+
+Generate a complete document and select View Document.
+
+Expected:
+
+- rendered document preview appears
+- raw Markdown is not the primary view
+- DOCX and PDF downloads work
+
+Test F — Submit for Review:
+
+Select Submit for Review.
+
+Expected:
+
+- actual organization reviewer picker appears
+- reviewer is selected
+- submission succeeds
+- status changes to In Review
+- reviewer receives the review item
+
+Test G — Approval:
+
+Reviewer opens the assigned document and approves it.
+
+Expected:
+
+- status becomes Approved
+- approval metadata appears
+- Evidence status is synchronized
+- review history is preserved
+
+Test H — Request Changes:
+
+Reviewer requests changes.
+
+Expected:
+
+- author sees the requested changes
+- status becomes Changes Requested
+- document may be edited and resubmitted
+
+Test I — Failure:
+
+Simulate a review API failure.
+
+Expected:
+
+- document remains in its prior status
+- no partial review request is created
+- useful error is shown instead of only “Action failed”
+
+Test J — Production Safety:
+
+No existing templates, generated files, Evidence, controls, SSP, monitoring, POA&M, roadmap, package assignments, users, or organization records are deleted or overwritten.
+
+====================================================================
+38. MOST IMPORTANT RULES
+====================================================================
+
+1. Template availability must be based on the selected organization’s active compliance packages.
+
+2. A CMMC Level 1-only organization must not receive Level 2/CUI documentation templates.
+
+3. Category cards must open the selected category, not the full unfiltered library.
+
+4. Required unresolved placeholders must block generation.
+
+5. Normal users must see a rendered document, not raw Markdown source.
+
+6. Submit for Review must create a real review request and status transition or remain hidden until functional.
+
+7. Generated documents must be stored once and linked only to applicable organization controls.

@@ -27,6 +27,7 @@ import { useOrg } from "@/context/OrgContext";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { EvidenceUploadModal } from "@/components/evidence/EvidenceUploadModal";
 
 function authHeaders(orgId?: string): Record<string, string> {
   const token = localStorage.getItem("auth_token");
@@ -344,6 +345,7 @@ export default function DocumentationCenter() {
   const queryClient = useQueryClient();
   const [expandProfile, setExpandProfile] = useState(false);
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const [uploadEvidenceOpen, setUploadEvidenceOpen] = useState(false);
 
   // Global Admins and org_admins of the active org may edit the organization profile.
   const canEditProfile = user?.role === "admin" || activeOrg?.role === "org_admin";
@@ -748,15 +750,24 @@ export default function DocumentationCenter() {
                 The Documentation Center is for generating new controlled documents from templates.
               </p>
             </div>
-            <Button variant="outline" size="sm" className="shrink-0" asChild>
-              <Link href="/evidence/upload">
-                <Download className="h-3.5 w-3.5 mr-1.5" />
-                Upload to Evidence
-              </Link>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={() => setUploadEvidenceOpen(true)}
+            >
+              <Download className="h-3.5 w-3.5 mr-1.5" />
+              Upload to Evidence
             </Button>
           </div>
         </CardContent>
       </Card>
+
+      <EvidenceUploadModal
+        open={uploadEvidenceOpen}
+        onClose={() => setUploadEvidenceOpen(false)}
+        onSaved={() => setUploadEvidenceOpen(false)}
+      />
     </div>
   );
 }
