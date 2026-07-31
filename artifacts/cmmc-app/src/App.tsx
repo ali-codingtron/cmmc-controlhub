@@ -63,6 +63,7 @@ import PaConnections from "@/pages/pa-connections";
 import DocTemplateLibrary from "@/pages/doc-template-library";
 import DocTemplateDetail from "@/pages/doc-template-detail";
 import DocGenerate from "@/pages/doc-generate";
+import DocumentReviews from "@/pages/document-reviews";
 import PaResults from "@/pages/pa-results";
 import PaFindings from "@/pages/pa-findings";
 import PaEvidenceRequests from "@/pages/pa-evidence-requests";
@@ -222,6 +223,9 @@ function AppRoutes() {
               </Route>
               <Route path="/documents/templates/:id">
                 {(params: { id: string }) => <DocTemplateDetail id={params.id} />}
+              </Route>
+              <Route path="/documents/reviews">
+                {() => <DocumentReviews />}
               </Route>
               <Route path="/documents/generate">
                 {() => <DocGenerate />}

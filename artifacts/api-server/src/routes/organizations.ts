@@ -11,7 +11,7 @@ import {
   poamsTable,
   controlsTable,
 } from "@workspace/db";
-import { eq, and, count, or, desc, sql } from "drizzle-orm";
+import { eq, and, count, or, desc, sql, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { logAudit } from "../lib/audit";
 import { ASSIGNABLE_ORG_ROLES, isAssignableOrgRole } from "../lib/access-control";
@@ -458,6 +458,47 @@ router.get("/organizations/:id/users", requireAuth, async (req, res) => {
     .orderBy(organizationUsersTable.role, usersTable.name);
 
   res.json(members);
+});
+
+// Returns active org members eligible to review documents
+router.get("/organizations/:orgId/reviewers", requireAuth, async (req, res): Promise<void> => {
+  const { orgId } = req.params as Record<string, string>;
+
+  // Must be a member of the org (or global admin)
+  if (req.authUser?.role !== "admin") {
+    const [membership] = await db
+      .select({ id: organizationUsersTable.id })
+      .from(organizationUsersTable)
+      .where(
+        and(
+          eq(organizationUsersTable.organizationId, orgId),
+          eq(organizationUsersTable.userId, req.authUser!.id),
+          eq(organizationUsersTable.status, "active")
+        )
+      )
+      .limit(1);
+    if (!membership) { res.status(403).json({ error: "Access denied" }); return; }
+  }
+
+  const reviewers = await db
+    .select({
+      id: usersTable.id,
+      name: usersTable.name,
+      email: usersTable.email,
+      orgRole: organizationUsersTable.role,
+    })
+    .from(organizationUsersTable)
+    .innerJoin(usersTable, eq(usersTable.id, organizationUsersTable.userId))
+    .where(
+      and(
+        eq(organizationUsersTable.organizationId, orgId),
+        eq(organizationUsersTable.status, "active"),
+        inArray(organizationUsersTable.role, ["org_admin", "compliance_manager", "reviewer", "it_contributor"])
+      )
+    )
+    .orderBy(usersTable.name);
+
+  res.json(reviewers);
 });
 
 router.post("/organizations/:id/users", requireAuth, requireAdmin, async (req, res) => {

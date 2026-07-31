@@ -539,7 +539,7 @@ export default function DocumentationCenter() {
       {/* ── SUMMARY STATS ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
-          { label: "Available Templates", value: templateCount, icon: Library, color: "text-blue-600 bg-blue-50" },
+          { label: "Available Templates", value: templateCount, icon: Library, color: "text-blue-600 bg-blue-50", href: undefined },
           {
             label: "Generated This Month",
             value: recentDocs.filter((d: any) => {
@@ -549,21 +549,36 @@ export default function DocumentationCenter() {
             }).length,
             icon: TrendingUp,
             color: "text-emerald-600 bg-emerald-50",
+            href: undefined,
           },
-          { label: "Draft Documents", value: totalDraft, icon: FileText, color: "text-gray-600 bg-gray-50" },
-          { label: "Pending Review", value: totalPending, icon: Clock, color: "text-amber-600 bg-amber-50" },
-          { label: "Approved / Active", value: totalApproved, icon: CheckCircle2, color: "text-green-600 bg-green-50" },
-          { label: "Total Generated", value: totalDocs, icon: Layers, color: "text-purple-600 bg-purple-50" },
+          { label: "Draft Documents", value: totalDraft, icon: FileText, color: "text-gray-600 bg-gray-50", href: undefined },
+          { label: "Pending Review", value: totalPending, icon: Clock, color: "text-amber-600 bg-amber-50", href: "/documents/reviews" },
+          { label: "Approved / Active", value: totalApproved, icon: CheckCircle2, color: "text-green-600 bg-green-50", href: undefined },
+          { label: "Total Generated", value: totalDocs, icon: Layers, color: "text-purple-600 bg-purple-50", href: undefined },
         ].map((card) => (
-          <Card key={card.label} className="text-center">
-            <CardContent className="pt-4 pb-3">
-              <div className={cn("h-8 w-8 rounded-full flex items-center justify-center mx-auto mb-2", card.color)}>
-                <card.icon className="h-4 w-4" />
-              </div>
-              <p className="text-2xl font-bold">{card.value}</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">{card.label}</p>
-            </CardContent>
-          </Card>
+          card.href ? (
+            <Link key={card.label} href={card.href}>
+              <Card className="text-center hover:shadow-md transition-shadow cursor-pointer">
+                <CardContent className="pt-4 pb-3">
+                  <div className={cn("h-8 w-8 rounded-full flex items-center justify-center mx-auto mb-2", card.color)}>
+                    <card.icon className="h-4 w-4" />
+                  </div>
+                  <p className="text-2xl font-bold">{card.value}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">{card.label}</p>
+                </CardContent>
+              </Card>
+            </Link>
+          ) : (
+            <Card key={card.label} className="text-center">
+              <CardContent className="pt-4 pb-3">
+                <div className={cn("h-8 w-8 rounded-full flex items-center justify-center mx-auto mb-2", card.color)}>
+                  <card.icon className="h-4 w-4" />
+                </div>
+                <p className="text-2xl font-bold">{card.value}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">{card.label}</p>
+              </CardContent>
+            </Card>
+          )
         ))}
       </div>
 

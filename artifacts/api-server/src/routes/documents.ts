@@ -9,18 +9,21 @@ import {
   documentVersionsTable,
   documentControlMapsTable,
   documentReviewsTable,
+  documentReviewRequestsTable,
   generatedLogsTable,
   logEntriesTable,
   checklistItemsTable,
   checklistCompletionsTable,
   usersTable,
+  organizationUsersTable,
   controlsTable,
   domainsTable,
   evidenceItemsTable,
   evidenceControlLinksTable,
   tasksTable,
 } from "@workspace/db";
-import { eq, and, desc, ilike, or, inArray, lte, gte, isNull, isNotNull, sql } from "drizzle-orm";
+import { eq, and, desc, ilike, or, inArray, lte, gte, isNull, isNotNull, sql, ne, aliasedTable } from "drizzle-orm";
+import { sendDocumentReviewRequestEmail, sendDocumentDecisionEmail } from "../lib/email";
 import { requireAuth, requireNotAssessor } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 import { logAudit } from "../lib/audit";
@@ -1040,6 +1043,77 @@ router.get("/documents/missing", requireAuth, requireOrg, async (req, res) => {
   });
 });
 
+// ─── REVIEW QUEUE (must be before /documents/:id) ────────────────────────────
+
+router.get("/documents/review-requests", requireAuth, requireOrg, async (req, res): Promise<void> => {
+  const { tab } = req.query as Record<string, string>;
+  const userId = req.authUser!.id;
+  const orgId = req.orgId;
+
+  const submitterAlias = aliasedTable(usersTable, "submitter_user");
+  const reviewerAlias = aliasedTable(usersTable, "reviewer_user");
+
+  let whereConditions: any[] = orgId ? [eq(documentReviewRequestsTable.organizationId, orgId)] : [];
+
+  if (tab === "assigned_to_me") {
+    whereConditions.push(
+      eq(documentReviewRequestsTable.reviewerUserId, userId),
+      eq(documentReviewRequestsTable.status, "PENDING")
+    );
+  } else if (tab === "submitted_by_me") {
+    whereConditions.push(eq(documentReviewRequestsTable.submittedByUserId, userId));
+  } else if (tab === "changes_requested") {
+    whereConditions.push(eq(documentReviewRequestsTable.status, "CHANGES_REQUESTED"));
+  } else if (tab === "completed") {
+    whereConditions.push(inArray(documentReviewRequestsTable.status, ["APPROVED", "CANCELLED"]));
+  } else if (tab === "all_pending") {
+    whereConditions.push(eq(documentReviewRequestsTable.status, "PENDING"));
+  } else {
+    // default: all in org that are relevant to this user
+    whereConditions.push(
+      or(
+        eq(documentReviewRequestsTable.reviewerUserId, userId),
+        eq(documentReviewRequestsTable.submittedByUserId, userId)
+      )
+    );
+  }
+
+  const requests = await db
+    .select({
+      id: documentReviewRequestsTable.id,
+      organizationId: documentReviewRequestsTable.organizationId,
+      generatedDocumentId: documentReviewRequestsTable.generatedDocumentId,
+      documentTitle: documentsTable.title,
+      documentStatus: documentsTable.status,
+      documentFileKey: documentsTable.fileKey,
+      documentFileName: documentsTable.fileName,
+      templateId: documentsTable.templateId,
+      templateTitle: documentTemplatesTable.title,
+      reviewerUserId: documentReviewRequestsTable.reviewerUserId,
+      reviewerName: reviewerAlias.name,
+      reviewerEmail: reviewerAlias.email,
+      submittedByUserId: documentReviewRequestsTable.submittedByUserId,
+      submitterName: submitterAlias.name,
+      submitterEmail: submitterAlias.email,
+      submittedAt: documentReviewRequestsTable.submittedAt,
+      dueDate: documentReviewRequestsTable.dueDate,
+      status: documentReviewRequestsTable.status,
+      submissionNotes: documentReviewRequestsTable.submissionNotes,
+      decisionNotes: documentReviewRequestsTable.decisionNotes,
+      decidedAt: documentReviewRequestsTable.decidedAt,
+      createdAt: documentReviewRequestsTable.createdAt,
+    })
+    .from(documentReviewRequestsTable)
+    .leftJoin(documentsTable, eq(documentsTable.id, documentReviewRequestsTable.generatedDocumentId))
+    .leftJoin(documentTemplatesTable, eq(documentTemplatesTable.id, documentsTable.templateId))
+    .leftJoin(submitterAlias, eq(submitterAlias.id, documentReviewRequestsTable.submittedByUserId))
+    .leftJoin(reviewerAlias, eq(reviewerAlias.id, documentReviewRequestsTable.reviewerUserId))
+    .where(and(...whereConditions))
+    .orderBy(desc(documentReviewRequestsTable.submittedAt));
+
+  res.json(requests);
+});
+
 router.get("/documents/:id", requireAuth, requireOrg, async (req, res) => {
   const rows = await db
     .select({
@@ -1092,34 +1166,62 @@ router.get("/documents/:id", requireAuth, requireOrg, async (req, res) => {
   const linkedControlIds = controlMapRows.map((m) => m.controlId);
   const controlDetails = await getControlDetails(linkedControlIds);
 
-  const [versions, reviews] = await Promise.all([
+  const versionUserAlias = aliasedTable(usersTable, "version_user");
+  const reviewUserAlias = aliasedTable(usersTable, "review_user");
+  const reviewerUserAlias = aliasedTable(usersTable, "reviewer_user_alias");
+  const submitterUserAlias = aliasedTable(usersTable, "submitter_user_alias");
+
+  const [versions, reviews, pendingRequestRows] = await Promise.all([
     db.select({
       id: documentVersionsTable.id,
       documentId: documentVersionsTable.documentId,
       version: documentVersionsTable.version,
       status: documentVersionsTable.status,
-      changedByName: usersTable.name,
+      changedByName: versionUserAlias.name,
       changeNotes: documentVersionsTable.changeNotes,
       createdAt: documentVersionsTable.createdAt,
     })
       .from(documentVersionsTable)
-      .leftJoin(usersTable, eq(usersTable.id, documentVersionsTable.changedById))
+      .leftJoin(versionUserAlias, eq(versionUserAlias.id, documentVersionsTable.changedById))
       .where(eq(documentVersionsTable.documentId, req.params.id as string))
       .orderBy(desc(documentVersionsTable.createdAt)),
     db.select({
       id: documentReviewsTable.id,
       documentId: documentReviewsTable.documentId,
       reviewerId: documentReviewsTable.reviewerId,
-      reviewerName: usersTable.name,
+      reviewerName: reviewUserAlias.name,
       action: documentReviewsTable.action,
       notes: documentReviewsTable.notes,
       version: documentReviewsTable.version,
       reviewedAt: documentReviewsTable.reviewedAt,
     })
       .from(documentReviewsTable)
-      .leftJoin(usersTable, eq(usersTable.id, documentReviewsTable.reviewerId))
+      .leftJoin(reviewUserAlias, eq(reviewUserAlias.id, documentReviewsTable.reviewerId))
       .where(eq(documentReviewsTable.documentId, req.params.id as string))
       .orderBy(desc(documentReviewsTable.reviewedAt)),
+    db.select({
+      id: documentReviewRequestsTable.id,
+      status: documentReviewRequestsTable.status,
+      reviewerUserId: documentReviewRequestsTable.reviewerUserId,
+      reviewerName: reviewerUserAlias.name,
+      submittedByUserId: documentReviewRequestsTable.submittedByUserId,
+      submitterName: submitterUserAlias.name,
+      submittedAt: documentReviewRequestsTable.submittedAt,
+      dueDate: documentReviewRequestsTable.dueDate,
+      submissionNotes: documentReviewRequestsTable.submissionNotes,
+      decisionNotes: documentReviewRequestsTable.decisionNotes,
+      decidedAt: documentReviewRequestsTable.decidedAt,
+    })
+      .from(documentReviewRequestsTable)
+      .leftJoin(reviewerUserAlias, eq(reviewerUserAlias.id, documentReviewRequestsTable.reviewerUserId))
+      .leftJoin(submitterUserAlias, eq(submitterUserAlias.id, documentReviewRequestsTable.submittedByUserId))
+      .where(
+        and(
+          eq(documentReviewRequestsTable.generatedDocumentId, req.params.id as string),
+          eq(documentReviewRequestsTable.status, "PENDING")
+        )
+      )
+      .limit(1),
   ]);
 
   const sourceSubtype = doc.fileKey ? "uploaded" : doc.templateId ? "generated" : doc.body?.trim() ? "body" : "empty";
@@ -1131,6 +1233,7 @@ router.get("/documents/:id", requireAuth, requireOrg, async (req, res) => {
     sourceSubtype,
     versionHistory: versions,
     reviews,
+    pendingReviewRequest: pendingRequestRows[0] ?? null,
   });
 });
 
@@ -1305,22 +1408,353 @@ router.post("/documents/:id/archive", requireAuth, requireOrg, async (req, res) 
 });
 
 router.get("/documents/:id/versions", requireAuth, requireOrg, async (req, res) => {
+  const versionsUserAlias = aliasedTable(usersTable, "versions_user");
   const versions = await db
     .select({
       id: documentVersionsTable.id,
       documentId: documentVersionsTable.documentId,
       version: documentVersionsTable.version,
       status: documentVersionsTable.status,
-      changedByName: usersTable.name,
+      changedByName: versionsUserAlias.name,
       changeNotes: documentVersionsTable.changeNotes,
       createdAt: documentVersionsTable.createdAt,
     })
     .from(documentVersionsTable)
-    .leftJoin(usersTable, eq(usersTable.id, documentVersionsTable.changedById))
+    .leftJoin(versionsUserAlias, eq(versionsUserAlias.id, documentVersionsTable.changedById))
     .where(eq(documentVersionsTable.documentId, req.params.id as string))
     .orderBy(desc(documentVersionsTable.createdAt));
 
   res.json(versions);
+});
+
+// ─── DOCUMENT REVIEW REQUESTS ────────────────────────────────────────────────
+
+router.get("/documents/:id/review-requests", requireAuth, requireOrg, async (req, res): Promise<void> => {
+  const docId = req.params.id as string;
+  const orgId = req.orgId;
+
+  // Verify document belongs to the caller's org
+  const [docCheck] = await db
+    .select({ id: documentsTable.id })
+    .from(documentsTable)
+    .where(
+      and(
+        eq(documentsTable.id, docId),
+        orgId ? eq(documentsTable.organizationId, orgId) : undefined
+      )
+    )
+    .limit(1);
+  if (!docCheck) { res.status(404).json({ error: "Document not found" }); return; }
+
+  const reviewerAlias2 = aliasedTable(usersTable, "rev_req_reviewer");
+  const submitterAlias2 = aliasedTable(usersTable, "rev_req_submitter");
+  const requests = await db
+    .select({
+      id: documentReviewRequestsTable.id,
+      status: documentReviewRequestsTable.status,
+      reviewerUserId: documentReviewRequestsTable.reviewerUserId,
+      reviewerName: reviewerAlias2.name,
+      submittedByUserId: documentReviewRequestsTable.submittedByUserId,
+      submitterName: submitterAlias2.name,
+      submittedAt: documentReviewRequestsTable.submittedAt,
+      dueDate: documentReviewRequestsTable.dueDate,
+      submissionNotes: documentReviewRequestsTable.submissionNotes,
+      decision: documentReviewRequestsTable.decision,
+      decisionNotes: documentReviewRequestsTable.decisionNotes,
+      decidedAt: documentReviewRequestsTable.decidedAt,
+      createdAt: documentReviewRequestsTable.createdAt,
+    })
+    .from(documentReviewRequestsTable)
+    .leftJoin(reviewerAlias2, eq(reviewerAlias2.id, documentReviewRequestsTable.reviewerUserId))
+    .leftJoin(submitterAlias2, eq(submitterAlias2.id, documentReviewRequestsTable.submittedByUserId))
+    .where(eq(documentReviewRequestsTable.generatedDocumentId, docId))
+    .orderBy(desc(documentReviewRequestsTable.submittedAt));
+  res.json(requests);
+});
+
+router.post("/documents/:id/review-requests", requireAuth, requireOrg, async (req, res): Promise<void> => {
+  const docId = req.params.id as string;
+  const { reviewerUserId, dueDate, notes } = req.body;
+  const submitterId = req.authUser!.id;
+  const orgId = req.orgId;
+
+  // 1. Load document — enforce org boundary
+  const [doc] = await db
+    .select()
+    .from(documentsTable)
+    .where(
+      and(
+        eq(documentsTable.id, docId),
+        orgId ? eq(documentsTable.organizationId, orgId) : undefined
+      )
+    )
+    .limit(1);
+  if (!doc) { res.status(404).json({ error: "Document not found" }); return; }
+
+  // 2. Validate status
+  if (!["draft", "needs_update"].includes(doc.status)) {
+    res.status(400).json({
+      error: `Cannot submit a document with status "${doc.status}" for review. Document must be in Draft or Changes Requested state.`,
+    });
+    return;
+  }
+
+  // 3. Validate no unresolved placeholders
+  if (doc.body) {
+    const matchArr: string[] = doc.body.match(/\{\{[^}]+\}\}/g) ?? [];
+    const unresolved = matchArr.filter((p) => !p.includes("optional"));
+    if (unresolved.length > 0) {
+      res.status(400).json({
+        error: `Document has ${unresolved.length} unresolved placeholder(s): ${unresolved.slice(0, 3).join(", ")}${unresolved.length > 3 ? "…" : ""}. Fill all required fields before submitting for review.`,
+      });
+      return;
+    }
+  }
+
+  // 4. Validate reviewer exists in org with active membership
+  if (!reviewerUserId) {
+    res.status(400).json({ error: "A reviewer must be selected before submitting for review." });
+    return;
+  }
+
+  const [reviewerMembership] = await db
+    .select({
+      userId: organizationUsersTable.userId,
+      status: organizationUsersTable.status,
+      name: usersTable.name,
+      email: usersTable.email,
+    })
+    .from(organizationUsersTable)
+    .innerJoin(usersTable, eq(usersTable.id, organizationUsersTable.userId))
+    .where(
+      and(
+        eq(organizationUsersTable.organizationId, orgId!),
+        eq(organizationUsersTable.userId, reviewerUserId),
+        eq(organizationUsersTable.status, "active")
+      )
+    )
+    .limit(1);
+
+  if (!reviewerMembership) {
+    res.status(400).json({ error: "Reviewer not found in this organization or does not have an active membership." });
+    return;
+  }
+
+  // 5. Check no existing PENDING request for this document
+  const [existingPending] = await db
+    .select({ id: documentReviewRequestsTable.id })
+    .from(documentReviewRequestsTable)
+    .where(
+      and(
+        eq(documentReviewRequestsTable.generatedDocumentId, docId),
+        eq(documentReviewRequestsTable.status, "PENDING")
+      )
+    )
+    .limit(1);
+
+  if (existingPending) {
+    res.status(409).json({ error: "This document already has a pending review request. Cancel it before submitting a new one." });
+    return;
+  }
+
+  // 6. Get submitter info for email
+  const [submitter] = await db.select({ name: usersTable.name, email: usersTable.email }).from(usersTable).where(eq(usersTable.id, submitterId)).limit(1);
+
+  // 7. Execute in transaction
+  const requestId = randomUUID();
+  let updatedDoc: typeof doc;
+  try {
+    await db.transaction(async (tx) => {
+      await tx.insert(documentReviewRequestsTable).values({
+        id: requestId,
+        organizationId: orgId ?? doc.organizationId ?? undefined,
+        generatedDocumentId: docId,
+        reviewerUserId,
+        submittedByUserId: submitterId,
+        submittedAt: new Date(),
+        dueDate: dueDate ? new Date(dueDate) : undefined,
+        status: "PENDING",
+        submissionNotes: notes ?? null,
+        rowVersion: 1,
+      });
+
+      const [upd] = await tx
+        .update(documentsTable)
+        .set({ status: "pending_review", reviewerId: reviewerUserId, updatedAt: new Date() })
+        .where(eq(documentsTable.id, docId))
+        .returning();
+      updatedDoc = upd;
+
+      await tx.insert(documentReviewsTable).values({
+        id: randomUUID(),
+        documentId: docId,
+        reviewerId: submitterId,
+        action: "submitted_for_review",
+        notes: notes ?? null,
+        version: upd.version,
+      });
+    });
+  } catch (err: any) {
+    if (err?.code === "23505") {
+      res.status(409).json({ error: "This document already has a pending review request." });
+    } else {
+      res.status(500).json({ error: "Failed to submit review request. Please try again." });
+    }
+    return;
+  }
+
+  await logAudit(req, "submit_review", "document", docId, {
+    entityLabel: updatedDoc!.title,
+    previousValue: { status: doc.status },
+    newValue: { status: "pending_review", reviewerId: reviewerUserId, reviewRequestId: requestId },
+  });
+
+  // 8. Send notification email (non-blocking)
+  if (submitter && reviewerMembership.email) {
+    sendDocumentReviewRequestEmail({
+      reviewerEmail: reviewerMembership.email,
+      reviewerName: reviewerMembership.name,
+      submitterName: submitter.name,
+      documentTitle: doc.title,
+      documentId: docId,
+      dueDate: dueDate ?? null,
+      notes: notes ?? null,
+    }).catch(() => {});
+  }
+
+  res.json({ ...updatedDoc!, reviewRequestId: requestId });
+});
+
+router.patch("/documents/:id/review-requests/:requestId", requireAuth, requireOrg, async (req, res): Promise<void> => {
+  const docId = req.params.id as string;
+  const requestId = req.params.requestId as string;
+  const { decision, notes } = req.body;
+  const deciderId = req.authUser!.id;
+  const orgId = req.orgId;
+  const isAdmin = req.authUser!.role === "admin" || req.orgRole === "admin";
+
+  if (!["APPROVED", "CHANGES_REQUESTED"].includes(decision)) {
+    res.status(400).json({ error: "Invalid decision. Must be APPROVED or CHANGES_REQUESTED." });
+    return;
+  }
+  if (decision === "CHANGES_REQUESTED" && !notes?.trim()) {
+    res.status(400).json({ error: "Change-request notes are required when requesting changes." });
+    return;
+  }
+
+  // Load document — enforce org boundary first
+  const [doc] = await db
+    .select()
+    .from(documentsTable)
+    .where(
+      and(
+        eq(documentsTable.id, docId),
+        orgId ? eq(documentsTable.organizationId, orgId) : undefined
+      )
+    )
+    .limit(1);
+  if (!doc) { res.status(404).json({ error: "Document not found." }); return; }
+
+  // Load review request — verified against doc AND org
+  const [request] = await db
+    .select()
+    .from(documentReviewRequestsTable)
+    .where(
+      and(
+        eq(documentReviewRequestsTable.id, requestId),
+        eq(documentReviewRequestsTable.generatedDocumentId, docId),
+        orgId ? eq(documentReviewRequestsTable.organizationId, orgId) : undefined
+      )
+    )
+    .limit(1);
+
+  if (!request) { res.status(404).json({ error: "Review request not found." }); return; }
+  if (request.status !== "PENDING") {
+    res.status(400).json({ error: `This review request is already ${request.status.toLowerCase()}. Only PENDING requests can be decided.` });
+    return;
+  }
+
+  // Permission: reviewer or admin
+  if (!isAdmin && request.reviewerUserId !== deciderId) {
+    res.status(403).json({ error: "Only the assigned reviewer or an administrator can decide on this review request." });
+    return;
+  }
+
+  const now = new Date();
+  const newDocStatus = decision === "APPROVED" ? "approved" : "needs_update";
+
+  let updatedDoc: typeof doc;
+  try {
+    await db.transaction(async (tx) => {
+      await tx
+        .update(documentReviewRequestsTable)
+        .set({
+          status: decision as "APPROVED" | "CHANGES_REQUESTED",
+          decision,
+          decisionNotes: notes ?? null,
+          decidedAt: now,
+          decidedByUserId: deciderId,
+          updatedAt: now,
+        })
+        .where(eq(documentReviewRequestsTable.id, requestId));
+
+      const docUpdates: Partial<typeof documentsTable.$inferSelect> = {
+        status: newDocStatus,
+        updatedAt: now,
+      };
+      if (decision === "APPROVED") {
+        docUpdates.approverId = deciderId;
+        docUpdates.approvedAt = now;
+        docUpdates.reviewedAt = now;
+      } else {
+        docUpdates.rejectionNotes = notes ?? null;
+        docUpdates.reviewedAt = now;
+      }
+
+      const [upd] = await tx
+        .update(documentsTable)
+        .set(docUpdates)
+        .where(eq(documentsTable.id, docId))
+        .returning();
+      updatedDoc = upd;
+
+      await tx.insert(documentReviewsTable).values({
+        id: randomUUID(),
+        documentId: docId,
+        reviewerId: deciderId,
+        action: decision === "APPROVED" ? "approved" : "changes_requested",
+        notes: notes ?? null,
+        version: upd.version,
+      });
+    });
+  } catch {
+    res.status(500).json({ error: "Failed to record review decision. Please try again." });
+    return;
+  }
+
+  await logAudit(req, decision === "APPROVED" ? "approve" : "request_changes", "document", docId, {
+    entityLabel: updatedDoc!.title,
+    previousValue: { status: doc.status },
+    newValue: { status: newDocStatus, reviewRequestId: requestId, decision },
+  });
+
+  // Send decision email to document author
+  const [author] = await db.select({ name: usersTable.name, email: usersTable.email }).from(usersTable).where(eq(usersTable.id, doc.ownerId)).limit(1);
+  const [decider] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, deciderId)).limit(1);
+
+  if (author?.email && decider) {
+    sendDocumentDecisionEmail({
+      authorEmail: author.email,
+      authorName: author.name,
+      reviewerName: decider.name,
+      documentTitle: doc.title,
+      documentId: docId,
+      decision: decision as "APPROVED" | "CHANGES_REQUESTED",
+      notes: notes ?? null,
+    }).catch(() => {});
+  }
+
+  res.json({ ...updatedDoc!, reviewRequestId: requestId });
 });
 
 // ─── DOCUMENT LOGS ──────────────────────────────────────────────────────────

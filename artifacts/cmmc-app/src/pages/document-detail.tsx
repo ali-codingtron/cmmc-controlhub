@@ -1,10 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   useGetDocument,
   useUpdateDocument,
-  useSubmitDocumentForReview,
-  useApproveDocument,
-  useRejectDocument,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -13,17 +10,41 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import {
-  ArrowLeft, Edit, Save, X, CheckCircle2, XCircle, Send, Clock, History,
+  ArrowLeft, Edit, Save, X, CheckCircle2, Send, Clock, History,
   Download, Eye, AlertCircle, FileIcon, Code2, ChevronDown, ChevronRight as ChevronRightIcon,
+  ClipboardCheck, AlertTriangle, UserCheck,
 } from "lucide-react";
 import { useOrg } from "@/context/OrgContext";
 import { useAuth } from "@/lib/auth";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+
+// ─── Status labels ────────────────────────────────────────────────────────────
+
+const DOC_STATUS_LABELS: Record<string, string> = {
+  draft: "Draft",
+  pending_review: "In Review",
+  approved: "Approved",
+  active: "Active",
+  assessor_ready: "Assessor Ready",
+  rejected: "Rejected",
+  stale: "Stale",
+  needs_update: "Changes Requested",
+  expired: "Expired",
+  superseded: "Superseded",
+  archived: "Archived",
+};
 
 const DOC_STATUS_COLORS: Record<string, string> = {
   draft: "bg-gray-100 text-gray-700",
@@ -35,6 +56,22 @@ const DOC_STATUS_COLORS: Record<string, string> = {
   superseded: "bg-purple-100 text-purple-700",
   archived: "bg-slate-100 text-slate-700",
 };
+
+function docStatusLabel(status: string): string {
+  return DOC_STATUS_LABELS[status] ?? status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// ─── Auth helpers ─────────────────────────────────────────────────────────────
+
+function getAuthHeaders(orgId?: string): Record<string, string> {
+  const h: Record<string, string> = {};
+  const token = localStorage.getItem("auth_token");
+  if (token) h["Authorization"] = `Bearer ${token}`;
+  if (orgId) h["X-Organization-ID"] = orgId;
+  return h;
+}
+
+// ─── DocFileCard ──────────────────────────────────────────────────────────────
 
 function DocFileCard({ docId, fileKey, fileName, fileSize }: {
   docId: string;
@@ -67,17 +104,14 @@ function DocFileCard({ docId, fileKey, fileName, fileSize }: {
       : `${(Number(fileSize) / 1024).toFixed(0)} KB`
     : null;
 
-  const getHeaders = () => ({
-    Authorization: `Bearer ${localStorage.getItem("auth_token")}`,
-    ...(activeOrg?.id ? { "X-Organization-ID": activeOrg.id } : {}),
-  });
+  const headers = getAuthHeaders(activeOrg?.id);
 
   const handlePreview = async () => {
     setPreviewOpen(true);
     if (blobUrl) return;
     setLoadState("loading");
     try {
-      const res = await fetch(`/api/documents/${docId}/preview`, { headers: getHeaders() });
+      const res = await fetch(`/api/documents/${docId}/preview`, { headers });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? "Preview failed");
@@ -95,7 +129,7 @@ function DocFileCard({ docId, fileKey, fileName, fileSize }: {
 
   const handleDownload = async () => {
     try {
-      const res = await fetch(`/api/documents/${docId}/download`, { headers: getHeaders() });
+      const res = await fetch(`/api/documents/${docId}/download`, { headers });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? "Download failed");
@@ -182,9 +216,21 @@ function DocFileCard({ docId, fileKey, fileName, fileSize }: {
   );
 }
 
+// ─── Main component ───────────────────────────────────────────────────────────
+
+interface Reviewer {
+  id: string;
+  name: string;
+  email: string;
+  orgRole: string;
+}
+
 export default function DocumentDetail({ id }: { id: string }) {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { activeOrg } = useOrg();
+  const orgId = activeOrg?.id;
+
   const { data: doc, isLoading, refetch } = useGetDocument(id);
 
   const [editing, setEditing] = useState(false);
@@ -192,16 +238,42 @@ export default function DocumentDetail({ id }: { id: string }) {
   const [editTitle, setEditTitle] = useState("");
   const [rawSourceOpen, setRawSourceOpen] = useState(false);
 
-  const [reviewDialog, setReviewDialog] = useState<"submit" | "approve" | "reject" | null>(null);
+  // Review dialogs: submit | approve | request_changes
+  const [reviewDialog, setReviewDialog] = useState<"submit" | "approve" | "request_changes" | null>(null);
   const [dialogNotes, setDialogNotes] = useState("");
-  const [reviewerId, setReviewerId] = useState("");
+  const [selectedReviewerId, setSelectedReviewerId] = useState("");
+  const [reviewerSearch, setReviewerSearch] = useState("");
+  const [submitDueDate, setSubmitDueDate] = useState("");
+  const [reviewers, setReviewers] = useState<Reviewer[]>([]);
+  const [reviewersLoading, setReviewersLoading] = useState(false);
+  const [actionPending, setActionPending] = useState(false);
 
   const { mutate: updateDoc, isPending: isUpdating } = useUpdateDocument();
-  const { mutate: submitReview, isPending: isSubmitting } = useSubmitDocumentForReview();
-  const { mutate: approveDoc, isPending: isApproving } = useApproveDocument();
-  const { mutate: rejectDoc, isPending: isRejecting } = useRejectDocument();
 
-  const isActionPending = isUpdating || isSubmitting || isApproving || isRejecting;
+  const fetchReviewers = useCallback(async () => {
+    if (!orgId) return;
+    setReviewersLoading(true);
+    try {
+      const res = await fetch(`/api/organizations/${orgId}/reviewers`, {
+        headers: getAuthHeaders(orgId),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setReviewers(data);
+      }
+    } finally {
+      setReviewersLoading(false);
+    }
+  }, [orgId]);
+
+  const openSubmitDialog = () => {
+    setReviewDialog("submit");
+    setDialogNotes("");
+    setSelectedReviewerId("");
+    setReviewerSearch("");
+    setSubmitDueDate("");
+    fetchReviewers();
+  };
 
   const startEdit = () => {
     setEditBody((doc as any)?.body ?? "");
@@ -225,23 +297,67 @@ export default function DocumentDetail({ id }: { id: string }) {
     );
   };
 
-  const handleAction = (action: typeof reviewDialog) => {
-    if (!action) return;
-
-    const onSuccess = () => {
-      toast({ title: `Document ${action?.replace("_", " ")} successful` });
+  // Submit for review → new review-request endpoint
+  const handleSubmitForReview = async () => {
+    if (!selectedReviewerId) {
+      toast({ title: "Please select a reviewer before submitting.", variant: "destructive" });
+      return;
+    }
+    setActionPending(true);
+    try {
+      const res = await fetch(`/api/documents/${id}/review-requests`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders(orgId) },
+        body: JSON.stringify({
+          reviewerUserId: selectedReviewerId,
+          dueDate: submitDueDate || undefined,
+          notes: dialogNotes || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: data.error ?? "Failed to submit for review", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Document submitted for review. The reviewer has been notified." });
       setReviewDialog(null);
       setDialogNotes("");
       refetch();
-    };
-    const onError = () => toast({ title: "Action failed", variant: "destructive" });
+    } finally {
+      setActionPending(false);
+    }
+  };
 
-    if (action === "submit") {
-      submitReview({ id, data: { reviewerId: reviewerId || id, notes: dialogNotes } }, { onSuccess, onError });
-    } else if (action === "approve") {
-      approveDoc({ id, data: { notes: dialogNotes } }, { onSuccess, onError });
-    } else if (action === "reject") {
-      rejectDoc({ id, data: { rejectionNotes: dialogNotes } }, { onSuccess, onError });
+  // Reviewer decision → PATCH review-request
+  const handleReviewDecision = async (decision: "APPROVED" | "CHANGES_REQUESTED") => {
+    const pendingRequest = (doc as any)?.pendingReviewRequest;
+    if (!pendingRequest?.id) {
+      toast({ title: "Review request not found.", variant: "destructive" });
+      return;
+    }
+    if (decision === "CHANGES_REQUESTED" && !dialogNotes.trim()) {
+      toast({ title: "Please describe the changes required before submitting.", variant: "destructive" });
+      return;
+    }
+    setActionPending(true);
+    try {
+      const res = await fetch(`/api/documents/${id}/review-requests/${pendingRequest.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders(orgId) },
+        body: JSON.stringify({ decision, notes: dialogNotes || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: data.error ?? "Failed to record decision", variant: "destructive" });
+        return;
+      }
+      const label = decision === "APPROVED" ? "approved" : "changes requested";
+      toast({ title: `Document ${label}. The author has been notified.` });
+      setReviewDialog(null);
+      setDialogNotes("");
+      refetch();
+    } finally {
+      setActionPending(false);
     }
   };
 
@@ -259,16 +375,27 @@ export default function DocumentDetail({ id }: { id: string }) {
       <div className="text-center py-12 text-muted-foreground">
         <p>Document not found</p>
         <Button variant="outline" asChild className="mt-4">
-          <Link href="/documents/list">Back to Documents</Link>
+          <Link href="/documents">Back to Documents</Link>
         </Button>
       </div>
     );
   }
 
   const status = doc.status;
+  const pendingReviewRequest = (doc as any).pendingReviewRequest as {
+    id: string;
+    reviewerUserId: string;
+    reviewerName: string;
+    submitterName: string;
+    submittedAt: string;
+    dueDate?: string | null;
+    submissionNotes?: string | null;
+  } | null | undefined;
+
   const canEdit = ["draft", "needs_update"].includes(status);
   const canSubmit = ["draft", "needs_update"].includes(status);
-  const canApprove = status === "pending_review";
+  const canReview = status === "pending_review" && !!pendingReviewRequest && pendingReviewRequest.reviewerUserId === user?.id;
+  const isAdmin = user?.role === "admin";
 
   const fileKey = (doc as any).fileKey as string | null | undefined;
   const fileName = (doc as any).fileName as string | null | undefined;
@@ -278,12 +405,27 @@ export default function DocumentDetail({ id }: { id: string }) {
     id: string; label: string; title: string; domainName: string | null; level: string | null;
   }[] | undefined;
 
+  const filteredReviewers = reviewerSearch
+    ? reviewers.filter(
+        (r) =>
+          r.name.toLowerCase().includes(reviewerSearch.toLowerCase()) ||
+          r.email.toLowerCase().includes(reviewerSearch.toLowerCase())
+      )
+    : reviewers;
+
+  const ORG_ROLE_LABELS: Record<string, string> = {
+    org_admin: "Org Admin",
+    compliance_manager: "Compliance Manager",
+    it_contributor: "IT Contributor",
+    reviewer: "Reviewer",
+  };
+
   return (
     <div className="space-y-6 max-w-4xl">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" asChild>
-            <Link href="/documents/list">
+            <Link href="/documents">
               <ArrowLeft className="h-4 w-4 mr-1" />
               Back
             </Link>
@@ -299,8 +441,8 @@ export default function DocumentDetail({ id }: { id: string }) {
               <h1 className="text-2xl font-bold">{doc.title}</h1>
             )}
             <div className="flex items-center gap-2 mt-1">
-              <span className={`text-xs font-medium px-2 py-0.5 rounded ${DOC_STATUS_COLORS[status] ?? ""}`}>
-                {status.replace(/_/g, " ")}
+              <span className={`text-xs font-medium px-2 py-0.5 rounded ${DOC_STATUS_COLORS[status] ?? "bg-gray-100 text-gray-700"}`}>
+                {docStatusLabel(status)}
               </span>
               <span className="text-xs text-muted-foreground capitalize">{doc.docType}</span>
               <span className="text-xs text-muted-foreground">v{doc.version}</span>
@@ -329,27 +471,75 @@ export default function DocumentDetail({ id }: { id: string }) {
                 </Button>
               )}
               {canSubmit && (
-                <Button variant="outline" size="sm" onClick={() => setReviewDialog("submit")}>
+                <Button variant="outline" size="sm" onClick={openSubmitDialog}>
                   <Send className="h-3.5 w-3.5 mr-1" />
                   Submit for Review
                 </Button>
-              )}
-              {canApprove && (
-                <>
-                  <Button variant="outline" size="sm" className="border-red-300 text-red-700 hover:bg-red-50" onClick={() => setReviewDialog("reject")}>
-                    <XCircle className="h-3.5 w-3.5 mr-1" />
-                    Reject
-                  </Button>
-                  <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => setReviewDialog("approve")}>
-                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                    Approve
-                  </Button>
-                </>
               )}
             </>
           )}
         </div>
       </div>
+
+      {/* Reviewer action panel — shown to the assigned reviewer when doc is IN_REVIEW */}
+      {canReview && (
+        <Card className="border-yellow-200 bg-yellow-50">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2 text-yellow-800">
+              <UserCheck className="h-4 w-4" />
+              Review Document
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-yellow-700 mb-3">
+              You are assigned to review this document.
+              {pendingReviewRequest?.dueDate && (
+                <span className="ml-1 font-medium">Due: {new Date(pendingReviewRequest.dueDate).toLocaleDateString()}</span>
+              )}
+            </p>
+            {pendingReviewRequest?.submissionNotes && (
+              <p className="text-xs text-yellow-600 mb-3 italic">"{pendingReviewRequest.submissionNotes}"</p>
+            )}
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 text-white"
+                onClick={() => { setReviewDialog("approve"); setDialogNotes(""); }}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                Approve
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-orange-300 text-orange-700 hover:bg-orange-50"
+                onClick={() => { setReviewDialog("request_changes"); setDialogNotes(""); }}
+              >
+                <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
+                Request Changes
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Pending review info banner (for doc owner, while under review) */}
+      {status === "pending_review" && !canReview && pendingReviewRequest && (
+        <Card className="border-yellow-200 bg-yellow-50">
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-start gap-2">
+              <Clock className="h-4 w-4 text-yellow-600 mt-0.5 shrink-0" />
+              <div className="text-sm text-yellow-700">
+                <span className="font-medium">Under Review</span> — assigned to{" "}
+                <span className="font-medium">{pendingReviewRequest.reviewerName ?? "reviewer"}</span>
+                {pendingReviewRequest.dueDate && (
+                  <span className="text-xs ml-1">(due {new Date(pendingReviewRequest.dueDate).toLocaleDateString()})</span>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-2 space-y-4">
@@ -503,13 +693,14 @@ export default function DocumentDetail({ id }: { id: string }) {
             </Card>
           ) : null}
 
+          {/* Changes Requested notes */}
           {(doc as any).rejectionNotes && (
-            <Card className="border-red-200">
+            <Card className="border-orange-200">
               <CardHeader>
-                <CardTitle className="text-sm text-red-700">Rejection Notes</CardTitle>
+                <CardTitle className="text-sm text-orange-700">Changes Requested</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-red-600">{(doc as any).rejectionNotes}</p>
+                <p className="text-sm text-orange-600">{(doc as any).rejectionNotes}</p>
               </CardContent>
             </Card>
           )}
@@ -565,53 +756,162 @@ export default function DocumentDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      <Dialog open={!!reviewDialog} onOpenChange={(open) => !open && setReviewDialog(null)}>
+      {/* ─── Submit for Review Dialog ─────────────────────────────────────── */}
+      <Dialog open={reviewDialog === "submit"} onOpenChange={(open) => !open && setReviewDialog(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>
-              {reviewDialog === "submit" && "Submit for Review"}
-              {reviewDialog === "approve" && "Approve Document"}
-              {reviewDialog === "reject" && "Reject Document"}
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardCheck className="h-4 w-4" />
+              Submit for Review
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 mt-4">
-            {reviewDialog === "submit" && (
-              <div>
-                <Label>Reviewer ID (optional)</Label>
-                <Input
-                  value={reviewerId}
-                  onChange={(e) => setReviewerId(e.target.value)}
-                  placeholder="User ID of reviewer..."
-                  className="mt-1.5"
-                />
-              </div>
-            )}
+          <div className="space-y-4 mt-2">
             <div>
-              <Label>{reviewDialog === "reject" ? "Rejection Notes *" : "Notes (optional)"}</Label>
+              <Label className="text-sm font-medium">Reviewer *</Label>
+              {reviewersLoading ? (
+                <div className="mt-1.5 h-9 animate-pulse bg-muted rounded" />
+              ) : reviewers.length === 0 ? (
+                <p className="mt-1.5 text-sm text-muted-foreground">No eligible reviewers found in this organization.</p>
+              ) : (
+                <>
+                  <Input
+                    value={reviewerSearch}
+                    onChange={(e) => setReviewerSearch(e.target.value)}
+                    placeholder="Search reviewers..."
+                    className="mt-1.5 mb-1.5"
+                  />
+                  <div className="border rounded-md max-h-40 overflow-y-auto">
+                    {filteredReviewers.length === 0 ? (
+                      <p className="p-2 text-sm text-muted-foreground">No reviewers match your search.</p>
+                    ) : (
+                      filteredReviewers.map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors flex items-center justify-between ${selectedReviewerId === r.id ? "bg-primary/10 font-medium" : ""}`}
+                          onClick={() => setSelectedReviewerId(r.id)}
+                        >
+                          <span>{r.name}</span>
+                          <span className="text-xs text-muted-foreground">{ORG_ROLE_LABELS[r.orgRole] ?? r.orgRole}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                  {selectedReviewerId && (
+                    <p className="text-xs text-green-600 mt-1">
+                      ✓ {reviewers.find((r) => r.id === selectedReviewerId)?.name} selected
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium">Review Due Date (optional)</Label>
+              <Input
+                type="date"
+                value={submitDueDate}
+                onChange={(e) => setSubmitDueDate(e.target.value)}
+                className="mt-1.5"
+                min={new Date().toISOString().split("T")[0]}
+              />
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium">Submission Notes (optional)</Label>
               <Textarea
                 value={dialogNotes}
                 onChange={(e) => setDialogNotes(e.target.value)}
-                placeholder={
-                  reviewDialog === "reject" ? "Provide reason for rejection..." :
-                  reviewDialog === "approve" ? "Approval notes..." :
-                  "Notes..."
-                }
+                placeholder="Any notes for the reviewer..."
                 className="mt-1.5"
                 rows={3}
               />
             </div>
-            <div className="flex justify-end gap-3">
+
+            <div className="flex justify-end gap-3 pt-1">
               <Button variant="outline" onClick={() => setReviewDialog(null)}>Cancel</Button>
               <Button
-                onClick={() => handleAction(reviewDialog)}
-                disabled={isActionPending || (reviewDialog === "reject" && !dialogNotes)}
-                className={reviewDialog === "approve" ? "bg-green-600 hover:bg-green-700" : reviewDialog === "reject" ? "bg-red-600 hover:bg-red-700" : ""}
+                onClick={handleSubmitForReview}
+                disabled={actionPending || !selectedReviewerId || reviewersLoading}
               >
-                {isActionPending ? "Processing..." : (
-                  reviewDialog === "submit" ? "Submit" :
-                  reviewDialog === "approve" ? "Approve" :
-                  "Reject"
-                )}
+                {actionPending ? "Submitting..." : "Submit for Review"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Approve Dialog ────────────────────────────────────────────────── */}
+      <Dialog open={reviewDialog === "approve"} onOpenChange={(open) => !open && setReviewDialog(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-green-700">
+              <CheckCircle2 className="h-4 w-4" />
+              Approve Document
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <p className="text-sm text-muted-foreground">
+              Approving this document will mark it as <strong>Approved</strong> and notify the author.
+            </p>
+            <div>
+              <Label className="text-sm font-medium">Approval Notes (optional)</Label>
+              <Textarea
+                value={dialogNotes}
+                onChange={(e) => setDialogNotes(e.target.value)}
+                placeholder="Any notes about the approval..."
+                className="mt-1.5"
+                rows={3}
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-1">
+              <Button variant="outline" onClick={() => setReviewDialog(null)}>Cancel</Button>
+              <Button
+                className="bg-green-600 hover:bg-green-700"
+                onClick={() => handleReviewDecision("APPROVED")}
+                disabled={actionPending}
+              >
+                {actionPending ? "Processing..." : "Approve Document"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Request Changes Dialog ────────────────────────────────────────── */}
+      <Dialog open={reviewDialog === "request_changes"} onOpenChange={(open) => !open && setReviewDialog(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-700">
+              <AlertTriangle className="h-4 w-4" />
+              Request Changes
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <p className="text-sm text-muted-foreground">
+              The document will be returned to the author as <strong>Changes Requested</strong>.
+            </p>
+            <div>
+              <Label className="text-sm font-medium">Changes Required *</Label>
+              <Textarea
+                value={dialogNotes}
+                onChange={(e) => setDialogNotes(e.target.value)}
+                placeholder="Describe the changes required..."
+                className="mt-1.5"
+                rows={4}
+              />
+              {dialogNotes.trim() === "" && (
+                <p className="text-xs text-orange-600 mt-1">Required — the author needs to know what to fix.</p>
+              )}
+            </div>
+            <div className="flex justify-end gap-3 pt-1">
+              <Button variant="outline" onClick={() => setReviewDialog(null)}>Cancel</Button>
+              <Button
+                className="bg-orange-600 hover:bg-orange-700"
+                onClick={() => handleReviewDecision("CHANGES_REQUESTED")}
+                disabled={actionPending || !dialogNotes.trim()}
+              >
+                {actionPending ? "Processing..." : "Request Changes"}
               </Button>
             </div>
           </div>

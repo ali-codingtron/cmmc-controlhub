@@ -324,3 +324,116 @@ export async function sendBreakGlassLoginAlert(opts: {
     logger.warn({ email, ipAddress }, "Break-glass login alert sent");
   }
 }
+
+// ─── Document review request email ────────────────────────────────────────────
+
+export async function sendDocumentReviewRequestEmail(opts: {
+  reviewerEmail: string;
+  reviewerName: string;
+  submitterName: string;
+  documentTitle: string;
+  documentId: string;
+  dueDate?: string | null;
+  notes?: string | null;
+}): Promise<void> {
+  const { reviewerEmail, reviewerName, submitterName, documentTitle, documentId, dueDate, notes } = opts;
+  const appUrl = getAppBaseUrl();
+  const docUrl = `${appUrl}/documents/${encodeURIComponent(documentId)}`;
+
+  const dueDateLine = dueDate
+    ? `<tr><td style="font-weight:600;padding:3px 0;width:120px;">Due Date</td><td>${escapeHtml(new Date(dueDate).toLocaleDateString())}</td></tr>`
+    : "";
+
+  const notesSection = notes
+    ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;margin-bottom:24px;">
+        <p style="color:#374151;font-weight:600;margin:0 0 6px 0;font-size:13px;">Submission Notes:</p>
+        <p style="color:#374151;margin:0;font-size:13px;">${escapeHtml(notes)}</p>
+       </div>`
+    : "";
+
+  const html = emailShell(`
+    <h2 style="color:#111827;margin-bottom:8px;">Document Review Requested</h2>
+    <p style="color:#374151;margin-bottom:8px;">Hi ${escapeHtml(reviewerName)},</p>
+    <p style="color:#374151;margin-bottom:16px;"><strong>${escapeHtml(submitterName)}</strong> has submitted a document for your review.</p>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;margin-bottom:16px;">
+      <table style="width:100%;font-size:13px;color:#374151;">
+        <tr><td style="font-weight:600;padding:3px 0;width:120px;">Document</td><td>${escapeHtml(documentTitle)}</td></tr>
+        <tr><td style="font-weight:600;padding:3px 0;">Submitted By</td><td>${escapeHtml(submitterName)}</td></tr>
+        ${dueDateLine}
+      </table>
+    </div>
+    ${notesSection}
+    ${primaryButton(docUrl, "Open Document")}
+    <p style="color:#9ca3af;font-size:12px;">Please review the document and either approve it or request changes.</p>
+  `);
+
+  const dueDateText = dueDate ? `\nDue Date: ${new Date(dueDate).toLocaleDateString()}` : "";
+  const notesText = notes ? `\nNotes: ${notes}` : "";
+
+  await sendEmail({
+    to: reviewerEmail,
+    subject: `Review Requested: ${documentTitle}`,
+    html,
+    text: `Hi ${reviewerName},\n\n${submitterName} has submitted "${documentTitle}" for your review.${dueDateText}${notesText}\n\nOpen the document here: ${docUrl}`,
+  });
+
+  logger.info({ reviewerEmail, documentId }, "Document review request email sent");
+}
+
+// ─── Document review decision email ───────────────────────────────────────────
+
+export async function sendDocumentDecisionEmail(opts: {
+  authorEmail: string;
+  authorName: string;
+  reviewerName: string;
+  documentTitle: string;
+  documentId: string;
+  decision: "APPROVED" | "CHANGES_REQUESTED";
+  notes?: string | null;
+}): Promise<void> {
+  const { authorEmail, authorName, reviewerName, documentTitle, documentId, decision, notes } = opts;
+  const appUrl = getAppBaseUrl();
+  const docUrl = `${appUrl}/documents/${encodeURIComponent(documentId)}`;
+
+  const isApproved = decision === "APPROVED";
+  const headingColor = isApproved ? "#166534" : "#92400e";
+  const headingText = isApproved ? "✓ Document Approved" : "Changes Requested";
+  const bodyText = isApproved
+    ? `<strong>${escapeHtml(reviewerName)}</strong> has approved your document.`
+    : `<strong>${escapeHtml(reviewerName)}</strong> has reviewed your document and requested changes.`;
+  const bgColor = isApproved ? "#f0fdf4" : "#fffbeb";
+  const borderColor = isApproved ? "#bbf7d0" : "#fde68a";
+
+  const notesSection = notes
+    ? `<div style="background:${bgColor};border:1px solid ${borderColor};border-radius:6px;padding:12px 16px;margin-bottom:24px;">
+        <p style="color:#374151;font-weight:600;margin:0 0 6px 0;font-size:13px;">${isApproved ? "Approval Notes:" : "Changes Required:"}</p>
+        <p style="color:#374151;margin:0;font-size:13px;">${escapeHtml(notes)}</p>
+       </div>`
+    : "";
+
+  const html = emailShell(`
+    <h2 style="color:${headingColor};margin-bottom:8px;">${headingText}</h2>
+    <p style="color:#374151;margin-bottom:8px;">Hi ${escapeHtml(authorName)},</p>
+    <p style="color:#374151;margin-bottom:16px;">${bodyText}</p>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;margin-bottom:16px;">
+      <table style="width:100%;font-size:13px;color:#374151;">
+        <tr><td style="font-weight:600;padding:3px 0;width:120px;">Document</td><td>${escapeHtml(documentTitle)}</td></tr>
+        <tr><td style="font-weight:600;padding:3px 0;">Reviewer</td><td>${escapeHtml(reviewerName)}</td></tr>
+      </table>
+    </div>
+    ${notesSection}
+    ${primaryButton(docUrl, isApproved ? "View Approved Document" : "Edit Document")}
+  `);
+
+  const actionText = isApproved ? "approved" : "requested changes to";
+  const notesText = notes ? `\n\n${isApproved ? "Notes" : "Changes Required"}: ${notes}` : "";
+
+  await sendEmail({
+    to: authorEmail,
+    subject: isApproved ? `Approved: ${documentTitle}` : `Changes Requested: ${documentTitle}`,
+    html,
+    text: `Hi ${authorName},\n\n${reviewerName} has ${actionText} "${documentTitle}".${notesText}\n\nView the document: ${docUrl}`,
+  });
+
+  logger.info({ authorEmail, documentId, decision }, "Document decision email sent");
+}
