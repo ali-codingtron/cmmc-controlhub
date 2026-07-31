@@ -6,7 +6,8 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 import { OrgProvider, useOrg } from "@/context/OrgContext";
 import { DemoModeProvider } from "@/context/DemoModeContext";
 import { RoadmapFeatureProvider, useRoadmapFeature } from "@/context/RoadmapFeatureContext";
-import { Map } from "lucide-react";
+import { PreAssessmentFeatureProvider, usePreAssessmentFeature } from "@/context/PreAssessmentFeatureContext";
+import { Map, Cable } from "lucide-react";
 import { Layout } from "@/components/layout/layout";
 import NotFound from "@/pages/not-found";
 import DemoLanding from "@/pages/demo-landing";
@@ -145,6 +146,27 @@ function RoadmapRouteGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function PreAssessmentDisabledPage() {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center p-6">
+      <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+        <Cable className="h-8 w-8 text-muted-foreground" />
+      </div>
+      <h2 className="text-xl font-semibold">Pre-Assessment Not Enabled</h2>
+      <p className="text-muted-foreground max-w-md">
+        The Pre-Assessment module is not enabled for this organization.
+        A Global Administrator or Organization Administrator can enable it from the organization settings.
+      </p>
+    </div>
+  );
+}
+
+function PreAssessmentRouteGuard({ children }: { children: React.ReactNode }) {
+  const { isPreAssessmentEnabled } = usePreAssessmentFeature();
+  if (!isPreAssessmentEnabled) return <PreAssessmentDisabledPage />;
+  return <>{children}</>;
+}
+
 function AppRoutes() {
   return (
     <Switch>
@@ -256,16 +278,28 @@ function AppRoutes() {
                 {(params: { id: string }) => <RoadmapOnly><RoadmapRouteGuard><RoadmapActionDetail id={params.id} /></RoadmapRouteGuard></RoadmapOnly>}
               </Route>
               <Route path="/pre-assessment">
-                {() => <Redirect to="/pre-assessment/history" />}
+                {() => <PreAssessmentRouteGuard><Redirect to="/pre-assessment/history" /></PreAssessmentRouteGuard>}
               </Route>
-              <Route path="/pre-assessment/history" component={PaHistory} />
-              <Route path="/pre-assessment/run" component={PaRun} />
-              <Route path="/pre-assessment/connections" component={PaConnections} />
-              <Route path="/pre-assessment/findings" component={PaFindings} />
-              <Route path="/pre-assessment/evidence-requests" component={PaEvidenceRequests} />
-              <Route path="/pre-assessment/roadmap" component={PaRoadmap} />
+              <Route path="/pre-assessment/history">
+                {() => <PreAssessmentRouteGuard><PaHistory /></PreAssessmentRouteGuard>}
+              </Route>
+              <Route path="/pre-assessment/run">
+                {() => <PreAssessmentRouteGuard><PaRun /></PreAssessmentRouteGuard>}
+              </Route>
+              <Route path="/pre-assessment/connections">
+                {() => <PreAssessmentRouteGuard><PaConnections /></PreAssessmentRouteGuard>}
+              </Route>
+              <Route path="/pre-assessment/findings">
+                {() => <PreAssessmentRouteGuard><PaFindings /></PreAssessmentRouteGuard>}
+              </Route>
+              <Route path="/pre-assessment/evidence-requests">
+                {() => <PreAssessmentRouteGuard><PaEvidenceRequests /></PreAssessmentRouteGuard>}
+              </Route>
+              <Route path="/pre-assessment/roadmap">
+                {() => <PreAssessmentRouteGuard><PaRoadmap /></PreAssessmentRouteGuard>}
+              </Route>
               <Route path="/pre-assessment/results/:id">
-                {(params: { id: string }) => <PaResults id={params.id} />}
+                {(params: { id: string }) => <PreAssessmentRouteGuard><PaResults id={params.id} /></PreAssessmentRouteGuard>}
               </Route>
               <Route path="/certification" component={Certification} />
               <Route path="/dfars-obligations" component={DfarsObligations} />
@@ -292,11 +326,13 @@ function App() {
         <AuthProvider>
           <OrgProvider>
             <RoadmapFeatureProvider>
-              <DemoModeProvider>
-                <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-                  <AppRoutes />
-                </WouterRouter>
-              </DemoModeProvider>
+              <PreAssessmentFeatureProvider>
+                <DemoModeProvider>
+                  <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                    <AppRoutes />
+                  </WouterRouter>
+                </DemoModeProvider>
+              </PreAssessmentFeatureProvider>
             </RoadmapFeatureProvider>
           </OrgProvider>
         </AuthProvider>

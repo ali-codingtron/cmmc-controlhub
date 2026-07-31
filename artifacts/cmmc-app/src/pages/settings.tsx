@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Eye, EyeOff, User, KeyRound, Shield, Mail, AlertTriangle, CheckCircle2, Send, Package, ChevronRight, Sparkles, ShieldOff, Award, Check, ExternalLink } from "lucide-react";
+import { Eye, EyeOff, User, KeyRound, Shield, Mail, AlertTriangle, CheckCircle2, Send, Package, ChevronRight, Sparkles, ShieldOff, Award, Check, ExternalLink, Cable, Loader2 } from "lucide-react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 
@@ -773,6 +773,169 @@ function CertificationCard() {
   );
 }
 
+// ─── Pre-Assessment Module Card ───────────────────────────────────────────────
+
+function PreAssessmentModuleCard() {
+  const { user } = useAuth();
+  const { activeOrg } = useOrg();
+  const { toast } = useToast();
+  const [actionDialog, setActionDialog] = useState<{ action: "enable" | "disable" } | null>(null);
+  const [changeReason, setChangeReason] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const orgId = activeOrg?.id ?? "";
+  const orgRole = activeOrg?.role ?? "";
+  const isGlobalAdmin = user?.role === "admin";
+  const isOrgAdmin = isGlobalAdmin || orgRole === "org_admin";
+
+  const { data: features = [], refetch } = useQuery<Array<{ featureKey: string; enabled: boolean }>>({
+    queryKey: ["org-features", orgId],
+    queryFn: async () => {
+      const token = localStorage.getItem("auth_token");
+      const res = await apiFetch(`/api/organizations/${orgId}/features`, {
+        headers: { "X-Organization-ID": orgId },
+      });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!orgId && isOrgAdmin,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  if (!isOrgAdmin || !activeOrg) return null;
+
+  const paFeature = features.find((f) => f.featureKey === "PRE_ASSESSMENT");
+  const isEnabled = paFeature?.enabled ?? true;
+
+  async function handleToggle() {
+    setLoading(true);
+    try {
+      const newEnabled = actionDialog?.action === "enable";
+      const r = await apiFetch(`/api/organizations/${orgId}/features/PRE_ASSESSMENT`, {
+        method: "PATCH",
+        headers: { "X-Organization-ID": orgId },
+        body: JSON.stringify({ enabled: newEnabled, changeReason }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error ?? "Failed to update module");
+      }
+      toast({
+        title: newEnabled ? "Pre-Assessment enabled" : "Pre-Assessment disabled",
+        description: newEnabled
+          ? "The Pre-Assessment module is now active for your organization."
+          : "The Pre-Assessment module has been disabled.",
+      });
+      setActionDialog(null);
+      setChangeReason("");
+      refetch();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Cable className="h-5 w-5 text-primary" />
+            <CardTitle>Pre-Assessment Module</CardTitle>
+          </div>
+          <CardDescription>
+            Tenant-connected automated assessment scanning Microsoft 365 configurations against CMMC controls.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Status:</span>
+              {isEnabled ? (
+                <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs">
+                  Enabled
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-muted-foreground text-xs">
+                  Disabled
+                </Badge>
+              )}
+            </div>
+            {isEnabled ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+                onClick={() => setActionDialog({ action: "disable" })}
+              >
+                Disable Module
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs text-emerald-600 border-emerald-200 hover:bg-emerald-50 hover:border-emerald-300"
+                onClick={() => setActionDialog({ action: "enable" })}
+              >
+                Enable Module
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {actionDialog && (
+        <Dialog open={!!actionDialog} onOpenChange={() => { setActionDialog(null); setChangeReason(""); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Cable className="h-4 w-4 text-primary" />
+                {actionDialog.action === "enable" ? "Enable" : "Disable"} Pre-Assessment
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              {actionDialog.action === "disable" ? (
+                <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 text-sm text-amber-800 dark:text-amber-400">
+                  <p className="font-semibold mb-1">⚠ This will hide the Pre-Assessment module</p>
+                  <p>Users will no longer see Pre-Assessment in the sidebar. Existing assessment data and connections are preserved and can be re-enabled at any time.</p>
+                </div>
+              ) : (
+                <div className="rounded-md bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-3 text-sm text-emerald-800 dark:text-emerald-400">
+                  <p className="font-semibold mb-1">Enable Pre-Assessment</p>
+                  <p>Users with compliance manager or reviewer access will see the Pre-Assessment module in the sidebar.</p>
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label className="text-xs">Change Reason (optional)</Label>
+                <textarea
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                  rows={2}
+                  value={changeReason}
+                  onChange={(e) => setChangeReason(e.target.value)}
+                  placeholder="Reason for this change (for audit log)"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setActionDialog(null); setChangeReason(""); }} disabled={loading}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleToggle}
+                disabled={loading}
+                variant={actionDialog.action === "disable" ? "destructive" : "default"}
+              >
+                {loading ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />Saving…</> : actionDialog.action === "enable" ? "Enable Module" : "Disable Module"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function Settings() {
@@ -790,6 +953,7 @@ export default function Settings() {
       <ChangePasswordCard />
       <SecurityInfoCard />
       <SmartMappingCard />
+      <PreAssessmentModuleCard />
       <CertificationCard />
 
       <Card>

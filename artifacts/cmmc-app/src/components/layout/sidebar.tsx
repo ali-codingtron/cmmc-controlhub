@@ -29,6 +29,7 @@ import { useAuth } from "@/lib/auth";
 import { useOrg } from "@/context/OrgContext";
 import { useDemoMode } from "@/context/DemoModeContext";
 import { useRoadmapFeature } from "@/context/RoadmapFeatureContext";
+import { usePreAssessmentFeature } from "@/context/PreAssessmentFeatureContext";
 import { useListOrgPackages } from "@workspace/api-client-react";
 import { useState, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -173,10 +174,12 @@ export function Sidebar() {
   const isAdmin = user?.role === "admin";
   const { isDemoMode } = useDemoMode();
   const { isRoadmapEnabled } = useRoadmapFeature();
+  const { isPreAssessmentEnabled } = usePreAssessmentFeature();
   // Use org-specific role for feature gating; fall back to global role for backward compat
   const effectiveOrgRole = isAdmin ? "admin" : (activeOrg?.role ?? user?.role ?? "");
   const canRunAssessment = isAdmin || ["compliance_manager", "reviewer", "org_admin"].includes(effectiveOrgRole);
   const canViewRoadmap = (isAdmin || ["compliance_manager", "reviewer", "org_admin"].includes(effectiveOrgRole)) && isRoadmapEnabled;
+  const canViewPreAssessment = canRunAssessment && isPreAssessmentEnabled;
   const isPreAssessmentActive = location.startsWith("/pre-assessment");
   const [preAssessmentExpanded, setPreAssessmentExpanded] = useState(isPreAssessmentActive);
 
@@ -268,7 +271,7 @@ export function Sidebar() {
           )}
 
           {/* Pre-Assessment section */}
-          {canRunAssessment && (
+          {canViewPreAssessment && (
             <>
               <button
                 onClick={() => setPreAssessmentExpanded((v) => !v)}

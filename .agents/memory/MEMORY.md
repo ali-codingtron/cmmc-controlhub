@@ -15,7 +15,7 @@
 - [organization_users duplicates](membership-duplicates.md) — onConflictDoNothing is a no-op without a unique index; repair order (diagnose → fix writer → collapse in reads → delete → constraint last).
 - [Smart Evidence Mapping](smart-evidence-mapping.md) — local-only analysis engine (no external AI); controlsTable needs LEFT JOIN domainsTable for domain name; confidence tiers + scoring rules.
 - [CMMC L1 ↔ FAR 52.204-21 crosswalk](cmmc-l1-far-crosswalk.md) — 17 equivalent rows missing; nothingToDo guard in seedCrosswalkRequirements skipped them; fix pattern for adding future crosswalk pairs.
-- [Roadmap module architecture](roadmap-module.md) — Completion guard, optional module system, visual redesign; fail-open feature flags; missing record = enabled.
+- [Optional module pattern](optional-module-pattern.md) — org_feature_key enum + organization_features table; PRE_ASSESSMENT toggleable by org_admin; IMPLEMENTATION_ROADMAP global-admin-only; db dist rebuild needed after enum changes.
 - [Control-scoped Task Lifecycle](control-tasks.md) — Nested task router, TASK-XXXX generation, activity table, drizzle transaction typing pitfalls, schema rebuild steps.
 - [Roadmap profile system](roadmap-profile.md) — profile_key on roadmap_actions; L1/L2 resolution from packages; idempotent seed; filter pattern; lucide Map icon vs JS Map conflict.
 - [SSP module upgrade](ssp-module-upgrade.md) — package-aware template registry, prefill wizard, DOCX engine; actual placeholder key naming (Roman numerals for L1, NIST ref for L2).

@@ -1193,6 +1193,18 @@ async function migrateRoadmapProfileKey() {
   }
 }
 
+async function migrateOrgFeatureEnum() {
+  // PRE_ASSESSMENT was added to org_feature_key enum after initial release.
+  // Postgres enums require an explicit ALTER TYPE to add new values.
+  try {
+    await db.execute(sql.raw(
+      `ALTER TYPE org_feature_key ADD VALUE IF NOT EXISTS 'PRE_ASSESSMENT'`
+    ));
+  } catch (_e) {
+    // Already exists or DDL not allowed in transaction — safe to ignore
+  }
+}
+
 export async function runStartupSeed() {
   try {
     await migrateSsoTable();
@@ -1202,6 +1214,7 @@ export async function runStartupSeed() {
     await migrateBreakGlassColumns();
     await migrateAuditEnum();
     await migrateRoadmapProfileKey();
+    await migrateOrgFeatureEnum();
     await migrateSspPrefillDrafts();
     await seedDomainControls();
     await seedInitialAdmin();
