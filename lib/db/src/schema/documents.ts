@@ -93,6 +93,11 @@ export const documentTemplatesTable = pgTable("document_templates", {
   artifactTypeLabel: text("artifact_type_label"),
   purpose: text("purpose"),
   scope: text("scope"),
+  // ── Package applicability extensions (Task 59) ────────────────────────────
+  // informationType: FCI | CUI | BOTH | NOT_APPLICABLE (nullable for legacy rows)
+  informationType: text("information_type"),
+  // templateFamilyKey: groups templates across L1/L2 variants (nullable for legacy rows)
+  templateFamilyKey: text("template_family_key"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -281,6 +286,46 @@ export const procedureTaskRulesTable = pgTable("procedure_task_rules", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// ── Document Review Requests ─────────────────────────────────────────────────
+// Formal review-request lifecycle: submitter → reviewer → decision.
+// Unique constraint: at most one PENDING request per generated document.
+
+export const reviewRequestStatusEnum = pgEnum("review_request_status", [
+  "PENDING",
+  "APPROVED",
+  "CHANGES_REQUESTED",
+  "CANCELLED",
+]);
+
+export const documentReviewRequestsTable = pgTable("document_review_requests", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id")
+    .references(() => organizationsTable.id, { onDelete: "cascade" }),
+  generatedDocumentId: text("generated_document_id")
+    .references(() => documentsTable.id, { onDelete: "cascade" }),
+  evidenceId: text("evidence_id")
+    .references(() => evidenceItemsTable.id, { onDelete: "set null" }),
+  reviewerUserId: text("reviewer_user_id")
+    .references(() => usersTable.id, { onDelete: "set null" }),
+  submittedByUserId: text("submitted_by_user_id")
+    .references(() => usersTable.id, { onDelete: "set null" }),
+  submittedAt: timestamp("submitted_at").notNull().defaultNow(),
+  dueDate: timestamp("due_date"),
+  status: reviewRequestStatusEnum("status").notNull().default("PENDING"),
+  submissionNotes: text("submission_notes"),
+  decision: text("decision"),
+  decisionNotes: text("decision_notes"),
+  decidedAt: timestamp("decided_at"),
+  decidedByUserId: text("decided_by_user_id")
+    .references(() => usersTable.id, { onDelete: "set null" }),
+  rowVersion: integer("row_version").notNull().default(1),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+// NOTE: a partial unique index (WHERE status = 'PENDING') is created via raw SQL
+// migration in migrateDocumentReviewRequestsTable() to enforce at-most-one-PENDING
+// per document without locking all other status rows.
+
 export const insertDocumentTemplateSchema = createInsertSchema(documentTemplatesTable).omit({
   createdAt: true,
   updatedAt: true,
@@ -302,3 +347,5 @@ export type LogEntry = typeof logEntriesTable.$inferSelect;
 export type ChecklistItem = typeof checklistItemsTable.$inferSelect;
 export type ChecklistCompletion = typeof checklistCompletionsTable.$inferSelect;
 export type ProcedureTaskRule = typeof procedureTaskRulesTable.$inferSelect;
+export type DocumentReviewRequest = typeof documentReviewRequestsTable.$inferSelect;
+export type ReviewRequestStatus = typeof reviewRequestStatusEnum.enumValues[number];

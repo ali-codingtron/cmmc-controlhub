@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 import bcrypt from "bcryptjs";
 import {
@@ -16,13 +16,17 @@ import {
   helpArticlesTable,
   faqItemsTable,
   organizationPackagesTable,
+  docTemplatePackagesTable,
+  docTemplatePlaceholderManifestTable,
+  docTemplateControlMapsTable,
 } from "@workspace/db";
-import { count, eq, sql } from "drizzle-orm";
+import { count, eq, sql, inArray } from "drizzle-orm";
 import { seedMonitoringItemsForOrg } from "./routes/monitoring";
 import { seedControlConfigure } from "./routes/configure";
 import { seedRoadmapActions, seedProcedureSteps } from "./routes/roadmap";
 import { logger } from "./lib/logger";
 import { DOCUMENT_TEMPLATES } from "./data/document-templates-data";
+import { L1_TEMPLATES } from "./data/l1-templates-data";
 import { HELP_CATEGORIES, HELP_ARTICLES, FAQ_ITEMS, COMPLIANCE_FRAMEWORK_ARTICLES } from "./data/help-seed-data";
 import { seedDemoOrg } from "./demo-seed-org";
 import { seedApexSolutions } from "./seed-apex-startup";
@@ -1205,6 +1209,584 @@ async function migrateOrgFeatureEnum() {
   }
 }
 
+// ── Task 59: Doc Template Schema Additions ────────────────────────────────────
+
+async function migrateDocTemplateNewColumns() {
+  const migrations = [
+    // Nullable columns on existing document_templates table
+    `ALTER TABLE document_templates ADD COLUMN IF NOT EXISTS information_type text`,
+    `ALTER TABLE document_templates ADD COLUMN IF NOT EXISTS template_family_key text`,
+  ];
+  for (const stmt of migrations) {
+    try {
+      await db.execute(sql.raw(stmt));
+    } catch (_e) {
+      // Already exists — safe to ignore
+    }
+  }
+}
+
+async function migrateDocTemplatePackagesTable() {
+  const stmts = [
+    `CREATE TABLE IF NOT EXISTS doc_template_packages (
+      id text PRIMARY KEY,
+      template_id text NOT NULL REFERENCES document_templates(id) ON DELETE CASCADE,
+      package_key text NOT NULL,
+      applicability text NOT NULL DEFAULT 'EXACT',
+      information_type text NOT NULL DEFAULT 'CUI',
+      created_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (template_id, package_key)
+    )`,
+    `CREATE INDEX IF NOT EXISTS doc_template_packages_pkg_key_idx ON doc_template_packages(package_key)`,
+  ];
+  for (const stmt of stmts) {
+    try {
+      await db.execute(sql.raw(stmt));
+    } catch (_e) {
+      // Already exists — safe to ignore
+    }
+  }
+}
+
+async function migrateDocTemplatePlaceholderManifestTable() {
+  const stmts = [
+    `CREATE TABLE IF NOT EXISTS doc_template_placeholder_manifest (
+      id text PRIMARY KEY,
+      template_id text NOT NULL REFERENCES document_templates(id) ON DELETE CASCADE,
+      placeholder_key text NOT NULL,
+      display_label text NOT NULL,
+      section text,
+      data_type text NOT NULL DEFAULT 'text',
+      required boolean NOT NULL DEFAULT false,
+      default_source text,
+      default_value text,
+      validation_rule text,
+      help_text text,
+      package_key text,
+      allow_document_override boolean NOT NULL DEFAULT true,
+      sort_order integer NOT NULL DEFAULT 0,
+      UNIQUE (template_id, placeholder_key)
+    )`,
+  ];
+  for (const stmt of stmts) {
+    try {
+      await db.execute(sql.raw(stmt));
+    } catch (_e) {
+      // Already exists — safe to ignore
+    }
+  }
+}
+
+async function migrateDocumentReviewRequestsTable() {
+  const stmts = [
+    `DO $$ BEGIN
+       IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'review_request_status') THEN
+         CREATE TYPE review_request_status AS ENUM ('PENDING','APPROVED','CHANGES_REQUESTED','CANCELLED');
+       END IF;
+     END $$`,
+    `CREATE TABLE IF NOT EXISTS document_review_requests (
+      id text PRIMARY KEY,
+      organization_id text REFERENCES organizations(id) ON DELETE CASCADE,
+      generated_document_id text REFERENCES documents(id) ON DELETE CASCADE,
+      evidence_id text REFERENCES evidence_items(id) ON DELETE SET NULL,
+      reviewer_user_id text REFERENCES users(id) ON DELETE SET NULL,
+      submitted_by_user_id text REFERENCES users(id) ON DELETE SET NULL,
+      submitted_at timestamptz NOT NULL DEFAULT now(),
+      due_date timestamptz,
+      status review_request_status NOT NULL DEFAULT 'PENDING',
+      submission_notes text,
+      decision text,
+      decision_notes text,
+      decided_at timestamptz,
+      decided_by_user_id text REFERENCES users(id) ON DELETE SET NULL,
+      row_version integer NOT NULL DEFAULT 1,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`,
+    // Partial unique index: at most one PENDING request per document
+    `CREATE UNIQUE INDEX IF NOT EXISTS document_review_requests_pending_doc_uniq
+      ON document_review_requests(generated_document_id)
+      WHERE status = 'PENDING'`,
+  ];
+  for (const stmt of stmts) {
+    try {
+      await db.execute(sql.raw(stmt));
+    } catch (_e) {
+      // Already exists — safe to ignore
+    }
+  }
+}
+
+// ── Package applicability seed ─────────────────────────────────────────────────
+// Tags all 67 existing library templates with their package applicability.
+// Idempotent: skips templates that already have rows in doc_template_packages.
+
+async function seedDocTemplatePackages() {
+  // Fetch all library templates (those with sourceTemplateId set — the imported L2 library)
+  const libraryTemplates = await db
+    .select({
+      id: documentTemplatesTable.id,
+      sourceTemplateId: documentTemplatesTable.sourceTemplateId,
+      title: documentTemplatesTable.title,
+      cmmcLevel: documentTemplatesTable.cmmcLevel,
+      family: documentTemplatesTable.family,
+    })
+    .from(documentTemplatesTable)
+    .where(sql`${documentTemplatesTable.sourceTemplateId} IS NOT NULL`);
+
+  if (libraryTemplates.length === 0) return;
+
+  // Get already-tagged template IDs
+  const alreadyTagged = await db
+    .select({ templateId: docTemplatePackagesTable.templateId })
+    .from(docTemplatePackagesTable);
+  const taggedSet = new Set(alreadyTagged.map((r) => r.templateId));
+
+  const toTag = libraryTemplates.filter((t) => !taggedSet.has(t.id));
+  if (toTag.length === 0) return;
+
+  logger.info({ count: toTag.length }, "Seeding doc_template_packages for library templates...");
+
+  // Keywords/prefixes that signal shared governance (cross-L1 and L2) templates
+  const SHARED_KEYWORDS = [
+    "training", "awareness", "workforce", "personnel", "roles", "security policy",
+    "information security policy", "incident response policy",
+  ];
+
+  // Templates matching these sourceTemplateId prefixes are primarily FAR/L1-adjacent
+  // (governance/org-level, no deep CUI dependency)
+  const FAR_SHARED_PREFIXES = ["AT-", "IR-POL", "PS-"];
+
+  let inserted = 0;
+  for (const t of toTag) {
+    const titleLower = (t.title ?? "").toLowerCase();
+    const srcId = t.sourceTemplateId ?? "";
+
+    // Determine if this is a shared governance template
+    const isShared =
+      SHARED_KEYWORDS.some((kw) => titleLower.includes(kw)) ||
+      FAR_SHARED_PREFIXES.some((pfx) => srcId.startsWith(pfx));
+
+    // All L2 library templates are primarily CUI/CMMC_L2_SELF + NIST_800_171_R2
+    const rows: Array<{
+      id: string;
+      templateId: string;
+      packageKey: string;
+      applicability: string;
+      informationType: string;
+    }> = [
+      {
+        id: randomUUID(),
+        templateId: t.id,
+        packageKey: "CMMC_L2_SELF",
+        applicability: "EXACT",
+        informationType: "CUI",
+      },
+      {
+        id: randomUUID(),
+        templateId: t.id,
+        packageKey: "NIST_800_171_R2",
+        applicability: "EXACT",
+        informationType: "CUI",
+      },
+    ];
+
+    // Shared governance templates also apply to L1/FAR (SHARED = used by both)
+    if (isShared) {
+      rows.push(
+        {
+          id: randomUUID(),
+          templateId: t.id,
+          packageKey: "CMMC_L1_SELF",
+          applicability: "SHARED",
+          informationType: "BOTH",
+        },
+        {
+          id: randomUUID(),
+          templateId: t.id,
+          packageKey: "FAR_52_204_21",
+          applicability: "SHARED",
+          informationType: "BOTH",
+        }
+      );
+
+      // Update information_type on the template row itself
+      await db.execute(sql.raw(
+        `UPDATE document_templates SET information_type = 'BOTH' WHERE id = '${t.id}'`
+      ));
+    } else {
+      // Pure CUI template
+      await db.execute(sql.raw(
+        `UPDATE document_templates SET information_type = 'CUI' WHERE id = '${t.id}'`
+      ));
+    }
+
+    for (const row of rows) {
+      await db
+        .insert(docTemplatePackagesTable)
+        .values(row)
+        .onConflictDoNothing();
+      inserted++;
+    }
+  }
+
+  logger.info({ inserted }, "Doc template packages seeded for library templates");
+}
+
+// ── Level 1 template seed ─────────────────────────────────────────────────────
+// Inserts 19 L1 templates (idempotent by sourceTemplateId).
+// Each is tagged to CMMC_L1_SELF and FAR_52_204_21 in doc_template_packages.
+
+async function seedLevel1Templates() {
+  // Fetch existing L1 sourceTemplateIds to make seed idempotent
+  const existing = await db
+    .select({ sourceTemplateId: documentTemplatesTable.sourceTemplateId })
+    .from(documentTemplatesTable)
+    .where(
+      inArray(
+        documentTemplatesTable.sourceTemplateId,
+        L1_TEMPLATES.map((t) => t.sourceTemplateId)
+      )
+    );
+  const existingIds = new Set(existing.map((r) => r.sourceTemplateId));
+
+  const toSeed = L1_TEMPLATES.filter((t) => !existingIds.has(t.sourceTemplateId));
+  if (toSeed.length === 0) return;
+
+  logger.info({ count: toSeed.length }, "Seeding L1 templates...");
+
+  // Load L1 controls for mapping (control_id like "AC.L1-*")
+  const l1Controls = await db
+    .select({ id: controlsTable.id, controlId: controlsTable.controlId, nistRef: controlsTable.nistRef })
+    .from(controlsTable)
+    .where(sql`${controlsTable.level} = 'L1'`);
+
+  // Build nistRef → control row map
+  const nistToL1 = new Map<string, typeof l1Controls[0]>();
+  for (const c of l1Controls) {
+    if (c.nistRef) nistToL1.set(c.nistRef.trim(), c);
+  }
+
+  for (const tmpl of toSeed) {
+    const templateId = randomUUID();
+    const extractedPlaceholders = [
+      ...new Set([
+        ...(tmpl.requiredFields ?? []),
+        ...(tmpl.bodyTemplate.match(/\{\{([A-Z_]+)\}\}/g) ?? []).map((p) =>
+          p.replace(/\{\{|\}\}/g, "")
+        ),
+      ]),
+    ];
+    const computedArtifactTypeLabel =
+      tmpl.docType === "policy"
+        ? "Policy"
+        : tmpl.docType === "procedure"
+        ? "Procedure"
+        : tmpl.docType === "log" || tmpl.docType === "access_review"
+        ? "Log"
+        : tmpl.docType === "training_record"
+        ? "Training Record"
+        : tmpl.docType === "asset_inventory"
+        ? "Register/Table"
+        : "Other";
+
+    await db
+      .insert(documentTemplatesTable)
+      .values({
+        id: templateId,
+        title: tmpl.title,
+        docType: tmpl.docType,
+        cmmcLevel: tmpl.cmmcLevel,
+        domainAbbr: tmpl.domainAbbr,
+        ownerRole: tmpl.ownerRole,
+        reviewFrequency: tmpl.reviewFrequency,
+        description: tmpl.description,
+        bodyTemplate: tmpl.bodyTemplate,
+        requiredFields: tmpl.requiredFields,
+        placeholders: extractedPlaceholders,
+        linkedControlIds: [],
+        requiresApproval: tmpl.requiresApproval,
+        isSystemTemplate: tmpl.isSystemTemplate,
+        sourceTemplateId: tmpl.sourceTemplateId,
+        sourcePackage: "CMMC_L1_Document_Library",
+        family: "Level 1 FCI",
+        artifactTypeLabel: computedArtifactTypeLabel,
+        purpose: tmpl.purpose,
+        scope: tmpl.scope,
+        informationType: tmpl.informationType,
+        templateFamilyKey: tmpl.templateFamilyKey,
+        outputFormat: "rich_text",
+        isActive: true,
+      } as any)
+      .onConflictDoNothing();
+
+    // Insert doc_template_packages rows
+    for (const packageKey of tmpl.packageKeys) {
+      await db
+        .insert(docTemplatePackagesTable)
+        .values({
+          id: randomUUID(),
+          templateId,
+          packageKey,
+          applicability: "EXACT",
+          informationType: tmpl.informationType,
+        })
+        .onConflictDoNothing();
+    }
+
+    // Insert control maps
+    for (const nistRef of tmpl.mappedL1Controls) {
+      const ctrl = nistToL1.get(nistRef);
+      await db
+        .insert(docTemplateControlMapsTable)
+        .values({
+          id: randomUUID(),
+          templateId,
+          controlId: ctrl?.id ?? null,
+          nistControlNumber: nistRef,
+          supportType: "primary",
+          artifactType: computedArtifactTypeLabel,
+        } as any)
+        .onConflictDoNothing();
+    }
+  }
+
+  logger.info({ seeded: toSeed.length }, "L1 templates seeded");
+}
+
+// ── Placeholder manifest seed ──────────────────────────────────────────────────
+// Extracts {{TOKEN}} from all template bodies and inserts manifest rows.
+// Idempotent: skips templates already present in the manifest table.
+
+const REQUIRED_PLACEHOLDER_KEYS = new Set([
+  "ORGANIZATION_NAME",
+  "EFFECTIVE_DATE",
+  "REVIEW_DATE",
+  "VERSION",
+  "APPROVER_NAME",
+  "SYSTEM_OWNER",
+  "SYSTEM_NAME",
+  "ACCESS_REVIEW_FREQUENCY",
+  "MALWARE_SCAN_FREQUENCY",
+]);
+
+const PLACEHOLDER_LABELS: Record<string, { label: string; section?: string; dataType?: string; helpText?: string }> = {
+  ORGANIZATION_NAME: { label: "Organization Name", section: "Header", dataType: "text", helpText: "Full legal name of the organization" },
+  SYSTEM_NAME: { label: "System Name", section: "Header", dataType: "text", helpText: "Name of the information system in scope" },
+  EFFECTIVE_DATE: { label: "Effective Date", section: "Header", dataType: "date", helpText: "Date this document takes effect" },
+  REVIEW_DATE: { label: "Next Review Date", section: "Header", dataType: "date", helpText: "Date the document must next be reviewed" },
+  VERSION: { label: "Version", section: "Header", dataType: "text" },
+  POLICY_OWNER: { label: "Policy Owner", section: "Header", dataType: "text" },
+  PROCEDURE_OWNER: { label: "Procedure Owner", section: "Header", dataType: "text" },
+  APPROVER_NAME: { label: "Approver Name", section: "Approval", dataType: "text" },
+  APPROVER_TITLE: { label: "Approver Title", section: "Approval", dataType: "text" },
+  APPROVAL_DATE: { label: "Approval Date", section: "Approval", dataType: "date" },
+  SYSTEM_OWNER: { label: "System Owner", section: "Header", dataType: "text" },
+  SECURITY_OFFICER: { label: "Security Officer Name", section: "Header", dataType: "text" },
+  IT_ADMIN: { label: "IT Administrator Name", section: "Header", dataType: "text" },
+  ACCESS_REVIEW_FREQUENCY: { label: "Access Review Frequency", section: "Controls", dataType: "text", helpText: "e.g. quarterly, semi-annually, annually" },
+  MALWARE_SCAN_FREQUENCY: { label: "Malware Scan Frequency", section: "Controls", dataType: "text", helpText: "e.g. daily, weekly, monthly" },
+  INACTIVE_ACCOUNT_DAYS: { label: "Inactive Account Threshold (Days)", section: "Controls", dataType: "number" },
+  LOCKOUT_ATTEMPTS: { label: "Lockout Attempts", section: "Controls", dataType: "number" },
+  LOCKOUT_DURATION: { label: "Lockout Duration", section: "Controls", dataType: "text" },
+  REVIEW_PERIOD: { label: "Review Period", section: "Header", dataType: "text", helpText: "e.g. Q1 2026" },
+  SCAN_DATE: { label: "Scan Date", section: "Header", dataType: "date" },
+  SCAN_TOOL: { label: "Scan Tool Name", section: "Controls", dataType: "text" },
+  TOTAL_ACCOUNTS: { label: "Total Account Count", section: "Summary", dataType: "number" },
+  ACCOUNTS_REMOVED: { label: "Accounts Removed", section: "Summary", dataType: "number" },
+  ACCOUNTS_MODIFIED: { label: "Accounts Modified", section: "Summary", dataType: "number" },
+  INCIDENT_COUNT: { label: "Incident Count", section: "Summary", dataType: "number" },
+  ANOMALIES_NOTED: { label: "Anomalies / Notes", section: "Summary", dataType: "text" },
+  FINDINGS_AND_ACTIONS: { label: "Findings and Actions", section: "Summary", dataType: "text" },
+  ANNUAL_TRAINING_DEADLINE: { label: "Annual Training Deadline", section: "Controls", dataType: "text" },
+};
+
+async function seedDocTemplatePlaceholderManifest() {
+  // Find templates that already have manifest rows
+  const alreadyHaveManifest = await db
+    .select({ templateId: docTemplatePlaceholderManifestTable.templateId })
+    .from(docTemplatePlaceholderManifestTable)
+    .groupBy(docTemplatePlaceholderManifestTable.templateId);
+  const alreadySet = new Set(alreadyHaveManifest.map((r) => r.templateId));
+
+  // Fetch all active templates with body
+  const templates = await db
+    .select({
+      id: documentTemplatesTable.id,
+      bodyTemplate: documentTemplatesTable.bodyTemplate,
+    })
+    .from(documentTemplatesTable)
+    .where(sql`${documentTemplatesTable.isActive} = true`);
+
+  const toSeed = templates.filter((t) => !alreadySet.has(t.id));
+  if (toSeed.length === 0) return;
+
+  logger.info({ count: toSeed.length }, "Seeding doc template placeholder manifest...");
+  let insertedTotal = 0;
+
+  for (const t of toSeed) {
+    const body = t.bodyTemplate ?? "";
+    const tokens = [...new Set((body.match(/\{\{([A-Z_]+)\}\}/g) ?? []).map((p) => p.replace(/\{\{|\}\}/g, "")))];
+    if (tokens.length === 0) continue;
+
+    for (let i = 0; i < tokens.length; i++) {
+      const key = tokens[i];
+      const meta = PLACEHOLDER_LABELS[key] ?? { label: key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) };
+      await db
+        .insert(docTemplatePlaceholderManifestTable)
+        .values({
+          id: randomUUID(),
+          templateId: t.id,
+          placeholderKey: key,
+          displayLabel: meta.label,
+          section: meta.section ?? null,
+          dataType: meta.dataType ?? "text",
+          required: REQUIRED_PLACEHOLDER_KEYS.has(key),
+          defaultSource: REQUIRED_PLACEHOLDER_KEYS.has(key) ? "organization" : null,
+          defaultValue: null,
+          validationRule: null,
+          helpText: meta.helpText ?? null,
+          packageKey: null,
+          allowDocumentOverride: true,
+          sortOrder: i,
+        } as any)
+        .onConflictDoNothing();
+      insertedTotal++;
+    }
+  }
+
+  logger.info({ insertedTotal }, "Doc template placeholder manifest seeded");
+}
+
+// ── CSV dry-run report ─────────────────────────────────────────────────────────
+
+async function generateDocTemplateApplicabilityCsv() {
+  const workspaceRoot = process.env.REPL_HOME ?? "/home/runner/workspace";
+  const outPath = `${workspaceRoot}/artifacts/api-server/src/data/Documentation_Template_Applicability_Dry_Run.csv`;
+
+  try {
+    // Fetch all templates with their package rows
+    const templates = await db
+      .select({
+        id: documentTemplatesTable.id,
+        sourceTemplateId: documentTemplatesTable.sourceTemplateId,
+        title: documentTemplatesTable.title,
+        family: documentTemplatesTable.family,
+        artifactTypeLabel: documentTemplatesTable.artifactTypeLabel,
+        cmmcLevel: documentTemplatesTable.cmmcLevel,
+        informationType: documentTemplatesTable.informationType,
+        templateFamilyKey: documentTemplatesTable.templateFamilyKey,
+        isActive: documentTemplatesTable.isActive,
+      })
+      .from(documentTemplatesTable)
+      .where(sql`${documentTemplatesTable.sourceTemplateId} IS NOT NULL`);
+
+    if (templates.length === 0) return;
+
+    const templateIds = templates.map((t) => t.id);
+
+    // Fetch package rows
+    const pkgRows = await db
+      .select({
+        templateId: docTemplatePackagesTable.templateId,
+        packageKey: docTemplatePackagesTable.packageKey,
+        applicability: docTemplatePackagesTable.applicability,
+        informationType: docTemplatePackagesTable.informationType,
+      })
+      .from(docTemplatePackagesTable)
+      .where(inArray(docTemplatePackagesTable.templateId, templateIds));
+
+    const pkgByTemplate = new Map<string, typeof pkgRows>();
+    for (const row of pkgRows) {
+      if (!pkgByTemplate.has(row.templateId)) pkgByTemplate.set(row.templateId, []);
+      pkgByTemplate.get(row.templateId)!.push(row);
+    }
+
+    // Fetch control maps
+    const ctrlMaps = await db
+      .select({
+        templateId: docTemplateControlMapsTable.templateId,
+        nistControlNumber: docTemplateControlMapsTable.nistControlNumber,
+      })
+      .from(docTemplateControlMapsTable)
+      .where(inArray(docTemplateControlMapsTable.templateId, templateIds));
+
+    const ctrlByTemplate = new Map<string, string[]>();
+    for (const cm of ctrlMaps) {
+      if (!ctrlByTemplate.has(cm.templateId)) ctrlByTemplate.set(cm.templateId, []);
+      ctrlByTemplate.get(cm.templateId)!.push(cm.nistControlNumber);
+    }
+
+    // Build CSV
+    const escape = (v: string) => `"${(v ?? "").replace(/"/g, '""')}"`;
+    const headers = [
+      "Template ID",
+      "Title",
+      "Category / Family",
+      "Artifact Type",
+      "Existing Control Mappings",
+      "CUI/FCI Language",
+      "Proposed Package Applicability",
+      "Proposed Information Type",
+      "Proposed Variant Family",
+      "CMMC Level",
+      "Active",
+      "Conflicts",
+      "Recommended Action",
+    ];
+
+    const rows: string[][] = [headers];
+
+    for (const t of templates) {
+      const pkgs = pkgByTemplate.get(t.id) ?? [];
+      const controls = ctrlByTemplate.get(t.id) ?? [];
+      const packageApplicability = pkgs
+        .map((p) => `${p.packageKey}:${p.applicability}`)
+        .join("; ");
+      const pkgInfoType = pkgs[0]?.informationType ?? "";
+      const fciFlavor = (t.informationType ?? pkgInfoType).includes("FCI")
+        ? "FCI"
+        : (t.informationType ?? pkgInfoType).includes("CUI")
+        ? "CUI"
+        : "Both/Mixed";
+
+      // Detect conflicts: template tagged FCI but has CUI control mappings → flag
+      const hasL2Controls = controls.some((c) => !c.startsWith("3.1") && !c.startsWith("3.5") && !c.startsWith("3.8") && !c.startsWith("3.10") && !c.startsWith("3.13") && !c.startsWith("3.14"));
+      const conflict = fciFlavor === "FCI" && hasL2Controls ? "FCI template mapped to L2-only controls" : "";
+
+      const action =
+        pkgs.length === 0
+          ? "Tag with default CMMC_L2_SELF / NIST_800_171_R2 EXACT"
+          : conflict
+          ? "Review control mapping for FCI/CUI mismatch"
+          : "No action required";
+
+      rows.push([
+        escape(t.sourceTemplateId ?? ""),
+        escape(t.title),
+        escape(t.family ?? ""),
+        escape(t.artifactTypeLabel ?? ""),
+        escape(controls.slice(0, 5).join(", ") + (controls.length > 5 ? ` (+${controls.length - 5} more)` : "")),
+        escape(fciFlavor),
+        escape(packageApplicability),
+        escape(t.informationType ?? pkgInfoType ?? ""),
+        escape(t.templateFamilyKey ?? ""),
+        escape(t.cmmcLevel ?? ""),
+        escape(t.isActive ? "Yes" : "No"),
+        escape(conflict),
+        escape(action),
+      ]);
+    }
+
+    const csvContent = rows.map((r) => r.join(",")).join("\n");
+    mkdirSync(`${workspaceRoot}/artifacts/api-server/src/data`, { recursive: true });
+    writeFileSync(outPath, csvContent, "utf-8");
+    logger.info({ rows: rows.length - 1, path: outPath }, "Documentation_Template_Applicability_Dry_Run.csv generated");
+  } catch (err: any) {
+    logger.warn({ err: err.message }, "CSV dry-run report generation skipped (non-fatal)");
+  }
+}
+
 export async function runStartupSeed() {
   try {
     await migrateSsoTable();
@@ -1216,6 +1798,12 @@ export async function runStartupSeed() {
     await migrateRoadmapProfileKey();
     await migrateOrgFeatureEnum();
     await migrateSspPrefillDrafts();
+    // ── Task 59: doc template schema additions ────────────────────────────
+    await migrateDocTemplateNewColumns();
+    await migrateDocTemplatePackagesTable();
+    await migrateDocTemplatePlaceholderManifestTable();
+    await migrateDocumentReviewRequestsTable();
+    // ─────────────────────────────────────────────────────────────────────
     await seedDomainControls();
     await seedInitialAdmin();
     await seedBreakGlassAccount();
@@ -1233,6 +1821,12 @@ export async function runStartupSeed() {
     await seedCrosswalkRequirements();
     await seedOrgPackages();
     await fixVtccorpControlLinks();
+    // ── Task 59: package applicability + L1 templates + manifest + CSV ───
+    await seedDocTemplatePackages();
+    await seedLevel1Templates();
+    await seedDocTemplatePlaceholderManifest();
+    await generateDocTemplateApplicabilityCsv();
+    // ─────────────────────────────────────────────────────────────────────
   } catch (err) {
     logger.error({ err }, "Startup seed failed — app will continue but may lack reference data");
   }
