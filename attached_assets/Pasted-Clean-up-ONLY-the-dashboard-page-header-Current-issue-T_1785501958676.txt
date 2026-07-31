@@ -1,0 +1,325 @@
+Clean up ONLY the dashboard page header.
+
+Current issue:
+
+The dashboard header currently displays:
+
+“APEX Solutions Compliance Dashboard”
+
+as one long primary title, with the CMMC level and risk status badges placed on the same line.
+
+This makes the header feel crowded and does not clearly separate:
+
+- the organization identity
+- the page title
+- active frameworks
+- compliance level
+- current readiness status
+- report metadata
+
+Do not modify dashboard calculations, cards, data, readiness status, framework assignments, organization data, or any other page content.
+
+====================================================================
+1. SEPARATE ORGANIZATION NAME FROM PAGE TITLE
+====================================================================
+
+Use this structure:
+
+Primary heading:
+APEX Solutions
+
+Secondary page title:
+Compliance Dashboard
+
+Do not render:
+
+APEX Solutions Compliance Dashboard
+
+as one combined heading.
+
+The organization name should be the most prominent text.
+
+The page title should appear directly below it using smaller, lighter text.
+
+Example:
+
+APEX Solutions
+Compliance Dashboard
+
+====================================================================
+2. HEADER LAYOUT
+====================================================================
+
+Use a responsive two-column header layout.
+
+Left side:
+
+- Organization logo
+- Organization name
+- Page title
+- Framework/package badges
+- Report metadata
+
+Right side:
+
+- CMMC level badge
+- readiness/risk status badge
+
+Desktop layout:
+
+[Logo] Organization Name                         [CMMC L2] [At Risk]
+       Compliance Dashboard
+
+       [NIST SP 800-171 R2] [NIST SP 800-53 R4]
+
+       Report date: July 31, 2026  •  Last activity: 18h ago
+
+Mobile/tablet layout:
+
+- stack the status badges below the page title
+- allow framework badges to wrap cleanly
+- do not reduce the organization name to an unreadably small size
+
+====================================================================
+3. TYPOGRAPHY
+====================================================================
+
+Organization Name:
+
+- font size: approximately 28–32px
+- font weight: 700
+- dark navy text
+- one line where space permits
+
+Page Title:
+
+- font size: approximately 16–18px
+- font weight: 500 or 600
+- slate-gray text
+- top margin: 2–4px
+
+Metadata:
+
+- font size: approximately 12–13px
+- muted slate text
+- use consistent icons
+- keep on one line where possible
+
+Do not make “Compliance Dashboard” compete visually with the organization name.
+
+====================================================================
+4. ORGANIZATION LOGO
+====================================================================
+
+Increase the organization logo to approximately:
+
+44–48px square
+
+Requirements:
+
+- preserve aspect ratio
+- do not stretch the image
+- vertically align it with the organization-name block
+- use a subtle border radius if appropriate
+- provide a neutral fallback icon when no organization logo exists
+
+The current logo appears too small compared with the title.
+
+====================================================================
+5. STATUS BADGES
+====================================================================
+
+Move these badges to the right-side status area:
+
+- CMMC L2
+- At Risk
+
+Use clear labels:
+
+CMMC Level 2
+
+or retain:
+
+CMMC L2
+
+Status examples:
+
+- Assessment Ready
+- On Track
+- Attention Needed
+- At Risk
+
+Use:
+
+- green only for positive/current status
+- amber for attention
+- red for At Risk
+- dark navy or slate for framework/level badges
+
+Do not place the risk badge immediately against the organization-name text.
+
+Add spacing between badges.
+
+====================================================================
+6. FRAMEWORK BADGES
+====================================================================
+
+Keep active framework/package badges below the page title.
+
+Examples:
+
+- NIST SP 800-171 Rev. 2
+- NIST SP 800-53 Rev. 4
+- DFARS 252.204-7012
+
+Use compact outlined or lightly tinted badges.
+
+Framework badges should not look like warning or status indicators.
+
+Allow them to wrap to a second line when necessary.
+
+Do not display an empty or zero-requirement package badge unless the package is genuinely active and relevant to the organization.
+
+====================================================================
+7. REPORT METADATA
+====================================================================
+
+Display report metadata below the framework badges:
+
+Report date: July 31, 2026
+Last activity: 18h ago
+
+Use a separator:
+
+•
+
+Example:
+
+Report date: July 31, 2026  •  Last activity: 18h ago
+
+Use accessible date and clock icons.
+
+Do not allow metadata to appear more prominent than the page title.
+
+====================================================================
+8. SPACING
+====================================================================
+
+Recommended spacing:
+
+- logo to title block: 12–16px
+- organization name to page title: 2–4px
+- page title to framework badges: 8–10px
+- framework badges to metadata: 8px
+- left content to right status area: flexible space
+- bottom of header to dashboard content: 20–24px
+
+Avoid excessive vertical height.
+
+The header should feel polished but compact.
+
+====================================================================
+9. OPTIONAL HEADER BACKGROUND
+====================================================================
+
+Use the current page background or a very subtle header treatment.
+
+Recommended:
+
+- no heavy card border
+- no large white box
+- optional subtle bottom divider
+- optional very light slate/blue gradient
+
+Do not make the header look like another dashboard card.
+
+====================================================================
+10. ACCESSIBILITY
+====================================================================
+
+Ensure:
+
+- heading hierarchy uses semantic H1/H2 structure
+- status is not communicated by color alone
+- badge text has adequate contrast
+- framework badges are readable
+- title does not truncate unnecessarily
+- mobile layout remains usable
+- organization logo has appropriate alternative text
+
+====================================================================
+11. PRODUCTION DATA SAFETY
+====================================================================
+
+This is a presentation-only change.
+
+Do not modify:
+
+- organization name in the database
+- organization logo file
+- CMMC target level
+- framework assignments
+- readiness status
+- report date logic
+- last-activity logic
+- dashboard calculations
+- dashboard cards
+- evidence
+- controls
+- SSP
+- monitoring
+- POA&M
+- users or roles
+
+Use the existing values and only change how they are arranged and styled.
+
+====================================================================
+12. ACCEPTANCE TESTS
+====================================================================
+
+Test A:
+
+Open APEX Solutions dashboard.
+
+Expected:
+
+The header displays:
+
+APEX Solutions
+
+and beneath it:
+
+Compliance Dashboard
+
+They are no longer combined into one long title.
+
+Test B:
+
+CMMC L2 and At Risk appear in a separate right-side status area.
+
+Test C:
+
+Framework badges appear beneath Compliance Dashboard.
+
+Test D:
+
+Report date and last activity appear beneath the framework badges.
+
+Test E:
+
+Organization logo is visibly larger and remains sharp.
+
+Test F:
+
+Resize the browser.
+
+Expected:
+
+- status badges stack cleanly
+- framework badges wrap
+- title remains readable
+- no horizontal overflow
+
+Test G:
+
+No dashboard data or production organization information changes.

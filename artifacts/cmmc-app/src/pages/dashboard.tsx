@@ -287,80 +287,106 @@ export default function Dashboard() {
     <div className="space-y-6 max-w-[1600px] mx-auto print:space-y-4">
 
       {/* ── Header ─────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 pb-2 border-b border-border">
-        <div className="space-y-1">
-          <div className="flex items-center gap-3 flex-wrap">
-            <img
-              src="/assets/control-hub-icon.png"
-              alt="Control HUB"
-              className="h-8 w-8 rounded-lg object-contain shrink-0 hidden sm:block"
-            />
-            <h1 className="text-2xl font-bold tracking-tight">{activeOrg?.name ?? "—"} Compliance Dashboard</h1>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 pb-5 border-b border-border">
+
+        {/* Left: logo + identity block */}
+        <div className="flex items-start gap-4">
+          <img
+            src="/assets/control-hub-icon.png"
+            alt={activeOrg?.name ?? "Organization"}
+            className="h-12 w-12 rounded-xl object-contain shrink-0 hidden sm:block mt-0.5"
+          />
+          <div className="space-y-2 min-w-0">
+            {/* Org name + page subtitle */}
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-foreground leading-none">
+                {activeOrg?.name ?? "—"}
+              </h1>
+              <p className="text-base font-semibold text-muted-foreground mt-1.5">
+                Compliance Dashboard
+              </p>
+            </div>
+
+            {/* Framework / package badges */}
+            {activePkgs.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                {activePkgs.map(pkg => {
+                  const key = pkg.packageKey ?? "";
+                  let label = pkg.packageName ?? key;
+                  if (key === "CMMC_L1_SELF") label = "CMMC L1";
+                  else if (key === "CMMC_L2_SELF") label = "CMMC L2";
+                  else if (key === "NIST_800_171_R2") label = "NIST 800-171 r2";
+                  else if (key === "NIST_800_171_R3") label = "NIST 800-171 r3";
+                  else if (key === "NIST_800_171A_R2") label = "800-171A r2";
+                  else if (key === "NIST_800_171A_R3") label = "800-171A r3";
+                  else if (key === "DFARS_252_204_7012") label = "DFARS 7012";
+                  else if (key === "DFARS_252_204_7019") label = "DFARS 7019";
+                  else if (key === "DFARS_252_204_7020") label = "DFARS 7020";
+                  else if (key === "DFARS_252_204_7021") label = "DFARS 7021";
+                  else if (key === "FAR_52_204_21") label = "FAR 52.204-21";
+                  const fw = pkg.frameworkShortName;
+                  const color = fw === "CMMC"
+                    ? "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800"
+                    : fw === "NIST 800-171" || fw === "NIST 800-171A"
+                    ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800"
+                    : fw === "DFARS"
+                    ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
+                    : "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700";
+                  return (
+                    <span key={pkg.id} className={cn("inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium border", color)}>
+                      {label}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Report metadata */}
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
+              <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />Report Date: {today}</span>
+              {lastActivity && (
+                <>
+                  <span className="text-muted-foreground/40 mx-0.5">•</span>
+                  <span className="flex items-center gap-1"><Clock className="h-3 w-3" />Last Activity: {relativeTime(lastActivity)}</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right: status badges + action buttons */}
+        <div className="flex flex-col items-start sm:items-end gap-3 shrink-0">
+          {/* CMMC level + readiness status */}
+          <div className="flex items-center gap-2 flex-wrap sm:justify-end">
             {activeOrg?.cmmcTargetLevel && (
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-900 text-white dark:bg-white dark:text-slate-900">
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-900 text-white dark:bg-white dark:text-slate-900">
                 CMMC {activeOrg.cmmcTargetLevel}
               </span>
             )}
-            <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border", status.bg, status.color, status.border)}>
+            <span className={cn("inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border", status.bg, status.color, status.border)}>
               {status.label}
             </span>
           </div>
-          {activePkgs.length > 0 && (
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {activePkgs.map(pkg => {
-                const key = pkg.packageKey ?? "";
-                let label = pkg.packageName ?? key;
-                if (key === "CMMC_L1_SELF") label = "CMMC L1";
-                else if (key === "CMMC_L2_SELF") label = "CMMC L2";
-                else if (key === "NIST_800_171_R2") label = "NIST 800-171 r2";
-                else if (key === "NIST_800_171_R3") label = "NIST 800-171 r3";
-                else if (key === "NIST_800_171A_R2") label = "800-171A r2";
-                else if (key === "NIST_800_171A_R3") label = "800-171A r3";
-                else if (key === "DFARS_252_204_7012") label = "DFARS 7012";
-                else if (key === "DFARS_252_204_7019") label = "DFARS 7019";
-                else if (key === "DFARS_252_204_7020") label = "DFARS 7020";
-                else if (key === "DFARS_252_204_7021") label = "DFARS 7021";
-                else if (key === "FAR_52_204_21") label = "FAR 52.204-21";
-                const fw = pkg.frameworkShortName;
-                const color = fw === "CMMC"
-                  ? "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800"
-                  : fw === "NIST 800-171" || fw === "NIST 800-171A"
-                  ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800"
-                  : fw === "DFARS"
-                  ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
-                  : "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700";
-                return (
-                  <span key={pkg.id} className={cn("inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium border", color)}>
-                    {label}
-                  </span>
-                );
-              })}
-            </div>
-          )}
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5"><Calendar className="h-3 w-3" />Report Date: {today}</span>
-            {lastActivity && (
-              <span className="flex items-center gap-1.5"><Clock className="h-3 w-3" />Last Activity: {relativeTime(lastActivity)}</span>
-            )}
+          {/* Action buttons */}
+          <div className="flex items-center gap-2 print:hidden">
+            <button
+              onClick={handleRefresh}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-accent transition-colors"
+            >
+              <RefreshCcw className="h-3.5 w-3.5" />
+              Refresh
+            </button>
+            <Link href="/reports/executive" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-accent transition-colors">
+              <FileText className="h-3.5 w-3.5" />
+              Export Report
+            </Link>
+            <Link href="/reports/gap" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
+              <BarChart3 className="h-3.5 w-3.5" />
+              Gap Analysis
+            </Link>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0 print:hidden">
-          <button
-            onClick={handleRefresh}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-accent transition-colors"
-          >
-            <RefreshCcw className="h-3.5 w-3.5" />
-            Refresh
-          </button>
-          <Link href="/reports/executive" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-accent transition-colors">
-            <FileText className="h-3.5 w-3.5" />
-            Export Report
-          </Link>
-          <Link href="/reports/gap" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
-            <BarChart3 className="h-3.5 w-3.5" />
-            Gap Analysis
-          </Link>
-        </div>
+
       </div>
 
       {/* ── 5 KPI Cards ───────────────────────────────────────────── */}

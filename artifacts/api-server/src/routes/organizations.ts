@@ -17,7 +17,7 @@ import { logAudit } from "../lib/audit";
 import { ASSIGNABLE_ORG_ROLES, isAssignableOrgRole } from "../lib/access-control";
 import { randomUUID } from "crypto";
 
-const SUPPORTED_FEATURE_KEYS = ["IMPLEMENTATION_ROADMAP"] as const;
+const SUPPORTED_FEATURE_KEYS = ["IMPLEMENTATION_ROADMAP", "PRE_ASSESSMENT"] as const;
 type FeatureKey = typeof SUPPORTED_FEATURE_KEYS[number];
 
 const router = Router();

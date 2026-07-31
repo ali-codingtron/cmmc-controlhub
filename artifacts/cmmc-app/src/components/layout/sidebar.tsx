@@ -196,7 +196,7 @@ export function Sidebar() {
         <img
           src="/assets/control-hub-icon.png"
           alt="Control HUB"
-          className="h-7 w-7 rounded-lg object-contain shrink-0"
+          className="h-10 w-10 rounded-lg object-contain shrink-0"
         />
         <span className="font-semibold tracking-tight">Control HUB</span>
       </div>
