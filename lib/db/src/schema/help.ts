@@ -79,6 +79,7 @@ export const supportTicketsTable = pgTable("support_tickets", {
   correlationId: text("correlation_id"),
   includeDiagnostics: boolean("include_diagnostics").notNull().default(false),
   status: text("status").notNull().default("submitted"),
+  internalNotes: text("internal_notes"),
   emailDeliveryStatus: text("email_delivery_status").notNull().default("pending"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

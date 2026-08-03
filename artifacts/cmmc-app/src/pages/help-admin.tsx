@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Plus, Pencil, Archive, ChevronDown, ChevronUp, ArrowLeft, BookOpen, HelpCircle, Loader2 } from "lucide-react";
+import { Plus, Pencil, Archive, ArrowLeft, BookOpen, HelpCircle, Loader2, Ticket, ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -54,6 +54,27 @@ interface Category {
   name: string;
 }
 
+interface SupportTicket {
+  id: string;
+  ticketNumber: string;
+  submittedByName: string;
+  submittedByEmail: string;
+  subject: string;
+  category: string;
+  priority: string;
+  description: string;
+  status: string;
+  internalNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+  closedAt: string | null;
+  organizationId: string | null;
+  relatedModule: string | null;
+  currentPageUrl: string | null;
+  emailDeliveryStatus: string;
+}
+
 interface ArticleForm {
   slug: string;
   title: string;
@@ -75,6 +96,51 @@ interface FaqForm {
 const EMPTY_ARTICLE: ArticleForm = { slug: "", title: "", categoryId: "", module: "", content: "", summary: "", keywords: "", status: "published" };
 const EMPTY_FAQ: FaqForm = { question: "", answer: "", category: "General", sortOrder: 0 };
 
+const TICKET_STATUSES = [
+  { value: "all", label: "All Tickets" },
+  { value: "submitted", label: "Submitted" },
+  { value: "in_review", label: "In Review" },
+  { value: "waiting_on_user", label: "Waiting on User" },
+  { value: "resolved", label: "Resolved" },
+  { value: "closed", label: "Closed" },
+] as const;
+
+const TICKET_STATUS_LABELS: Record<string, string> = {
+  submitted: "Submitted",
+  in_review: "In Review",
+  waiting_on_user: "Waiting on User",
+  resolved: "Resolved",
+  closed: "Closed",
+};
+
+// Map display status back to raw value for PATCH requests
+const STATUS_DISPLAY_TO_RAW: Record<string, string> = {
+  "Submitted": "submitted",
+  "In Review": "in_review",
+  "Waiting on User": "waiting_on_user",
+  "Resolved": "resolved",
+  "Closed": "closed",
+};
+
+const TICKET_STATUS_COLORS: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
+  Submitted: "default",
+  "In Review": "secondary",
+  "Waiting on User": "outline",
+  Resolved: "secondary",
+  Closed: "outline",
+};
+
+const PRIORITY_COLORS: Record<string, string> = {
+  Low: "text-muted-foreground",
+  Normal: "text-foreground",
+  High: "text-orange-600",
+  Urgent: "text-destructive font-semibold",
+};
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
 export default function HelpAdmin() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
@@ -91,6 +157,13 @@ export default function HelpAdmin() {
   const [articleForm, setArticleForm] = useState<ArticleForm>(EMPTY_ARTICLE);
   const [faqForm, setFaqForm] = useState<FaqForm>(EMPTY_FAQ);
 
+  // Ticket state
+  const [ticketStatusFilter, setTicketStatusFilter] = useState<string>("all");
+  const [ticketDialog, setTicketDialog] = useState<{ open: boolean; ticket?: SupportTicket }>({ open: false });
+  const [ticketStatus, setTicketStatus] = useState("");
+  const [ticketNotes, setTicketNotes] = useState("");
+  const [expandedTicket, setExpandedTicket] = useState<string | null>(null);
+
   const { data: articles = [] } = useQuery<Article[]>({
     queryKey: ["help-articles-admin"],
     queryFn: () => apiFetch("/api/help/articles?status=all").then((r) => r.json()),
@@ -105,6 +178,20 @@ export default function HelpAdmin() {
     queryKey: ["help-categories"],
     queryFn: () => apiFetch("/api/help/categories").then((r) => r.json()),
   });
+
+  const { data: allTickets = [] } = useQuery<SupportTicket[]>({
+    queryKey: ["support-tickets-admin"],
+    queryFn: () => apiFetch("/api/help/support-tickets?all=true").then((r) => r.json()),
+  });
+
+  const filteredTickets = ticketStatusFilter === "all"
+    ? allTickets
+    : allTickets.filter((t) => t.status === ticketStatusFilter);
+
+  const ticketCounts: Record<string, number> = { all: allTickets.length };
+  for (const t of allTickets) {
+    ticketCounts[t.status] = (ticketCounts[t.status] ?? 0) + 1;
+  }
 
   const saveArticle = useMutation({
     mutationFn: async (form: ArticleForm) => {
@@ -162,6 +249,36 @@ export default function HelpAdmin() {
     },
   });
 
+  const updateTicket = useMutation({
+    mutationFn: async ({ id, status, internalNotes }: { id: string; status?: string; internalNotes?: string }) => {
+      const body: Record<string, string> = {};
+      if (status) body.status = status;
+      if (internalNotes !== undefined) body.internalNotes = internalNotes;
+      const r = await apiFetch(`/api/help/support-tickets/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error((err as any).error ?? "Failed to update ticket");
+      }
+      return r.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["support-tickets-admin"] });
+      setTicketDialog({ open: false });
+      toast({ title: "Ticket updated" });
+    },
+    onError: (e: Error) => toast({ title: e.message, variant: "destructive" }),
+  });
+
+  const openTicketDialog = (ticket: SupportTicket) => {
+    // Convert display status ("In Review") back to raw value ("in_review") for the Select
+    setTicketStatus(STATUS_DISPLAY_TO_RAW[ticket.status] ?? ticket.status);
+    setTicketNotes(ticket.internalNotes ?? "");
+    setTicketDialog({ open: true, ticket });
+  };
+
   const openNewArticle = () => {
     setArticleForm(EMPTY_ARTICLE);
     setArticleDialog({ open: true });
@@ -206,8 +323,12 @@ export default function HelpAdmin() {
         </Button>
       </div>
 
-      <Tabs defaultValue="articles">
+      <Tabs defaultValue="tickets">
         <TabsList>
+          <TabsTrigger value="tickets">
+            <Ticket className="h-4 w-4 mr-2" />
+            Support Tickets {allTickets.length > 0 && `(${allTickets.length})`}
+          </TabsTrigger>
           <TabsTrigger value="articles">
             <BookOpen className="h-4 w-4 mr-2" />
             Articles ({articles.length})
@@ -217,6 +338,117 @@ export default function HelpAdmin() {
             FAQ ({faqItems.length})
           </TabsTrigger>
         </TabsList>
+
+        {/* ── Tickets Tab ── */}
+        <TabsContent value="tickets" className="space-y-4">
+          {/* Status filter bar */}
+          <div className="flex flex-wrap gap-2 pt-1">
+            {TICKET_STATUSES.map((s) => (
+              <Button
+                key={s.value}
+                size="sm"
+                variant={ticketStatusFilter === s.value ? "default" : "outline"}
+                onClick={() => setTicketStatusFilter(s.value)}
+                className="h-7 text-xs"
+              >
+                {s.label}
+                {ticketCounts[s.value] != null && (
+                  <span className="ml-1.5 rounded-full bg-background/20 px-1.5 py-0.5 text-[10px] font-medium">
+                    {ticketCounts[s.value]}
+                  </span>
+                )}
+              </Button>
+            ))}
+          </div>
+
+          {filteredTickets.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                No tickets {ticketStatusFilter !== "all" ? `with status "${TICKET_STATUS_LABELS[ticketStatusFilter] ?? ticketStatusFilter}"` : "submitted yet"}.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {filteredTickets.map((t) => {
+                const isExpanded = expandedTicket === t.id;
+                return (
+                  <Card key={t.id} className="overflow-hidden">
+                    <CardContent className="py-0">
+                      {/* Header row */}
+                      <div
+                        className="flex items-start gap-3 py-3 cursor-pointer"
+                        onClick={() => setExpandedTicket(isExpanded ? null : t.id)}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                            <span className="font-mono text-xs text-muted-foreground">{t.ticketNumber}</span>
+                            <Badge variant={TICKET_STATUS_COLORS[t.status] ?? "outline"} className="text-xs">
+                              {t.status}
+                            </Badge>
+                            <span className={`text-xs font-medium ${PRIORITY_COLORS[t.priority] ?? ""}`}>
+                              {t.priority}
+                            </span>
+                            <Badge variant="outline" className="text-xs">{t.category}</Badge>
+                          </div>
+                          <p className="font-medium text-sm truncate">{t.subject}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {t.submittedByName} &middot; {t.submittedByEmail} &middot; {formatDate(t.createdAt)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 pt-1">
+                          {t.internalNotes && (
+                            <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" aria-label="Has internal notes" />
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={(e) => { e.stopPropagation(); openTicketDialog(t); }}
+                          >
+                            Manage
+                          </Button>
+                          {isExpanded ? (
+                            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Expanded detail */}
+                      {isExpanded && (
+                        <div className="border-t px-0 pb-3 space-y-3">
+                          <div className="pt-3">
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Description</p>
+                            <p className="text-sm whitespace-pre-wrap">{t.description}</p>
+                          </div>
+                          {(t.relatedModule || t.currentPageUrl) && (
+                            <div className="flex gap-6 text-xs text-muted-foreground">
+                              {t.relatedModule && <span><span className="font-medium">Module:</span> {t.relatedModule}</span>}
+                              {t.currentPageUrl && <span><span className="font-medium">Page:</span> {t.currentPageUrl}</span>}
+                            </div>
+                          )}
+                          {t.internalNotes && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Internal Notes</p>
+                              <p className="text-sm whitespace-pre-wrap bg-muted/40 rounded px-3 py-2">{t.internalNotes}</p>
+                            </div>
+                          )}
+                          {(t.resolvedAt || t.closedAt) && (
+                            <div className="flex gap-6 text-xs text-muted-foreground">
+                              {t.resolvedAt && <span><span className="font-medium">Resolved:</span> {formatDate(t.resolvedAt)}</span>}
+                              {t.closedAt && <span><span className="font-medium">Closed:</span> {formatDate(t.closedAt)}</span>}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
 
         <TabsContent value="articles" className="space-y-4">
           <div className="flex justify-end">
@@ -284,6 +516,72 @@ export default function HelpAdmin() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Ticket Manage Dialog */}
+      <Dialog open={ticketDialog.open} onOpenChange={(o) => !o && setTicketDialog({ open: false })}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Manage Ticket</DialogTitle>
+            <DialogDescription>
+              {ticketDialog.ticket?.ticketNumber} &mdash; {ticketDialog.ticket?.subject}
+            </DialogDescription>
+          </DialogHeader>
+          {ticketDialog.ticket && (
+            <div className="space-y-4">
+              <div className="rounded-md bg-muted/40 px-3 py-2 text-sm space-y-1">
+                <p><span className="text-muted-foreground">From:</span> {ticketDialog.ticket.submittedByName} ({ticketDialog.ticket.submittedByEmail})</p>
+                <p><span className="text-muted-foreground">Category:</span> {ticketDialog.ticket.category}</p>
+                <p><span className="text-muted-foreground">Priority:</span> <span className={PRIORITY_COLORS[ticketDialog.ticket.priority]}>{ticketDialog.ticket.priority}</span></p>
+                <p><span className="text-muted-foreground">Submitted:</span> {formatDate(ticketDialog.ticket.createdAt)}</p>
+              </div>
+              <div className="space-y-1">
+                <Label>Status</Label>
+                <Select value={ticketStatus} onValueChange={setTicketStatus}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="submitted">Submitted</SelectItem>
+                    <SelectItem value="in_review">In Review</SelectItem>
+                    <SelectItem value="waiting_on_user">Waiting on User</SelectItem>
+                    <SelectItem value="resolved">Resolved</SelectItem>
+                    <SelectItem value="closed">Closed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Internal Notes</Label>
+                <Textarea
+                  value={ticketNotes}
+                  onChange={(e) => setTicketNotes(e.target.value)}
+                  placeholder="Add notes visible only to admins..."
+                  rows={4}
+                />
+                <p className="text-xs text-muted-foreground">These notes are not visible to the submitter.</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTicketDialog({ open: false })}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!ticketDialog.ticket) return;
+                // Compare raw value against the current raw status to detect a change
+                const currentRaw = STATUS_DISPLAY_TO_RAW[ticketDialog.ticket.status] ?? ticketDialog.ticket.status;
+                updateTicket.mutate({
+                  id: ticketDialog.ticket.id,
+                  status: ticketStatus !== currentRaw ? ticketStatus : undefined,
+                  internalNotes: ticketNotes,
+                });
+              }}
+              disabled={updateTicket.isPending}
+            >
+              {updateTicket.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Article Dialog */}
       <Dialog open={articleDialog.open} onOpenChange={(o) => !o && setArticleDialog({ open: false })}>

@@ -465,7 +465,7 @@ const supportTicketSchema = z.object({
   subject: z.string().min(3).max(200),
   category: z.enum(ALLOWED_CATEGORIES),
   description: z.string().min(10).max(5000),
-  priority: z.enum(["low", "normal", "high", "urgent"]).default("normal"),
+  priority: z.string().transform((v) => v.toLowerCase()).pipe(z.enum(["low", "normal", "high", "urgent"])).default("normal"),
   relatedModule: z.string().optional(),
   currentPageUrl: z.string().optional(),
   articleId: z.string().uuid().optional(),
@@ -594,6 +594,49 @@ router.post("/help/support-tickets", requireAuth, async (req, res): Promise<void
 
 // ── GET /help/support-tickets ─────────────────────────────────────────────────
 
+const PRIORITY_DISPLAY: Record<string, string> = {
+  low: "Low", normal: "Normal", high: "High", urgent: "Urgent",
+};
+const STATUS_DISPLAY: Record<string, string> = {
+  submitted: "Submitted", in_review: "In Review", waiting_on_user: "Waiting on User",
+  resolved: "Resolved", closed: "Closed",
+};
+const EMAIL_STATUS_DISPLAY: Record<string, string> = {
+  pending: "Pending", delivered: "Delivered", failed: "Failed", retry_scheduled: "Retry Scheduled",
+};
+
+function transformTicketRow(row: Record<string, unknown>) {
+  return {
+    id: row.id,
+    ticketNumber: row.ticket_number,
+    organizationId: row.organization_id,
+    submittedByUserId: row.submitted_by_user_id,
+    submittedByName: row.submitted_by_name,
+    submittedByEmail: row.submitted_by_email,
+    effectiveRole: row.effective_role,
+    category: row.category,
+    priority: PRIORITY_DISPLAY[(row.priority as string) ?? ""] ?? row.priority,
+    subject: row.subject,
+    description: row.description,
+    relatedModule: row.related_module,
+    currentPageUrl: row.current_page_url,
+    articleId: row.article_id,
+    environment: row.environment,
+    appVersion: row.app_version,
+    browserSummary: row.browser_summary,
+    correlationId: row.correlation_id,
+    includeDiagnostics: row.include_diagnostics,
+    status: STATUS_DISPLAY[(row.status as string) ?? ""] ?? row.status,
+    internalNotes: row.internal_notes,
+    emailDeliveryStatus: EMAIL_STATUS_DISPLAY[(row.email_delivery_status as string) ?? ""] ?? row.email_delivery_status,
+    submittedAt: row.created_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    resolvedAt: row.resolved_at,
+    closedAt: row.closed_at,
+  };
+}
+
 router.get("/help/support-tickets", requireAuth, async (req, res): Promise<void> => {
   const isAdmin = req.authUser?.role === "admin";
   const showAll = req.query.all === "true";
@@ -610,7 +653,64 @@ router.get("/help/support-tickets", requireAuth, async (req, res): Promise<void>
     );
   }
 
-  res.json(result.rows ?? []);
+  const rows = (result.rows ?? []) as Record<string, unknown>[];
+  res.json(rows.map(transformTicketRow));
+});
+
+// ── PATCH /help/support-tickets/:id ───────────────────────────────────────────
+
+const ticketPatchSchema = z.object({
+  status: z.enum(["submitted", "in_review", "waiting_on_user", "resolved", "closed"]).optional(),
+  internalNotes: z.string().max(5000).optional(),
+});
+
+router.patch("/help/support-tickets/:id", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+  const ticketId = req.params.id as string;
+  const parsed = ticketPatchSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return void res.status(400).json({ error: "Validation failed", details: parsed.error.flatten() });
+  }
+  const body = parsed.data;
+
+  // Fetch existing ticket
+  const existing = await db.execute(
+    sql`SELECT id, ticket_number, status FROM support_tickets WHERE id = ${ticketId}::uuid LIMIT 1`
+  );
+  const ticket = existing.rows?.[0] as { id: string; ticket_number: string; status: string } | undefined;
+  if (!ticket) {
+    return void res.status(404).json({ error: "Ticket not found" });
+  }
+
+  const prevStatus = ticket.status;
+
+  if (body.internalNotes !== undefined) {
+    await db.execute(
+      sql`UPDATE support_tickets SET internal_notes = ${body.internalNotes}, updated_at = NOW() WHERE id = ${ticketId}::uuid`
+    );
+  }
+
+  if (body.status !== undefined) {
+    await db.execute(
+      sql`UPDATE support_tickets SET status = ${body.status}, updated_at = NOW()
+        ${body.status === "resolved" ? sql`, resolved_at = NOW()` : sql``}
+        ${body.status === "closed" ? sql`, closed_at = NOW()` : sql``}
+        WHERE id = ${ticketId}::uuid`
+    );
+
+    if (body.status !== prevStatus) {
+      await logAudit(req, "support_ticket_status_changed", "support_ticket", ticketId, {
+        entityLabel: ticket.ticket_number,
+        previousValue: { status: prevStatus },
+        newValue: { status: body.status },
+      });
+    }
+  }
+
+  const updated = await db.execute(
+    sql`SELECT * FROM support_tickets WHERE id = ${ticketId}::uuid LIMIT 1`
+  );
+  const row = updated.rows?.[0] as Record<string, unknown> | undefined;
+  res.json(row ? transformTicketRow(row) : {});
 });
 
 // ── Admin CRUD ─────────────────────────────────────────────────────────────────

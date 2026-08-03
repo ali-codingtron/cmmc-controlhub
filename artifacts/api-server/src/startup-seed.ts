@@ -417,10 +417,7 @@ async function seedHelpContent() {
     "Reports",              // → Reports & Exports
     "MFA & Login Help",     // → MFA, SSO & Sign-In
   ];
-  await pool.query(
-    `DELETE FROM help_categories WHERE name = ANY($1)`,
-    [OBSOLETE_CATEGORIES],
-  );
+  await db.delete(helpCategoriesTable).where(inArray(helpCategoriesTable.name, OBSOLETE_CATEGORIES));
 
   // ── Categories: insert new ones, upsert description/icon/sortOrder on conflict ──
   const catIdMap: Record<string, string> = {};
@@ -1423,6 +1420,7 @@ async function migrateHelpNewColumns() {
       correlation_id text,
       include_diagnostics boolean NOT NULL DEFAULT false,
       status text NOT NULL DEFAULT 'submitted',
+      internal_notes text,
       email_delivery_status text NOT NULL DEFAULT 'pending',
       created_at timestamptz NOT NULL DEFAULT NOW(),
       updated_at timestamptz NOT NULL DEFAULT NOW(),
