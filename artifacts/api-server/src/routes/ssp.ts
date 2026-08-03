@@ -893,6 +893,18 @@ router.post("/ssp/:id/parse", requireAuth, requireOrg, async (req, res): Promise
 
   const controlMap = new Map(allControls.map((c) => [c.controlId, c.id]));
 
+  // Scope the control map to only the controls this org's active packages entitle
+  // it to. For an L1 org that means 17 controls; for L2 it's 110.
+  // resolveOrgControlIds returns null when no packages are configured (no
+  // restriction — keep all controls so a bare org still gets useful output).
+  const orgControlIds = await resolveOrgControlIds(orgId);
+  if (orgControlIds !== null) {
+    const orgControlIdSet = new Set(orgControlIds);
+    for (const [ref, dbId] of controlMap.entries()) {
+      if (!orgControlIdSet.has(dbId)) controlMap.delete(ref);
+    }
+  }
+
   // Normalized fallback: "DOMAIN-REQ" → canonical DB control ID
   // e.g. "AC-3.1.1" → "AC.L1-3.1.1"
   // This handles SSPs that label all controls as L2 even when some are L1 in the DB.
