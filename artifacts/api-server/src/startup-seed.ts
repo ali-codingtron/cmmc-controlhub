@@ -1427,6 +1427,8 @@ async function migrateHelpNewColumns() {
       resolved_at timestamptz,
       closed_at timestamptz
     )`,
+    // support_tickets: add internal_notes column if missing (added in schema v2)
+    `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS internal_notes text`,
     // support_ticket_attachments table
     `CREATE TABLE IF NOT EXISTS support_ticket_attachments (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
