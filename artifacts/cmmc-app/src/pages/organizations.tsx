@@ -999,6 +999,7 @@ function OrgCreationWizard({ open, onClose, onSuccess }: { open: boolean; onClos
     assessmentScope: "",
   });
   const [enableRoadmap, setEnableRoadmap] = useState(true);
+  const [enablePreAssessment, setEnablePreAssessment] = useState(true);
 
   const [ctx, setCtx] = useState({
     handlesFci: false,
@@ -1102,6 +1103,15 @@ function OrgCreationWizard({ open, onClose, onSuccess }: { open: boolean; onClos
       // If roadmap is explicitly disabled, record it now
       if (!enableRoadmap) {
         await fetch(`${base}/api/organizations/${newOrg.id}/features/IMPLEMENTATION_ROADMAP`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ enabled: false, changeReason: "Disabled during organization creation" }),
+        }).catch(() => { /* non-fatal */ });
+      }
+
+      // If pre-assessment is explicitly disabled, record it now
+      if (!enablePreAssessment) {
+        await fetch(`${base}/api/organizations/${newOrg.id}/features/PRE_ASSESSMENT`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ enabled: false, changeReason: "Disabled during organization creation" }),
@@ -1561,39 +1571,71 @@ function OrgCreationWizard({ open, onClose, onSuccess }: { open: boolean; onClos
                 </div>
               )}
 
-              {/* Implementation Roadmap toggle */}
+              {/* Optional Modules */}
               <div>
                 <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                   Optional Modules
                 </div>
-                <button
-                  type="button"
-                  className={cn(
-                    "w-full text-left rounded-lg border p-4 transition-all",
-                    enableRoadmap
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-primary/40 hover:bg-muted/30"
-                  )}
-                  onClick={() => setEnableRoadmap(v => !v)}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className={cn(
-                      "mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
-                      enableRoadmap ? "border-primary bg-primary" : "border-border bg-background"
-                    )}>
-                      {enableRoadmap && <Check className="h-3 w-3 text-primary-foreground" strokeWidth={3} />}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-sm">Enable Implementation Roadmap</span>
-                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary">Recommended</span>
+                <div className="space-y-2">
+                  {/* Implementation Roadmap */}
+                  <button
+                    type="button"
+                    className={cn(
+                      "w-full text-left rounded-lg border p-4 transition-all",
+                      enableRoadmap
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/40 hover:bg-muted/30"
+                    )}
+                    onClick={() => setEnableRoadmap(v => !v)}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={cn(
+                        "mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
+                        enableRoadmap ? "border-primary bg-primary" : "border-border bg-background"
+                      )}>
+                        {enableRoadmap && <Check className="h-3 w-3 text-primary-foreground" strokeWidth={3} />}
                       </div>
-                      <div className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                        Guided implementation actions and evidence collection workflow for CMMC compliance. Can be enabled or disabled later from Organization Settings.
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-sm">Enable Implementation Roadmap</span>
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary">Recommended</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                          Guided implementation actions and evidence collection workflow for CMMC compliance. Can be enabled or disabled later from Organization Settings.
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </button>
+                  </button>
+
+                  {/* Pre-Assessment */}
+                  <button
+                    type="button"
+                    className={cn(
+                      "w-full text-left rounded-lg border p-4 transition-all",
+                      enablePreAssessment
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/40 hover:bg-muted/30"
+                    )}
+                    onClick={() => setEnablePreAssessment(v => !v)}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={cn(
+                        "mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
+                        enablePreAssessment ? "border-primary bg-primary" : "border-border bg-background"
+                      )}>
+                        {enablePreAssessment && <Check className="h-3 w-3 text-primary-foreground" strokeWidth={3} />}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-sm">Enable Pre-Assessment</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                          Microsoft 365 tenant analysis that maps security configurations to CMMC controls before a formal assessment. Can be enabled or disabled later from Organization Settings.
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                </div>
               </div>
             </div>
           )}

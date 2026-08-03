@@ -1,0 +1,2119 @@
+Completely update, professionalize, and make context-aware ONLY the Control HUB Help & User Guide module.
+
+
+Current observed problems:
+
+1. The Help Center displays the same categories, articles, FAQs, workflows, and videos regardless of the logged-in user’s effective role.
+
+2. Help content is not filtered by:
+   - platform role
+   - organization-specific role
+   - effective permissions
+   - selected organization
+   - active compliance packages
+   - enabled organization modules
+
+3. A CMMC Level 1 organization can still see articles such as DFARS Contract Obligations even when DFARS is not assigned.
+
+4. Pre-Assessment help is displayed even when Pre-Assessment may be disabled for the organization.
+
+5. The Control Detail Tabs article is outdated and does not reflect the current Control Detail functionality, including Tasks and the newer control views.
+
+6. The User Roles Guide reflects an older simplified role model and does not properly explain:
+   - Platform Role None
+   - Platform Global Admin
+   - organization-specific roles
+   - different roles in different organizations
+   - effective permissions
+   - protected break-glass behavior
+
+7. The How to Invite a New User guide assumes one user role and one organization assignment and does not reflect the current membership model.
+
+8. Several help tags and labels are displayed in lowercase or inconsistent capitalization, including examples such as:
+   - dfars
+   - users
+   - documents
+   - poams
+
+9. Video Tutorials is mostly disabled “Coming Soon” cards, which makes the application look incomplete.
+
+10. Contact Support currently points users to info@carmetechnology.com rather than providing a real support-ticket workflow.
+
+11. Article pages are visually plain:
+   - long blocks of text
+   - no useful table of contents
+   - limited hierarchy
+   - weak related-content navigation
+   - no role/package context
+   - no professional callouts or step styling
+
+12. The Help landing page contains too much empty background space and many visually identical cards.
+
+Goal:
+
+Create a professional Control HUB Help Center that:
+
+- shows each user only the content relevant to their effective role
+- also respects active packages and enabled modules
+- accurately reflects currently implemented functionality
+- provides professional articles, FAQs, workflows, and videos
+- includes a real Submit Support Ticket workflow
+- sends support tickets to support@carmetechnology.com
+- uses consistent capitalization and terminology
+- remains easy to maintain as Control HUB changes
+
+====================================================================
+1. STRICT SCOPE
+====================================================================
+
+Change only:
+
+- Help & User Guide landing page
+- help search
+- help categories
+- help articles
+- FAQ
+- role guides
+- workflow guides
+- video tutorials
+- related articles
+- article feedback
+- support-ticket submission
+- support-ticket email delivery
+- help-content authorization/filtering
+- help-specific audit events
+- help-content metadata and maintenance tools
+
+Do not redesign or modify the underlying functionality of:
+
+- Dashboard
+- Controls
+- Tasks
+- Evidence
+- Monitoring Tracker
+- POA&M
+- Implementation Roadmap
+- Pre-Assessment
+- Documentation
+- SSP
+- Framework Crosswalk
+- DFARS Obligations
+- Reports
+- Users & Roles
+- Organizations
+- Security Center
+- Certification
+- Authentication
+- SSO
+- MFA
+
+The Help Center must describe existing functionality accurately, but it must not change that functionality.
+
+====================================================================
+2. RUN A READ-ONLY HELP CONTENT AUDIT FIRST
+====================================================================
+
+Before changing help content, inventory the current application and Help Center.
+
+Inspect:
+
+- all Help Center routes
+- all help categories
+- all help articles
+- all FAQ entries
+- all workflow guides
+- all video records
+- all support links
+- all article tags
+- all article last-updated dates
+- all current Help Center permissions
+- whether articles are stored in code, database, Markdown, or another format
+- all current application routes
+- current user-role and capability definitions
+- current organization-feature/module definitions
+- current package definitions
+- current navigation labels
+- current page and button labels
+
+For each existing help article, report:
+
+- article ID
+- slug
+- title
+- category
+- tags
+- last reviewed date
+- roles currently able to see it
+- packages to which it applies
+- modules to which it applies
+- referenced routes
+- referenced buttons/actions
+- whether those routes/actions still exist
+- capitalization issues
+- outdated statements
+- missing content
+- recommended disposition
+
+Disposition values:
+
+- Keep and Update
+- Split by Role
+- Split by Package
+- Replace
+- Archive
+- Remove from Navigation
+- Hide Until Feature Exists
+
+Specifically review the articles shown in the video:
+
+- Understanding Compliance Packages
+- Getting Started with Control HUB
+- Dashboard Guide
+- Controls Guide
+- Control Detail Tabs
+- DFARS Contract Obligations
+- Framework Crosswalk — Mapping Between Standards
+- User Roles Guide
+- Monitoring Tracker guide
+- How to Invite a New User
+- How to Upload Evidence to a Control
+- How to Approve Evidence
+- How to Generate a Document from a Template
+- How to Complete a Monitoring Review
+- How to Create and Close a POA&M
+
+Generate:
+
+artifacts/help/Help_Content_Audit.md
+
+Do not change production help content during the audit.
+
+====================================================================
+3. USE THE AUTHORITATIVE EFFECTIVE-ACCESS MODEL
+====================================================================
+
+Help visibility must use the same backend authorization model used by the application.
+
+Create or reuse a service such as:
+
+resolveHelpContext(userId, organizationId)
+
+Return:
+
+- platformRole
+- organizationRole
+- effectiveRole
+- effectiveCapabilities
+- selectedOrganizationId
+- selectedOrganizationName
+- activePackageKeys
+- activeFrameworkVersions
+- enabledModules
+- organizationLevel
+- demo/test organization status
+
+Do not determine help visibility using:
+
+- a frontend role badge
+- a client-supplied role
+- the first role in a user record
+- a legacy role when authoritative memberships exist
+- the user’s role in a different organization
+- the current route alone
+
+When the selected organization changes:
+
+- recalculate the help context
+- refresh categories
+- refresh article recommendations
+- refresh search results
+- refresh FAQs
+- refresh videos
+- refresh workflow guides
+
+A user may have different help content in different organizations because their effective role or enabled modules may differ.
+
+====================================================================
+4. HELP CONTENT MODEL
+====================================================================
+
+Create or extend a structured help-content model.
+
+Suggested model:
+
+HelpArticle
+- id
+- slug
+- title
+- summary
+- category_key
+- content
+- content_format
+- status
+- published
+- estimated_read_minutes
+- last_reviewed_at
+- last_reviewed_by
+- content_version
+- sort_order
+- featured
+- popular
+- created_at
+- updated_at
+
+HelpArticleAudience
+- id
+- article_id
+- platform_role
+- organization_role
+- required_capability
+- audience_type
+
+HelpArticlePackage
+- id
+- article_id
+- package_key
+- applicability
+
+HelpArticleModule
+- id
+- article_id
+- module_key
+- visibility_rule
+
+HelpArticleTag
+- id
+- article_id
+- tag_key
+
+HelpArticleRoute
+- id
+- article_id
+- application_route
+- route_label
+
+HelpVideo
+- id
+- title
+- summary
+- category_key
+- video_url_or_asset
+- duration
+- published
+- package_keys
+- module_key
+- required_capabilities
+- last_reviewed_at
+
+HelpFaq
+- id
+- question
+- answer
+- category_key
+- package_keys
+- module_key
+- required_capabilities
+- related_article_id
+- published
+- sort_order
+
+Do not require a database migration if an equivalent content registry already exists.
+
+Preserve existing article URLs where possible.
+
+Redirect old routes when replacing articles.
+
+====================================================================
+5. CAPABILITY-BASED VISIBILITY
+====================================================================
+
+Prefer required capabilities over hardcoded role-name checks.
+
+Examples:
+
+Article:
+How to Create an Organization
+
+Required capability:
+organizations.create
+
+Article:
+How to Edit an Organization Profile
+
+Required capability:
+organizations.profile.edit
+
+Article:
+How to Invite a User
+
+Required capability:
+users.invite
+
+Article:
+How to Approve Evidence
+
+Required capability:
+evidence.approve
+
+Article:
+How to Submit a Document for Review
+
+Required capability:
+documents.submit_review
+
+Article:
+How to Review a Document
+
+Required capability:
+documents.review
+
+Article:
+How to Configure Pre-Assessment
+
+Required capability:
+preassessment.configure_module
+
+Article:
+How to Run a Pre-Assessment
+
+Required capability:
+preassessment.run
+
+Article:
+How to View Evidence as an Assessor
+
+Required capability:
+evidence.view
+
+Using capabilities prevents the Help Center from becoming inaccurate when role permissions are updated.
+
+====================================================================
+6. ROLE-AWARE CONTENT RULES
+====================================================================
+
+General authenticated-user content may be shown to all active users.
+
+Platform Global Admin:
+
+Show:
+
+- all general user guidance
+- platform administration
+- organizations
+- package assignment
+- organization profiles
+- module settings
+- users and roles
+- Platform Role None
+- organization memberships
+- effective permissions
+- protected break-glass account guidance
+- SSO/MFA administration
+- Security Center
+- Audit Trail
+- global template/resource management
+- all organization-module guides
+
+Organization Admin:
+
+Show only guidance applicable to organizations where the user is an active Organization Admin.
+
+Examples:
+
+- organization user access
+- organization-specific role assignments
+- organization module configuration where permitted
+- Pre-Assessment enable/disable
+- documentation review
+- organization reports
+- organization settings permitted by their capabilities
+
+Do not show:
+
+- global organization creation
+- global package administration
+- protected break-glass management
+- global SSO secrets
+- cross-organization administration
+
+Compliance Manager:
+
+Prioritize:
+
+- dashboard
+- controls and requirements
+- evidence
+- evidence review
+- documentation
+- document review
+- SSP
+- Monitoring Tracker
+- POA&M
+- Implementation Roadmap
+- Pre-Assessment when enabled
+- reports and exports
+
+IT Contributor:
+
+Prioritize:
+
+- assigned controls
+- Configure steps
+- Tasks
+- evidence upload
+- evidence linking
+- Monitoring Tracker
+- roadmap implementation steps
+- troubleshooting
+
+Do not show approval/admin workflows unless capabilities permit them.
+
+Reviewer:
+
+Prioritize:
+
+- reviewing evidence
+- approving or requesting changes
+- reviewing documents
+- reviewing control narratives
+- reports
+- read-only monitoring/POA&M context where permitted
+
+Executive Viewer:
+
+Prioritize:
+
+- dashboard
+- readiness summaries
+- domain/package views
+- reports
+- status interpretation
+- read-only navigation
+
+Do not show creation/editing guides.
+
+Assessor Read-Only:
+
+Prioritize:
+
+- assessor navigation
+- Dashboard interpretation
+- Controls and Requirements
+- implementation narratives
+- Evidence preview and download
+- SSP review
+- reports and exports
+- what the assessor role can and cannot do
+
+Do not show:
+
+- uploads
+- approvals
+- editing
+- user management
+- module settings
+- organization administration
+
+Demo Viewer:
+
+Show only guidance relevant to the synthetic demo organization.
+
+====================================================================
+7. PLATFORM ROLE NONE AND MULTI-ORGANIZATION ROLES
+====================================================================
+
+Update the User Roles guidance to explain:
+
+Platform Role:
+
+- None — Organization Access Only
+- Global Admin — Platform-Wide Administration
+
+Organization roles:
+
+- Organization Admin
+- Compliance Manager
+- IT Contributor
+- Reviewer
+- Executive Viewer
+- Assessor Read-Only
+- Demo Viewer, when used
+
+Explain that:
+
+- a user may have Platform Role None
+- a user may have access to several organizations
+- a user may have a different organization role in each organization
+- effective permissions are calculated using the selected organization
+- changing organizations may change what the user can see and do
+
+Do not state:
+
+“Global Admin cannot do nothing” or similar wording.
+
+Use:
+
+“Global Admin has platform-wide administrative authority, subject to protected-account safeguards and application security controls.”
+
+Do not expose break-glass credentials or sensitive recovery procedures in normal help content.
+
+====================================================================
+8. PACKAGE-AWARE CONTENT
+====================================================================
+
+Filter help content using active organization packages.
+
+CMMC Level 1 / FAR organization:
+
+Show content using:
+
+- Federal Contract Information
+- CMMC Level 1
+- FAR 52.204-21
+- applicable Level 1 requirements
+- Level 1 self-assessment
+- annual affirmation
+
+Do not show Level 2-only/CUI guidance unless another active package requires it.
+
+CMMC Level 2 / NIST SP 800-171 organization:
+
+Show:
+
+- CUI
+- NIST SP 800-171
+- Level 2 implementation
+- Level 2 SSP
+- Level 2 evidence
+- applicable assessment content
+
+DFARS:
+
+Show DFARS articles only when the organization has an applicable DFARS package or the user is a Global Admin reviewing all platform content.
+
+NIST SP 800-53:
+
+Treat reference-catalog guidance differently from implementation-package guidance.
+
+Do not display package-specific articles merely because they are marked Popular.
+
+====================================================================
+9. MODULE-AWARE CONTENT
+====================================================================
+
+Pre-Assessment:
+
+When disabled:
+
+- hide normal Pre-Assessment usage articles
+- hide scan, findings, and tenant-connection articles from ordinary users
+
+Users with:
+
+preassessment.configure_module
+
+may still see:
+
+- What Is Pre-Assessment?
+- How to Enable Pre-Assessment
+- What Happens to Existing Data When It Is Disabled?
+
+Implementation Roadmap:
+
+Show only the roadmap guidance matching the resolved roadmap profile.
+
+Examples:
+
+- CMMC Level 1 Implementation Roadmap
+- CMMC Level 2 Implementation Roadmap
+
+Do not show Level 2 roadmap instructions to an L1-only organization.
+
+Certification:
+
+Show Certification & Sustainment help only when the module is active or the user has permission to configure/verify it.
+
+Documentation:
+
+Show package-compatible template and generation guidance.
+
+SSP:
+
+Show Level 1 or Level 2 SSP help based on the organization’s active package.
+
+====================================================================
+10. APPLY THE SAME FILTERING EVERYWHERE
+====================================================================
+
+Use one central help-visibility function for:
+
+- Help landing page
+- categories
+- article counts
+- article search
+- popular articles
+- recommended articles
+- FAQ
+- workflow guides
+- video tutorials
+- related articles
+- direct article routes
+
+Do not filter only the landing-page cards.
+
+A hidden article must not appear through:
+
+- search
+- a direct URL
+- related articles
+- Popular Articles
+- browser history
+- FAQ links
+- workflow links
+
+If a user opens an article that is not applicable:
+
+Show:
+
+“This guide is not available for your current role or organization configuration.”
+
+Provide:
+
+- Return to Help Center
+- View Relevant Guides
+
+Do not expose administrator-only procedural content to unauthorized users.
+
+====================================================================
+11. REDESIGN THE HELP LANDING PAGE
+====================================================================
+
+Keep the sidebar label:
+
+Help & User Guide
+
+Use the page title:
+
+Control HUB Help Center
+
+Subtitle:
+
+“Find role-specific guidance, step-by-step workflows, troubleshooting help, and support.”
+
+Use a professional contained layout with a maximum width around 1180–1240px.
+
+Do not spread small cards across an excessively large empty background.
+
+--------------------------------------------------------------------
+11.1 PERSONALIZED CONTEXT HEADER
+--------------------------------------------------------------------
+
+At the top, show:
+
+Help for:
+
+[Effective Role Badge]
+
+Organization:
+
+[Selected Organization]
+
+Applicable Packages:
+
+[Package Badges]
+
+Example:
+
+Help for: Compliance Manager
+Organization: APEX Solutions
+CMMC Level 2 · NIST SP 800-171 Rev. 2
+
+For Global Admin:
+
+Help for: Platform Global Admin
+
+Do not display sensitive internal IDs.
+
+--------------------------------------------------------------------
+11.2 SEARCH
+--------------------------------------------------------------------
+
+Use a prominent search bar.
+
+Placeholder:
+
+“Search guides, FAQs, workflows, and troubleshooting…”
+
+Search:
+
+- titles
+- summaries
+- article content
+- tags
+- FAQs
+- workflow names
+- video titles
+
+Filter content before returning results.
+
+Show result type:
+
+- Guide
+- Workflow
+- FAQ
+- Video
+- Troubleshooting
+
+Support:
+
+- keyboard navigation
+- Enter to open
+- Escape to close suggestions
+- Ctrl+K or / shortcut where practical
+
+No Results message:
+
+“No help content matched your search.”
+
+Actions:
+
+- Clear Search
+- Submit a Support Ticket
+
+Do not log sensitive raw search queries unnecessarily.
+
+--------------------------------------------------------------------
+11.3 QUICK ACTIONS
+--------------------------------------------------------------------
+
+Replace the four generic cards with:
+
+- Start Here
+- My Role Guide
+- Recently Updated
+- Submit a Support Ticket
+
+For users with assigned reviews or tasks, optionally show:
+
+- My Assigned Work
+
+Quick-action cards should use:
+
+- consistent icons
+- concise descriptions
+- restrained blue/slate accents
+- hover elevation
+- visible focus
+- clear arrow/action label
+
+--------------------------------------------------------------------
+11.4 RECOMMENDED FOR YOUR ROLE
+--------------------------------------------------------------------
+
+Add:
+
+Recommended for You
+
+Show 3–5 articles selected from:
+
+- role
+- enabled modules
+- active packages
+- commonly used workflows
+- current organization configuration
+
+Examples for Compliance Manager:
+
+- Review Control Readiness
+- Upload and Approve Evidence
+- Generate and Review a Document
+- Maintain the SSP
+- Generate a Compliance Report
+
+Examples for Assessor Read-Only:
+
+- Navigate the Assessor View
+- Review Control Narratives
+- Preview and Download Evidence
+- Review the SSP
+- Export Assessment Reports
+
+--------------------------------------------------------------------
+11.5 BROWSE BY CATEGORY
+--------------------------------------------------------------------
+
+Use professional category cards.
+
+Each card should show:
+
+- icon
+- category title
+- concise description
+- applicable article count
+- right arrow
+- optional Recently Updated badge
+
+Only show categories with visible content.
+
+Recommended categories:
+
+- Getting Started
+- Dashboard
+- Controls & Requirements
+- Tasks
+- Evidence
+- Framework Crosswalk
+- DFARS Obligations
+- Monitoring Tracker
+- POA&M Management
+- Implementation Roadmap
+- Pre-Assessment
+- Documentation
+- System Security Plan
+- Reports & Exports
+- Users & Roles
+- Organizations & Modules
+- MFA, SSO & Sign-In
+- Certification & Sustainment
+- Workflows
+- Troubleshooting
+
+The visible subset depends on role, packages, and modules.
+
+Do not combine Documentation and SSP into one category now that they are separate modules.
+
+--------------------------------------------------------------------
+11.6 RECENTLY UPDATED
+--------------------------------------------------------------------
+
+Add:
+
+Recently Updated
+
+Show:
+
+- article title
+- category
+- last reviewed date
+- estimated reading time
+
+This section will make the Help Center feel maintained.
+
+--------------------------------------------------------------------
+11.7 SUPPORT PANEL
+--------------------------------------------------------------------
+
+Add a professional support panel:
+
+Still Need Help?
+
+“Submit a support request with the page, organization, and diagnostic context already included.”
+
+Primary button:
+
+Submit a Support Ticket
+
+Secondary link:
+
+View My Support Requests
+
+Do not direct the primary support action to info@carmetechnology.com.
+
+====================================================================
+12. PROFESSIONAL VISUAL DESIGN
+====================================================================
+
+Use:
+
+- soft slate/light-blue page background
+- white content cards
+- dark navy headings
+- Control HUB blue primary actions
+- restrained semantic colors
+- subtle borders
+- consistent 12–16px radii
+- modest shadows
+- clear spacing
+
+Avoid:
+
+- large empty gray areas
+- identical cards without hierarchy
+- excessive pale-blue boxes
+- disabled-looking content
+- all-uppercase section headings except small eyebrow labels
+- inconsistent tag styles
+
+Use:
+
+- one prominent hero/search area
+- clear sections
+- compact article cards
+- readable max-width content
+- professional typography
+
+====================================================================
+13. CAPITALIZATION AND TERMINOLOGY STANDARD
+====================================================================
+
+Create a centralized Help Center display-label map.
+
+Required display values:
+
+- CMMC
+- CMMC Level 1
+- CMMC Level 2
+- NIST SP 800-171
+- NIST SP 800-53
+- DFARS
+- FCI
+- CUI
+- SSP
+- POA&M
+- POA&Ms, when referring to multiple records
+- MFA
+- SSO
+- Microsoft Entra ID
+- Microsoft Sign-In
+- Pre-Assessment
+- Implementation Roadmap
+- Monitoring Tracker
+- Evidence Repository
+- Framework Crosswalk
+- Users & Roles
+- Organization Admin
+- Compliance Manager
+- IT Contributor
+- Assessor Read-Only
+- Global Admin
+- Platform Role
+- Organization Role
+- Sign-In
+- Password Reset
+
+Do not display raw tag keys such as:
+
+- dfars
+- users
+- documents
+- poams
+- preassessment
+- mfa-login
+
+Use Title Case for:
+
+- page titles
+- article titles
+- category names
+- button labels
+- section headings
+
+Use sentence case for:
+
+- summaries
+- descriptions
+- helper text
+- article paragraphs
+
+Use consistent hyphenation:
+
+- Pre-Assessment
+- Read-Only
+- Multi-Organization
+- Package-Aware
+- Role-Based
+
+====================================================================
+14. ARTICLE PAGE REDESIGN
+====================================================================
+
+Create a professional article layout.
+
+Header:
+
+- breadcrumb
+- category badge
+- article title
+- summary
+- role/package/module badges
+- estimated read time
+- last reviewed date
+
+Body layout on desktop:
+
+Left:
+- sticky table of contents
+
+Center:
+- article content
+
+Right or bottom:
+- related guides
+- article feedback
+- submit-ticket action
+
+Article body should support:
+
+- numbered steps
+- callout boxes
+- notes
+- warnings
+- role-specific notes
+- package-specific notes
+- screenshots
+- tables
+- checklists
+- related links
+- previous/next navigation
+
+Do not use one uninterrupted wall of text.
+
+Use callouts:
+
+Note
+
+Important
+
+Permission Required
+
+Package-Specific
+
+Security Warning
+
+Example
+
+At the end:
+
+Was This Helpful?
+
+- Yes
+- No
+
+If No:
+
+- Outdated
+- Steps Did Not Match
+- Missing Information
+- Permission Issue
+- Other
+
+Optional comment.
+
+Do not require a support ticket for simple article feedback.
+
+Add:
+
+Submit a Support Ticket About This Guide
+
+This should prefill:
+
+- article title
+- article URL
+- category
+
+====================================================================
+15. UPDATE CONTROL HELP CONTENT
+====================================================================
+
+Update Controls & Requirements guidance to include the current implemented views:
+
+- Domain Overview
+- Detailed Table
+- Readiness Matrix
+- Attention Needed
+- Package View, where applicable
+
+Update Control Detail guidance to include only tabs actually present.
+
+Potential current tabs include:
+
+- Implementation
+- Configure
+- Evidence
+- Tasks
+- Monitoring
+- POA&M
+- SSP
+
+Inspect the actual implementation before publishing.
+
+Explain:
+
+- implementation narratives
+- Configure steps
+- evidence upload/linking
+- task lifecycle
+- recurring monitoring
+- POA&M remediation
+- SSP narratives
+- control status
+- evidence readiness
+- package-aware control aliases
+
+Do not publish tab descriptions for tabs that do not exist.
+
+====================================================================
+16. UPDATE TASK HELP CONTENT
+====================================================================
+
+Add guides for:
+
+- Creating a Control Task
+- Opening and Viewing a Task
+- Editing and Assigning a Task
+- Starting a Task
+- Marking a Task Blocked
+- Resuming a Task
+- Closing a Task
+- Reopening a Task
+- Cancelling a Task
+- Understanding Active, Overdue, and Closed Tasks
+
+Only show actions the user is permitted to perform.
+
+Read-only roles should see:
+
+Viewing Tasks
+
+not editing or closure workflows.
+
+====================================================================
+17. UPDATE EVIDENCE HELP CONTENT
+====================================================================
+
+Create separate guides for:
+
+- Evidence Repository Overview
+- Uploading One Evidence File
+- Bulk Uploading Evidence
+- Linking One Evidence Record to Multiple Controls
+- Uploading Evidence from a Control
+- Linking Existing Evidence
+- Evidence Statuses
+- Reviewing and Approving Evidence
+- Previewing and Downloading Evidence
+- Bulk Downloading Evidence
+- Understanding Export Folder Structures and Manifests
+- Duplicate Evidence Handling, only when implemented
+- Evidence Versioning and Superseded Records, only when implemented
+- Troubleshooting Preview and Download Problems
+
+Do not document future AI evidence mapping until it is actually enabled.
+
+Do not mention external AI if it is not configured.
+
+====================================================================
+18. UPDATE IMPLEMENTATION ROADMAP HELP
+====================================================================
+
+Create package-aware guidance.
+
+Level 1:
+
+- Understanding the CMMC Level 1 Roadmap
+- Completing Level 1 Actions
+- Linking Level 1 Evidence
+- Understanding Level 1 Completion
+
+Level 2:
+
+- Understanding the Level 2 Roadmap
+- Priority Actions
+- Coverage Matrix
+- Roadmap Progress
+- Action Stages
+- Upload New Evidence
+- Link Existing Evidence
+- Validation
+- Submitting an Action for Review
+- Completing an Action
+
+Do not show L2 guidance to L1-only organizations.
+
+====================================================================
+19. UPDATE PRE-ASSESSMENT HELP
+====================================================================
+
+Separate configuration from use.
+
+Configuration articles:
+
+- What Is Pre-Assessment?
+- Enabling or Disabling Pre-Assessment
+- What Happens to Existing Data When Disabled?
+
+Visible only to users with configuration permission.
+
+Usage articles when enabled:
+
+- Connecting a Microsoft Tenant
+- Understanding Requested Permissions
+- Running a Scan
+- Scan Progress and Warnings
+- Assessment History
+- Findings
+- Evidence Requests
+- Recommended Roadmap
+- Exporting the Pre-Assessment Report
+- Troubleshooting Missing Intune or Graph Data
+- Reconnecting a Tenant
+
+Do not call the result an official CMMC score.
+
+====================================================================
+20. UPDATE DOCUMENTATION HELP
+====================================================================
+
+Use package-aware articles:
+
+- Documentation Center Overview
+- Browsing Template Categories
+- Level 1 versus Level 2 Templates
+- Viewing a Template
+- Generating a Document
+- Completing Required Placeholders
+- Previewing a Generated Document
+- Downloading DOCX and PDF
+- Submitting a Document for Review
+- Approving a Document
+- Requesting Changes
+- Resubmitting a Document
+- Understanding Draft, In Review, Changes Requested, Approved, and Archived
+
+Publish review-workflow articles only when the workflow is implemented and tested.
+
+====================================================================
+21. UPDATE SSP HELP
+====================================================================
+
+Create guides for:
+
+- SSP Overview
+- Level 1 FCI SSP Template
+- Level 2 NIST SP 800-171 SSP Template
+- Downloading a Blank SSP Template
+- Prefilling an SSP
+- Reviewing Organization Information
+- Reviewing Scope and Architecture
+- Reviewing Requirement Narratives
+- Reviewing Evidence References
+- Confirming Assessment Statuses
+- Downloading a Prefilled SSP
+- Uploading a Completed SSP
+- SSP Sections
+- SSP Control Mapping
+- SSP Export
+- Maintaining and Revising an SSP
+
+Show only package-compatible SSP guidance.
+
+====================================================================
+22. UPDATE USER AND ROLE HELP
+====================================================================
+
+Replace the current static User Roles Guide.
+
+Create:
+
+My Role in Control HUB
+
+This page should dynamically show:
+
+- Platform Role
+- Organization Role
+- Effective Role
+- Selected Organization
+- permission source
+- visible modules
+- permitted high-level actions
+- restricted actions
+
+Do not hardcode permissions that may not match the backend.
+
+Add role-specific guides:
+
+Global Admin:
+
+- Managing Organizations
+- Managing Users and Organization Access
+- Platform Role None
+- Effective Permissions
+- Protected Break-Glass Account
+- Organization Profile Editing
+- Package and Module Configuration
+
+Organization Admin:
+
+- Managing Organization Users
+- Assigning Organization Roles
+- Configuring Pre-Assessment
+- Organization-Level Review Workflows
+
+Normal users:
+
+- Understanding My Access
+- Switching Organizations
+- Why My Role Changes Between Organizations
+- Requesting Additional Access
+
+Update invitation help to reflect:
+
+- Platform Role
+- organization access
+- organization-specific roles
+- invitation expiration
+- password setup
+- Microsoft sign-in where applicable
+
+====================================================================
+23. VIDEO TUTORIALS
+====================================================================
+
+The current video page is mostly “Coming Soon.”
+
+Change the behavior:
+
+Published videos:
+
+- display normally
+- allow Watch
+- show duration
+- show category
+- show last reviewed
+
+Unpublished videos:
+
+- do not show as large disabled cards in the primary grid
+
+Optional section:
+
+Planned Tutorials
+
+Collapsed by default.
+
+If only one video is published:
+
+- display it as a featured tutorial
+- show relevant written guides beneath it
+- do not fill the page with disabled placeholders
+
+Replace:
+
+Request a Video
+
+with:
+
+Request a Tutorial
+
+This opens the Support Ticket form with:
+
+Category:
+Tutorial Request
+
+====================================================================
+24. REAL SUPPORT TICKET WORKFLOW
+====================================================================
+
+Add:
+
+Submit a Support Ticket
+
+Available to all active authenticated users.
+
+Do not use only a mailto link.
+
+Create a server-side ticket workflow.
+
+Suggested model:
+
+SupportTicket
+- id
+- ticket_number
+- organization_id
+- submitted_by_user_id
+- submitted_by_name
+- submitted_by_email
+- effective_role
+- category
+- priority
+- subject
+- description
+- related_module
+- current_page_url
+- article_id
+- environment
+- app_version
+- browser_summary
+- correlation_id
+- status
+- email_delivery_status
+- created_at
+- updated_at
+- resolved_at
+- closed_at
+
+SupportTicketAttachment
+- id
+- ticket_id
+- original_filename
+- storage_key
+- mime_type
+- file_size
+- checksum
+- uploaded_at
+
+Ticket statuses:
+
+- Submitted
+- In Review
+- Waiting on User
+- Resolved
+- Closed
+
+Email delivery statuses:
+
+- Pending
+- Delivered
+- Failed
+- Retry Scheduled
+
+====================================================================
+25. SUPPORT TICKET FORM
+====================================================================
+
+Fields:
+
+Required:
+
+- Subject
+- Category
+- Description
+
+Optional:
+
+- Priority
+- Related Module
+- Attachment
+- Error or Correlation ID
+
+Categories:
+
+- Sign-In, Password or MFA
+- Microsoft SSO
+- User Access or Role
+- Organization Setup
+- Controls or Frameworks
+- Tasks
+- Evidence Upload or Download
+- Monitoring Tracker
+- POA&M
+- Implementation Roadmap
+- Pre-Assessment
+- Documentation
+- SSP
+- Reports or Exports
+- Performance
+- Bug Report
+- Feature Request
+- Tutorial Request
+- Other
+
+Priority:
+
+- Low
+- Normal
+- High
+- Urgent
+
+Helper text for Urgent:
+
+“Use Urgent only when users cannot access Control HUB, critical data appears unavailable, or a severe production issue is occurring.”
+
+Automatically capture:
+
+- user name
+- user email
+- effective role
+- selected organization
+- current page
+- application environment
+- application version
+- browser and operating-system summary
+- timestamp
+
+Do not automatically capture:
+
+- passwords
+- tokens
+- file contents
+- page HTML
+- evidence contents
+- console contents
+- Microsoft tenant secrets
+
+Add an optional checkbox:
+
+Include Basic Diagnostic Context
+
+Explain exactly what metadata is included.
+
+====================================================================
+26. SUPPORT TICKET SECURITY NOTICE
+====================================================================
+
+Display prominently:
+
+“Do not include Controlled Unclassified Information, passwords, secrets, access tokens, recovery keys, or sensitive contract data in this support request.”
+
+Attachment allowlist:
+
+- PNG
+- JPG/JPEG
+- PDF
+- TXT
+
+Maximum:
+
+10 MB per file
+
+Maximum:
+
+3 attachments
+
+Reject:
+
+- executable files
+- scripts
+- archives
+- HTML
+- files with mismatched MIME type
+- empty files
+
+Store attachments privately.
+
+No public attachment URLs.
+
+====================================================================
+27. SUPPORT EMAIL DELIVERY
+====================================================================
+
+Use the existing server-side Resend integration.
+
+Send to:
+
+support@carmetechnology.com
+
+Recommended From:
+
+Control HUB Support <noreply@carmetechnology.com>
+
+Use the verified sender already configured in production.
+
+Set Reply-To:
+
+the submitting user’s email address
+
+Subject format:
+
+[Control HUB Support] [Ticket Number] [Priority] Subject
+
+Example:
+
+[Control HUB Support] [CH-20260803-0042] [High] Evidence Download Failure
+
+Email body should include:
+
+- Ticket Number
+- Organization
+- Submitted By
+- Email
+- Effective Role
+- Category
+- Priority
+- Subject
+- Description
+- Related Module
+- Current Page
+- Environment
+- Application Version
+- Browser Summary
+- Correlation ID
+- Attachment list
+- Submission timestamp
+
+Do not include passwords, tokens, or raw application logs.
+
+Send a confirmation email to the submitting user.
+
+Confirmation subject:
+
+Control HUB Support Request Received — [Ticket Number]
+
+Confirmation body:
+
+- ticket number
+- subject
+- submission date
+- support address
+- expected next step
+- copy of the non-sensitive submitted description
+
+====================================================================
+28. EMAIL FAILURE HANDLING
+====================================================================
+
+Do not show a false success when email delivery fails.
+
+Preferred workflow:
+
+1. Create the ticket transactionally.
+2. Attempt support email delivery.
+3. Record delivery status.
+4. Retry failed delivery through a controlled background retry process.
+5. Show the user the actual result.
+
+Successful message:
+
+“Support request submitted successfully.”
+
+Show:
+
+- Ticket Number
+- Submitted Date
+- View My Support Requests
+
+Delivery delayed:
+
+“Your support request was recorded, but email delivery is delayed. Support delivery will be retried.”
+
+Failed record creation:
+
+“Your support request could not be submitted. No ticket was created.”
+
+Do not expose Resend API details or stack traces.
+
+====================================================================
+29. MY SUPPORT REQUESTS
+====================================================================
+
+Add:
+
+My Support Requests
+
+Accessible from:
+
+- Help Center support panel
+- ticket-success page
+
+Users may view only tickets they submitted unless they have an explicit support-management capability.
+
+Show:
+
+- Ticket Number
+- Subject
+- Category
+- Priority
+- Submitted Date
+- Status
+- Email Delivery Status
+- Last Updated
+
+Platform Global Admin may have:
+
+View All Support Requests
+
+Organization Admin should not automatically see tickets submitted by every organization user unless a separate permission explicitly grants that access.
+
+====================================================================
+30. SUPPORT-TICKET PERMISSIONS
+====================================================================
+
+Capabilities:
+
+- support.tickets.create
+- support.tickets.view_own
+- support.tickets.view_all
+- support.tickets.update_status
+- support.tickets.download_attachments
+
+All active authenticated users:
+
+- create
+- view own
+
+Platform Global Admin:
+
+- view all
+- update status
+- download attachments
+
+Do not expose one organization’s support tickets to another organization.
+
+Backend enforcement is required.
+
+====================================================================
+31. HELP CONTENT MAINTENANCE
+====================================================================
+
+Every published article must include:
+
+- Content Version
+- Last Reviewed Date
+- Last Reviewed By
+- Applicable Roles or Capabilities
+- Applicable Packages
+- Applicable Modules
+
+Add a Global Admin-only Help Content Health report.
+
+Show:
+
+- published articles
+- articles not reviewed within 90 days
+- broken application links
+- broken related-article links
+- articles referencing disabled/unimplemented features
+- articles with no audience rules
+- articles with no package/module rules
+- inconsistent capitalization
+- unpublished videos shown in primary navigation
+- empty categories
+- search index failures
+
+Do not expose this report to normal users.
+
+====================================================================
+32. NO “COMING SOON” AS PRIMARY CONTENT
+====================================================================
+
+Do not publish a help article, workflow, or video as a prominent user-facing item when the underlying functionality is not complete.
+
+Use:
+
+- Draft
+- In Review
+- Published
+- Archived
+
+Only Published content appears to users.
+
+Do not make the Help Center look unfinished through numerous disabled cards.
+
+====================================================================
+33. LOADING, EMPTY, AND ERROR STATES
+====================================================================
+
+The FAQ page in the video briefly displays a large blank skeleton area.
+
+Provide professional states.
+
+Loading:
+
+- compact skeleton rows matching actual content
+- no oversized empty blocks
+
+Empty:
+
+“No help content is available for this category and current role.”
+
+Actions:
+
+- Return to Help Center
+- Submit a Support Ticket
+
+Error:
+
+“Help content could not be loaded.”
+
+Actions:
+
+- Retry
+- Submit a Support Ticket
+
+Do not leave an indefinite skeleton.
+
+====================================================================
+34. RESPONSIVE DESIGN
+====================================================================
+
+Desktop:
+
+- centered maximum-width layout
+- category grid
+- role context
+- article table of contents
+
+Tablet:
+
+- two-column category grid
+- article table of contents collapses
+
+Mobile:
+
+- one-column layout
+- context badges wrap
+- search remains full width
+- support form fits viewport
+- no horizontal scrolling
+- article navigation remains accessible
+
+====================================================================
+35. ACCESSIBILITY
+====================================================================
+
+Requirements:
+
+- semantic headings
+- one H1 per page
+- proper breadcrumb navigation
+- keyboard-accessible cards
+- visible focus
+- accessible accordion controls
+- screen-reader labels
+- status not conveyed only by color
+- proper link names
+- support form field labels
+- validation messages associated with fields
+- modal focus trap
+- Escape closes modal where appropriate
+- WCAG AA contrast
+- minimum 44px touch targets
+
+====================================================================
+36. AUDIT LOGGING
+====================================================================
+
+Audit:
+
+- support ticket submitted
+- support email delivered
+- support email failed
+- support email retried
+- ticket status changed
+- support attachment downloaded
+- unauthorized ticket access attempted
+- help content published
+- help content archived
+- article audience rules changed
+- article package/module rules changed
+
+Do not create high-volume audit events for every ordinary article view unless analytics are explicitly enabled.
+
+Do not log raw help-search terms if they may contain sensitive information.
+
+====================================================================
+37. PRODUCTION DATA SAFETY
+====================================================================
+
+Do not:
+
+- change user roles
+- change organization memberships
+- change package assignments
+- enable or disable modules
+- modify controls
+- modify Evidence
+- modify SSP
+- modify Monitoring
+- modify POA&M
+- modify Roadmap
+- modify Pre-Assessment
+- modify Documentation
+- modify Reports
+- expose cross-organization data
+- delete current help content without preserving it
+
+Archive or redirect outdated help articles rather than deleting them immediately.
+
+====================================================================
+38. AUTOMATED TESTS
+====================================================================
+
+Add frontend and backend tests.
+
+Role tests:
+
+- Global Admin sees platform-administration help.
+- Organization Admin does not see Global Admin-only help.
+- Compliance Manager sees compliance-management workflows.
+- IT Contributor does not see evidence-approval help without permission.
+- Reviewer sees review workflows.
+- Executive Viewer sees read-only guidance.
+- Assessor Read-Only sees assessor guidance and no editing workflows.
+- Platform Role None uses the selected organization role.
+- Switching organizations refreshes help content.
+
+Package tests:
+
+- L1 organization does not show L2/CUI-only help.
+- L2 organization receives L2 help.
+- DFARS help is hidden when DFARS is not active.
+- package-specific search results are filtered.
+
+Module tests:
+
+- Pre-Assessment usage help is hidden when disabled.
+- authorized Organization Admin can still see enable/disable help.
+- Certification help is hidden when the module is not active.
+- Roadmap help uses the correct L1 or L2 profile.
+
+Search tests:
+
+- unauthorized articles do not appear.
+- disabled-module articles do not appear.
+- package-incompatible articles do not appear.
+- direct URLs are also protected.
+
+Capitalization tests:
+
+- DFARS displays uppercase.
+- POA&M displays correctly.
+- MFA and SSO display uppercase.
+- Pre-Assessment is hyphenated.
+- Microsoft Entra ID is capitalized.
+- raw tag keys never appear.
+
+Support tests:
+
+- ticket is created.
+- ticket number is generated.
+- email goes to support@carmetechnology.com.
+- Reply-To is the submitting user.
+- confirmation email is sent.
+- delivery failure is recorded.
+- attachment validation works.
+- cross-organization ticket access is denied.
+- ticket form warns against submitting CUI and secrets.
+
+Visual/accessibility tests:
+
+- Help landing page is responsive.
+- category cards are keyboard accessible.
+- FAQ accordions work with keyboard.
+- support modal traps focus.
+- article table of contents works.
+- no indefinite loading skeleton appears.
+
+====================================================================
+39. ACCEPTANCE TESTS
+====================================================================
+
+Test A — Global Admin:
+
+Sign in as Platform Global Admin.
+
+Expected:
+
+- platform-administration help is available
+- all relevant module/package guides are accessible
+- role context says Platform Global Admin
+- lowercase raw tags are not displayed
+
+Test B — Assessor Read-Only:
+
+Sign in as Assessor Read-Only.
+
+Expected:
+
+- recommended guides focus on controls, evidence, SSP, and reports
+- no organization/user-management guides appear
+- no upload/edit/approve workflows appear
+- direct admin article URL is denied
+
+Test C — Multi-Organization User:
+
+User is Organization Admin in CarmeTechnology and Compliance Manager in APEX Solutions.
+
+Expected:
+
+- Help Center content changes when organization changes
+- CarmeTechnology Organization Admin guidance does not leak into APEX Solutions
+
+Test D — CMMC Level 1:
+
+Select a Level 1-only organization without DFARS.
+
+Expected:
+
+- L1/FCI guidance appears
+- L2/CUI guidance does not appear
+- DFARS Contract Obligations is not listed as Popular
+- SSP and Roadmap help are Level 1-specific
+
+Test E — Pre-Assessment Disabled:
+
+Expected:
+
+- ordinary Pre-Assessment usage articles are hidden
+- Organization Admin with configuration permission may see how to enable it
+
+Test F — Help Landing Page:
+
+Expected:
+
+- professional hero/search area
+- personalized role and organization context
+- Recommended for You
+- relevant category cards
+- Recently Updated
+- Submit a Support Ticket
+- no large unfinished areas
+
+Test G — Article Page:
+
+Expected:
+
+- professional typography
+- breadcrumb
+- table of contents
+- role/package badges
+- last reviewed date
+- callouts
+- related guides
+- feedback
+- submit-ticket action
+
+Test H — Support Ticket:
+
+Submit a High-priority Evidence ticket.
+
+Expected:
+
+- ticket number is created
+- support@carmetechnology.com receives the email
+- submitting user receives confirmation
+- ticket appears under My Support Requests
+- no sensitive credentials are included
+
+Test I — Email Failure:
+
+Simulate Resend failure.
+
+Expected:
+
+- ticket is preserved with delivery status
+- user receives an accurate delivery-delay message
+- retry process is recorded
+- no false Delivered status is shown
+
+Test J — Production Safety:
+
+No control, evidence, SSP, monitoring, POA&M, roadmap, package, module, user, role, or organization data is changed.
+
+====================================================================
+40. MOST IMPORTANT RULES
+====================================================================
+
+1. Help content must reflect the user’s effective role in the selected organization.
+
+2. Help content must also respect active packages and enabled modules.
+
+3. Search, categories, FAQs, videos, workflows, related articles, and direct URLs must all use the same visibility rules.
+
+4. Do not document features that are not implemented and tested.
+
+5. Support requests must be submitted through a real server-side ticket workflow and sent to support@carmetechnology.com.
+
+6. Do not permit CUI, credentials, secrets, or tokens in support tickets.
+
+7. Use professional capitalization and never display raw internal tag keys.

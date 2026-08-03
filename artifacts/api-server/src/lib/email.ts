@@ -437,3 +437,176 @@ export async function sendDocumentDecisionEmail(opts: {
 
   logger.info({ authorEmail, documentId, decision }, "Document decision email sent");
 }
+
+// ─── Support ticket — internal notification ────────────────────────────────────
+
+export async function sendSupportTicketEmail(opts: {
+  ticketNumber: string;
+  subject: string;
+  category: string;
+  priority: string;
+  description: string;
+  submittedByName: string;
+  submittedByEmail: string;
+  effectiveRole: string | null;
+  organizationName: string | null;
+  relatedModule: string | null;
+  currentPageUrl: string | null;
+  environment: string | null;
+  browserSummary: string | null;
+  correlationId: string | null;
+  createdAt: Date;
+}): Promise<void> {
+  const {
+    ticketNumber, subject, category, priority, description,
+    submittedByName, submittedByEmail, effectiveRole, organizationName,
+    relatedModule, currentPageUrl, environment, browserSummary,
+    correlationId, createdAt,
+  } = opts;
+
+  const priorityLabel: Record<string, string> = {
+    low: "Low",
+    normal: "Normal",
+    high: "HIGH",
+    urgent: "URGENT",
+  };
+  const priorityDisplay = priorityLabel[priority] ?? priority.toUpperCase();
+
+  const optionalRows = [
+    organizationName ? `<tr><td style="font-weight:600;padding:4px 0;width:160px;">Organization</td><td>${escapeHtml(organizationName)}</td></tr>` : "",
+    effectiveRole ? `<tr><td style="font-weight:600;padding:4px 0;">User Role</td><td>${escapeHtml(effectiveRole)}</td></tr>` : "",
+    relatedModule ? `<tr><td style="font-weight:600;padding:4px 0;">Related Module</td><td>${escapeHtml(relatedModule)}</td></tr>` : "",
+    currentPageUrl ? `<tr><td style="font-weight:600;padding:4px 0;">Page URL</td><td style="word-break:break-all;">${escapeHtml(currentPageUrl)}</td></tr>` : "",
+    environment ? `<tr><td style="font-weight:600;padding:4px 0;">Environment</td><td>${escapeHtml(environment)}</td></tr>` : "",
+    browserSummary ? `<tr><td style="font-weight:600;padding:4px 0;">Browser</td><td>${escapeHtml(browserSummary)}</td></tr>` : "",
+    correlationId ? `<tr><td style="font-weight:600;padding:4px 0;">Correlation ID</td><td style="font-family:monospace;">${escapeHtml(correlationId)}</td></tr>` : "",
+  ].join("");
+
+  const html = emailShell(`
+    <h2 style="color:#111827;margin-bottom:8px;">[Control HUB Support] New Ticket — ${escapeHtml(ticketNumber)}</h2>
+    <div style="background:#fef9c3;border:1px solid #fde047;border-radius:6px;padding:10px 14px;margin-bottom:16px;">
+      <p style="color:#713f12;font-weight:700;margin:0;font-size:13px;">⚠ Do not reply with CUI, passwords, access tokens, or sensitive contract data.</p>
+    </div>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;margin-bottom:16px;">
+      <table style="width:100%;font-size:13px;color:#374151;">
+        <tr><td style="font-weight:600;padding:4px 0;width:160px;">Ticket Number</td><td style="font-family:monospace;font-weight:700;">${escapeHtml(ticketNumber)}</td></tr>
+        <tr><td style="font-weight:600;padding:4px 0;">Submitted At</td><td>${escapeHtml(createdAt.toUTCString())}</td></tr>
+        <tr><td style="font-weight:600;padding:4px 0;">Submitted By</td><td>${escapeHtml(submittedByName)} &lt;${escapeHtml(submittedByEmail)}&gt;</td></tr>
+        <tr><td style="font-weight:600;padding:4px 0;">Category</td><td>${escapeHtml(category)}</td></tr>
+        <tr><td style="font-weight:600;padding:4px 0;">Priority</td><td><strong>${escapeHtml(priorityDisplay)}</strong></td></tr>
+        <tr><td style="font-weight:600;padding:4px 0;">Subject</td><td>${escapeHtml(subject)}</td></tr>
+        ${optionalRows}
+      </table>
+    </div>
+    <h3 style="color:#374151;font-size:14px;margin-bottom:6px;">Description</h3>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;margin-bottom:16px;white-space:pre-wrap;font-size:13px;color:#374151;">${escapeHtml(description)}</div>
+    <p style="color:#9ca3af;font-size:12px;">Reply to this email to respond to the user. Their email is: <strong>${escapeHtml(submittedByEmail)}</strong></p>
+  `);
+
+  const text = [
+    `[Control HUB Support] New Ticket: ${ticketNumber}`,
+    `WARNING: Do not reply with CUI, passwords, tokens, or sensitive data.`,
+    ``,
+    `Ticket: ${ticketNumber}`,
+    `Submitted: ${createdAt.toUTCString()}`,
+    `From: ${submittedByName} <${submittedByEmail}>`,
+    `Category: ${category}`,
+    `Priority: ${priorityDisplay}`,
+    `Subject: ${subject}`,
+    organizationName ? `Organization: ${organizationName}` : "",
+    effectiveRole ? `Role: ${effectiveRole}` : "",
+    relatedModule ? `Module: ${relatedModule}` : "",
+    currentPageUrl ? `Page: ${currentPageUrl}` : "",
+    browserSummary ? `Browser: ${browserSummary}` : "",
+    correlationId ? `Correlation ID: ${correlationId}` : "",
+    ``,
+    `Description:`,
+    description,
+  ].filter((l) => l !== undefined).join("\n");
+
+  const p = getProvider();
+  const from = getFromAddress();
+
+  if (p === "resend") {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) throw new Error("RESEND_API_KEY secret is not set");
+    const client = new Resend(apiKey);
+    const { error } = await client.emails.send({
+      from,
+      to: ["support@carmetechnology.com"],
+      replyTo: submittedByEmail,
+      subject: `[Control HUB Support] [${ticketNumber}] [${priorityDisplay}] ${subject}`,
+      html,
+      text,
+    });
+    if (error) throw new Error(`Resend error: ${error.message}`);
+  } else if (p === "smtp") {
+    const transport = createSmtpTransport();
+    await transport.sendMail({
+      from,
+      to: "support@carmetechnology.com",
+      replyTo: submittedByEmail,
+      subject: `[Control HUB Support] [${ticketNumber}] [${priorityDisplay}] ${subject}`,
+      html,
+      text,
+    });
+  } else {
+    throw new Error("Email is not configured.");
+  }
+
+  logger.info({ ticketNumber, submittedByEmail }, "Support ticket email sent to team");
+}
+
+// ─── Support ticket — user confirmation ───────────────────────────────────────
+
+export async function sendSupportTicketConfirmation(opts: {
+  ticketNumber: string;
+  subject: string;
+  toEmail: string;
+  toName: string;
+  createdAt: Date;
+}): Promise<void> {
+  const { ticketNumber, subject, toEmail, toName, createdAt } = opts;
+
+  const html = emailShell(`
+    <h2 style="color:#111827;margin-bottom:8px;">Support Request Received</h2>
+    <p style="color:#374151;margin-bottom:8px;">Hi ${escapeHtml(toName)},</p>
+    <p style="color:#374151;margin-bottom:16px;">Thank you for reaching out. We've received your support request and will get back to you as soon as possible.</p>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin-bottom:16px;">
+      <table style="width:100%;font-size:13px;color:#374151;">
+        <tr><td style="font-weight:600;padding:4px 0;width:140px;">Ticket Number</td><td style="font-family:monospace;font-weight:700;">${escapeHtml(ticketNumber)}</td></tr>
+        <tr><td style="font-weight:600;padding:4px 0;">Subject</td><td>${escapeHtml(subject)}</td></tr>
+        <tr><td style="font-weight:600;padding:4px 0;">Submitted</td><td>${escapeHtml(createdAt.toUTCString())}</td></tr>
+      </table>
+    </div>
+    <p style="color:#374151;font-size:13px;">You will receive a reply at this email address (<strong>${escapeHtml(toEmail)}</strong>) from <strong>support@carmetechnology.com</strong>. Please check your spam folder if you do not receive a reply within one business day.</p>
+    <div style="background:#fef9c3;border:1px solid #fde047;border-radius:6px;padding:10px 14px;margin-top:16px;">
+      <p style="color:#713f12;font-weight:600;margin:0;font-size:12px;">🔒 Security Notice: For security, do not reply with Controlled Unclassified Information, passwords, access tokens, or sensitive contract data.</p>
+    </div>
+  `);
+
+  const text = [
+    `Support Request Received — ${ticketNumber}`,
+    ``,
+    `Hi ${toName},`,
+    ``,
+    `Thank you for contacting Control HUB Support. Your request has been received.`,
+    ``,
+    `Ticket Number: ${ticketNumber}`,
+    `Subject: ${subject}`,
+    `Submitted: ${createdAt.toUTCString()}`,
+    ``,
+    `You will receive a reply at ${toEmail} from support@carmetechnology.com.`,
+    ``,
+    `SECURITY NOTICE: Do not reply with Controlled Unclassified Information, passwords, access tokens, or sensitive contract data.`,
+  ].join("\n");
+
+  await sendEmail({
+    to: toEmail,
+    subject: `Control HUB Support Request Received — ${ticketNumber}`,
+    html,
+    text,
+  });
+
+  logger.info({ ticketNumber, toEmail }, "Support ticket confirmation email sent to user");
+}

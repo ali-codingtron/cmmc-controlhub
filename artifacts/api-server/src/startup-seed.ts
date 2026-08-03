@@ -406,31 +406,31 @@ async function migrateAuditEnum() {
 
 async function seedHelpContent() {
   const [{ value: catCount }] = await db.select({ value: count() }).from(helpCategoriesTable);
-  const [{ value: faqCount }] = await db.select({ value: count() }).from(faqItemsTable);
-  if (catCount > 0 && faqCount > 0) return;
 
-  logger.info("Seeding help center content...");
+  logger.info("Seeding / updating help center content...");
 
-  if (faqCount === 0) {
-    for (const faq of FAQ_ITEMS) {
-      await db.insert(faqItemsTable).values({
-        id: randomUUID(),
-        question: faq.question,
-        answer: faq.answer,
-        category: faq.category,
-        sortOrder: faq.sortOrder,
-        status: "published",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }).onConflictDoNothing();
-    }
-  }
+  // ── Remove obsolete category names replaced by spec v2 ────────────────────────
+  const OBSOLETE_CATEGORIES = [
+    "Controls",             // → Controls & Requirements
+    "Documentation & SSP",  // → split into Documentation + System Security Plan
+    "POA&M",                // → POA&M Management
+    "Reports",              // → Reports & Exports
+    "MFA & Login Help",     // → MFA, SSO & Sign-In
+  ];
+  await pool.query(
+    `DELETE FROM help_categories WHERE name = ANY($1)`,
+    [OBSOLETE_CATEGORIES],
+  );
 
-  if (catCount > 0) return;
-
+  // ── Categories: insert new ones, upsert description/icon/sortOrder on conflict ──
   const catIdMap: Record<string, string> = {};
+
+  // Pre-load existing category IDs so the map works even when categories already exist
+  const existingCats = await db.select({ id: helpCategoriesTable.id, name: helpCategoriesTable.name }).from(helpCategoriesTable);
+  for (const ec of existingCats) catIdMap[ec.name] = ec.id;
+
   for (const cat of HELP_CATEGORIES) {
-    const id = randomUUID();
+    const id = catIdMap[cat.name] ?? randomUUID();
     catIdMap[cat.name] = id;
     await db.insert(helpCategoriesTable).values({
       id,
@@ -442,30 +442,67 @@ async function seedHelpContent() {
     }).onConflictDoNothing();
   }
 
+  // ── Articles: upsert — insert new, update content/metadata when contentVersion is newer ──
   for (const article of HELP_ARTICLES) {
+    const categoryId = catIdMap[article.categoryName] ?? null;
     await db.insert(helpArticlesTable).values({
       id: randomUUID(),
       slug: article.slug,
       title: article.title,
-      categoryId: catIdMap[article.categoryName] ?? null,
+      categoryId,
       module: article.module ?? null,
       content: article.content,
       summary: article.summary,
       keywords: article.keywords,
       roleVisibility: article.roleVisibility ?? null,
+      requiredCapabilities: article.requiredCapabilities ?? null,
+      packageKeys: article.packageKeys ?? null,
+      moduleKeys: article.moduleKeys ?? null,
       sortOrder: article.sortOrder,
+      featured: article.featured ?? false,
+      popular: article.popular ?? false,
+      contentVersion: article.contentVersion ?? "1.0",
+      estimatedReadMinutes: article.estimatedReadMinutes ?? 3,
+      lastReviewedAt: article.lastReviewedAt ?? null,
       status: "published",
       createdAt: new Date(),
       updatedAt: new Date(),
-    }).onConflictDoNothing();
+    }).onConflictDoUpdate({
+      target: helpArticlesTable.slug,
+      set: {
+        title: article.title,
+        categoryId,
+        module: article.module ?? null,
+        content: article.content,
+        summary: article.summary,
+        keywords: article.keywords,
+        roleVisibility: article.roleVisibility ?? null,
+        requiredCapabilities: article.requiredCapabilities ?? null,
+        packageKeys: article.packageKeys ?? null,
+        moduleKeys: article.moduleKeys ?? null,
+        sortOrder: article.sortOrder,
+        featured: article.featured ?? false,
+        popular: article.popular ?? false,
+        contentVersion: article.contentVersion ?? "1.0",
+        estimatedReadMinutes: article.estimatedReadMinutes ?? 3,
+        lastReviewedAt: article.lastReviewedAt ?? null,
+        status: "published",
+        updatedAt: new Date(),
+      },
+    });
   }
 
+  // ── FAQs: upsert by question text (no unique constraint on question — use onConflictDoNothing
+  //    for new rows; existing rows are left as-is since there is no unique slug for FAQs)
   for (const faq of FAQ_ITEMS) {
     await db.insert(faqItemsTable).values({
       id: randomUUID(),
       question: faq.question,
       answer: faq.answer,
       category: faq.category,
+      requiredCapabilities: faq.requiredCapabilities ?? null,
+      packageKeys: faq.packageKeys ?? null,
+      moduleKey: faq.moduleKey ?? null,
       sortOrder: faq.sortOrder,
       status: "published",
       createdAt: new Date(),
@@ -473,7 +510,11 @@ async function seedHelpContent() {
     }).onConflictDoNothing();
   }
 
-  logger.info("Help center content seeded.");
+  if (catCount === 0) {
+    logger.info("Help center content seeded (first run).");
+  } else {
+    logger.info("Help center content updated (upsert pass complete).");
+  }
 }
 
 /**
@@ -658,18 +699,8 @@ async function seedComplianceFrameworks() {
 }
 
 async function seedComplianceFrameworkHelpArticles() {
-  const SLUGS = COMPLIANCE_FRAMEWORK_ARTICLES.map((a) => a.slug);
-  const existing = await db
-    .select({ slug: helpArticlesTable.slug })
-    .from(helpArticlesTable)
-    .where(
-      sql`${helpArticlesTable.slug} = ANY(ARRAY[${sql.raw(SLUGS.map((s) => `'${s}'`).join(","))}])`
-    );
-  const existingSlugs = new Set(existing.map((r) => r.slug));
-  const toInsert = COMPLIANCE_FRAMEWORK_ARTICLES.filter((a) => !existingSlugs.has(a.slug));
-  if (!toInsert.length) return;
-
-  for (const article of toInsert) {
+  // Upsert all compliance framework articles — insert new, update existing when content changes.
+  for (const article of COMPLIANCE_FRAMEWORK_ARTICLES) {
     const [cat] = await db
       .select({ id: helpCategoriesTable.id })
       .from(helpCategoriesTable)
@@ -680,6 +711,7 @@ async function seedComplianceFrameworkHelpArticles() {
       continue;
     }
     await db.insert(helpArticlesTable).values({
+      id: randomUUID(),
       slug: article.slug,
       title: article.title,
       categoryId: cat.id,
@@ -688,14 +720,43 @@ async function seedComplianceFrameworkHelpArticles() {
       summary: article.summary,
       keywords: article.keywords ?? null,
       roleVisibility: article.roleVisibility ?? null,
+      requiredCapabilities: article.requiredCapabilities ?? null,
+      packageKeys: article.packageKeys ?? null,
+      moduleKeys: article.moduleKeys ?? null,
       sortOrder: article.sortOrder,
+      featured: article.featured ?? false,
+      popular: article.popular ?? false,
+      contentVersion: article.contentVersion ?? "1.0",
+      estimatedReadMinutes: article.estimatedReadMinutes ?? 3,
+      lastReviewedAt: article.lastReviewedAt ?? null,
+      status: "published",
       createdAt: new Date(),
       updatedAt: new Date(),
+    }).onConflictDoUpdate({
+      target: helpArticlesTable.slug,
+      set: {
+        title: article.title,
+        categoryId: cat.id,
+        module: article.module ?? null,
+        content: article.content,
+        summary: article.summary,
+        keywords: article.keywords ?? null,
+        roleVisibility: article.roleVisibility ?? null,
+        requiredCapabilities: article.requiredCapabilities ?? null,
+        packageKeys: article.packageKeys ?? null,
+        moduleKeys: article.moduleKeys ?? null,
+        sortOrder: article.sortOrder,
+        featured: article.featured ?? false,
+        popular: article.popular ?? false,
+        contentVersion: article.contentVersion ?? "1.0",
+        estimatedReadMinutes: article.estimatedReadMinutes ?? 3,
+        lastReviewedAt: article.lastReviewedAt ?? null,
+        status: "published",
+        updatedAt: new Date(),
+      },
     });
   }
-  if (toInsert.length > 0) {
-    logger.info({ count: toInsert.length }, "Seeded compliance framework help articles");
-  }
+  logger.info({ count: COMPLIANCE_FRAMEWORK_ARTICLES.length }, "Compliance framework help articles upserted");
 }
 
 async function seedCrosswalkRequirements() {
@@ -1322,6 +1383,73 @@ async function migrateDocumentReviewRequestsTable() {
   }
 }
 
+// ── Help Center schema migrations ─────────────────────────────────────────────
+
+async function migrateHelpNewColumns() {
+  const stmts = [
+    // help_articles new columns
+    `ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS required_capabilities text[]`,
+    `ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS package_keys text[]`,
+    `ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS module_keys text[]`,
+    `ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS featured boolean NOT NULL DEFAULT false`,
+    `ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS popular boolean NOT NULL DEFAULT false`,
+    `ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS content_version text NOT NULL DEFAULT '1.0'`,
+    `ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS estimated_read_minutes integer NOT NULL DEFAULT 3`,
+    `ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS last_reviewed_at timestamptz`,
+    `ALTER TABLE help_articles ADD COLUMN IF NOT EXISTS last_reviewed_by text`,
+    // faq_items new columns
+    `ALTER TABLE faq_items ADD COLUMN IF NOT EXISTS required_capabilities text[]`,
+    `ALTER TABLE faq_items ADD COLUMN IF NOT EXISTS package_keys text[]`,
+    `ALTER TABLE faq_items ADD COLUMN IF NOT EXISTS module_key text`,
+    // support_tickets table
+    `CREATE TABLE IF NOT EXISTS support_tickets (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      ticket_number text NOT NULL UNIQUE,
+      organization_id uuid,
+      submitted_by_user_id uuid NOT NULL,
+      submitted_by_name text NOT NULL,
+      submitted_by_email text NOT NULL,
+      effective_role text,
+      category text NOT NULL,
+      priority text NOT NULL DEFAULT 'normal',
+      subject text NOT NULL,
+      description text NOT NULL,
+      related_module text,
+      current_page_url text,
+      article_id uuid,
+      environment text,
+      app_version text,
+      browser_summary text,
+      correlation_id text,
+      include_diagnostics boolean NOT NULL DEFAULT false,
+      status text NOT NULL DEFAULT 'submitted',
+      email_delivery_status text NOT NULL DEFAULT 'pending',
+      created_at timestamptz NOT NULL DEFAULT NOW(),
+      updated_at timestamptz NOT NULL DEFAULT NOW(),
+      resolved_at timestamptz,
+      closed_at timestamptz
+    )`,
+    // support_ticket_attachments table
+    `CREATE TABLE IF NOT EXISTS support_ticket_attachments (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      ticket_id uuid NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+      original_filename text NOT NULL,
+      storage_key text NOT NULL,
+      mime_type text NOT NULL,
+      file_size integer NOT NULL,
+      checksum text,
+      uploaded_at timestamptz NOT NULL DEFAULT NOW()
+    )`,
+  ];
+  for (const stmt of stmts) {
+    try {
+      await db.execute(sql.raw(stmt));
+    } catch (_e) {
+      // Already exists — safe to ignore
+    }
+  }
+}
+
 // ── Package applicability seed ─────────────────────────────────────────────────
 // Tags all 67 existing library templates with their package applicability.
 // Idempotent: skips templates that already have rows in doc_template_packages.
@@ -1812,6 +1940,7 @@ export async function runStartupSeed() {
     await seedDomainControls();
     await seedInitialAdmin();
     await seedBreakGlassAccount();
+    await migrateHelpNewColumns();
     await seedDocumentTemplates();
     await seedMonitoringItems();
     await seedControlConfigure();

@@ -75,6 +75,8 @@ import HelpArticle from "@/pages/help-article";
 import HelpFaq from "@/pages/help-faq";
 import HelpVideos from "@/pages/help-videos";
 import HelpAdmin from "@/pages/help-admin";
+import HelpSupportTicket from "@/pages/help-support-ticket";
+import HelpMyTickets from "@/pages/help-my-tickets";
 import DfarsObligations from "@/pages/dfars-obligations";
 import Crosswalk from "@/pages/crosswalk";
 import AdminPackageMigration from "@/pages/admin-package-migration";
@@ -309,6 +311,8 @@ function AppRoutes() {
               <Route path="/help/faq" component={HelpFaq} />
               <Route path="/help/videos" component={HelpVideos} />
               <Route path="/help/admin" component={HelpAdmin} />
+              <Route path="/help/support-ticket" component={HelpSupportTicket} />
+              <Route path="/help/my-tickets" component={HelpMyTickets} />
               <Route path="/help" component={Help} />
               <Route component={NotFound} />
             </Switch>
