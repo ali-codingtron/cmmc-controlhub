@@ -552,7 +552,7 @@ export default function DocumentationCenter() {
             href: undefined,
           },
           { label: "Draft Documents", value: totalDraft, icon: FileText, color: "text-gray-600 bg-gray-50", href: undefined },
-          { label: "Pending Review", value: totalPending, icon: Clock, color: "text-amber-600 bg-amber-50", href: "/documents/reviews" },
+          { label: "Pending Review", value: totalPending, icon: Clock, color: "text-amber-600 bg-amber-50", href: undefined },
           { label: "Approved / Active", value: totalApproved, icon: CheckCircle2, color: "text-green-600 bg-green-50", href: undefined },
           { label: "Total Generated", value: totalDocs, icon: Layers, color: "text-purple-600 bg-purple-50", href: undefined },
         ].map((card) => (

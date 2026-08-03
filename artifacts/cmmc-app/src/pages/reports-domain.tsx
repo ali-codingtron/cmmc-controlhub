@@ -305,7 +305,7 @@ export default function ReportsDomain() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
-              CMMC ML2 = 110 controls, 1 point each. Score reflects currently implemented controls. Open POA&Ms require documented remediation plans before a C3PAO assessment.
+              {ps.max} controls in scope, 1 point each. Score reflects currently implemented controls. Open POA&Ms require documented remediation plans before a C3PAO assessment.
             </p>
           </CardContent>
         </Card>

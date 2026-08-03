@@ -1,0 +1,735 @@
+Redesign ONLY the unauthenticated Control HUB login page.
+
+Current page:
+
+- split-screen layout
+- dark navy product panel on the left
+- login form on the right
+- local username/password login
+- password reset link
+- Microsoft sign-in
+- Carme Technology / Control HUB branding
+
+Goal:
+
+Create a polished enterprise SaaS login screen that clearly communicates:
+
+- Carme Technology branding
+- Control HUB product identity
+- compliance readiness and evidence management
+- local sign-in
+- Microsoft sign-in
+- secure authorized access
+
+This is primarily a user-interface and user-experience improvement.
+
+Do not change authentication behavior unless specifically required below.
+
+====================================================================
+1. STRICT SCOPE
+====================================================================
+
+Change only:
+
+- login page layout
+- login page copy
+- login page branding presentation
+- form styling
+- login loading/error states
+- Microsoft sign-in button presentation
+- responsive behavior
+- login-page accessibility
+- environment indicator
+
+Do not modify:
+
+- local user accounts
+- passwords
+- password hashes
+- password-reset tokens
+- MFA enrollment
+- MFA requirements
+- Microsoft SSO configuration
+- SSO callback logic
+- break-glass account behavior
+- session duration
+- authentication endpoints
+- organization memberships
+- roles or permissions
+- production data
+- invitation workflow
+
+Preserve all current working login methods.
+
+====================================================================
+2. REMOVE PACKAGE-SPECIFIC STATISTICS
+====================================================================
+
+Remove the current four tiles:
+
+- 110+ Controls Tracked
+- 14 CMMC Domains
+- Multi Evidence Types
+- Always Audit Ready
+
+Reasons:
+
+- CMMC Level 1 does not use the same requirement count as Level 2.
+- Control HUB supports multiple packages, including NIST and DFARS.
+- “Always Audit Ready” is an absolute claim and should not be displayed.
+
+Replace them with three package-neutral value statements:
+
+- Multi-Framework Management
+  “Manage CMMC, NIST, DFARS, and applicable organizational requirements.”
+
+- Evidence Mapped to Requirements
+  “Organize supporting artifacts and maintain clear requirement traceability.”
+
+- Controlled Workflows and Audit History
+  “Use role-based workflows, approvals, monitoring, and recorded activity.”
+
+Use compact icon-and-text rows rather than four large metric cards.
+
+Do not hardcode framework control counts on the public login page.
+
+====================================================================
+3. LEFT BRAND PANEL
+====================================================================
+
+Keep the dark navy left panel, but improve the hierarchy.
+
+Top branding:
+
+- organization/product logo
+- Control HUB wordmark
+
+Use the Carme Technology Compliance shield at approximately 48–56px.
+
+Because the current shield contains detailed text that becomes difficult to read at small sizes:
+
+- use the full shield at a larger size on the left panel
+- use an icon-only or simplified shield variation for favicon and very small placements
+- preserve aspect ratio
+- do not stretch the image
+
+Primary headline:
+
+Compliance readiness, organized.
+
+Emphasize:
+
+organized
+
+or:
+
+readiness
+
+using the existing brand blue.
+
+Supporting copy:
+
+“Manage requirements, evidence, documentation, assessments, and continuous monitoring in one secure workspace.”
+
+Framework badges:
+
+- CMMC
+- NIST SP 800-171
+- DFARS
+
+Use compact, understated badges.
+
+Do not imply that every customer has every framework assigned.
+
+These badges communicate platform support only.
+
+Value statements:
+
+- Multi-framework management
+- Evidence mapped to requirements
+- Role-based workflows and audit history
+
+Bottom branding:
+
+Carme Technology
+
+Optional secondary text:
+
+Compliance technology for defense contractors and regulated organizations.
+
+Do not repeat generic statements such as:
+
+“Secure Compliance Platform”
+
+multiple times on the same page.
+
+====================================================================
+4. RIGHT LOGIN AREA
+====================================================================
+
+Use a soft slate/off-white page background.
+
+Center a login card vertically and horizontally within the right panel.
+
+Recommended card:
+
+- maximum width: 420–460px
+- white background
+- 32–40px internal padding
+- 14–18px border radius
+- subtle gray/slate border
+- restrained shadow
+- no heavy gradient
+- no excessive empty area beneath the form
+
+Do not make the entire right side one unstructured blank area.
+
+====================================================================
+5. REMOVE DUPLICATE LOGO PRESENTATION
+====================================================================
+
+The current page displays the shield:
+
+- in the upper-left Control HUB branding
+- again beside the login heading
+
+Preferred:
+
+Use the full brand once on the left panel.
+
+On the login card:
+
+- do not repeat the full detailed shield
+- use no icon
+or
+- use a simplified icon-only shield at 32–40px
+
+The form heading should carry the hierarchy, not a second detailed logo.
+
+====================================================================
+6. LOGIN-CARD COPY
+====================================================================
+
+Use:
+
+Heading:
+
+Welcome back
+
+Secondary heading:
+
+Sign in to Control HUB
+
+Helper text:
+
+“Use your Control HUB credentials or your Microsoft work account.”
+
+Do not use:
+
+“Sign in to your account”
+
+as the only heading because it does not identify the application.
+
+Replace:
+
+“CMMC Compliance & Evidence Management”
+
+with:
+
+“Compliance Readiness & Evidence Management”
+
+This reflects the platform’s support for multiple packages and assessment types.
+
+====================================================================
+7. LOCAL LOGIN FORM
+====================================================================
+
+Fields:
+
+Email address
+
+Password
+
+Requirements:
+
+- persistent visible labels
+- 48px minimum input height
+- readable placeholder text
+- clear hover state
+- visible keyboard focus ring
+- consistent border radius
+- password show/hide action with accessible label
+- Enter key submits the form
+- support password managers
+- support browser autofill
+
+Use:
+
+autocomplete="email"
+
+and:
+
+autocomplete="current-password"
+
+Place:
+
+Forgot password?
+
+on the same row as the Password label or directly beneath the password input, right aligned.
+
+Primary button:
+
+Sign in
+
+Requirements:
+
+- full card width
+- approximately 48px high
+- Control HUB blue
+- clear hover/focus state
+- disabled while submitting
+- loading spinner and “Signing in…” text while processing
+- prevent duplicate submissions
+
+====================================================================
+8. MICROSOFT SIGN-IN
+====================================================================
+
+Use a clear divider:
+
+or continue with
+
+Button:
+
+Continue with Microsoft
+
+or retain:
+
+Sign in with Microsoft
+
+Use the official Microsoft four-color mark.
+
+Button requirements:
+
+- same width and height as the local Sign In button
+- white background
+- visible border
+- dark readable text
+- clear hover/focus state
+- loading state while redirecting
+- preserve return URL
+
+Do not change the existing Microsoft SSO configuration or callback behavior.
+
+Display SSO errors inline in the login card instead of only as floating notifications.
+
+====================================================================
+9. INLINE ERROR AND INFORMATION STATES
+====================================================================
+
+Add a dedicated message region above the email field.
+
+Supported states:
+
+- Invalid credentials
+- Account disabled
+- Invitation not completed
+- MFA required
+- Session expired
+- Password reset successful
+- Microsoft sign-in failed
+- SSO unavailable
+- Network error
+- Rate limit reached
+
+Use a generic invalid-login message:
+
+“Unable to sign in with those credentials.”
+
+Do not reveal whether a particular email address exists.
+
+For SSO errors, provide a specific but safe message:
+
+“Microsoft sign-in could not be completed. Try again or contact your organization administrator.”
+
+Do not expose:
+
+- stack traces
+- tenant IDs
+- client IDs
+- callback details
+- internal error objects
+
+Use:
+
+- red alert for failure
+- blue alert for information
+- green alert for password-reset success
+- amber alert for session expiration or temporary issues
+
+====================================================================
+10. ACCESS AND SUPPORT TEXT
+====================================================================
+
+Below the Microsoft button, add:
+
+“Need access? Contact your organization administrator.”
+
+Do not add public self-registration.
+
+Below that, add restrained security text:
+
+“Authorized use only. Activity may be logged.”
+
+Only use this wording if it reflects the application’s current audit behavior.
+
+Optional:
+
+“Having trouble signing in?”
+
+Link to an existing support workflow only if a real support page or email route exists.
+
+Do not add broken Privacy, Terms, or Support links.
+
+====================================================================
+11. ENVIRONMENT INDICATOR
+====================================================================
+
+Add a small environment badge based on authoritative server configuration.
+
+Values:
+
+- Development
+- Staging
+- Production
+
+Recommended placement:
+
+top-right corner of the login card or page
+
+Examples:
+
+Development:
+blue badge
+
+Staging:
+amber badge
+
+Production:
+subtle green or slate badge
+
+Do not derive the environment solely from the browser hostname.
+
+Use a server-provided configuration value such as:
+
+APP_ENV
+
+This helps prevent administrators from signing into or testing the wrong environment.
+
+Do not expose internal deployment IDs or secrets.
+
+====================================================================
+12. VISUAL PALETTE
+====================================================================
+
+Recommended colors:
+
+Left background:
+deep navy with a restrained blue gradient
+
+Right background:
+soft slate or very light blue-gray
+
+Login card:
+white
+
+Primary button:
+Control HUB blue
+
+Primary text:
+dark navy
+
+Secondary text:
+slate gray
+
+Success:
+green
+
+Warning:
+amber
+
+Error:
+red
+
+Avoid excessive gradients, glows, and decorative effects.
+
+Keep the existing subtle grid/network motif on the left, but lower its opacity.
+
+Respect:
+
+prefers-reduced-motion
+
+if any background animation is added.
+
+Do not animate the form itself.
+
+====================================================================
+13. RESPONSIVE DESIGN
+====================================================================
+
+Desktop:
+
+- left panel approximately 44–48% width
+- right panel fills remaining space
+- login card centered
+- minimum viewport height supported without clipping
+
+Tablet:
+
+- reduce left-panel width
+- allow framework badges and benefit text to wrap
+- preserve readable form width
+
+Mobile:
+
+- hide the full marketing panel
+or
+- convert it into a compact top banner
+
+Mobile layout:
+
+[Logo] Control HUB
+
+Welcome back
+Sign in to Control HUB
+
+[Form]
+
+Do not require horizontal scrolling.
+
+Ensure the keyboard does not cover primary form actions.
+
+====================================================================
+14. ACCESSIBILITY
+====================================================================
+
+Requirements:
+
+- semantic page landmarks
+- one clear H1
+- proper labels for every input
+- password toggle has an accessible name
+- visible focus state
+- keyboard-only navigation
+- logical tab order
+- error text associated with affected input
+- screen-reader announcement for login failures
+- minimum WCAG AA contrast
+- status not conveyed only by color
+- touch targets at least 44px
+- decorative background ignored by screen readers
+
+Do not use placeholder text as the only input label.
+
+====================================================================
+15. SECURITY-SENSITIVE UI BEHAVIOR
+====================================================================
+
+Preserve existing backend authentication protections.
+
+The UI should additionally:
+
+- prevent repeated submission while a request is pending
+- not store passwords in browser storage
+- not write credentials to console logs
+- not include passwords in error telemetry
+- not reveal whether an email exists
+- clear the password field after a failed login where appropriate
+- preserve email only when safe and useful
+- show a Caps Lock indicator when detectable
+- use HTTPS-only production URLs
+
+Do not add “Remember Me” unless the existing session design securely supports it.
+
+====================================================================
+16. BREAK-GLASS ACCOUNT SUPPORT
+====================================================================
+
+Do not remove local username/password login.
+
+The break-glass Global Admin account must remain able to authenticate locally according to the existing configuration.
+
+Microsoft SSO must not become the only login method.
+
+Do not identify the break-glass account publicly on the login page.
+
+====================================================================
+17. SUGGESTED FINAL COPY
+====================================================================
+
+LEFT PANEL:
+
+Control HUB
+
+Compliance readiness, organized.
+
+“Manage requirements, evidence, documentation, assessments, and continuous monitoring in one secure workspace.”
+
+Badges:
+
+CMMC
+NIST SP 800-171
+DFARS
+
+Benefits:
+
+Multi-framework management
+Evidence mapped to requirements
+Role-based workflows and audit history
+
+Bottom:
+
+Carme Technology
+
+RIGHT CARD:
+
+Welcome back
+
+Sign in to Control HUB
+
+“Use your Control HUB credentials or your Microsoft work account.”
+
+Email address
+
+Password                         Forgot password?
+
+Sign in
+
+or continue with
+
+Continue with Microsoft
+
+“Need access? Contact your organization administrator.”
+
+“Authorized use only. Activity may be logged.”
+
+====================================================================
+18. PRODUCTION DATA SAFETY
+====================================================================
+
+This change must not:
+
+- modify user records
+- modify password hashes
+- modify MFA
+- modify SSO settings
+- modify sessions
+- modify roles
+- modify organization memberships
+- modify invitation tokens
+- modify password-reset tokens
+- change authentication routing
+- change production data
+- expose credentials
+- break local break-glass login
+
+Use existing authentication APIs.
+
+====================================================================
+19. ACCEPTANCE TESTS
+====================================================================
+
+Test A — Desktop:
+
+Open the production login page at 1920×1080.
+
+Expected:
+
+- left brand panel is balanced
+- login card is centered
+- no excessive empty space
+- one prominent brand presentation
+- no misleading 110+/14-domain statistics
+
+Test B — Local Login:
+
+Sign in with a valid local account.
+
+Expected:
+
+- authentication works exactly as before
+- loading state appears
+- duplicate submissions are prevented
+- correct destination opens
+
+Test C — Invalid Login:
+
+Use invalid credentials.
+
+Expected:
+
+- inline generic error appears
+- no account-existence information is disclosed
+- password is not logged
+
+Test D — Microsoft Login:
+
+Click Continue with Microsoft.
+
+Expected:
+
+- existing SSO flow starts
+- callback works
+- return URL is preserved
+
+Test E — Password Reset:
+
+Click Forgot password.
+
+Expected:
+
+- existing password-reset workflow opens
+- no routing regression
+
+Test F — Break Glass:
+
+Sign in with the protected local break-glass account.
+
+Expected:
+
+- local login remains available and functional
+
+Test G — Environment:
+
+Open Development, Staging, and Production.
+
+Expected:
+
+- correct environment badge appears
+- no deployment secret is exposed
+
+Test H — Mobile:
+
+Open at a typical mobile width.
+
+Expected:
+
+- marketing panel collapses or hides
+- login card fits
+- no horizontal overflow
+- all controls remain usable
+
+Test I — Accessibility:
+
+Use keyboard-only navigation.
+
+Expected:
+
+- focus order is logical
+- every action is reachable
+- focus is visible
+- errors are announced
+
+Test J — Production Safety:
+
+No authentication configuration, user, password, MFA, SSO, role, membership, or session record changes as a result of the visual redesign.

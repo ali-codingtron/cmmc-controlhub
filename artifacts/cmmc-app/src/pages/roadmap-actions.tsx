@@ -962,7 +962,17 @@ const ROADMAP_STEPS: {
   },
 ];
 
-const ROADMAP_BENEFITS = [
+const ROADMAP_BENEFITS_L1 = [
+  "Helps you avoid working randomly through 17 FCI safeguarding requirements",
+  "Shows which actions support multiple controls",
+  "Reduces duplicate evidence collection",
+  "Helps you know what to do first",
+  "Tracks required documents and evidence",
+  "Helps prepare for your annual CMMC Level 1 self-assessment",
+  "Creates a repeatable implementation path for each organization",
+];
+
+const ROADMAP_BENEFITS_L2 = [
   "Helps you avoid working randomly through 110 controls",
   "Shows which actions support multiple controls",
   "Reduces duplicate evidence collection",
@@ -972,7 +982,8 @@ const ROADMAP_BENEFITS = [
   "Creates a repeatable implementation path for each organization",
 ];
 
-function HowItWorksPanel() {
+function HowItWorksPanel({ isL1 }: { isL1: boolean }) {
+  const benefits = isL1 ? ROADMAP_BENEFITS_L1 : ROADMAP_BENEFITS_L2;
   const storageKey = "roadmap_howto_collapsed";
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
@@ -1056,7 +1067,7 @@ function HowItWorksPanel() {
               Why Use This Roadmap?
             </h3>
             <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1.5">
-              {ROADMAP_BENEFITS.map((b) => (
+              {benefits.map((b) => (
                 <li
                   key={b}
                   className="flex items-start gap-2 text-xs text-muted-foreground"
@@ -1251,7 +1262,7 @@ export default function RoadmapActions() {
       </div>
 
       {/* Collapsible How It Works */}
-      <HowItWorksPanel />
+      <HowItWorksPanel isL1={activeOrg?.cmmcTargetLevel === "L1"} />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">

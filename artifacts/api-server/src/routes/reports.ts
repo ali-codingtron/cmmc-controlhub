@@ -13,12 +13,60 @@ import {
   sspDocumentsTable,
   sspSectionsTable,
   sspControlMappingsTable,
+  organizationPackagesTable,
+  compliancePackagesTable,
+  complianceRequirementsTable,
 } from "@workspace/db";
-import { eq, and, desc, count, isNotNull, isNull, ne, lte, gte, sql, or } from "drizzle-orm";
+import { eq, and, desc, count, isNotNull, isNull, ne, lte, gte, sql, or, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 
 const router = Router();
+
+// ── Package-aware control filter ──────────────────────────────────────────────
+// Returns an array of control DB IDs the org is actually responsible for,
+// or null if there are no package restrictions (show all — legacy / no packages).
+async function resolveOrgControlIds(orgId: string): Promise<string[] | null> {
+  const orgPkgs = await db
+    .select({ packageId: compliancePackagesTable.id, packageKey: compliancePackagesTable.packageKey })
+    .from(organizationPackagesTable)
+    .innerJoin(compliancePackagesTable, eq(organizationPackagesTable.packageId, compliancePackagesTable.id))
+    .where(and(
+      eq(organizationPackagesTable.organizationId, orgId),
+      eq(organizationPackagesTable.isActive, true),
+    ));
+
+  if (orgPkgs.length === 0) return null; // no packages → show all
+
+  const cmmcFarPkgIds = orgPkgs.filter(p => p.packageKey.startsWith("CMMC_") || p.packageKey === "FAR_52_204_21").map(p => p.packageId);
+  const nistPkgIds = orgPkgs.filter(p => p.packageKey.startsWith("NIST_800_171_")).map(p => p.packageId);
+  const mappedPkgIds = [...cmmcFarPkgIds, ...nistPkgIds];
+
+  if (mappedPkgIds.length === 0) return null; // DFARS-only or non-control packages → show all
+
+  const reqs = await db
+    .select({ reqId: complianceRequirementsTable.requirementId, pkgId: complianceRequirementsTable.packageId })
+    .from(complianceRequirementsTable)
+    .where(inArray(complianceRequirementsTable.packageId, mappedPkgIds));
+
+  if (reqs.length === 0) return null;
+
+  const cmmcFarReqIds = reqs.filter(r => cmmcFarPkgIds.includes(r.pkgId)).map(r => r.reqId);
+  const nistReqIds    = reqs.filter(r => nistPkgIds.includes(r.pkgId)).map(r => r.reqId);
+
+  const matched = await db
+    .selectDistinct({ id: controlsTable.id })
+    .from(controlsTable)
+    .where(and(
+      eq(controlsTable.isActive, true),
+      or(
+        cmmcFarReqIds.length > 0 ? inArray(controlsTable.controlId, cmmcFarReqIds) : undefined,
+        nistReqIds.length > 0    ? inArray(controlsTable.nistRef as any, nistReqIds) : undefined,
+      ),
+    ));
+
+  return matched.map(c => c.id);
+}
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 function todayStr() {
@@ -41,13 +89,16 @@ function sevenDaysFromNow() {
 router.get("/reports/executive", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = req.orgId!;
 
-  const [org] = await db
-    .select({ name: organizationsTable.name, cmmcTargetLevel: organizationsTable.cmmcTargetLevel, legalName: organizationsTable.legalName, primaryContact: organizationsTable.primaryContact })
-    .from(organizationsTable)
-    .where(eq(organizationsTable.id, orgId))
-    .limit(1);
+  const [org, packageControlIds] = await Promise.all([
+    db.select({ name: organizationsTable.name, cmmcTargetLevel: organizationsTable.cmmcTargetLevel, legalName: organizationsTable.legalName, primaryContact: organizationsTable.primaryContact })
+      .from(organizationsTable)
+      .where(eq(organizationsTable.id, orgId))
+      .limit(1)
+      .then(r => r[0]),
+    resolveOrgControlIds(orgId),
+  ]);
 
-  // Controls with assessment status
+  // Controls with assessment status — filtered to org's active packages
   const controls = await db
     .select({
       id: controlsTable.id,
@@ -61,7 +112,8 @@ router.get("/reports/executive", requireAuth, requireOrg, async (req, res): Prom
     .leftJoin(controlAssessmentsTable, and(
       eq(controlAssessmentsTable.controlId, controlsTable.id),
       eq(controlAssessmentsTable.organizationId, orgId),
-    ));
+    ))
+    .where(packageControlIds ? inArray(controlsTable.id, packageControlIds) : undefined);
 
   const total = controls.length;
   const implemented = controls.filter(c => c.status === "implemented" || c.status === "assessor_ready").length;
@@ -150,6 +202,8 @@ router.get("/reports/executive", requireAuth, requireOrg, async (req, res): Prom
 router.get("/reports/gap", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = req.orgId!;
 
+  const packageControlIds = await resolveOrgControlIds(orgId);
+
   const controls = await db
     .select({
       id: controlsTable.id,
@@ -165,6 +219,7 @@ router.get("/reports/gap", requireAuth, requireOrg, async (req, res): Promise<vo
       eq(controlAssessmentsTable.controlId, controlsTable.id),
       eq(controlAssessmentsTable.organizationId, orgId),
     ))
+    .where(packageControlIds ? inArray(controlsTable.id, packageControlIds) : undefined)
     .orderBy(domainsTable.sortOrder, controlsTable.sortOrder);
 
   // Get all evidence links for this org
@@ -266,6 +321,8 @@ router.get("/reports/gap", requireAuth, requireOrg, async (req, res): Promise<vo
 router.get("/reports/controls", requireAuth, requireOrg, async (req, res): Promise<void> => {
   const orgId = req.orgId!;
 
+  const packageControlIds = await resolveOrgControlIds(orgId);
+
   const controls = await db
     .select({
       controlId: controlsTable.controlId,
@@ -283,6 +340,7 @@ router.get("/reports/controls", requireAuth, requireOrg, async (req, res): Promi
       eq(controlAssessmentsTable.controlId, controlsTable.id),
       eq(controlAssessmentsTable.organizationId, orgId),
     ))
+    .where(packageControlIds ? inArray(controlsTable.id, packageControlIds) : undefined)
     .orderBy(domainsTable.sortOrder, controlsTable.sortOrder);
 
   // Evidence counts per control
@@ -462,6 +520,8 @@ router.get("/reports/domain", requireAuth, requireOrg, async (req, res): Promise
     "System and Information Integrity": "SI",
   };
 
+  const packageControlIds = await resolveOrgControlIds(orgId);
+
   // Fetch all data in parallel
   const [
     orgResult,
@@ -492,7 +552,9 @@ router.get("/reports/domain", requireAuth, requireOrg, async (req, res): Promise
       eq(controlAssessmentsTable.controlId, controlsTable.id),
       eq(controlAssessmentsTable.organizationId, orgId),
     ))
-    .where(eq(controlsTable.isActive, true)),
+    .where(packageControlIds
+      ? and(eq(controlsTable.isActive, true), inArray(controlsTable.id, packageControlIds))
+      : eq(controlsTable.isActive, true)),
 
     db.select({
       controlId: evidenceControlLinksTable.controlId,
@@ -631,7 +693,7 @@ router.get("/reports/domain", requireAuth, requireOrg, async (req, res): Promise
   const evMissingHash = allEvidenceRaw.filter(e => !!e.fileKey && !e.fileHash).length;
 
   // Projected CMMC Score
-  const maxScore = 110;
+  const maxScore = totalControls; // scoped to org's active package, not a hard-coded 110
   const notMet = notStartedCount + atRiskCount;
   const projectedScore = Math.max(0, maxScore - notMet);
 
@@ -731,6 +793,8 @@ router.get("/reports/audit", requireAuth, requireOrg, async (req, res): Promise<
   const orgId = req.orgId!;
   const now = new Date();
 
+  const packageControlIds = await resolveOrgControlIds(orgId);
+
   const controls = await db
     .select({
       id: controlsTable.id,
@@ -746,7 +810,8 @@ router.get("/reports/audit", requireAuth, requireOrg, async (req, res): Promise<
     .leftJoin(controlAssessmentsTable, and(
       eq(controlAssessmentsTable.controlId, controlsTable.id),
       eq(controlAssessmentsTable.organizationId, orgId),
-    ));
+    ))
+    .where(packageControlIds ? inArray(controlsTable.id, packageControlIds) : undefined);
 
   // Evidence per control
   const evidenceLinks = await db

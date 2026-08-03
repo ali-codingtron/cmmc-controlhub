@@ -12,23 +12,26 @@ type Connection = {
 };
 
 const ALL_PACKS = [
-  { id: "identity", name: "Identity Pack", desc: "Users, guests, stale accounts, group membership", controls: "AC.L1-3.1.1, IA.L1-3.5.1, IA.L2-3.5.6" },
-  { id: "authentication", name: "Authentication Pack", desc: "MFA registration, authentication method coverage", controls: "IA.L2-3.5.3, IA.L1-3.5.2" },
-  { id: "conditional_access", name: "Conditional Access Pack", desc: "CA policies, MFA enforcement, legacy auth blocking", controls: "IA.L2-3.5.3, AC.L2-3.1.12, SC.L2-3.13.8" },
-  { id: "devices", name: "Device / Intune Pack", desc: "Managed devices, compliance state, encryption", controls: "CM.L2-3.4.1, CM.L2-3.4.3, SI.L1-3.14.1" },
-  { id: "audit", name: "Audit / Sign-in Pack", desc: "Sign-in logs, directory audit logs, admin changes", controls: "AU.L2-3.3.1, AU.L2-3.3.2, CA.L2-3.12.3" },
-  { id: "secure_score", name: "Security Score Pack", desc: "Microsoft Secure Score and improvement recommendations", controls: "Multiple" },
+  { id: "identity",          name: "Identity Pack",          desc: "Users, guests, stale accounts, group membership",                  controls: "AC.L1-3.1.1, IA.L1-3.5.1, IA.L2-3.5.6", l1Relevant: true  },
+  { id: "authentication",    name: "Authentication Pack",    desc: "MFA registration, authentication method coverage",                 controls: "IA.L1-3.5.2, IA.L2-3.5.3",              l1Relevant: true  },
+  { id: "conditional_access",name: "Conditional Access Pack",desc: "CA policies, MFA enforcement, legacy auth blocking",               controls: "IA.L2-3.5.3, AC.L2-3.1.12, SC.L2-3.13.8", l1Relevant: false },
+  { id: "devices",           name: "Device / Intune Pack",  desc: "Managed devices, compliance state, encryption",                    controls: "CM.L2-3.4.1, CM.L2-3.4.3, SI.L1-3.14.1", l1Relevant: false },
+  { id: "audit",             name: "Audit / Sign-in Pack",  desc: "Sign-in logs, directory audit logs, admin changes",                controls: "AU.L2-3.3.1, AU.L2-3.3.2, CA.L2-3.12.3", l1Relevant: false },
+  { id: "secure_score",      name: "Security Score Pack",   desc: "Microsoft Secure Score and improvement recommendations",           controls: "Multiple",                                l1Relevant: false },
 ];
 
 export default function PaRun() {
   const [, navigate] = useLocation();
   const { activeOrg } = useOrg();
+  const isL1 = activeOrg?.cmmcTargetLevel === "L1";
 
   const [connections, setConnections] = useState<Connection[]>([]);
   const [connsLoaded, setConnsLoaded] = useState(false);
   const [scanName, setScanName] = useState("");
   const [selectedConn, setSelectedConn] = useState("");
-  const [selectedPacks, setSelectedPacks] = useState<string[]>(ALL_PACKS.map((p) => p.id));
+  const [selectedPacks, setSelectedPacks] = useState<string[]>(() =>
+    isL1 ? ALL_PACKS.filter((p) => p.l1Relevant).map((p) => p.id) : ALL_PACKS.map((p) => p.id)
+  );
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -168,6 +171,12 @@ export default function PaRun() {
               </button>
             </div>
 
+            {isL1 && (
+              <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                <strong>CMMC Level 1 org:</strong> Identity and Authentication packs cover your 17 FCI safeguarding requirements. The remaining packs assess NIST SP 800-171 controls applicable at Level 2.
+              </div>
+            )}
+
             <div className="space-y-2">
               {ALL_PACKS.map((pack) => {
                 const isSelected = selectedPacks.includes(pack.id);
@@ -184,8 +193,14 @@ export default function PaRun() {
                     {isSelected
                       ? <CheckSquare className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
                       : <Square className="h-4 w-4 text-gray-300 mt-0.5 shrink-0" />}
-                    <div>
-                      <p className="text-sm font-medium text-gray-800">{pack.name}</p>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium text-gray-800">{pack.name}</p>
+                        {pack.l1Relevant
+                          ? <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">L1 Relevant</span>
+                          : <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">L2 / NIST SP 800-171</span>
+                        }
+                      </div>
                       <p className="text-xs text-gray-500 mt-0.5">{pack.desc}</p>
                       <p className="text-[11px] text-blue-600 mt-1">Controls: {pack.controls}</p>
                     </div>

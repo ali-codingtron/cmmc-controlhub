@@ -3,8 +3,8 @@ import multer from "multer";
 import path from "path";
 import { unlink, readFile, access as fsAccess } from "fs/promises";
 import { createReadStream } from "fs";
-import { db, sspDocumentsTable, sspSectionsTable, sspControlMappingsTable, sspPrefillDraftsTable, controlsTable, controlAssessmentsTable, evidenceControlLinksTable, evidenceItemsTable, organizationPackagesTable, compliancePackagesTable, organizationsTable } from "@workspace/db";
-import { eq, and, desc, count, isNotNull, isNull, sql, ne } from "drizzle-orm";
+import { db, sspDocumentsTable, sspSectionsTable, sspControlMappingsTable, sspPrefillDraftsTable, controlsTable, controlAssessmentsTable, evidenceControlLinksTable, evidenceItemsTable, organizationPackagesTable, compliancePackagesTable, complianceRequirementsTable, organizationsTable } from "@workspace/db";
+import { eq, and, desc, count, isNotNull, isNull, sql, ne, inArray, or } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 import { logAudit } from "../lib/audit";
@@ -16,6 +16,48 @@ import { applyPrefillToDocx } from "../lib/ssp-prefill-engine";
 import { objectStorageClient, ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 
 const objectStorageService = new ObjectStorageService();
+
+// ── Package-scoped control resolver ───────────────────────────────────────────
+// Returns an array of control DB UUIDs (controls.id) for the org's active
+// packages, or null if the org has no packages (no restriction).
+async function resolveOrgControlIds(orgId: string): Promise<string[] | null> {
+  const orgPkgs = await db
+    .select({ packageId: compliancePackagesTable.id, packageKey: compliancePackagesTable.packageKey })
+    .from(organizationPackagesTable)
+    .innerJoin(compliancePackagesTable, eq(organizationPackagesTable.packageId, compliancePackagesTable.id))
+    .where(and(eq(organizationPackagesTable.organizationId, orgId), eq(organizationPackagesTable.isActive, true)));
+
+  if (orgPkgs.length === 0) return null;
+
+  const cmmcFarPkgIds = orgPkgs.filter(p => p.packageKey.startsWith("CMMC_") || p.packageKey === "FAR_52_204_21").map(p => p.packageId);
+  const nistPkgIds    = orgPkgs.filter(p => p.packageKey.startsWith("NIST_800_171_")).map(p => p.packageId);
+  const mappedPkgIds  = [...cmmcFarPkgIds, ...nistPkgIds];
+
+  if (mappedPkgIds.length === 0) return null;
+
+  const reqs = await db
+    .select({ reqId: complianceRequirementsTable.requirementId, pkgId: complianceRequirementsTable.packageId })
+    .from(complianceRequirementsTable)
+    .where(inArray(complianceRequirementsTable.packageId, mappedPkgIds));
+
+  if (reqs.length === 0) return null;
+
+  const cmmcFarReqIds = reqs.filter(r => cmmcFarPkgIds.includes(r.pkgId)).map(r => r.reqId);
+  const nistReqIds    = reqs.filter(r => nistPkgIds.includes(r.pkgId)).map(r => r.reqId);
+
+  const matched = await db
+    .selectDistinct({ id: controlsTable.id })
+    .from(controlsTable)
+    .where(and(
+      eq(controlsTable.isActive, true),
+      or(
+        cmmcFarReqIds.length > 0 ? inArray(controlsTable.controlId, cmmcFarReqIds) : undefined,
+        nistReqIds.length > 0    ? inArray(controlsTable.nistRef as any, nistReqIds) : undefined,
+      ),
+    ));
+
+  return matched.map(c => c.id);
+}
 
 // ── GCS upload helper ─────────────────────────────────────────────────────────
 async function uploadBufferToGCS(
@@ -776,12 +818,27 @@ router.get("/ssp/:id/stats", requireAuth, requireOrg, async (req, res): Promise<
     .limit(1);
   if (!doc) return void res.status(404).json({ error: "Not found" });
 
+  // Resolve package-scoped control IDs for this org (null = no restriction)
+  const packageControlIds = await resolveOrgControlIds(orgId);
+
+  const mappingFilter = packageControlIds
+    ? and(eq(sspControlMappingsTable.sspDocumentId, id), isNotNull(sspControlMappingsTable.controlDbId), inArray(sspControlMappingsTable.controlDbId, packageControlIds))
+    : and(eq(sspControlMappingsTable.sspDocumentId, id), isNotNull(sspControlMappingsTable.controlDbId));
+
+  const editedFilter = packageControlIds
+    ? and(eq(sspControlMappingsTable.sspDocumentId, id), eq(sspControlMappingsTable.isEdited, true), inArray(sspControlMappingsTable.controlDbId, packageControlIds))
+    : and(eq(sspControlMappingsTable.sspDocumentId, id), eq(sspControlMappingsTable.isEdited, true));
+
+  const totalControlsQuery = packageControlIds
+    ? db.select({ total: count() }).from(controlsTable).where(inArray(controlsTable.id, packageControlIds))
+    : db.select({ total: count() }).from(controlsTable);
+
   const [[sectionsRow], [completeSectionsRow], [mappingsRow], [editedRow], [totalControlsRow]] = await Promise.all([
     db.select({ total: count() }).from(sspSectionsTable).where(eq(sspSectionsTable.sspDocumentId, id)),
     db.select({ total: count() }).from(sspSectionsTable).where(and(eq(sspSectionsTable.sspDocumentId, id), eq(sspSectionsTable.isComplete, true))),
-    db.select({ total: count() }).from(sspControlMappingsTable).where(and(eq(sspControlMappingsTable.sspDocumentId, id), isNotNull(sspControlMappingsTable.controlDbId))),
-    db.select({ total: count() }).from(sspControlMappingsTable).where(and(eq(sspControlMappingsTable.sspDocumentId, id), eq(sspControlMappingsTable.isEdited, true))),
-    db.select({ total: count() }).from(controlsTable),
+    db.select({ total: count() }).from(sspControlMappingsTable).where(mappingFilter),
+    db.select({ total: count() }).from(sspControlMappingsTable).where(editedFilter),
+    totalControlsQuery,
   ]);
 
   res.json({

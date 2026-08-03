@@ -48,6 +48,7 @@ const PERMISSION_PACKS = [
     id: "identity",
     name: "Identity Pack",
     use: "Enumerate users, guests, and stale accounts",
+    l1Relevant: true,
     perms: [
       { name: "User.Read.All", desc: "Read all user profiles" },
       { name: "Group.Read.All", desc: "Read group memberships" },
@@ -58,6 +59,7 @@ const PERMISSION_PACKS = [
     id: "authentication",
     name: "Authentication Pack",
     use: "Verify MFA registration and auth method coverage",
+    l1Relevant: true,
     perms: [
       { name: "Reports.Read.All", desc: "Read usage and authentication reports" },
       { name: "UserAuthenticationMethod.Read.All", desc: "Read registered auth methods per user" },
@@ -67,6 +69,7 @@ const PERMISSION_PACKS = [
     id: "conditional_access",
     name: "Conditional Access Pack",
     use: "Review CA policies, MFA enforcement, legacy auth blocks",
+    l1Relevant: false,
     perms: [
       { name: "Policy.Read.All", desc: "Read conditional access and named location policies" },
     ],
@@ -75,6 +78,7 @@ const PERMISSION_PACKS = [
     id: "devices",
     name: "Device / Intune Pack",
     use: "Inspect managed device inventory and compliance state",
+    l1Relevant: false,
     perms: [
       { name: "DeviceManagementManagedDevices.Read.All", desc: "Read Intune managed device records" },
     ],
@@ -83,6 +87,7 @@ const PERMISSION_PACKS = [
     id: "audit",
     name: "Audit / Sign-in Pack",
     use: "Confirm sign-in logs and directory audit log availability",
+    l1Relevant: false,
     perms: [
       { name: "AuditLog.Read.All", desc: "Read sign-in and directory audit logs" },
     ],
@@ -91,6 +96,7 @@ const PERMISSION_PACKS = [
     id: "secure_score",
     name: "Security Score Pack",
     use: "Snapshot Microsoft Secure Score recommendations",
+    l1Relevant: false,
     perms: [
       { name: "SecurityEvents.Read.All", desc: "Read security events and Secure Score" },
     ],
@@ -510,7 +516,13 @@ export default function PaConnections() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {PERMISSION_PACKS.map((pack) => (
             <div key={pack.id} className="rounded-lg border border-gray-200 bg-white p-3">
-              <p className="text-xs font-semibold text-gray-800 mb-0.5">{pack.name}</p>
+              <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                <p className="text-xs font-semibold text-gray-800">{pack.name}</p>
+                {pack.l1Relevant
+                  ? <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">L1 Relevant</span>
+                  : <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">L2 / NIST SP 800-171</span>
+                }
+              </div>
               <p className="text-[11px] text-gray-500 mb-2">{pack.use}</p>
               <div className="space-y-1">
                 {pack.perms.map((perm) => (

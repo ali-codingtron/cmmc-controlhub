@@ -312,7 +312,7 @@ router.post("/admin/doc-templates/import", requireAuth, requireAdmin, async (req
       const markdownBody = mdEntry ? mdEntry.getData().toString("utf-8") : "";
       const templateUUID = randomUUID();
 
-      await db.insert(documentTemplatesTable).values({
+      const inserted = await db.insert(documentTemplatesTable).values({
         id: templateUUID, title: t.title, docType: docType as any,
         cmmcLevel: "L2", domainAbbr: t.template_id.split("-")[0], version: "1.0",
         ownerRole: "compliance_manager", reviewFrequency: mapReviewFreq(t.review_frequency) as any,
@@ -322,7 +322,10 @@ router.post("/admin/doc-templates/import", requireAuth, requireAdmin, async (req
         isActive: true, isSystemTemplate: true, sourceTemplateId: t.template_id,
         sourcePackage: "CMMC_L2_Document_Library", family: t.family,
         artifactTypeLabel: t.artifact_type, purpose: t.purpose, scope: t.scope,
-      });
+      }).onConflictDoNothing().returning({ id: documentTemplatesTable.id });
+
+      // If nothing was inserted (race-condition duplicate), count as skipped and move on
+      if (inserted.length === 0) { skippedCount++; continue; }
 
       if (markdownBody) {
         await db.insert(docTemplateSectionsTable).values({ id: randomUUID(), templateId: templateUUID, sectionName: "Full Template", sectionOrder: 0, content: markdownBody, contentType: "markdown" });
