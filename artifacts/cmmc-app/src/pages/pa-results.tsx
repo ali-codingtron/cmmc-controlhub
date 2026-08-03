@@ -11,6 +11,7 @@ import {
 import { useOrg } from "@/context/OrgContext";
 
 const CMMC_L2_TOTAL = 110;
+const CMMC_L1_TOTAL = 17;
 
 type ScanRun = {
   id: string;
@@ -281,6 +282,12 @@ function ScanProgressPanel({ scan }: { scan: ScanRun }) {
 export default function PaResults({ id }: { id: string }) {
   const [, navigate] = useLocation();
   const { activeOrg } = useOrg();
+
+  const isL1 = activeOrg?.cmmcTargetLevel === "L1";
+  const CMMC_TOTAL = isL1 ? CMMC_L1_TOTAL : CMMC_L2_TOTAL;
+  const cmmcLevelLabel = isL1 ? "CMMC Level 1 FCI safeguarding requirements" : "CMMC Level 2 controls";
+  const cmmcShortLabel = isL1 ? "Level 1 requirements" : "Level 2 controls";
+
   const [scan, setScan] = useState<ScanRun | null>(null);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [evidenceRecords, setEvidenceRecords] = useState<EvidenceRecord[]>([]);
@@ -541,16 +548,16 @@ export default function PaResults({ id }: { id: string }) {
               <div className="relative group cursor-help text-center min-w-[110px]">
                 <p className="text-2xl font-bold text-gray-900">
                   {controlsTouched.length}
-                  <span className="text-base font-normal text-gray-400"> / {CMMC_L2_TOTAL}</span>
+                  <span className="text-base font-normal text-gray-400"> / {CMMC_TOTAL}</span>
                 </p>
                 <p className="text-xs text-gray-500 mt-0.5 flex items-center justify-center gap-1">
-                  Controls Touched
+                  {isL1 ? "Requirements Touched" : "Controls Touched"}
                   <HelpCircle className="h-3 w-3 text-gray-400 shrink-0" />
                 </p>
                 <p className="text-[10px] text-gray-400">by tenant scan</p>
                 <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 rounded-lg bg-gray-900 text-white text-xs p-3 opacity-0 group-hover:opacity-100 transition-opacity z-50 text-left leading-relaxed shadow-xl">
-                  <p className="font-semibold mb-1">CMMC Controls Touched by Tenant Scan</p>
-                  <p className="text-gray-300">Microsoft tenant data provided assessment signals for {controlsTouched.length} of {CMMC_L2_TOTAL} CMMC Level 2 controls. This does not mean they were fully assessed.</p>
+                  <p className="font-semibold mb-1">{isL1 ? "CMMC L1 Requirements Touched by Tenant Scan" : "CMMC Controls Touched by Tenant Scan"}</p>
+                  <p className="text-gray-300">Microsoft tenant data provided assessment signals for {controlsTouched.length} of {CMMC_TOTAL} {cmmcLevelLabel}. This does not mean they were fully assessed.</p>
                   <p className="text-gray-400 mt-1.5 text-[11px]">Full CMMC readiness requires SSP review, policies, procedures, evidence, interviews, testing, POA&M review, and non-Microsoft system validation.</p>
                 </div>
               </div>
@@ -681,19 +688,19 @@ export default function PaResults({ id }: { id: string }) {
             </h3>
             <div className="space-y-1.5">
               {[
-                { label: "Total CMMC Level 2 Controls", value: CMMC_L2_TOTAL, cls: "text-gray-700", bar: false },
-                { label: "Controls touched by tenant scan", value: controlsTouched.length, cls: "text-blue-700", bar: true, color: "bg-blue-500" },
-                { label: "Controls NOT assessed by tenant scan", value: CMMC_L2_TOTAL - controlsTouched.length, cls: "text-red-700", bar: true, color: "bg-red-400" },
-                { label: "Controls with findings (gaps identified)", value: controlsWithFindings.length, cls: "text-orange-700", bar: true, color: "bg-orange-500" },
-                { label: "Controls with evidence snapshots", value: controlsWithEvidence.length, cls: "text-green-700", bar: true, color: "bg-green-500" },
-                { label: "Controls with evidence requests", value: controlsWithRequests.length, cls: "text-yellow-700", bar: true, color: "bg-yellow-500" },
-                { label: "Controls requiring manual review (not touched)", value: CMMC_L2_TOTAL - controlsTouched.length, cls: "text-gray-500", bar: false },
+                { label: isL1 ? "Total CMMC Level 1 FCI Safeguarding Requirements" : "Total CMMC Level 2 Controls", value: CMMC_TOTAL, cls: "text-gray-700", bar: false },
+                { label: isL1 ? "Requirements touched by tenant scan" : "Controls touched by tenant scan", value: controlsTouched.length, cls: "text-blue-700", bar: true, color: "bg-blue-500" },
+                { label: isL1 ? "Requirements NOT assessed by tenant scan" : "Controls NOT assessed by tenant scan", value: CMMC_TOTAL - controlsTouched.length, cls: "text-red-700", bar: true, color: "bg-red-400" },
+                { label: isL1 ? "Requirements with findings (gaps identified)" : "Controls with findings (gaps identified)", value: controlsWithFindings.length, cls: "text-orange-700", bar: true, color: "bg-orange-500" },
+                { label: isL1 ? "Requirements with evidence snapshots" : "Controls with evidence snapshots", value: controlsWithEvidence.length, cls: "text-green-700", bar: true, color: "bg-green-500" },
+                { label: isL1 ? "Requirements with evidence requests" : "Controls with evidence requests", value: controlsWithRequests.length, cls: "text-yellow-700", bar: true, color: "bg-yellow-500" },
+                { label: isL1 ? "Requirements requiring manual review (not touched)" : "Controls requiring manual review (not touched)", value: CMMC_TOTAL - controlsTouched.length, cls: "text-gray-500", bar: false },
               ].map((row) => (
                 <div key={row.label} className="flex items-center gap-3 py-1 border-b border-gray-50 last:border-0">
                   <span className="flex-1 text-xs text-gray-600">{row.label}</span>
                   {row.bar && (
                     <div className="w-16 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                      <div className={`h-full rounded-full ${row.color}`} style={{ width: `${Math.round((row.value / CMMC_L2_TOTAL) * 100)}%` }} />
+                      <div className={`h-full rounded-full ${row.color}`} style={{ width: `${Math.round((row.value / CMMC_TOTAL) * 100)}%` }} />
                     </div>
                   )}
                   <span className={`text-sm font-bold w-8 text-right ${row.cls}`}>{row.value}</span>
@@ -701,8 +708,8 @@ export default function PaResults({ id }: { id: string }) {
               ))}
             </div>
             <p className="text-[11px] text-gray-400 mt-3">
-              Microsoft tenant data provided assessment signals for <strong>{controlsTouched.length}</strong> of <strong>{CMMC_L2_TOTAL}</strong> CMMC Level 2 controls.
-              The remaining <strong>{CMMC_L2_TOTAL - controlsTouched.length}</strong> require SSP review, policies, interviews, and manual assessment.
+              Microsoft tenant data provided assessment signals for <strong>{controlsTouched.length}</strong> of <strong>{CMMC_TOTAL}</strong> {cmmcLevelLabel}.
+              The remaining <strong>{CMMC_TOTAL - controlsTouched.length}</strong> require SSP review, policies, interviews, and manual assessment.
             </p>
           </div>
 
@@ -743,7 +750,10 @@ export default function PaResults({ id }: { id: string }) {
                 </button>
                 <p className="text-sm text-amber-700 leading-relaxed mt-1">
                   This pre-assessment reviews Microsoft tenant configuration via read-only Microsoft Graph API access.{" "}
-                  <strong>It does not replace a C3PAO assessment</strong> and does not fully determine CMMC compliance.
+                  {isL1
+                    ? <><strong>It does not replace the required annual self-assessment</strong> and does not fully determine CMMC Level 1 compliance.</>
+                    : <><strong>It does not replace a C3PAO assessment</strong> and does not fully determine CMMC compliance.</>
+                  }
                 </p>
                 {scopeExpanded && (
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
