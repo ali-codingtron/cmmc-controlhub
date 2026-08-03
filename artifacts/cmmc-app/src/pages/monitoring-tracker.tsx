@@ -449,6 +449,8 @@ export default function MonitoringTracker() {
   const [addForm, setAddForm] = useState({ task: "", frequency: "monthly" as MonitoringFrequency, controlRef: "", description: "" });
   const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
 
+  const isL1 = activeOrg?.cmmcTargetLevel === "L1";
+
   const { data: items = [], isLoading } = useQuery<MonitoringItem[]>({
     queryKey: ["monitoring", activeOrg?.id],
     queryFn: async () => {
@@ -708,7 +710,7 @@ export default function MonitoringTracker() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Activity className="h-4 w-4" />
-            <span>CMMC L2 Operational Monitoring</span>
+            <span>{isL1 ? "CMMC L1 Operational Monitoring" : "CMMC L2 Operational Monitoring"}</span>
           </div>
           {!isAssessor && (
             <Button size="sm" onClick={() => setShowAddItem(true)}>

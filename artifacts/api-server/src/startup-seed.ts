@@ -21,7 +21,7 @@ import {
   docTemplateControlMapsTable,
 } from "@workspace/db";
 import { count, eq, sql, inArray } from "drizzle-orm";
-import { seedMonitoringItemsForOrg } from "./routes/monitoring";
+import { seedMonitoringItemsForOrg, migrateMonitoringLevelForOrg } from "./routes/monitoring";
 import { seedControlConfigure } from "./routes/configure";
 import { seedRoadmapActions, seedProcedureSteps } from "./routes/roadmap";
 import { logger } from "./lib/logger";
@@ -250,9 +250,14 @@ async function seedDocumentTemplates() {
 }
 
 async function seedMonitoringItems() {
-  const orgs = await db.select({ id: organizationsTable.id }).from(organizationsTable);
+  const orgs = await db
+    .select({ id: organizationsTable.id, cmmcTargetLevel: organizationsTable.cmmcTargetLevel })
+    .from(organizationsTable);
   for (const org of orgs) {
-    await seedMonitoringItemsForOrg(org.id);
+    const level = org.cmmcTargetLevel ?? "L2";
+    // Silently replace L2 items with L1 defaults if org is L1 and was seeded wrong
+    await migrateMonitoringLevelForOrg(org.id, level);
+    await seedMonitoringItemsForOrg(org.id, level);
   }
 }
 

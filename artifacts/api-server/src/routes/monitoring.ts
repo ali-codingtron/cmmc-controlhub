@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, monitoringItemsTable, organizationsTable } from "@workspace/db";
-import { eq, and, ilike, or, lte, gte, count, sql } from "drizzle-orm";
+import { eq, and, ilike, or, count, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireOrg } from "../middleware/org";
 import { randomUUID } from "crypto";
@@ -17,6 +17,332 @@ interface MonitoringSeedItem {
   testProcedure: string;
   evidenceToRetain: string;
 }
+
+// ─── L1 seed (17 CMMC Level 1 / FAR 52.204-21 practices) ────────────────────
+
+const MONITORING_SEED_ITEMS_L1: MonitoringSeedItem[] = [
+  {
+    frequency: "weekly",
+    task: "Check Anti-Malware Status",
+    controlRef: "SI.L1-3.14.2",
+    description: "Verify anti-malware is active and definitions are current on all FCI systems",
+    sortOrder: 0,
+    operatingProcedure: `1. Open your anti-malware/EDR console (e.g., Windows Defender, CrowdStrike, or equivalent).
+2. Confirm anti-malware is actively running on every workstation and server that handles FCI.
+3. Check that malware definition/signature files updated within the past 24 hours on all endpoints.
+4. Review any active threat detections or quarantine events from the past 7 days.
+5. For each detection: document the device, threat name, action taken, and resolution status.
+6. Confirm any device that was offline returned to compliance upon reconnecting.
+7. Document the review with the reviewer name, date, and a summary of findings.`,
+    testProcedure: `1. Verify anti-malware is installed and active on all FCI-scoped devices.
+2. Confirm definition files were updated within the last 24 hours on at least 5 sampled devices.
+3. Verify all active detections from the period have a documented resolution.
+4. Confirm no FCI-scoped device is reporting as unprotected or definition-expired.`,
+    evidenceToRetain: `• Screenshot of AV/EDR console showing all endpoints and their protection/definition status.
+• List of any detections during the period with resolution notes.
+• Definition update log showing last update timestamp per device (or a screenshot of the fleet view).
+• Reviewer name and date of review.`,
+  },
+  {
+    frequency: "weekly",
+    task: "Review System Scans",
+    controlRef: "SI.L1-3.14.5",
+    description: "Confirm scheduled malware scans ran and review any findings",
+    sortOrder: 1,
+    operatingProcedure: `1. Open the anti-malware/EDR console and navigate to the Scan History or Scheduled Scans view.
+2. Confirm all FCI-scoped devices completed a full or quick scan within the past 7 days.
+3. Review scan results for any threats detected, quarantined, or requiring remediation.
+4. For each finding: document the device, file path, threat type, action taken, and current status.
+5. Confirm real-time/on-access scanning is enabled on all FCI-scoped devices.
+6. Investigate any device that did not complete a scheduled scan — determine reason and remediate.
+7. Document the review with reviewer identity, date, and summary.`,
+    testProcedure: `1. Verify all FCI-scoped devices have a completed scan record within the past 7 days.
+2. Sample at least 5 devices and confirm scan history shows a recent completed scan.
+3. Verify all threats detected were remediated or escalated with documented actions.
+4. Confirm real-time scanning is active on sampled devices.`,
+    evidenceToRetain: `• Screenshot or export of scheduled scan results showing device name, scan date, and outcome.
+• List of threats detected with remediation actions and status.
+• Evidence of real-time scan configuration (screenshot of settings).
+• Note of any device that missed a scan and remediation action taken.`,
+  },
+  {
+    frequency: "monthly",
+    task: "Review User Access List",
+    controlRef: "AC.L1-3.1.1",
+    description: "Verify only authorized users have access to systems handling FCI",
+    sortOrder: 2,
+    operatingProcedure: `1. Export the user account list from all systems that access or store FCI (workstations, file shares, cloud storage, email, etc.).
+2. For each active account: confirm the user is a current employee or authorized contractor with a legitimate business need.
+3. Identify and disable accounts for departed employees, contractors whose engagement has ended, or personnel who no longer need FCI access.
+4. Confirm shared/service accounts are documented with a current owner and are necessary.
+5. Verify no unauthorized accounts (e.g., test accounts, former user accounts) remain active.
+6. Update the authorized user list with any additions or removals made during this review.
+7. Obtain or record management acknowledgment of the current authorized user list.`,
+    testProcedure: `1. Verify the user list review was completed for all FCI-scoped systems.
+2. Sample at least 10 active accounts and confirm each has documented business justification.
+3. Verify no terminated employee or contractor accounts are active on any FCI system.
+4. Confirm shared accounts are documented with a current assigned owner.`,
+    evidenceToRetain: `• Current authorized user list export showing username, role, and last login date.
+• Account removal log with justification and authorization references for accounts disabled this period.
+• Management acknowledgment of the authorized user list (email, signature, or system record).`,
+  },
+  {
+    frequency: "monthly",
+    task: "Verify Authentication Controls",
+    controlRef: "IA.L1-3.5.2",
+    description: "Confirm all FCI users must authenticate before accessing systems",
+    sortOrder: 3,
+    operatingProcedure: `1. Review all authentication settings for systems that access or store FCI.
+2. Confirm every account requires a password or equivalent authentication credential — no blank passwords.
+3. Verify password policies are configured to enforce minimum length and complexity (e.g., 8+ characters, not easily guessable).
+4. Check for any accounts with password-never-expires set without documented justification.
+5. Confirm shared workstation or kiosk accounts (if any) are controlled and restricted to authorized personnel.
+6. Where available, confirm multi-factor authentication (MFA) is enabled for remote access and privileged accounts.
+7. Document any authentication weaknesses found and assign owners for remediation.`,
+    testProcedure: `1. Verify password policies are enforced on all FCI-scoped systems (minimum length and expiration settings).
+2. Sample at least 5 user accounts and confirm passwords are required and meet policy.
+3. Verify no accounts with blank passwords exist.
+4. Confirm MFA is required for any remote access to FCI systems.`,
+    evidenceToRetain: `• Screenshot of password policy configuration on all FCI-scoped systems.
+• Confirmation that no blank-password accounts exist (export or screenshot).
+• MFA configuration screenshot for remote access if applicable.
+• Remediation notes for any authentication weakness found.`,
+  },
+  {
+    frequency: "monthly",
+    task: "Review External Connections",
+    controlRef: "AC.L1-3.1.20",
+    description: "Verify and document all authorized external system connections",
+    sortOrder: 4,
+    operatingProcedure: `1. Review the list of all external systems and services your systems connect to (cloud storage, email providers, file-sharing platforms, remote access tools, etc.).
+2. Confirm each connection is documented with: purpose, authorized by, and whether FCI passes through it.
+3. Identify any new or undocumented external connections established since the last review.
+4. Confirm security controls are in place for all external connections (authentication, encryption in transit, access control).
+5. Remove or disable connections that are no longer needed or not authorized.
+6. Update the external connections register/inventory.`,
+    testProcedure: `1. Verify all external connections are documented in the connections inventory.
+2. Sample at least 5 external connections and confirm each has a documented purpose and authorization.
+3. Verify no undocumented external connections exist on FCI-scoped systems.
+4. Confirm security controls (auth, encryption) are in place for each sampled connection.`,
+    evidenceToRetain: `• External connections inventory/register showing connection name, purpose, authorization, and security controls.
+• Evidence of authorization for any new connections established this period.
+• Removal record for any connections decommissioned this period.`,
+  },
+  {
+    frequency: "monthly",
+    task: "Apply System Patches",
+    controlRef: "SI.L1-3.14.1",
+    description: "Identify and apply security patches to address system flaws",
+    sortOrder: 5,
+    operatingProcedure: `1. Review available OS and software updates for all FCI-scoped systems (Windows Update, macOS Software Update, or patch management console).
+2. Identify any Critical or High-severity security patches not yet applied.
+3. Apply all Critical and High security patches within the organization's patch window (typically 30 days for Critical).
+4. Confirm patches were applied successfully — check for any failed installations.
+5. Document any patches deferred with justification, owner, and target remediation date.
+6. Review and update the patch status log.`,
+    testProcedure: `1. Verify a patch review was conducted for all FCI-scoped systems.
+2. Sample at least 5 devices and confirm no Critical security patches are outstanding beyond the allowed window.
+3. Verify deferred patches have documented justification and a scheduled remediation date.
+4. Confirm patch application logs show successful installation for recent Critical/High patches.`,
+    evidenceToRetain: `• Patch status report showing device name, OS version, available patches, and applied-date.
+• Evidence of Critical patch installation (e.g., Windows Update history screenshot).
+• Deferred patch list with justification and target dates.`,
+  },
+  {
+    frequency: "monthly",
+    task: "Check Network Boundary Controls",
+    controlRef: "SC.L1-3.13.1",
+    description: "Confirm firewall and network boundary protection is active for FCI systems",
+    sortOrder: 6,
+    operatingProcedure: `1. Confirm the host-based firewall is active on all FCI-scoped workstations and servers.
+2. Confirm a perimeter firewall or router ACL is in place between your internal network and the internet.
+3. Verify the firewall is configured to deny inbound connections by default (deny-by-default rule).
+4. Review any inbound firewall rules — confirm each is documented and necessary.
+5. Check that all outbound FCI traffic uses encrypted connections (HTTPS, TLS, VPN).
+6. Review any firewall rule changes made since the last review and confirm they were authorized.`,
+    testProcedure: `1. Verify host-based firewalls are active on all FCI-scoped devices.
+2. Confirm a perimeter firewall is in place and the deny-by-default policy is set.
+3. Sample at least 5 firewall rules and confirm each has documented business justification.
+4. Verify any rule changes this period were made via an approved change process.`,
+    evidenceToRetain: `• Screenshot of host-based firewall status on sampled FCI-scoped devices.
+• Screenshot or export of perimeter firewall rule set showing deny-by-default.
+• Authorization records for any rule changes made during the period.`,
+  },
+  {
+    frequency: "monthly",
+    task: "Check Physical Access Controls",
+    controlRef: "PE.L1-3.10.1",
+    description: "Verify physical access to FCI systems and work areas is restricted to authorized personnel",
+    sortOrder: 7,
+    operatingProcedure: `1. Walk through or review all areas where FCI systems are located (server rooms, workstations, storage).
+2. Confirm each area has an appropriate physical access control (keycard, lock, badge, alarm, or equivalent).
+3. Verify only authorized personnel have keys, access cards, or codes to enter FCI work areas.
+4. Check that unattended workstations in FCI areas lock automatically or are secured when not in use.
+5. Confirm FCI printed materials are secured (not left on desks, in unlocked drawers, etc.).
+6. Note and remediate any physical access weaknesses observed.`,
+    testProcedure: `1. Verify physical access controls are in place for all FCI-scoped work areas.
+2. Confirm the list of personnel with physical access is current and matches the authorized user list.
+3. Verify workstations in FCI areas have auto-lock enabled (typically 15 minutes or less).
+4. Confirm no unattended FCI materials were found in unsecured locations during the review.`,
+    evidenceToRetain: `• Physical walkthrough notes or checklist showing areas reviewed and controls observed.
+• List of personnel with physical access (key/card holders) matched against the authorized user list.
+• Workstation lock policy screenshot or configuration evidence.
+• Remediation notes for any weaknesses found.`,
+  },
+  {
+    frequency: "monthly",
+    task: "Review Physical Access Logs",
+    controlRef: "PE.L1-3.10.4",
+    description: "Review facility and system area access logs for unauthorized entries",
+    sortOrder: 8,
+    operatingProcedure: `1. Obtain physical access logs for the review period from your access control system (keycard system, sign-in log, or security camera log).
+2. Review all entries for FCI-restricted areas during the period.
+3. Identify any after-hours access, unusual access patterns, or entries by individuals not on the authorized list.
+4. Investigate and document any anomalous access events.
+5. Confirm all entries can be accounted for by authorized personnel or documented visitors.
+6. Escalate any unauthorized access events to management.`,
+    testProcedure: `1. Verify physical access logs are maintained for all FCI-restricted areas.
+2. Sample at least 10 access log entries and confirm each corresponds to an authorized individual.
+3. Verify any anomalous access events were investigated and documented.
+4. Confirm management was notified of any unauthorized access events.`,
+    evidenceToRetain: `• Physical access log export or screenshot for the review period.
+• Investigation notes for any anomalous or after-hours access events.
+• Management notification records for unauthorized access events.`,
+  },
+  {
+    frequency: "monthly",
+    task: "Review Publicly Accessible Content",
+    controlRef: "AC.L1-3.1.22",
+    description: "Confirm no FCI is posted to publicly accessible websites or file shares",
+    sortOrder: 9,
+    operatingProcedure: `1. Identify all publicly accessible systems operated by your organization (website, public file share, public cloud storage bucket, etc.).
+2. Review content posted or stored on each public-facing system.
+3. Confirm no FCI (Federal Contract Information) is present in any publicly accessible location.
+4. If FCI is found in a public location, remove it immediately and investigate how it was posted.
+5. Confirm that public-facing systems do not have login credentials or references to FCI systems embedded in content.
+6. Document the review with reviewer name, date, systems reviewed, and outcome.`,
+    testProcedure: `1. Verify all public-facing systems were reviewed during the period.
+2. Confirm no FCI was found in any publicly accessible location.
+3. If FCI was found and removed, verify the root cause was identified and corrected.`,
+    evidenceToRetain: `• List of public-facing systems reviewed with review date and outcome.
+• Confirmation that each system was checked and no FCI found (or removal documentation if FCI was found).
+• Reviewer identity and date.`,
+  },
+  {
+    frequency: "quarterly",
+    task: "Review Physical Access Devices",
+    controlRef: "PE.L1-3.10.5",
+    description: "Audit physical access devices (keys, cards, codes) for FCI work areas",
+    sortOrder: 10,
+    operatingProcedure: `1. Generate a list of all physical access devices issued for FCI-restricted areas (keycards, physical keys, PIN codes, fobs).
+2. Match each device to an active, authorized employee or contractor.
+3. Revoke or collect devices from personnel who have departed or no longer require access.
+4. Confirm all active devices are assigned to current authorized personnel.
+5. Update the physical access device inventory.
+6. Obtain management approval of the updated device inventory.`,
+    testProcedure: `1. Verify the physical access device inventory was reviewed and updated this quarter.
+2. Sample at least 10 issued devices and confirm each is assigned to a current authorized individual.
+3. Verify devices were collected or deactivated for any departed personnel.
+4. Confirm management reviewed and approved the updated inventory.`,
+    evidenceToRetain: `• Physical access device inventory showing device ID, assignee, and issue date.
+• Record of devices revoked or deactivated this quarter with authorization.
+• Management approval of the updated inventory.`,
+  },
+  {
+    frequency: "quarterly",
+    task: "Review Visitor Escort Procedures",
+    controlRef: "PE.L1-3.10.3",
+    description: "Verify that all visitors to FCI work areas are escorted and logged",
+    sortOrder: 11,
+    operatingProcedure: `1. Review the visitor log for all FCI-restricted areas for the quarter.
+2. Confirm each visitor was escorted by an authorized employee throughout their visit.
+3. Identify any unescorted visitors or incomplete log entries — investigate and remediate.
+4. Verify that the visitor escort policy is documented and that all staff are aware of the requirement.
+5. Confirm visitors are not left unattended with FCI systems or materials.
+6. Document the review with reviewer name, date, and any findings.`,
+    testProcedure: `1. Verify visitor logs are maintained for all FCI-restricted areas.
+2. Sample at least 5 visitor log entries and confirm each records escort identity and visit purpose.
+3. Verify no visitor was left unescorted in a FCI-restricted area.
+4. Confirm the visitor escort policy is documented and accessible to staff.`,
+    evidenceToRetain: `• Visitor log for the quarter showing visitor name, purpose, escort name, and date/time.
+• Visitor escort policy document or policy acknowledgment records.
+• Remediation notes for any unescorted visitor incidents.`,
+  },
+  {
+    frequency: "quarterly",
+    task: "Media Disposal Review",
+    controlRef: "MP.L1-3.8.3",
+    description: "Confirm procedures for sanitizing or destroying FCI media before disposal or reuse",
+    sortOrder: 12,
+    operatingProcedure: `1. Review the media disposal log for any devices or storage media disposed of or reused during the quarter.
+2. Confirm each disposed item (hard drives, USB drives, printed documents, etc.) was sanitized or destroyed per the media disposal policy.
+3. Verify electronic media was wiped using an approved method (NIST 800-88 compliant, degaussed, or physically destroyed).
+4. Confirm FCI paper documents were shredded (crosscut) rather than placed in regular recycling or trash.
+5. Check for any accumulated media awaiting disposal and ensure it is secured until sanitized.
+6. Update the media disposal log with this quarter's disposals.`,
+    testProcedure: `1. Verify the media disposal log is current and includes all disposals from the quarter.
+2. Sample at least 3 disposal records and confirm each has documented sanitization method and date.
+3. Verify electronic media was wiped or destroyed using an approved method.
+4. Confirm no FCI media is stored unsecured while awaiting disposal.`,
+    evidenceToRetain: `• Media disposal log for the quarter showing item description, sanitization method, date, and authorized-by.
+• Certificate of destruction or wipe confirmation for electronic media (if available from vendor).
+• Shredding service receipt or on-site shredder confirmation for paper documents.`,
+  },
+  {
+    frequency: "annually",
+    task: "Annual FCI Self-Assessment",
+    controlRef: "ALL",
+    description: "Review all 17 CMMC Level 1 FCI safeguarding requirements",
+    sortOrder: 13,
+    operatingProcedure: `1. Obtain and review the DoD CMMC Level 1 Assessment Guide and FAR 52.204-21 requirements.
+2. Define the assessment scope: all systems, personnel, and locations that process, store, or transmit FCI.
+3. Evaluate each of the 17 CMMC Level 1 practices for implementation status: MET, NOT MET, or NOT APPLICABLE.
+4. Collect and document evidence for each practice assessed as MET.
+5. Document all gaps and deficiencies for practices assessed as NOT MET.
+6. Update the POA&M with all new deficiencies identified.
+7. Prepare a self-assessment summary report with findings by practice family.
+8. Obtain management review and approval of the self-assessment results.
+9. Retain the self-assessment report and evidence packages for audit purposes.`,
+    testProcedure: `1. Verify the self-assessment scope is documented and management-approved.
+2. Confirm all 17 CMMC Level 1 practices were assessed with a documented status.
+3. Verify evidence was collected and retained for each MET practice.
+4. Confirm the POA&M was updated with all NOT MET findings.
+5. Verify management reviewed and approved the final self-assessment report.`,
+    evidenceToRetain: `• Signed assessment scope document with management approval.
+• Self-assessment report with per-practice findings (MET / NOT MET / N/A) and evidence references.
+• Evidence packages for each MET practice.
+• Updated POA&M reflecting all NOT MET findings.
+• Management approval documentation for self-assessment results.
+• Previous year's self-assessment for trend comparison.`,
+  },
+  {
+    frequency: "annually",
+    task: "Security Awareness Training",
+    controlRef: "ALL",
+    description: "Confirm all personnel complete annual FCI security awareness training",
+    sortOrder: 14,
+    operatingProcedure: `1. Review and update the annual security awareness training content for currency and relevance.
+2. Ensure training covers required topics: FCI handling rules, phishing recognition, password security, physical security, incident reporting, and acceptable use.
+3. Enroll all personnel with access to FCI systems or work areas in the annual training.
+4. Set a completion deadline and communicate it to all personnel and managers.
+5. Monitor completion progress — follow up with non-completers and their supervisors.
+6. Document training completions with user name, role, date completed, and course name.
+7. Address non-completion with escalation (management notification, access suspension if required).
+8. Obtain management sign-off on the training completion report.`,
+    testProcedure: `1. Verify the training completion report covers all FCI-access personnel.
+2. Sample at least 10 users and confirm training completion records with date and course name.
+3. Verify all FCI-access personnel completed training within the annual cycle.
+4. Confirm training content covers all required FCI awareness topics.
+5. Verify management sign-off is documented on the completion report.`,
+    evidenceToRetain: `• Training completion report by user and course with completion dates.
+• LMS export or screenshot showing completion rates and non-completers.
+• Training curriculum or content outline showing FCI topic coverage.
+• Management sign-off on training completion report.
+• Escalation records for personnel who did not complete training on time.`,
+  },
+];
+
+// ─── L2 seed (NIST SP 800-171 / CMMC Level 2 practices) ─────────────────────
 
 const MONITORING_SEED_ITEMS: MonitoringSeedItem[] = [
   {
@@ -518,7 +844,10 @@ const MONITORING_SEED_ITEMS: MonitoringSeedItem[] = [
   },
 ];
 
-export async function seedMonitoringItemsForOrg(orgId: string): Promise<void> {
+export async function seedMonitoringItemsForOrg(
+  orgId: string,
+  cmmcLevel: "L1" | "L2" | string = "L2"
+): Promise<void> {
   const [{ value: existing }] = await db
     .select({ value: count() })
     .from(monitoringItemsTable)
@@ -526,8 +855,10 @@ export async function seedMonitoringItemsForOrg(orgId: string): Promise<void> {
 
   if (Number(existing) > 0) return;
 
+  const seedItems = cmmcLevel === "L1" ? MONITORING_SEED_ITEMS_L1 : MONITORING_SEED_ITEMS;
+
   await db.insert(monitoringItemsTable).values(
-    MONITORING_SEED_ITEMS.map((item) => ({
+    seedItems.map((item) => ({
       id: randomUUID(),
       organizationId: orgId,
       ...item,
@@ -536,6 +867,57 @@ export async function seedMonitoringItemsForOrg(orgId: string): Promise<void> {
       updatedAt: new Date(),
     }))
   );
+}
+
+/**
+ * Delete all monitoring items for an org and re-seed with the level-appropriate defaults.
+ * Used when an org switches CMMC levels or was seeded with the wrong level.
+ */
+export async function resetMonitoringItemsForOrg(
+  orgId: string,
+  cmmcLevel: "L1" | "L2" | string = "L2"
+): Promise<number> {
+  await db.delete(monitoringItemsTable).where(eq(monitoringItemsTable.organizationId, orgId));
+
+  const seedItems = cmmcLevel === "L1" ? MONITORING_SEED_ITEMS_L1 : MONITORING_SEED_ITEMS;
+
+  await db.insert(monitoringItemsTable).values(
+    seedItems.map((item) => ({
+      id: randomUUID(),
+      organizationId: orgId,
+      ...item,
+      status: "open" as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }))
+  );
+
+  return seedItems.length;
+}
+
+/**
+ * Detect if an L1 org was seeded with L2-style monitoring items (NIST 800-171 refs like "3.14.3")
+ * and silently replace them with the correct L1 defaults. No-op for L2 orgs or already-migrated L1 orgs.
+ */
+export async function migrateMonitoringLevelForOrg(
+  orgId: string,
+  cmmcLevel: "L1" | "L2" | string
+): Promise<void> {
+  if (cmmcLevel !== "L1") return;
+
+  const sample = await db
+    .select({ controlRef: monitoringItemsTable.controlRef })
+    .from(monitoringItemsTable)
+    .where(eq(monitoringItemsTable.organizationId, orgId))
+    .limit(5);
+
+  if (sample.length === 0) return; // empty — seedMonitoringItemsForOrg will handle it
+
+  // L2 refs start with a digit (e.g. "3.14.3", "3.3.x"). L1 refs start with a letter (e.g. "AC.L1-...")
+  const hasL2Items = sample.some((i) => /^\d/.test(i.controlRef));
+  if (!hasL2Items) return; // already on L1 items
+
+  await resetMonitoringItemsForOrg(orgId, "L1");
 }
 
 /**
@@ -788,6 +1170,29 @@ router.post("/monitoring", requireAuth, requireOrg, async (req, res) => {
     .returning();
 
   res.status(201).json(inserted);
+});
+
+// ─── POST /api/monitoring/reset-to-level-defaults — replace all items with level defaults ──
+
+router.post("/monitoring/reset-to-level-defaults", requireAuth, requireOrg, async (req, res) => {
+  const orgId = req.orgId!;
+  const orgRole = req.orgRole ?? "member";
+  if (!["admin"].includes(orgRole) && req.authUser?.role !== "admin") {
+    res.status(403).json({ error: "Only org admins can reset monitoring defaults" });
+    return;
+  }
+
+  const [org] = await db
+    .select({ cmmcTargetLevel: organizationsTable.cmmcTargetLevel })
+    .from(organizationsTable)
+    .where(eq(organizationsTable.id, orgId))
+    .limit(1);
+
+  if (!org) { res.status(404).json({ error: "Org not found" }); return; }
+
+  const level = org.cmmcTargetLevel ?? "L2";
+  const count = await resetMonitoringItemsForOrg(orgId, level);
+  res.json({ ok: true, level, seeded: count });
 });
 
 // ─── DELETE /api/monitoring/:id — remove a monitoring item ───────────────────
