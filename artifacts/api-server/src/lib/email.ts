@@ -610,3 +610,87 @@ export async function sendSupportTicketConfirmation(opts: {
 
   logger.info({ ticketNumber, toEmail }, "Support ticket confirmation email sent to user");
 }
+
+// ─── Support ticket — status update notification ───────────────────────────────
+
+const TICKET_STATUS_LABELS: Record<string, string> = {
+  submitted: "Submitted",
+  in_review: "In Review",
+  waiting_on_user: "Waiting on User",
+  resolved: "Resolved",
+  closed: "Closed",
+};
+
+export async function sendTicketStatusUpdate(opts: {
+  ticketNumber: string;
+  subject: string;
+  newStatus: string;
+  toEmail: string;
+  toName: string;
+  /** Optional admin note shared with the submitter */
+  sharedNote?: string | null;
+}): Promise<void> {
+  const { ticketNumber, subject, newStatus, toEmail, toName, sharedNote } = opts;
+
+  const statusLabel = TICKET_STATUS_LABELS[newStatus] ?? newStatus;
+
+  const isResolved = newStatus === "resolved" || newStatus === "closed";
+  const headerColor = isResolved ? "#166534" : "#1e40af";
+  const badgeBg = isResolved ? "#f0fdf4" : "#eff6ff";
+  const badgeBorder = isResolved ? "#bbf7d0" : "#bfdbfe";
+  const badgeText = isResolved ? "#166534" : "#1e40af";
+
+  const sharedNoteSection = sharedNote
+    ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;margin-bottom:24px;">
+        <p style="color:#374151;font-weight:600;margin:0 0 6px 0;font-size:13px;">Message from Support:</p>
+        <p style="color:#374151;margin:0;font-size:13px;white-space:pre-wrap;">${escapeHtml(sharedNote)}</p>
+       </div>`
+    : "";
+
+  const sharedNoteText = sharedNote ? `\nMessage from Support:\n${sharedNote}\n` : "";
+
+  const html = emailShell(`
+    <h2 style="color:${headerColor};margin-bottom:8px;">Support Ticket Update</h2>
+    <p style="color:#374151;margin-bottom:8px;">Hi ${escapeHtml(toName)},</p>
+    <p style="color:#374151;margin-bottom:16px;">Your support request <strong>${escapeHtml(ticketNumber)}</strong> has been updated.</p>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;margin-bottom:16px;">
+      <table style="width:100%;font-size:13px;color:#374151;">
+        <tr><td style="font-weight:600;padding:4px 0;width:140px;">Ticket Number</td><td style="font-family:monospace;font-weight:700;">${escapeHtml(ticketNumber)}</td></tr>
+        <tr><td style="font-weight:600;padding:4px 0;">Subject</td><td>${escapeHtml(subject)}</td></tr>
+        <tr><td style="font-weight:600;padding:4px 0;">New Status</td><td>
+          <span style="display:inline-block;background:${badgeBg};border:1px solid ${badgeBorder};color:${badgeText};border-radius:4px;padding:2px 10px;font-size:12px;font-weight:600;">${escapeHtml(statusLabel)}</span>
+        </td></tr>
+      </table>
+    </div>
+    ${sharedNoteSection}
+    <p style="color:#6b7280;font-size:13px;">If you have questions, you can reply to the original support email thread or submit a new request through Control HUB.</p>
+    <div style="background:#fef9c3;border:1px solid #fde047;border-radius:6px;padding:10px 14px;margin-top:16px;">
+      <p style="color:#713f12;font-weight:600;margin:0;font-size:12px;">🔒 Security Notice: Do not reply with Controlled Unclassified Information, passwords, or sensitive contract data.</p>
+    </div>
+  `);
+
+  const text = [
+    `Support Ticket Update — ${ticketNumber}`,
+    ``,
+    `Hi ${toName},`,
+    ``,
+    `Your support request ${ticketNumber} has been updated.`,
+    ``,
+    `Ticket Number: ${ticketNumber}`,
+    `Subject: ${subject}`,
+    `New Status: ${statusLabel}`,
+    sharedNoteText,
+    `If you have questions, reply to the original support email thread or submit a new request through Control HUB.`,
+    ``,
+    `SECURITY NOTICE: Do not reply with Controlled Unclassified Information, passwords, or sensitive contract data.`,
+  ].join("\n");
+
+  await sendEmail({
+    to: toEmail,
+    subject: `Control HUB Support [${ticketNumber}] — Status updated to ${statusLabel}`,
+    html,
+    text,
+  });
+
+  logger.info({ ticketNumber, toEmail, newStatus }, "Support ticket status update email sent to user");
+}

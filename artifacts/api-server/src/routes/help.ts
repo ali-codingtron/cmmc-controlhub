@@ -16,6 +16,7 @@ import { logAudit } from "../lib/audit";
 import {
   sendSupportTicketEmail,
   sendSupportTicketConfirmation,
+  sendTicketStatusUpdate,
 } from "../lib/email";
 
 const router = Router();
@@ -662,6 +663,8 @@ router.get("/help/support-tickets", requireAuth, async (req, res): Promise<void>
 const ticketPatchSchema = z.object({
   status: z.enum(["submitted", "in_review", "waiting_on_user", "resolved", "closed"]).optional(),
   internalNotes: z.string().max(5000).optional(),
+  /** When true, send the internalNotes text to the submitter as part of the status-change email */
+  shareNotesWithSubmitter: z.boolean().default(false),
 });
 
 router.patch("/help/support-tickets/:id", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
@@ -672,11 +675,19 @@ router.patch("/help/support-tickets/:id", requireAuth, requireRole("admin"), asy
   }
   const body = parsed.data;
 
-  // Fetch existing ticket
+  // Fetch existing ticket (include submitter fields needed for status-change email)
   const existing = await db.execute(
-    sql`SELECT id, ticket_number, status FROM support_tickets WHERE id = ${ticketId}::uuid LIMIT 1`
+    sql`SELECT id, ticket_number, status, submitted_by_email, submitted_by_name, subject
+        FROM support_tickets WHERE id = ${ticketId}::uuid LIMIT 1`
   );
-  const ticket = existing.rows?.[0] as { id: string; ticket_number: string; status: string } | undefined;
+  const ticket = existing.rows?.[0] as {
+    id: string;
+    ticket_number: string;
+    status: string;
+    submitted_by_email: string;
+    submitted_by_name: string;
+    subject: string;
+  } | undefined;
   if (!ticket) {
     return void res.status(404).json({ error: "Ticket not found" });
   }
@@ -703,6 +714,20 @@ router.patch("/help/support-tickets/:id", requireAuth, requireRole("admin"), asy
         previousValue: { status: prevStatus },
         newValue: { status: body.status },
       });
+
+      // Notify the submitter — non-fatal
+      try {
+        await sendTicketStatusUpdate({
+          ticketNumber: ticket.ticket_number,
+          subject: ticket.subject,
+          newStatus: body.status,
+          toEmail: ticket.submitted_by_email,
+          toName: ticket.submitted_by_name,
+          sharedNote: body.shareNotesWithSubmitter ? (body.internalNotes ?? null) : null,
+        });
+      } catch (_emailErr) {
+        // Status-change notification failure is non-fatal
+      }
     }
   }
 
