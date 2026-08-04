@@ -32,6 +32,7 @@ import evidenceBulkImportRouter from "./evidence-bulk-import";
 import evidenceSmartMapRouter from "./evidence-smart-map";
 import certificationRouter from "./certification";
 import controlTasksRouter from "./control-tasks";
+import l1AssessmentRouter from "./l1-assessment";
 
 const router: IRouter = Router();
 
@@ -68,5 +69,6 @@ router.use(evidenceBulkImportRouter);
 router.use(evidenceSmartMapRouter);
 router.use("/certification", certificationRouter);
 router.use(controlTasksRouter);
+router.use("/l1-assessment", l1AssessmentRouter);
 
 export default router;
