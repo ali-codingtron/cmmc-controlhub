@@ -57,8 +57,9 @@ export const certificationRecordSchema = z
     assessmentStartDate: dateString("Assessment start date"),
     assessmentCompletionDate: dateString("Assessment completion date"),
     assessmentUniqueId: z
-      .string({ required_error: "C3PAO assessment reference number is required." })
-      .min(1, "C3PAO assessment reference number is required."),
+      .string()
+      .optional()
+      .nullable(),
     cageCodes: z
       .array(z.string().min(1))
       .min(1, "At least one CAGE code is required."),

@@ -40,6 +40,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useListPackages } from "@workspace/api-client-react";
+import { RecordCertWizardBody } from "@/components/certification/RecordCertWizardBody";
 
 interface OrgStats {
   id: string;
@@ -140,271 +141,26 @@ function CertificationInitiateWizard({
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const { toast } = useToast();
-  const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({
-    certificationStatus: "",
-    cmmcUid: "",
-    assessmentLevel: "Level 2",
-    c3paoName: "",
-    cmmcStatusDate: "",
-    assessmentStartDate: "",
-    assessmentCompletionDate: "",
-    assessmentUniqueId: "",
-    cageCodes: "",
-    assessmentScopeName: "",
-    sspTitle: "",
-    sspVersion: "",
-    sspDate: "",
-    affirmingOfficial: "",
-    internalCertificationOwner: "",
-    assessorNames: "",
-    notes: "",
-    hasRequiredRecord: false,
-  });
-
-  function set(k: string, v: string | boolean) {
-    setForm((f) => ({ ...f, [k]: v }));
-  }
-
-  function handleClose() {
-    setStep(1);
-    setForm({
-      certificationStatus: "",
-      cmmcUid: "",
-      assessmentLevel: "Level 2",
-      c3paoName: "",
-      cmmcStatusDate: "",
-      assessmentStartDate: "",
-      assessmentCompletionDate: "",
-      assessmentUniqueId: "",
-      cageCodes: "",
-      assessmentScopeName: "",
-      sspTitle: "",
-      sspVersion: "",
-      sspDate: "",
-      affirmingOfficial: "",
-      internalCertificationOwner: "",
-      assessorNames: "",
-      notes: "",
-      hasRequiredRecord: false,
-    });
-    onClose();
-  }
-
-  async function handleSubmit() {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem("auth_token");
-      const r = await fetch("/api/certification/initiate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          "X-Organization-ID": orgId,
-        },
-        body: JSON.stringify({
-          ...form,
-          cageCodes: form.cageCodes.split(",").map((s) => s.trim()).filter(Boolean),
-          assessorNames: form.assessorNames ? form.assessorNames.split(",").map((s) => s.trim()).filter(Boolean) : [],
-          contractReferences: [],
-        }),
-      });
-      const data = await r.json();
-      if (!r.ok) {
-        toast({ title: "Error", description: data.error ?? "Submission failed", variant: "destructive" });
-        return;
-      }
-      toast({ title: "Submitted", description: `Certification record submitted for ${orgName}. A second authorized user must verify it.` });
-      handleClose();
-      onSuccess();
-    } catch {
-      toast({ title: "Error", description: "Network error", variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const inputClass = "w-full border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800";
-  const labelClass = "block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1";
-  const STEPS = ["Select Status", "Assessment Details", "Supporting Records"];
-
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl flex flex-col overflow-hidden" style={{ maxHeight: "90vh" }}>
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Award className="h-5 w-5 text-blue-600" />
-            Initiate Certification — {orgName}
+            Record Official CMMC Level 2 Status — {orgName}
           </DialogTitle>
+          <p className="text-xs text-muted-foreground mt-1">
+            This records an already-received official C3PAO certification status for this organization.
+          </p>
         </DialogHeader>
-
-        {/* Step indicator */}
-        <div className="flex items-center gap-1 shrink-0 py-2">
-          {STEPS.map((label, i) => {
-            const n = i + 1;
-            return (
-              <div key={n} className="flex items-center gap-2 flex-1 min-w-0">
-                <div className={cn(
-                  "w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold shrink-0",
-                  step >= n ? "bg-blue-600 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-400"
-                )}>
-                  {step > n ? <Check className="h-3.5 w-3.5" /> : n}
-                </div>
-                <span className={cn("text-xs truncate", step >= n ? "text-slate-700 dark:text-slate-200 font-medium" : "text-slate-400")}>{label}</span>
-                {i < STEPS.length - 1 && <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700 ml-1" />}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Step content */}
         <div className="overflow-y-auto flex-1 py-2 pr-1">
-          {step === 1 && (
-            <div>
-              <p className="text-xs text-muted-foreground mb-4">
-                Select the CMMC certification status officially awarded to <strong>{orgName}</strong> by their C3PAO assessor.
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { value: "CONDITIONAL_L2_C3PAO", label: "Conditional Level 2 (C3PAO)", desc: "Assessment completed with POA&Ms", color: "border-amber-300 bg-amber-50 dark:bg-amber-950/30" },
-                  { value: "FINAL_L2_C3PAO", label: "Final Level 2 (C3PAO)", desc: "Full assessment completed, no open POA&Ms", color: "border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30" },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => set("certificationStatus", opt.value)}
-                    className={cn(
-                      "text-left p-4 rounded-xl border-2 transition-all",
-                      form.certificationStatus === opt.value
-                        ? opt.color
-                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-slate-300"
-                    )}
-                  >
-                    <div className="font-medium text-sm">{opt.label}</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{opt.desc}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {step === 2 && (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={labelClass}>CMMC UID <span className="text-red-500">*</span></label>
-                <input className={inputClass} value={form.cmmcUid} onChange={(e) => set("cmmcUid", e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} maxLength={10} placeholder="10 alphanumeric characters" />
-              </div>
-              <div>
-                <label className={labelClass}>Assessment Level</label>
-                <input className={inputClass} value={form.assessmentLevel} onChange={(e) => set("assessmentLevel", e.target.value)} />
-              </div>
-              <div className="col-span-2">
-                <label className={labelClass}>C3PAO Name <span className="text-red-500">*</span></label>
-                <input className={inputClass} value={form.c3paoName} onChange={(e) => set("c3paoName", e.target.value)} placeholder="Third-Party Assessment Organization name" />
-              </div>
-              <div>
-                <label className={labelClass}>CMMC Status Date <span className="text-red-500">*</span></label>
-                <input type="date" className={inputClass} value={form.cmmcStatusDate} onChange={(e) => set("cmmcStatusDate", e.target.value)} />
-              </div>
-              <div>
-                <label className={labelClass}>Assessment Start Date</label>
-                <input type="date" className={inputClass} value={form.assessmentStartDate} onChange={(e) => set("assessmentStartDate", e.target.value)} />
-              </div>
-              <div>
-                <label className={labelClass}>Assessment Completion Date</label>
-                <input type="date" className={inputClass} value={form.assessmentCompletionDate} onChange={(e) => set("assessmentCompletionDate", e.target.value)} />
-              </div>
-              <div>
-                <label className={labelClass}>Assessment Unique ID <span className="text-red-500">*</span></label>
-                <input className={inputClass} value={form.assessmentUniqueId} onChange={(e) => set("assessmentUniqueId", e.target.value)} />
-              </div>
-              <div className="col-span-2">
-                <label className={labelClass}>CAGE Codes <span className="text-red-500">*</span></label>
-                <input className={inputClass} value={form.cageCodes} onChange={(e) => set("cageCodes", e.target.value)} placeholder="Comma-separated, e.g. 1A2B3, 4C5D6" />
-              </div>
-              <div className="col-span-2">
-                <label className={labelClass}>Assessment Scope Name <span className="text-red-500">*</span></label>
-                <input className={inputClass} value={form.assessmentScopeName} onChange={(e) => set("assessmentScopeName", e.target.value)} />
-              </div>
-              <div className="col-span-2">
-                <label className={labelClass}>SSP Title <span className="text-red-500">*</span></label>
-                <input className={inputClass} value={form.sspTitle} onChange={(e) => set("sspTitle", e.target.value)} />
-              </div>
-              <div>
-                <label className={labelClass}>SSP Version <span className="text-red-500">*</span></label>
-                <input className={inputClass} value={form.sspVersion} onChange={(e) => set("sspVersion", e.target.value)} />
-              </div>
-              <div>
-                <label className={labelClass}>SSP Date <span className="text-red-500">*</span></label>
-                <input type="date" className={inputClass} value={form.sspDate} onChange={(e) => set("sspDate", e.target.value)} />
-              </div>
-              <div>
-                <label className={labelClass}>Affirming Official <span className="text-red-500">*</span></label>
-                <input className={inputClass} value={form.affirmingOfficial} onChange={(e) => set("affirmingOfficial", e.target.value)} placeholder="Name, Title" />
-              </div>
-              <div>
-                <label className={labelClass}>Internal Certification Owner <span className="text-red-500">*</span></label>
-                <input className={inputClass} value={form.internalCertificationOwner} onChange={(e) => set("internalCertificationOwner", e.target.value)} placeholder="Name, Title" />
-              </div>
-              <div className="col-span-2">
-                <label className={labelClass}>Assessor Names (optional, comma-separated)</label>
-                <input className={inputClass} value={form.assessorNames} onChange={(e) => set("assessorNames", e.target.value)} />
-              </div>
-              <div className="col-span-2">
-                <label className={labelClass}>Notes (optional)</label>
-                <textarea className={inputClass} rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
-              </div>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div className="space-y-4">
-              <p className="text-xs text-muted-foreground">At least one official supporting record must be available before submission. Records can be uploaded after verification in the Official Records tab.</p>
-              <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-4 space-y-2">
-                <div className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">Acceptable record types (at least one required):</div>
-                {["CMMC Assessment Findings Report", "CMMC Status Confirmation", "SPRS Status Verification", "Certification Record", "POA&M Closeout Result (if applicable)"].map((r) => (
-                  <div key={r} className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
-                    <div className="h-1.5 w-1.5 rounded-full bg-slate-400 shrink-0" />
-                    {r}
-                  </div>
-                ))}
-              </div>
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input type="checkbox" checked={form.hasRequiredRecord} onChange={(e) => set("hasRequiredRecord", e.target.checked)} className="mt-0.5" />
-                <span className="text-sm text-slate-700 dark:text-slate-300">
-                  I confirm that at least one official supporting record is available and will be uploaded to the Official Records tab upon module activation.
-                </span>
-              </label>
-              <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
-                <div className="flex gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                  <div className="text-xs text-amber-800 dark:text-amber-400">
-                    <div className="font-medium mb-1">Second-Person Verification Required</div>
-                    After submission, a different authorized user with verification permissions must independently confirm this record before the Certification module becomes active.
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          <RecordCertWizardBody
+            orgId={orgId}
+            orgName={orgName}
+            onSuccess={() => { onClose(); onSuccess(); }}
+            onCancel={onClose}
+          />
         </div>
-
-        <DialogFooter className="shrink-0 pt-4 border-t mt-2">
-          <Button variant="outline" onClick={step === 1 ? handleClose : () => setStep((s) => s - 1)}>
-            {step === 1 ? "Cancel" : "Back"}
-          </Button>
-          <Button
-            disabled={
-              (step === 1 && !form.certificationStatus) ||
-              (step === 2 && (!form.cmmcUid || form.cmmcUid.length !== 10 || !form.c3paoName || !form.cmmcStatusDate || !form.assessmentScopeName || !form.sspTitle || !form.sspVersion || !form.sspDate || !form.affirmingOfficial || !form.internalCertificationOwner || !form.cageCodes)) ||
-              (step === 3 && !form.hasRequiredRecord) ||
-              loading
-            }
-            onClick={step < 3 ? () => setStep((s) => s + 1) : handleSubmit}
-          >
-            {loading ? "Submitting…" : step < 3 ? "Continue" : "Submit for Verification"}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -954,7 +710,7 @@ function OrgCard({ org, onSwitch, onDelete, onInitiateCert, onEdit }: { org: Org
         >
           {isActive ? "Currently Viewing" : "Switch to Org"}
         </Button>
-        <div className="grid grid-cols-2 gap-2">
+        <div className={cn("grid gap-2", org.cmmcTargetLevel !== "L1" ? "grid-cols-2" : "grid-cols-1")}>
           <Button
             variant="outline"
             size="sm"
@@ -964,15 +720,17 @@ function OrgCard({ org, onSwitch, onDelete, onInitiateCert, onEdit }: { org: Org
             <Pencil className="h-3.5 w-3.5 mr-1.5" />
             Edit Profile
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300 dark:text-blue-400 dark:border-blue-800 dark:hover:bg-blue-950/30"
-            onClick={() => onInitiateCert(org.id, org.name)}
-          >
-            <Award className="h-3.5 w-3.5 mr-1.5" />
-            Certification
-          </Button>
+          {org.cmmcTargetLevel !== "L1" && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300 dark:text-blue-400 dark:border-blue-800 dark:hover:bg-blue-950/30"
+              onClick={() => onInitiateCert(org.id, org.name)}
+            >
+              <Award className="h-3.5 w-3.5 mr-1.5" />
+              Record C3PAO Status
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

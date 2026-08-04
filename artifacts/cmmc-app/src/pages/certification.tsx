@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { RecordCertWizardBody } from "@/components/certification/RecordCertWizardBody";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -143,272 +144,43 @@ function canVerify(orgRole: string, userRole: string): boolean {
 function ActivationWizard({
   onSuccess,
   onCancel,
+  existingRecord,
 }: {
   onSuccess: () => void;
   onCancel: () => void;
+  existingRecord?: Record<string, any>;
 }) {
   const { activeOrg } = useOrg();
-  const { toast } = useToast();
-  const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(false);
 
-  const [form, setForm] = useState({
-    certificationStatus: "",
-    cmmcUid: "",
-    assessmentLevel: "Level 2",
-    c3paoName: "",
-    cmmcStatusDate: "",
-    assessmentStartDate: "",
-    assessmentCompletionDate: "",
-    assessmentUniqueId: "",
-    cageCodes: "",
-    assessmentScopeName: "",
-    sspTitle: "",
-    sspVersion: "",
-    sspDate: "",
-    affirmingOfficial: "",
-    internalCertificationOwner: "",
-    assessorNames: "",
-    assessorContactInfo: "",
-    contractReferences: "",
-    notes: "",
-    hasRequiredRecord: false,
-  });
-
-  function set(k: string, v: string | boolean) {
-    setForm((f) => ({ ...f, [k]: v }));
-  }
-
-  async function handleSubmit() {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem("auth_token");
-      const r = await fetch("/api/certification/initiate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          "X-Organization-ID": activeOrg!.id,
-        },
-        body: JSON.stringify({
-          ...form,
-          cageCodes: form.cageCodes.split(",").map((s) => s.trim()).filter(Boolean),
-          assessorNames: form.assessorNames ? form.assessorNames.split(",").map((s) => s.trim()).filter(Boolean) : [],
-          contractReferences: form.contractReferences ? form.contractReferences.split(",").map((s) => s.trim()).filter(Boolean) : [],
-        }),
-      });
-      const data = await r.json();
-      if (!r.ok) {
-        toast({ title: "Error", description: data.error ?? "Submission failed", variant: "destructive" });
-        return;
-      }
-      toast({ title: "Submitted", description: "Certification record submitted for verification." });
-      onSuccess();
-    } catch {
-      toast({ title: "Error", description: "Network error", variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const inputClass = "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
-  const labelClass = "block text-xs font-medium text-slate-600 mb-1";
+  if (!activeOrg) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="bg-slate-900 rounded-t-2xl p-6">
-          <div className="flex items-center gap-3 mb-2">
+        <div className="bg-slate-900 rounded-t-2xl px-6 py-5">
+          <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-600/20 rounded-lg">
               <Award className="h-5 w-5 text-blue-400" />
             </div>
-            <h2 className="text-white font-semibold text-lg">Record CMMC Certification Status</h2>
-          </div>
-          {/* Step indicator */}
-          <div className="flex items-center gap-2 mt-4">
-            {[1, 2, 3].map((n) => (
-              <div key={n} className="flex items-center gap-2">
-                <div className={cn(
-                  "w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold",
-                  step >= n ? "bg-blue-500 text-white" : "bg-slate-700 text-slate-400"
-                )}>
-                  {step > n ? <CheckCircle2 className="h-4 w-4" /> : n}
-                </div>
-                <span className={cn("text-xs", step >= n ? "text-blue-300" : "text-slate-500")}>
-                  {n === 1 ? "Status" : n === 2 ? "Assessment Details" : "Supporting Records"}
-                </span>
-                {n < 3 && <ArrowRight className="h-3 w-3 text-slate-600" />}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="p-6 space-y-5">
-          {/* Step 1: Status */}
-          {step === 1 && (
             <div>
-              <h3 className="text-sm font-semibold text-slate-800 mb-4">Select CMMC Status</h3>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { value: "CONDITIONAL_L2_C3PAO", label: "Conditional Level 2 (C3PAO)", desc: "Assessment completed with POA&Ms", color: "border-amber-300 bg-amber-50" },
-                  { value: "FINAL_L2_C3PAO", label: "Final Level 2 (C3PAO)", desc: "Full assessment completed", color: "border-emerald-300 bg-emerald-50" },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => set("certificationStatus", opt.value)}
-                    className={cn(
-                      "text-left p-4 rounded-xl border-2 transition-all",
-                      form.certificationStatus === opt.value
-                        ? opt.color + " border-opacity-100"
-                        : "border-slate-200 bg-white hover:border-slate-300"
-                    )}
-                  >
-                    <div className="font-medium text-sm text-slate-800">{opt.label}</div>
-                    <div className="text-xs text-slate-500 mt-1">{opt.desc}</div>
-                  </button>
-                ))}
-              </div>
+              <h2 className="text-white font-semibold text-lg">
+                Record Official CMMC Level 2 Status — {activeOrg.name}
+              </h2>
+              <p className="text-slate-400 text-xs mt-0.5">
+                This records an already-received official C3PAO certification status.
+              </p>
             </div>
-          )}
-
-          {/* Step 2: Assessment Details */}
-          {step === 2 && (
-            <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-slate-800">Official Assessment Details</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className={labelClass}>CMMC UID <span className="text-red-500">*</span></label>
-                  <input className={inputClass} value={form.cmmcUid} onChange={(e) => set("cmmcUid", e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} maxLength={10} placeholder="10 alphanumeric characters" />
-                </div>
-                <div>
-                  <label className={labelClass}>Assessment Level <span className="text-red-500">*</span></label>
-                  <input className={inputClass} value={form.assessmentLevel} onChange={(e) => set("assessmentLevel", e.target.value)} />
-                </div>
-                <div className="col-span-2">
-                  <label className={labelClass}>C3PAO Name <span className="text-red-500">*</span></label>
-                  <input className={inputClass} value={form.c3paoName} onChange={(e) => set("c3paoName", e.target.value)} placeholder="Name of the Third-Party Assessment Organization" />
-                </div>
-                <div>
-                  <label className={labelClass}>CMMC Status Date <span className="text-red-500">*</span></label>
-                  <input type="date" className={inputClass} value={form.cmmcStatusDate} onChange={(e) => set("cmmcStatusDate", e.target.value)} />
-                </div>
-                <div>
-                  <label className={labelClass}>Assessment Start Date <span className="text-red-500">*</span></label>
-                  <input type="date" className={inputClass} value={form.assessmentStartDate} onChange={(e) => set("assessmentStartDate", e.target.value)} />
-                </div>
-                <div>
-                  <label className={labelClass}>Assessment Completion Date <span className="text-red-500">*</span></label>
-                  <input type="date" className={inputClass} value={form.assessmentCompletionDate} onChange={(e) => set("assessmentCompletionDate", e.target.value)} />
-                </div>
-                <div>
-                  <label className={labelClass}>Assessment Unique Identifier <span className="text-red-500">*</span></label>
-                  <input className={inputClass} value={form.assessmentUniqueId} onChange={(e) => set("assessmentUniqueId", e.target.value)} />
-                </div>
-                <div className="col-span-2">
-                  <label className={labelClass}>CAGE Codes <span className="text-red-500">*</span></label>
-                  <input className={inputClass} value={form.cageCodes} onChange={(e) => set("cageCodes", e.target.value)} placeholder="Comma-separated CAGE codes" />
-                </div>
-                <div className="col-span-2">
-                  <label className={labelClass}>Assessment Scope Name <span className="text-red-500">*</span></label>
-                  <input className={inputClass} value={form.assessmentScopeName} onChange={(e) => set("assessmentScopeName", e.target.value)} />
-                </div>
-                <div className="col-span-2">
-                  <label className={labelClass}>SSP Title <span className="text-red-500">*</span></label>
-                  <input className={inputClass} value={form.sspTitle} onChange={(e) => set("sspTitle", e.target.value)} />
-                </div>
-                <div>
-                  <label className={labelClass}>SSP Version <span className="text-red-500">*</span></label>
-                  <input className={inputClass} value={form.sspVersion} onChange={(e) => set("sspVersion", e.target.value)} />
-                </div>
-                <div>
-                  <label className={labelClass}>SSP Date <span className="text-red-500">*</span></label>
-                  <input type="date" className={inputClass} value={form.sspDate} onChange={(e) => set("sspDate", e.target.value)} />
-                </div>
-                <div>
-                  <label className={labelClass}>Affirming Official <span className="text-red-500">*</span></label>
-                  <input className={inputClass} value={form.affirmingOfficial} onChange={(e) => set("affirmingOfficial", e.target.value)} />
-                </div>
-                <div>
-                  <label className={labelClass}>Internal Certification Owner <span className="text-red-500">*</span></label>
-                  <input className={inputClass} value={form.internalCertificationOwner} onChange={(e) => set("internalCertificationOwner", e.target.value)} />
-                </div>
-                <div className="col-span-2">
-                  <label className={labelClass}>Assessor Names (optional, comma-separated)</label>
-                  <input className={inputClass} value={form.assessorNames} onChange={(e) => set("assessorNames", e.target.value)} />
-                </div>
-                <div className="col-span-2">
-                  <label className={labelClass}>Notes (optional)</label>
-                  <textarea className={inputClass} rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Supporting Records */}
-          {step === 3 && (
-            <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-slate-800">Supporting Records</h3>
-              <p className="text-xs text-slate-500">At least one official supporting record is required before submission. Records can be uploaded after verification through the Official Records tab.</p>
-              <div className="border border-slate-200 rounded-xl p-4 space-y-3">
-                <div className="text-xs font-medium text-slate-700 mb-2">Required (at least one):</div>
-                {[
-                  "CMMC Assessment Findings Report",
-                  "CMMC Status Confirmation",
-                  "SPRS Status Verification",
-                  "Certification Record",
-                  "POA&M Closeout Result (if applicable)",
-                ].map((r) => (
-                  <div key={r} className="flex items-center gap-2 text-xs text-slate-600">
-                    <div className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-                    {r}
-                  </div>
-                ))}
-              </div>
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.hasRequiredRecord}
-                  onChange={(e) => set("hasRequiredRecord", e.target.checked)}
-                  className="mt-0.5"
-                />
-                <span className="text-sm text-slate-700">
-                  I confirm that at least one official supporting record is available and will be uploaded to the Official Records tab upon module activation.
-                </span>
-              </label>
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                <div className="flex gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                  <div className="text-xs text-amber-800">
-                    <div className="font-medium mb-1">Second-Person Verification Required</div>
-                    After submission, a different authorized user with verification permissions must independently confirm this record before the Certification module becomes active.
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
-
-        {/* Footer */}
-        <div className="border-t border-slate-100 px-6 py-4 flex items-center justify-between">
-          <button
-            onClick={step === 1 ? onCancel : () => setStep((s) => s - 1)}
-            className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 transition-colors"
-          >
-            {step === 1 ? "Cancel" : "Back"}
-          </button>
-          <button
-            disabled={
-              (step === 1 && !form.certificationStatus) ||
-              (step === 2 && (!form.cmmcUid || form.cmmcUid.length !== 10 || !form.c3paoName || !form.cmmcStatusDate || !form.assessmentScopeName || !form.sspTitle || !form.sspVersion || !form.sspDate || !form.affirmingOfficial || !form.internalCertificationOwner || !form.cageCodes)) ||
-              (step === 3 && !form.hasRequiredRecord) ||
-              loading
-            }
-            onClick={step < 3 ? () => setStep((s) => s + 1) : handleSubmit}
-            className="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            {loading ? "Submitting…" : step < 3 ? "Continue" : "Submit for Verification"}
-          </button>
+        <div className="p-6">
+          <RecordCertWizardBody
+            orgId={activeOrg.id}
+            orgName={activeOrg.name}
+            onSuccess={onSuccess}
+            onCancel={onCancel}
+            existingRecord={existingRecord}
+          />
         </div>
       </div>
     </div>
@@ -1668,28 +1440,41 @@ export default function Certification() {
   // Not Available — show activation prompt for authorized users
   if (certState === "NOT_AVAILABLE") {
     const userCanActivate = canActivate(orgRole, userRole);
+    const isL1Only = activeOrg?.cmmcTargetLevel === "L1";
+
     return (
       <div className="max-w-2xl mx-auto py-16">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-100 rounded-2xl mb-4">
             <Award className="h-8 w-8 text-slate-400" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">CMMC Certification & Sustainment</h1>
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">CMMC Certification &amp; Sustainment</h1>
           <p className="text-slate-500 text-sm">
-            This module becomes available after {activeOrg?.name ?? "your organization"} records and verifies an official Conditional or Final Level 2 (C3PAO) CMMC status.
+            This module becomes available after {activeOrg?.name ?? "your organization"} records an
+            official Conditional or Final Level 2 (C3PAO) CMMC status.
           </p>
         </div>
 
-        {userCanActivate ? (
+        {isL1Only ? (
+          <div className="bg-slate-50 rounded-2xl border border-slate-200 p-8 text-center text-sm text-slate-500">
+            CMMC Level 2 C3PAO Certification is not available for organizations configured for Level 1 only.
+            Add the CMMC Level 2 package in Settings to enable this module.
+          </div>
+        ) : userCanActivate ? (
           <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
-            <div className="text-sm text-slate-600 mb-6">
-              Once activated, this module preserves the official assessment record, tracks annual affirmations, maintains the certified scope, and supports recertification planning.
+            <div className="text-sm text-slate-600 mb-2">
+              Use this module to record an official C3PAO certification status that has already been awarded.
+              Once activated, the module preserves the assessment record, tracks annual affirmations,
+              maintains the certified scope, and supports recertification planning.
             </div>
+            <p className="text-xs text-slate-400 mb-6">
+              Do not record a status here until it has been officially awarded by the C3PAO.
+            </p>
             <button
               onClick={() => setShowWizard(true)}
               className="px-6 py-3 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition-colors"
             >
-              Record CMMC Certification Status
+              Record C3PAO Status
             </button>
           </div>
         ) : (
@@ -1716,6 +1501,7 @@ export default function Certification() {
   // Verification Pending
   if (certState === "VERIFICATION_PENDING") {
     const userCanVerify = canVerify(orgRole, userRole);
+    const isGlobalAdmin = userRole === "admin";
     return (
       <div className="max-w-2xl mx-auto py-12 space-y-6">
         <div className="flex items-center gap-3">
@@ -1723,13 +1509,26 @@ export default function Certification() {
             <Award className="h-6 w-6 text-blue-600" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900">CMMC Certification & Sustainment</h1>
+            <h1 className="text-xl font-bold text-slate-900">CMMC Certification &amp; Sustainment</h1>
             <div className="text-sm text-slate-500">{activeOrg?.name}</div>
           </div>
           <span className={cn("ml-auto text-xs font-medium px-3 py-1 rounded-full border", statusBadgeClass("VERIFICATION_PENDING"))}>
             Verification Pending
           </span>
         </div>
+
+        {/* GA banner */}
+        {isGlobalAdmin && (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex items-start gap-3">
+            <Info className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+            <div className="text-sm text-blue-800">
+              <span className="font-medium">Platform Global Admin:</span>{" "}
+              This certification record is pending review. Use the verification panel below to
+              approve it, reject it, or apply an Admin Override to activate it directly without a
+              second approver.
+            </div>
+          </div>
+        )}
 
         {record && (userCanVerify || record.submittedById === user?.id) ? (
           <VerificationPanel
@@ -1745,6 +1544,7 @@ export default function Certification() {
             A certification record has been submitted and is awaiting second-person verification.
           </div>
         )}
+
       </div>
     );
   }

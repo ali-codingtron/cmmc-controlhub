@@ -221,7 +221,7 @@ export function Sidebar() {
           {hasMultiplePackages && (
             <NavLink href="/crosswalk" icon={GitCompare} label="Framework Crosswalk" />
           )}
-          {!isDemoMode && activeOrg && [
+          {!isDemoMode && activeOrg && activeOrg.cmmcTargetLevel !== "L1" && [
             "CONDITIONAL_L2_C3PAO",
             "FINAL_L2_C3PAO",
             "EXPIRED",
