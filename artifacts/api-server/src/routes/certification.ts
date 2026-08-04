@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import {
   db,
   organizationsTable,
@@ -14,6 +14,9 @@ import {
   evidenceItemsTable,
   poamsTable,
   usersTable,
+  organizationPackagesTable,
+  certificationRecordSchema,
+  formatCertError,
 } from "@workspace/db";
 import { eq, and, desc, asc, count, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
@@ -170,9 +173,52 @@ async function requireCertModule(orgId: string, res: any): Promise<boolean> {
   return true;
 }
 
+// ─── L2 Package Eligibility Middleware ───────────────────────────────────────
+// Every certification route requires the org to have an active CMMC L2 package.
+
+async function requireL2CertificationEligible(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  const orgId = (req as any).orgId as string | undefined;
+  if (!orgId) {
+    res.status(400).json({ error: "Organization context required" });
+    return;
+  }
+  const [pkg] = await db
+    .select({ id: organizationPackagesTable.id })
+    .from(organizationPackagesTable)
+    .where(
+      and(
+        eq(organizationPackagesTable.organizationId, orgId),
+        eq(organizationPackagesTable.packageId, "pkg-cmmc-l2-self"),
+        eq(organizationPackagesTable.isActive, true)
+      )
+    )
+    .limit(1);
+  if (!pkg) {
+    res
+      .status(404)
+      .json({ error: "CMMC Level 2 C3PAO Certification is not available for this organization." });
+    return;
+  }
+  next();
+}
+
+// ─── Response helper: add c3paoAssessmentReference alias ─────────────────────
+// The DB column is assessmentUniqueId; the API response exposes it as
+// c3paoAssessmentReference. The old key is preserved for backward compat.
+
+function mapCertRecord<T extends Record<string, unknown>>(
+  record: T
+): T & { c3paoAssessmentReference: unknown } {
+  return { ...record, c3paoAssessmentReference: record.assessmentUniqueId };
+}
+
 // ─── GET /api/certification/status ──────────────────────────────────────────
 
-router.get("/status", requireAuth, requireOrg, async (req, res) => {
+router.get("/status", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   const orgId = req.orgId!;
   const orgRole = req.orgRole ?? "member";
 
@@ -197,7 +243,10 @@ router.get("/status", requireAuth, requireOrg, async (req, res) => {
       return;
     }
     const record = await getActiveCertRecord(orgId);
-    res.json({ certificationModuleState: state, certificationRecord: record });
+    res.json({
+      certificationModuleState: state,
+      certificationRecord: record ? mapCertRecord(record as Record<string, unknown>) : null,
+    });
     return;
   }
 
@@ -217,15 +266,22 @@ router.get("/status", requireAuth, requireOrg, async (req, res) => {
     else if (record.nextAffirmationDue && record.nextAffirmationDue < addDays(now, 30)) sustainmentHealth = "Attention Needed";
   }
 
-  res.json({ certificationModuleState: state, certificationRecord: record, sustainmentHealth });
+  res.json({
+    certificationModuleState: state,
+    certificationRecord: record ? mapCertRecord(record as Record<string, unknown>) : null,
+    sustainmentHealth,
+  });
 });
 
 // ─── POST /api/certification/initiate ───────────────────────────────────────
-// Step 1-3 of activation wizard: submitter creates the pending record.
+// For Platform Global Admins: validates + activates directly (GLOBAL_ADMIN_DIRECT).
+// For all other authorized users: creates a VERIFICATION_PENDING record.
+// Both paths use the shared certificationRecordSchema for field validation.
 
-router.post("/initiate", requireAuth, requireOrg, async (req, res) => {
+router.post("/initiate", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   const orgId = req.orgId!;
   const orgRole = req.orgRole ?? "member";
+  const isGlobalAdmin = req.authUser!.role === "admin";
 
   if (!hasCertPerm(orgRole, "certification.activate")) {
     res.status(403).json({ error: "certification.activate permission required" });
@@ -234,93 +290,212 @@ router.post("/initiate", requireAuth, requireOrg, async (req, res) => {
 
   const currentState = await getOrgCertState(orgId);
   if (!["NOT_AVAILABLE", "EXPIRED"].includes(currentState)) {
-    res.status(400).json({ error: "Certification can only be initiated when module is NOT_AVAILABLE or EXPIRED" });
+    res.status(400).json({
+      error: "Certification can only be initiated when the module is in NOT_AVAILABLE or EXPIRED state.",
+    });
     return;
   }
 
-  const {
-    certificationStatus,
-    cmmcUid,
-    assessmentLevel,
-    c3paoName,
-    cmmcStatusDate,
-    assessmentStartDate,
-    assessmentCompletionDate,
-    assessmentUniqueId,
-    cageCodes,
-    assessmentScopeName,
-    sspTitle,
-    sspVersion,
-    sspDate,
-    affirmingOfficial,
-    internalCertificationOwner,
-    assessorNames,
-    assessorContactInfo,
-    contractReferences,
-    notes,
-  } = req.body;
+  // Normalize CMMC UID to uppercase before running Zod validation
+  const bodyForValidation = { ...req.body };
+  if (typeof bodyForValidation.cmmcUid === "string") {
+    bodyForValidation.cmmcUid = bodyForValidation.cmmcUid
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "");
+  }
 
-  // Validate required fields
-  if (!certificationStatus || !["CONDITIONAL_L2_C3PAO", "FINAL_L2_C3PAO"].includes(certificationStatus)) {
-    res.status(400).json({ error: "certificationStatus must be CONDITIONAL_L2_C3PAO or FINAL_L2_C3PAO" });
-    return;
-  }
-  if (!cmmcUid || !validateCmmcUid(cmmcUid)) {
-    res.status(400).json({ error: "cmmcUid must be exactly 10 alphanumeric characters" });
-    return;
-  }
-  const requiredFields = [
-    "assessmentLevel", "c3paoName", "cmmcStatusDate", "assessmentStartDate",
-    "assessmentCompletionDate", "assessmentUniqueId", "assessmentScopeName",
-    "sspTitle", "sspVersion", "sspDate", "affirmingOfficial", "internalCertificationOwner",
-  ];
-  for (const field of requiredFields) {
-    if (!req.body[field]) {
-      res.status(400).json({ error: `${field} is required` });
-      return;
-    }
-  }
-  if (!cageCodes || !Array.isArray(cageCodes) || cageCodes.length === 0) {
-    res.status(400).json({ error: "At least one CAGE code is required" });
+  const parseResult = certificationRecordSchema.safeParse(bodyForValidation);
+  if (!parseResult.success) {
+    res.status(400).json({ error: formatCertError(parseResult.error.issues) });
     return;
   }
 
-  const normalizedUid = cmmcUid.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  const statusDate = new Date(cmmcStatusDate);
+  const data = parseResult.data;
+  const normalizedUid = data.cmmcUid; // already normalized above
+  const statusDate = new Date(data.cmmcStatusDate);
   const id = randomUUID();
 
-  // Calculate validity dates
-  const statusValidThrough = certificationStatus === "FINAL_L2_C3PAO"
-    ? addYears(statusDate, 3)
-    : null;
+  const statusValidThrough =
+    data.certificationStatus === "FINAL_L2_C3PAO" ? addYears(statusDate, 3) : null;
   const nextAffirmationDue = addYears(statusDate, 1);
-  const closeoutDeadline = certificationStatus === "CONDITIONAL_L2_C3PAO"
-    ? addDays(statusDate, 180)
-    : null;
+  const closeoutDeadline =
+    data.certificationStatus === "CONDITIONAL_L2_C3PAO" ? addDays(statusDate, 180) : null;
 
+  // ── Global Admin Direct Activation ────────────────────────────────────────
+  if (isGlobalAdmin) {
+    const officialRecords: any[] = Array.isArray(req.body.officialRecords)
+      ? req.body.officialRecords
+      : [];
+
+    // At least one official record or external reference is required
+    if (officialRecords.length === 0) {
+      res.status(400).json({
+        error:
+          "At least one official record or external reference is required before " +
+          "activating certification as a Platform Global Admin.",
+      });
+      return;
+    }
+
+    // Validate each record has required fields
+    for (const or of officialRecords) {
+      if (!or.title || !or.recordType) {
+        res.status(400).json({
+          error: "Each official record must include a title and record type.",
+        });
+        return;
+      }
+    }
+
+    const officialRecordIds: string[] = [];
+
+    await db.transaction(async (tx) => {
+      // Insert the certification record (directly active)
+      await tx.insert(certificationRecordsTable).values({
+        id,
+        organizationId: orgId,
+        certificationStatus: data.certificationStatus,
+        cmmcUid: normalizedUid,
+        assessmentLevel: data.assessmentLevel,
+        c3paoName: data.c3paoName,
+        cmmcStatusDate: statusDate,
+        assessmentStartDate: new Date(data.assessmentStartDate),
+        assessmentCompletionDate: new Date(data.assessmentCompletionDate),
+        assessmentUniqueId: data.assessmentUniqueId,
+        cageCodes: data.cageCodes,
+        assessmentScopeName: data.assessmentScopeName,
+        sspTitle: data.sspTitle,
+        sspVersion: data.sspVersion,
+        sspDate: new Date(data.sspDate),
+        affirmingOfficial: data.affirmingOfficial,
+        internalCertificationOwner: data.internalCertificationOwner,
+        assessorNames: data.assessorNames ?? [],
+        assessorContactInfo: data.assessorContactInfo ?? null,
+        contractReferences: data.contractReferences ?? [],
+        notes: data.notes ?? null,
+        moduleState: data.certificationStatus, // activated directly — no VERIFICATION_PENDING
+        activationMethod: "GLOBAL_ADMIN_DIRECT",
+        submittedById: req.authUser!.id,
+        submittedAt: new Date(),
+        verifiedById: req.authUser!.id,
+        verifiedAt: new Date(),
+        statusValidThrough,
+        nextAffirmationDue,
+        closeoutDeadline,
+        isActive: true,
+        isArchived: false,
+      });
+
+      // Insert the official records provided in the request
+      for (const or of officialRecords) {
+        const orId = randomUUID();
+        officialRecordIds.push(orId);
+        await tx.insert(certificationOfficialRecordsTable).values({
+          id: orId,
+          certificationRecordId: id,
+          organizationId: orgId,
+          title: or.title,
+          recordType: or.recordType,
+          description: or.description ?? null,
+          effectiveDate: or.effectiveDate ? new Date(or.effectiveDate) : null,
+          documentDate: or.documentDate ? new Date(or.documentDate) : null,
+          issuedBy: or.issuedBy ?? null,
+          version: or.version ?? null,
+          externalRepositoryName: or.externalRepositoryName ?? null,
+          externalDocumentId: or.externalDocumentId ?? null,
+          externalUrl: or.externalUrl ?? null,
+          isExternalReference: or.isExternalReference ?? false,
+          originalFilename: or.originalFilename ?? null,
+          confidentialityClassification:
+            or.confidentialityClassification ?? "controlled",
+          isRequired: or.isRequired ?? false,
+          uploadedById: req.authUser!.id,
+          uploadedAt: new Date(),
+        });
+      }
+
+      // Set org module state directly to the certified status
+      await tx
+        .update(organizationsTable)
+        .set({ certificationModuleState: data.certificationStatus, updatedAt: new Date() })
+        .where(eq(organizationsTable.id, orgId));
+    });
+
+    await addCertHistory({
+      certificationRecordId: id,
+      organizationId: orgId,
+      eventType: "certification_activated_admin_direct",
+      eventTitle: "Certification Activated — Global Admin Direct",
+      description:
+        `${data.certificationStatus === "CONDITIONAL_L2_C3PAO" ? "Conditional" : "Final"} ` +
+        "Level 2 (C3PAO) certification activated directly by Platform Global Admin, " +
+        "bypassing second-person verification.",
+      previousState: currentState,
+      newState: data.certificationStatus,
+      performedById: req.authUser!.id,
+      performedByName: req.authUser!.name,
+      metadata: {
+        certificationStatus: data.certificationStatus,
+        c3paoName: data.c3paoName,
+        cmmcUid: normalizedUid,
+        activationMethod: "GLOBAL_ADMIN_DIRECT",
+        officialRecordCount: officialRecordIds.length,
+      },
+    });
+
+    await logAudit(req, "activated" as any, "certification_record", id, {
+      entityLabel: `Certification Activated: ${data.certificationStatus} (Global Admin Direct)`,
+      previousValue: {
+        state: currentState,
+        actingUser: req.authUser!.email,
+        platformRole: req.authUser!.role,
+        organization: orgId,
+      },
+      newValue: {
+        state: data.certificationStatus,
+        certificationRecordId: id,
+        previousStatus: currentState,
+        newStatus: data.certificationStatus,
+        cmmcUid: normalizedUid,
+        officialRecordIds,
+        activationMethod: "GLOBAL_ADMIN_DIRECT",
+        success: true,
+      },
+    });
+
+    res.json({
+      id,
+      certificationModuleState: data.certificationStatus,
+      c3paoAssessmentReference: data.assessmentUniqueId,
+    });
+    return;
+  }
+
+  // ── Standard Path: create VERIFICATION_PENDING record ────────────────────
   await db.insert(certificationRecordsTable).values({
     id,
     organizationId: orgId,
-    certificationStatus,
+    certificationStatus: data.certificationStatus,
     cmmcUid: normalizedUid,
-    assessmentLevel,
-    c3paoName,
+    assessmentLevel: data.assessmentLevel,
+    c3paoName: data.c3paoName,
     cmmcStatusDate: statusDate,
-    assessmentStartDate: new Date(assessmentStartDate),
-    assessmentCompletionDate: new Date(assessmentCompletionDate),
-    assessmentUniqueId,
-    cageCodes: Array.isArray(cageCodes) ? cageCodes : [cageCodes],
-    assessmentScopeName,
-    sspTitle,
-    sspVersion,
-    sspDate: new Date(sspDate),
-    affirmingOfficial,
-    internalCertificationOwner,
-    assessorNames: assessorNames ?? [],
-    assessorContactInfo: assessorContactInfo ?? null,
-    contractReferences: contractReferences ?? [],
-    notes: notes ?? null,
+    assessmentStartDate: new Date(data.assessmentStartDate),
+    assessmentCompletionDate: new Date(data.assessmentCompletionDate),
+    assessmentUniqueId: data.assessmentUniqueId,
+    cageCodes: data.cageCodes,
+    assessmentScopeName: data.assessmentScopeName,
+    sspTitle: data.sspTitle,
+    sspVersion: data.sspVersion,
+    sspDate: new Date(data.sspDate),
+    affirmingOfficial: data.affirmingOfficial,
+    internalCertificationOwner: data.internalCertificationOwner,
+    assessorNames: data.assessorNames ?? [],
+    assessorContactInfo: data.assessorContactInfo ?? null,
+    contractReferences: data.contractReferences ?? [],
+    notes: data.notes ?? null,
     moduleState: "VERIFICATION_PENDING",
+    activationMethod: null,
     submittedById: req.authUser!.id,
     submittedAt: new Date(),
     statusValidThrough,
@@ -330,7 +505,6 @@ router.post("/initiate", requireAuth, requireOrg, async (req, res) => {
     isArchived: false,
   });
 
-  // Set org module state to VERIFICATION_PENDING
   await db
     .update(organizationsTable)
     .set({ certificationModuleState: "VERIFICATION_PENDING", updatedAt: new Date() })
@@ -341,32 +515,63 @@ router.post("/initiate", requireAuth, requireOrg, async (req, res) => {
     organizationId: orgId,
     eventType: "certification_submitted",
     eventTitle: "Certification Record Submitted",
-    description: `${certificationStatus === "CONDITIONAL_L2_C3PAO" ? "Conditional" : "Final"} Level 2 (C3PAO) certification record submitted for verification.`,
+    description:
+      `${data.certificationStatus === "CONDITIONAL_L2_C3PAO" ? "Conditional" : "Final"} ` +
+      "Level 2 (C3PAO) certification record submitted for verification.",
     previousState: currentState,
     newState: "VERIFICATION_PENDING",
     performedById: req.authUser!.id,
     performedByName: req.authUser!.name,
-    metadata: { certificationStatus, c3paoName, cmmcUid: normalizedUid },
+    metadata: {
+      certificationStatus: data.certificationStatus,
+      c3paoName: data.c3paoName,
+      cmmcUid: normalizedUid,
+    },
   });
 
   await logAudit(req, "status_changed" as any, "certification_record", id, {
-    entityLabel: `Certification Initiated: ${certificationStatus}`,
-    previousValue: { state: currentState },
-    newValue: { state: "VERIFICATION_PENDING", certificationStatus },
+    entityLabel: `Certification Submitted: ${data.certificationStatus}`,
+    previousValue: {
+      state: currentState,
+      actingUser: req.authUser!.email,
+      platformRole: req.authUser!.role,
+      organization: orgId,
+    },
+    newValue: {
+      state: "VERIFICATION_PENDING",
+      certificationStatus: data.certificationStatus,
+      certificationRecordId: id,
+      cmmcUid: normalizedUid,
+      success: true,
+    },
   });
 
-  res.json({ id, certificationModuleState: "VERIFICATION_PENDING" });
+  res.json({
+    id,
+    certificationModuleState: "VERIFICATION_PENDING",
+    c3paoAssessmentReference: data.assessmentUniqueId,
+  });
 });
 
 // ─── POST /api/certification/verify ─────────────────────────────────────────
-// Second-person verification (verifier must NOT be the submitter).
+// Activation via second-person review — restricted to Platform Global Admins.
+// Org-level roles (including reviewer) cannot transition a record to active status;
+// every certification state transition to FINAL/CONDITIONAL requires Global Admin authority.
 
-router.post("/verify", requireAuth, requireOrg, async (req, res) => {
+router.post("/verify", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   const orgId = req.orgId!;
-  const orgRole = req.orgRole ?? "member";
 
-  if (!hasCertPerm(orgRole, "certification.verify")) {
-    res.status(403).json({ error: "certification.verify permission required" });
+  // Only Platform Global Admins can activate a certification record.
+  if (req.authUser!.role !== "admin") {
+    res.status(403).json({
+      error: "Only Platform Global Admins can activate a certification record.",
+    });
+
+    await logAudit(req, "status_changed" as any, "certification_record", orgId, {
+      entityLabel: "Certification Activation — Unauthorized Attempt",
+      previousValue: { actingUser: req.authUser!.email, platformRole: req.authUser!.role },
+      newValue: { denied: true, reason: "non-global-admin attempted verify activation" },
+    });
     return;
   }
 
@@ -382,12 +587,6 @@ router.post("/verify", requireAuth, requireOrg, async (req, res) => {
     return;
   }
 
-  // Enforce second-person rule
-  if (record.submittedById === req.authUser!.id) {
-    res.status(403).json({ error: "The user who submitted the record cannot be the verifier" });
-    return;
-  }
-
   const { verificationNotes } = req.body;
   const targetState = record.certificationStatus as string;
 
@@ -398,6 +597,7 @@ router.post("/verify", requireAuth, requireOrg, async (req, res) => {
       verifiedById: req.authUser!.id,
       verifiedAt: new Date(),
       verificationNotes: verificationNotes ?? null,
+      activationMethod: "SECOND_PERSON_VERIFIED",
       updatedAt: new Date(),
     })
     .where(eq(certificationRecordsTable.id, record.id));
@@ -420,10 +620,23 @@ router.post("/verify", requireAuth, requireOrg, async (req, res) => {
     metadata: { verificationNotes },
   });
 
-  await logAudit(req, "status_changed" as any, "certification_record", record.id, {
-    entityLabel: `Certification Verified: ${targetState}`,
-    previousValue: { state: "VERIFICATION_PENDING" },
-    newValue: { state: targetState },
+  await logAudit(req, "activated" as any, "certification_record", record.id, {
+    entityLabel: `Certification Verified and Activated: ${targetState}`,
+    previousValue: {
+      state: "VERIFICATION_PENDING",
+      actingUser: req.authUser!.email,
+      platformRole: req.authUser!.role,
+      organization: orgId,
+    },
+    newValue: {
+      state: targetState,
+      certificationRecordId: record.id,
+      previousStatus: "VERIFICATION_PENDING",
+      newStatus: targetState,
+      cmmcUid: record.cmmcUid,
+      activationMethod: "SECOND_PERSON_VERIFIED",
+      success: true,
+    },
   });
 
   res.json({ certificationModuleState: targetState });
@@ -431,12 +644,20 @@ router.post("/verify", requireAuth, requireOrg, async (req, res) => {
 
 // ─── POST /api/certification/reject ─────────────────────────────────────────
 
-router.post("/reject", requireAuth, requireOrg, async (req, res) => {
+router.post("/reject", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   const orgId = req.orgId!;
-  const orgRole = req.orgRole ?? "member";
 
-  if (!hasCertPerm(orgRole, "certification.verify") && orgRole !== "admin") {
-    res.status(403).json({ error: "certification.verify permission required" });
+  // Only Platform Global Admins can reject (and thus reset) a certification submission.
+  if (req.authUser!.role !== "admin") {
+    res.status(403).json({
+      error: "Only Platform Global Admins can reject a certification submission.",
+    });
+
+    await logAudit(req, "status_changed" as any, "certification_record", orgId, {
+      entityLabel: "Certification Rejection — Unauthorized Attempt",
+      previousValue: { actingUser: req.authUser!.email, platformRole: req.authUser!.role },
+      newValue: { denied: true, reason: "non-global-admin attempted reject" },
+    });
     return;
   }
 
@@ -499,7 +720,7 @@ router.post("/reject", requireAuth, requireOrg, async (req, res) => {
 // ─── POST /api/certification/admin-override ──────────────────────────────────
 // Global admin override of verification step.
 
-router.post("/admin-override", requireAuth, requireOrg, async (req, res) => {
+router.post("/admin-override", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   if (req.authUser?.role !== "admin") {
     res.status(403).json({ error: "Global admin access required" });
     return;
@@ -534,6 +755,7 @@ router.post("/admin-override", requireAuth, requireOrg, async (req, res) => {
       verifiedAt: new Date(),
       adminOverrideById: req.authUser!.id,
       adminOverrideJustification: justification,
+      activationMethod: "GLOBAL_ADMIN_DIRECT",
       updatedAt: new Date(),
     })
     .where(eq(certificationRecordsTable.id, record.id));
@@ -553,13 +775,28 @@ router.post("/admin-override", requireAuth, requireOrg, async (req, res) => {
     newState: targetState,
     performedById: req.authUser!.id,
     performedByName: req.authUser!.name,
-    metadata: { justification },
+    metadata: { justification, activationMethod: "GLOBAL_ADMIN_DIRECT" },
   });
 
-  await logAudit(req, "status_changed" as any, "certification_record", record.id, {
+  await logAudit(req, "activated" as any, "certification_record", record.id, {
     entityLabel: "Admin Override — Certification Module Activated",
-    previousValue: { state: "VERIFICATION_PENDING" },
-    newValue: { state: targetState, adminOverride: true, justification },
+    previousValue: {
+      state: "VERIFICATION_PENDING",
+      actingUser: req.authUser!.email,
+      platformRole: req.authUser!.role,
+      organization: orgId,
+    },
+    newValue: {
+      state: targetState,
+      certificationRecordId: record.id,
+      previousStatus: "VERIFICATION_PENDING",
+      newStatus: targetState,
+      cmmcUid: record.cmmcUid,
+      activationMethod: "GLOBAL_ADMIN_DIRECT",
+      adminOverride: true,
+      justification,
+      success: true,
+    },
   });
 
   res.json({ certificationModuleState: targetState });
@@ -568,7 +805,7 @@ router.post("/admin-override", requireAuth, requireOrg, async (req, res) => {
 // ─── GET /api/certification/records ─────────────────────────────────────────
 // All certification records for the org (full lifecycle history).
 
-router.get("/records", requireAuth, requireOrg, async (req, res) => {
+router.get("/records", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   const orgId = req.orgId!;
   const orgRole = req.orgRole ?? "member";
 
@@ -585,12 +822,12 @@ router.get("/records", requireAuth, requireOrg, async (req, res) => {
     .where(eq(certificationRecordsTable.organizationId, orgId))
     .orderBy(desc(certificationRecordsTable.createdAt));
 
-  res.json(records);
+  res.json(records.map((r) => mapCertRecord(r as Record<string, unknown>)));
 });
 
 // ─── GET /api/certification/official-records ─────────────────────────────────
 
-router.get("/official-records", requireAuth, requireOrg, async (req, res) => {
+router.get("/official-records", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   const orgId = req.orgId!;
   const orgRole = req.orgRole ?? "member";
 
@@ -623,7 +860,7 @@ router.get("/official-records", requireAuth, requireOrg, async (req, res) => {
 
 // ─── POST /api/certification/official-records ─────────────────────────────────
 
-router.post("/official-records", requireAuth, requireOrg, async (req, res) => {
+router.post("/official-records", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   const orgId = req.orgId!;
   const orgRole = req.orgRole ?? "member";
 
@@ -672,7 +909,7 @@ router.post("/official-records", requireAuth, requireOrg, async (req, res) => {
 
 // ─── PATCH /api/certification/official-records/:id ───────────────────────────
 
-router.patch("/official-records/:id", requireAuth, requireOrg, async (req, res) => {
+router.patch("/official-records/:id", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   const orgId = req.orgId!;
   const orgRole = req.orgRole ?? "member";
 
@@ -722,7 +959,7 @@ router.patch("/official-records/:id", requireAuth, requireOrg, async (req, res) 
 
 // ─── GET /api/certification/scope ────────────────────────────────────────────
 
-router.get("/scope", requireAuth, requireOrg, async (req, res) => {
+router.get("/scope", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   const orgId = req.orgId!;
   const orgRole = req.orgRole ?? "member";
 
@@ -753,7 +990,7 @@ router.get("/scope", requireAuth, requireOrg, async (req, res) => {
 
 // ─── POST /api/certification/scope ───────────────────────────────────────────
 
-router.post("/scope", requireAuth, requireOrg, async (req, res) => {
+router.post("/scope", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   const orgId = req.orgId!;
   const orgRole = req.orgRole ?? "member";
 
@@ -819,7 +1056,7 @@ router.post("/scope", requireAuth, requireOrg, async (req, res) => {
 
 // ─── GET /api/certification/affirmations ─────────────────────────────────────
 
-router.get("/affirmations", requireAuth, requireOrg, async (req, res) => {
+router.get("/affirmations", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   const orgId = req.orgId!;
   const orgRole = req.orgRole ?? "member";
 
@@ -849,7 +1086,7 @@ router.get("/affirmations", requireAuth, requireOrg, async (req, res) => {
 
 // ─── POST /api/certification/affirmations ─────────────────────────────────────
 
-router.post("/affirmations", requireAuth, requireOrg, async (req, res) => {
+router.post("/affirmations", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   const orgId = req.orgId!;
   const orgRole = req.orgRole ?? "member";
 
@@ -890,7 +1127,7 @@ router.post("/affirmations", requireAuth, requireOrg, async (req, res) => {
 
 // ─── PATCH /api/certification/affirmations/:id ────────────────────────────────
 
-router.patch("/affirmations/:id", requireAuth, requireOrg, async (req, res) => {
+router.patch("/affirmations/:id", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   const orgId = req.orgId!;
   const orgRole = req.orgRole ?? "member";
 
@@ -940,7 +1177,7 @@ router.patch("/affirmations/:id", requireAuth, requireOrg, async (req, res) => {
 
 // ─── GET /api/certification/changes ──────────────────────────────────────────
 
-router.get("/changes", requireAuth, requireOrg, async (req, res) => {
+router.get("/changes", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   const orgId = req.orgId!;
   const orgRole = req.orgRole ?? "member";
 
@@ -970,7 +1207,7 @@ router.get("/changes", requireAuth, requireOrg, async (req, res) => {
 
 // ─── POST /api/certification/changes ─────────────────────────────────────────
 
-router.post("/changes", requireAuth, requireOrg, async (req, res) => {
+router.post("/changes", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   const orgId = req.orgId!;
   const orgRole = req.orgRole ?? "member";
 
@@ -1020,7 +1257,7 @@ router.post("/changes", requireAuth, requireOrg, async (req, res) => {
 
 // ─── PATCH /api/certification/changes/:id ─────────────────────────────────────
 
-router.patch("/changes/:id", requireAuth, requireOrg, async (req, res) => {
+router.patch("/changes/:id", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   const orgId = req.orgId!;
   const orgRole = req.orgRole ?? "member";
 
@@ -1074,7 +1311,7 @@ router.patch("/changes/:id", requireAuth, requireOrg, async (req, res) => {
 
 // ─── GET /api/certification/poam-closeout ─────────────────────────────────────
 
-router.get("/poam-closeout", requireAuth, requireOrg, async (req, res) => {
+router.get("/poam-closeout", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   const orgId = req.orgId!;
   const orgRole = req.orgRole ?? "member";
 
@@ -1104,7 +1341,7 @@ router.get("/poam-closeout", requireAuth, requireOrg, async (req, res) => {
 
 // ─── POST /api/certification/poam-closeout ────────────────────────────────────
 
-router.post("/poam-closeout", requireAuth, requireOrg, async (req, res) => {
+router.post("/poam-closeout", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   const orgId = req.orgId!;
   const orgRole = req.orgRole ?? "member";
 
@@ -1147,7 +1384,7 @@ router.post("/poam-closeout", requireAuth, requireOrg, async (req, res) => {
 
 // ─── PATCH /api/certification/poam-closeout/:id ────────────────────────────────
 
-router.patch("/poam-closeout/:id", requireAuth, requireOrg, async (req, res) => {
+router.patch("/poam-closeout/:id", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   const orgId = req.orgId!;
   const orgRole = req.orgRole ?? "member";
 
@@ -1195,7 +1432,7 @@ router.patch("/poam-closeout/:id", requireAuth, requireOrg, async (req, res) => 
 
 // ─── GET /api/certification/recertification ───────────────────────────────────
 
-router.get("/recertification", requireAuth, requireOrg, async (req, res) => {
+router.get("/recertification", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   const orgId = req.orgId!;
   const orgRole = req.orgRole ?? "member";
 
@@ -1269,7 +1506,7 @@ router.get("/recertification", requireAuth, requireOrg, async (req, res) => {
 
 // ─── PATCH /api/certification/recertification/:id ─────────────────────────────
 
-router.patch("/recertification/:id", requireAuth, requireOrg, async (req, res) => {
+router.patch("/recertification/:id", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   const orgId = req.orgId!;
   const orgRole = req.orgRole ?? "member";
 
@@ -1313,7 +1550,7 @@ router.patch("/recertification/:id", requireAuth, requireOrg, async (req, res) =
 
 // ─── GET /api/certification/history ──────────────────────────────────────────
 
-router.get("/history", requireAuth, requireOrg, async (req, res) => {
+router.get("/history", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   const orgId = req.orgId!;
   const orgRole = req.orgRole ?? "member";
 
@@ -1339,7 +1576,7 @@ router.get("/history", requireAuth, requireOrg, async (req, res) => {
 // ─── GET /api/certification/sustainment ──────────────────────────────────────
 // Cross-module sustainment dashboard data — references, not duplicates.
 
-router.get("/sustainment", requireAuth, requireOrg, async (req, res) => {
+router.get("/sustainment", requireAuth, requireOrg, requireL2CertificationEligible, async (req, res) => {
   const orgId = req.orgId!;
   const orgRole = req.orgRole ?? "member";
 

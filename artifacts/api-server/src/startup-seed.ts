@@ -1188,6 +1188,33 @@ async function migrateCertificationTables() {
   }
 }
 
+/**
+ * Additive columns for certification_official_records and certification_records.
+ * Added after initial table creation — idempotent ADD COLUMN IF NOT EXISTS.
+ */
+async function migrateCertificationOfficialRecordsColumns() {
+  const migrations = [
+    // certification_official_records — new metadata columns
+    `ALTER TABLE certification_official_records ADD COLUMN IF NOT EXISTS document_date timestamptz`,
+    `ALTER TABLE certification_official_records ADD COLUMN IF NOT EXISTS issued_by text`,
+    `ALTER TABLE certification_official_records ADD COLUMN IF NOT EXISTS version text`,
+    `ALTER TABLE certification_official_records ADD COLUMN IF NOT EXISTS external_repository_name text`,
+    `ALTER TABLE certification_official_records ADD COLUMN IF NOT EXISTS external_document_id text`,
+    `ALTER TABLE certification_official_records ADD COLUMN IF NOT EXISTS external_url text`,
+    `ALTER TABLE certification_official_records ADD COLUMN IF NOT EXISTS is_external_reference boolean NOT NULL DEFAULT false`,
+    `ALTER TABLE certification_official_records ADD COLUMN IF NOT EXISTS original_filename text`,
+    // certification_records — activation method tracking
+    `ALTER TABLE certification_records ADD COLUMN IF NOT EXISTS activation_method text`,
+  ];
+  for (const stmt of migrations) {
+    try {
+      await db.execute(sql.raw(stmt));
+    } catch (_e) {
+      // Already exists — safe to ignore
+    }
+  }
+}
+
 async function migrateSspPrefillDrafts() {
   // ssp_prefill_drafts was added in the SSP module upgrade. Safe to run on every boot.
   try {
@@ -2244,6 +2271,7 @@ export async function runStartupSeed() {
     await migrateFaqTable();
     await migrateMicrosoftSsoColumns();
     await migrateCertificationTables();
+    await migrateCertificationOfficialRecordsColumns();
     await migrateBreakGlassColumns();
     await migrateAuditEnum();
     await migrateRoadmapProfileKey();

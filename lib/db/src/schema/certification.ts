@@ -6,6 +6,8 @@ import {
   integer,
   jsonb,
 } from "drizzle-orm/pg-core";
+
+// NOTE: activationMethod values: "GLOBAL_ADMIN_DIRECT" | "SECOND_PERSON_VERIFIED" | null
 import { organizationsTable } from "./organizations";
 import { usersTable } from "./users";
 
@@ -82,6 +84,9 @@ export const certificationRecordsTable = pgTable("certification_records", {
   ),
   adminOverrideJustification: text("admin_override_justification"),
 
+  // "GLOBAL_ADMIN_DIRECT" | "SECOND_PERSON_VERIFIED" | null (older records)
+  activationMethod: text("activation_method"),
+
   statusValidThrough: timestamp("status_valid_through"),
   nextAffirmationDue: timestamp("next_affirmation_due"),
   closeoutDeadline: timestamp("closeout_deadline"),
@@ -128,6 +133,25 @@ export const certificationOfficialRecordsTable = pgTable(
       onDelete: "set null",
     }),
     archivedAt: timestamp("archived_at"),
+
+    // ── Additive columns (ALTER TABLE ADD COLUMN IF NOT EXISTS in startup) ──
+    /** Date printed on the official record document */
+    documentDate: timestamp("document_date"),
+    /** Person or entity that issued/signed the document */
+    issuedBy: text("issued_by"),
+    /** Document version string (e.g. "1.0", "Rev 2") */
+    version: text("version"),
+    /** Name of the external repository (e.g. "eMASS", "CMMC AB Portal") */
+    externalRepositoryName: text("external_repository_name"),
+    /** Document identifier in the external repository */
+    externalDocumentId: text("external_document_id"),
+    /** Public or authenticated URL to the document in an external system */
+    externalUrl: text("external_url"),
+    /** True when this row is an external reference with no uploaded file */
+    isExternalReference: boolean("is_external_reference").notNull().default(false),
+    /** Original filename as provided by the uploader */
+    originalFilename: text("original_filename"),
+    // ────────────────────────────────────────────────────────────────────────
 
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
