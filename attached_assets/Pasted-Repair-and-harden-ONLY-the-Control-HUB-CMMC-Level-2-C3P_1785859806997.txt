@@ -1,0 +1,1254 @@
+Repair and harden ONLY the Control HUB CMMC Level 2 C3PAO Certification module.
+
+I provided a video demonstrating the current workflow.
+
+Observed problems:
+
+1. The Certification action is displayed on organization cards for CMMC Level 1 organizations.
+
+2. A Level 1-only organization can enter the C3PAO certification workflow even though the workflow is for CMMC Level 2 certification assessments.
+
+3. The final step requires second-person verification even when the acting user is a Platform Global Admin.
+
+4. Assessment Start Date is required by the backend but is not visually marked required.
+
+5. Assessment Completion Date is required by the backend but is not visually marked required.
+
+6. Missing date errors appear only after submission as raw internal messages such as:
+
+   assessmentStartDate is required
+   assessmentCompletionDate is required
+
+7. The Supporting Records step does not provide an upload function. It only asks the user to confirm that a record exists and says it may be uploaded later.
+
+8. The current action is named Initiate Certification. Control HUB does not initiate or issue official certification; it records an official status already received through the C3PAO process.
+
+9. The form contains both CMMC UID and Assessment Unique ID without clearly explaining whether they are different identifiers.
+
+Goal:
+
+- hide the C3PAO certification workflow for CMMC Level 1-only organizations
+- allow a Platform Global Admin to activate a valid record without second-person verification
+- make all required fields visibly and consistently required
+- provide actual secure upload and management of official certification records
+- preserve every existing certification and organization record
+- prevent Control HUB from implying that it issues an official CMMC status
+
+====================================================================
+1. STRICT SCOPE
+====================================================================
+
+Change only:
+
+- Organizations-page Certification action
+- certification eligibility logic
+- certification initiation/recording wizard
+- certification field validation
+- official certification record upload
+- official-record management
+- certification activation
+- certification route/API protection
+- certification-specific permissions
+- certification-specific audit logging
+- legacy Verification Pending handling
+
+Do not redesign or modify:
+
+- CMMC Level 1 Annual Self-Assessment
+- Controls
+- Evidence Repository
+- Documentation
+- SSP
+- Monitoring Tracker
+- POA&M
+- Implementation Roadmap
+- Pre-Assessment
+- Reports
+- Framework Crosswalk
+- Users and Roles
+- organization package assignments
+- existing certification records
+- existing files
+
+Do not delete, reset, or re-seed any production organization.
+
+====================================================================
+2. RUN A READ-ONLY DIAGNOSTIC FIRST
+====================================================================
+
+Before changing production data, inspect and report:
+
+- certification data model
+- certification status values
+- verification-request model
+- Global Admin activation logic
+- organization-card Certification visibility logic
+- certification sidebar visibility logic
+- certification route protection
+- active package keys used for Level 1 and Level 2
+- current required-field validation schema
+- frontend required-field indicators
+- backend required fields
+- existing certification records
+- existing Verification Pending records
+- existing official-record tables or file relationships
+- duplicate or orphaned certification records
+
+For each organization report:
+
+- organization name
+- active CMMC packages
+- target level
+- whether Certification button is visible
+- whether certification routes are available
+- certification record status
+- official-record count
+- verification status
+
+Specifically identify every CMMC Level 1-only organization where Certification is currently visible.
+
+Do not modify data during the diagnostic.
+
+====================================================================
+3. CERTIFICATION ELIGIBILITY
+====================================================================
+
+The C3PAO certification workflow is available only for organizations with an applicable CMMC Level 2 package.
+
+Minimum eligibility:
+
+- organization has an active CMMC Level 2 package
+- acting user has certification-recording permission
+
+Eligible examples:
+
+- CMMC Level 2 C3PAO
+- CMMC Level 2 organization recording an official C3PAO status
+- organization with both Level 1 and Level 2, because Level 2 is active
+
+Ineligible:
+
+- CMMC Level 1 only
+- FAR 52.204-21 only
+- organization with no CMMC Level 2 package
+- Level 1 Annual Self-Assessment organization with no Level 2 package
+
+Do not determine eligibility only from a display badge.
+
+Use canonical active package keys from the backend.
+
+====================================================================
+4. HIDE CERTIFICATION FOR LEVEL 1
+====================================================================
+
+For a CMMC Level 1-only organization, hide:
+
+- Certification button on the organization card
+- Initiate Certification action
+- Record Official CMMC Status action
+- Certification sidebar item
+- certification dashboard widgets
+- certification status cards
+- certification report options
+- certification notifications
+- certification routes and APIs
+
+The organization should continue using:
+
+Annual Self-Assessment
+
+Do not show a disabled Certification button.
+
+Do not show Coming Soon.
+
+Do not display C3PAO terminology to Level 1-only users.
+
+====================================================================
+5. BACKEND ROUTE PROTECTION
+====================================================================
+
+Do not rely only on hiding UI elements.
+
+Every certification route and API must verify:
+
+1. authenticated user
+2. target organization
+3. organization exists
+4. active CMMC Level 2 package
+5. required permission
+6. record belongs to the target organization
+
+If the organization is Level 1-only:
+
+Return a controlled 404 or unavailable response.
+
+Message:
+
+“CMMC Level 2 C3PAO Certification is not available for this organization.”
+
+Do not return certification metadata.
+
+Do not expose official records.
+
+====================================================================
+6. CHANGE THE ENTRY-POINT TERMINOLOGY
+====================================================================
+
+Replace:
+
+Initiate Certification
+
+with:
+
+Record Official CMMC Status
+
+or:
+
+Record C3PAO Assessment Status
+
+Recommended organization-card button:
+
+Record C3PAO Status
+
+Wizard title:
+
+Record Official CMMC Level 2 Status — [Organization Name]
+
+Do not imply that:
+
+- Control HUB performs the C3PAO assessment
+- Control HUB issues a CMMC status
+- selecting the button certifies the organization
+
+Add helper text:
+
+“Use this workflow to record an official Conditional or Final Level 2 (C3PAO) status that the organization has already received.”
+
+====================================================================
+7. GLOBAL ADMIN-ONLY ACTIVATION
+====================================================================
+
+Only a Platform Global Admin may:
+
+- start the official-status workflow
+- create the certification record
+- activate the Certification module
+- correct official status information
+- archive a certification record
+
+Use authoritative:
+
+platform_role = GLOBAL_ADMIN
+
+Do not authorize using:
+
+- Organization Admin role
+- legacy role
+- frontend badge
+- client-supplied role
+- current organization membership alone
+
+Organization users may view active certification records according to their permissions.
+
+They may not activate a certification record.
+
+====================================================================
+8. REMOVE SECOND-PERSON VERIFICATION FOR GLOBAL ADMINS
+====================================================================
+
+Remove this requirement from the Global Admin workflow:
+
+Second-Person Verification Required
+
+Remove:
+
+Submit for Verification
+
+For a Platform Global Admin, use:
+
+Review & Activate
+
+followed by:
+
+Activate Certification Record
+
+Do not create a second verification request.
+
+Do not require another Global Admin.
+
+Do not require the creator and verifier to be different people.
+
+Instead require a final confirmation:
+
+“I confirm that I reviewed the official supporting records and that the information entered matches the organization’s official CMMC status.”
+
+Require typed confirmation:
+
+ACTIVATE
+
+Record:
+
+- activated by
+- activated date
+- acting Platform Role
+- activation method = GLOBAL_ADMIN_DIRECT
+- record version
+- source documents reviewed
+- IP address
+- user agent
+
+The absence of a second verifier must not reduce audit logging.
+
+====================================================================
+9. NON-GLOBAL ADMIN BEHAVIOR
+====================================================================
+
+Do not provide a second-person verification workflow to normal organization users.
+
+Recommended:
+
+- non-Global Admin users cannot create or activate the certification record
+- authorized organization users may view active certification information
+- authorized users may upload annual affirmation or sustainment records after activation if their permission permits it
+
+If a future workflow allows an Organization Admin to prepare information:
+
+- save it as Draft
+- a Platform Global Admin must activate it
+- this is not a second Global Admin verification workflow
+
+Do not implement that preparer workflow as part of this repair unless it already exists.
+
+====================================================================
+10. REPLACE THE CURRENT THREE-STEP WIZARD
+====================================================================
+
+Use four clear steps:
+
+1. Status
+2. Assessment Details
+3. Official Records
+4. Review & Activate
+
+Step 1 — Status:
+
+- Final Level 2 (C3PAO)
+- Conditional Level 2 (C3PAO)
+
+Step 2 — Assessment Details:
+
+Collect and validate all official information.
+
+Step 3 — Official Records:
+
+Actually upload or reference supporting documents.
+
+Step 4 — Review & Activate:
+
+Display the full summary and allow Global Admin activation.
+
+Do not allow activation from the Official Records step without a final review.
+
+====================================================================
+11. SHARED VALIDATION SCHEMA
+====================================================================
+
+Use one authoritative validation schema for:
+
+- frontend required indicators
+- frontend validation
+- backend validation
+- API documentation
+- automated tests
+
+Use Zod or the application’s existing validation framework.
+
+Do not separately hardcode frontend and backend required fields.
+
+Every field required by the backend must display:
+
+- red asterisk
+- required semantic attribute
+- inline validation message
+- appropriate accessible description
+
+Every optional field must display:
+
+Optional
+
+where helpful.
+
+====================================================================
+12. REQUIRED ASSESSMENT FIELDS
+====================================================================
+
+Required:
+
+- Certification Status
+- CMMC UID
+- C3PAO Name
+- CMMC Status Date
+- Assessment Start Date
+- Assessment Completion Date
+- CAGE Code or Codes
+- Assessment Scope Name
+- SSP Title
+- SSP Version
+- SSP Date
+- Affirming Official Name
+- Affirming Official Title
+- Affirming Official Email
+- Internal Certification Owner
+- at least one official supporting record or approved external-record reference
+
+Assessment Level should be read-only:
+
+CMMC Level 2 (C3PAO)
+
+Do not permit a Level 1 value in this workflow.
+
+Optional:
+
+- C3PAO assessor names
+- C3PAO contact
+- notes
+- contract reference
+- separate C3PAO assessment reference
+
+====================================================================
+13. FIX THE DATE FIELDS
+====================================================================
+
+The video demonstrates that these backend-required fields are not marked required:
+
+- Assessment Start Date
+- Assessment Completion Date
+
+Mark both required.
+
+Required date fields must be visually consistent:
+
+- CMMC Status Date *
+- Assessment Start Date *
+- Assessment Completion Date *
+- SSP Date *
+
+Validate before moving to Official Records.
+
+Do not wait until final submission.
+
+Date rules:
+
+- Assessment Start Date must be on or before Assessment Completion Date.
+- Assessment Completion Date must be on or before CMMC Status Date.
+- Completed official assessments cannot use future completion dates.
+- CMMC Status Date cannot precede Assessment Completion Date.
+- SSP Date should normally be on or before Assessment Completion Date.
+
+For an SSP Date after the Assessment Completion Date:
+
+Show a warning and require confirmation rather than silently accepting it.
+
+When a date is invalid:
+
+- show error below the field
+- focus or scroll to the first invalid field
+- preserve all entered data
+- prevent continuation
+
+Do not show raw field names such as:
+
+assessmentStartDate is required
+
+Use:
+
+“Assessment Start Date is required.”
+
+====================================================================
+14. IDENTIFIER CLEANUP
+====================================================================
+
+CMMC UID:
+
+- required
+- exactly 10 alphanumeric characters
+- normalize to uppercase
+- display helper text:
+
+“Enter the 10-character CMMC UID from the official status or assessment record.”
+
+Current Assessment Unique ID field:
+
+Inspect whether this represents information distinct from the CMMC UID.
+
+If it is not distinct:
+
+- remove it from the UI
+- retain any existing database values for history
+- do not delete production data
+
+If it is distinct:
+
+Rename it:
+
+C3PAO Assessment Reference
+
+or:
+
+Assessment Record Reference
+
+Make it optional unless an authoritative business rule requires it.
+
+Add helper text explaining where the value is obtained.
+
+Do not require two fields that represent the same identifier.
+
+====================================================================
+15. STRUCTURED OFFICIALS AND OWNERS
+====================================================================
+
+Replace free-text combined values where practical.
+
+Affirming Official:
+
+- Name
+- Title
+- Email
+
+Allow:
+
+- select an active organization user
+- or enter a manual official when the person does not have a Control HUB account
+
+Internal Certification Owner:
+
+Use a searchable selector limited to active users with access to the organization.
+
+Show:
+
+- name
+- email
+- organization role
+
+Do not allow selection of a user from another organization.
+
+====================================================================
+16. ACTUAL OFFICIAL-RECORD UPLOAD
+====================================================================
+
+Replace the current checkbox-only Supporting Records step.
+
+Remove:
+
+“I confirm that at least one official supporting record is available and will be uploaded after verification.”
+
+Add an actual upload and record-reference interface.
+
+Step title:
+
+Official Records
+
+Description:
+
+“Upload or reference the official records used to verify this CMMC status.”
+
+Allow:
+
+- drag and drop
+- browse
+- multiple files
+- file progress
+- retry
+- remove before activation
+- preview
+- download
+
+Require at least one uploaded record or approved external repository reference before activation.
+
+====================================================================
+17. OFFICIAL RECORD TYPES
+====================================================================
+
+Support:
+
+- C3PAO Assessment Report
+- CMMC Assessment Findings Report
+- CMMC Status Confirmation
+- SPRS Status Verification
+- Certificate or Official CMMC Status Record
+- Final Assessment Scope
+- SSP Used for Assessment
+- C3PAO Assessment Correspondence
+- Conditional POA&M
+- POA&M Closeout Assessment Report
+- Annual Affirmation Record
+- Other Official Record
+
+The preferred first record should be:
+
+C3PAO Assessment Report
+
+or:
+
+CMMC Assessment Findings Report
+
+Do not require a POA&M closeout record for a Final status that did not use a Conditional status.
+
+====================================================================
+18. OFFICIAL RECORD METADATA
+====================================================================
+
+For each official record store:
+
+- Record Type
+- Title
+- Original Filename
+- Description
+- Issued By
+- Document Date
+- Effective Date
+- Version
+- Related Status
+- Confidentiality Classification
+- Uploaded By
+- Uploaded Date
+- File Size
+- MIME Type
+- SHA-256 Checksum
+- Storage Key
+- Current/Archived Status
+
+Do not use the original filename as the record title automatically without allowing review.
+
+====================================================================
+19. EXTERNAL REPOSITORY REFERENCE
+====================================================================
+
+Some assessment reports may not be appropriate for direct storage in Control HUB.
+
+Add:
+
+Reference External Record
+
+Fields:
+
+- Record Type
+- Record Title
+- Repository Name
+- External Document ID
+- Authorized URL
+- Document Date
+- Version
+- Record Owner
+- Notes
+
+Do not fetch or copy the external file automatically.
+
+Do not make an external URL publicly accessible.
+
+Display a warning:
+
+“Only reference locations authorized for this organization.”
+
+An external reference may satisfy the activation requirement if the Global Admin confirms that the official record was reviewed.
+
+====================================================================
+20. FILE SECURITY
+====================================================================
+
+Official assessment records may contain sensitive security or scope information.
+
+Requirements:
+
+- private persistent storage
+- authenticated download
+- organization authorization
+- no public file URLs
+- encryption in transit
+- encryption at rest
+- MIME validation
+- extension validation
+- file-size limits
+- malware scanning where available
+- safe filenames
+- checksum generation
+- audit logging
+
+Allowed file types:
+
+- PDF
+- DOCX
+- XLSX
+- PNG
+- JPG/JPEG
+- TXT
+
+Recommended maximum:
+
+25 MB per file
+
+Block:
+
+- executable files
+- scripts
+- archives unless explicitly approved
+- HTML
+- mismatched MIME types
+- empty files
+
+Display:
+
+“Do not upload CUI unless the Control HUB environment and organization policy explicitly authorize its storage. Use an approved external repository reference when required.”
+
+====================================================================
+21. OFFICIAL RECORD MODEL
+====================================================================
+
+Create or extend:
+
+CertificationOfficialRecord
+- id
+- organization_id
+- certification_record_id
+- record_type
+- title
+- description
+- issued_by
+- document_date
+- effective_date
+- version
+- confidentiality
+- storage_key
+- original_filename
+- mime_type
+- file_size
+- checksum_sha256
+- external_repository_name
+- external_document_id
+- external_url
+- is_external_reference
+- status
+- uploaded_by_user_id
+- uploaded_at
+- archived_by_user_id
+- archived_at
+- created_at
+- updated_at
+
+Enforce organization isolation.
+
+Official records should not automatically become general Evidence records.
+
+Add an explicit authorized action later if a record also needs to be linked as Evidence.
+
+Do not double-count an official record in readiness metrics.
+
+====================================================================
+22. REVIEW AND ACTIVATE SCREEN
+====================================================================
+
+The final step should summarize:
+
+Status:
+
+- Conditional or Final Level 2 (C3PAO)
+
+Identifiers:
+
+- CMMC UID
+- C3PAO Assessment Reference
+
+Assessment:
+
+- C3PAO
+- Start Date
+- Completion Date
+- Status Date
+- Scope
+- CAGE Codes
+
+SSP:
+
+- Title
+- Version
+- Date
+
+Officials:
+
+- Affirming Official
+- Internal Certification Owner
+
+Official Records:
+
+- record count
+- record types
+- filenames
+- document dates
+- preview actions
+
+Validation:
+
+- all required fields complete
+- date relationships valid
+- CMMC UID valid
+- at least one official record/reference
+- no duplicate active UID conflict
+
+Button:
+
+Activate Certification Record
+
+Do not display:
+
+Submit for Verification
+
+====================================================================
+23. ACTIVATION TRANSACTION
+====================================================================
+
+Activation must be transactional.
+
+The backend should:
+
+1. Verify the acting user is Platform Global Admin.
+2. Verify the organization has an active Level 2 package.
+3. Validate the full record.
+4. Validate dates.
+5. Validate the CMMC UID.
+6. Validate at least one official record or external reference.
+7. Validate all records belong to the organization.
+8. Create or activate the certification record.
+9. Set module state.
+10. Calculate applicable deadlines.
+11. Write audit events.
+12. Commit.
+13. Return the canonical active record.
+
+If any step fails:
+
+- roll back the complete transaction
+- do not activate the module
+- do not lose uploaded records
+- preserve entered draft information
+- show a clear error
+
+====================================================================
+24. CONDITIONAL STATUS BEHAVIOR
+====================================================================
+
+For:
+
+Conditional Level 2 (C3PAO)
+
+Automatically calculate:
+
+POA&M Closeout Deadline =
+CMMC Status Date + 180 days
+
+Show:
+
+- Days Remaining
+- Conditional POA&M record
+- Closeout status
+- assigned owner
+- C3PAO closeout assessment
+- final closeout result
+
+Require:
+
+- Conditional POA&M or official conditional-status record
+
+Do not require the final closeout report at initial activation.
+
+Allow it to be uploaded later.
+
+Do not automatically convert Conditional to Final.
+
+A Global Admin must record the official Final status after receiving the appropriate official record.
+
+====================================================================
+25. FINAL STATUS BEHAVIOR
+====================================================================
+
+For:
+
+Final Level 2 (C3PAO)
+
+Calculate:
+
+- Next Annual Affirmation Due
+- Next Certification Assessment Due
+
+Display these dates after activation.
+
+Do not treat calculated dates as proof that the official status remains valid.
+
+Preserve official status and affirmation records separately.
+
+====================================================================
+26. POST-ACTIVATION OFFICIAL RECORDS TAB
+====================================================================
+
+After activation, add or improve:
+
+Official Records
+
+Show:
+
+- Record Type
+- Title
+- Document Date
+- Version
+- Status
+- Uploaded By
+- Uploaded Date
+- Preview
+- Download
+- Replace with New Version
+- Archive
+
+Authorized actions:
+
+- Add Official Record
+- Add External Reference
+- Preview
+- Download
+- Replace
+- Archive
+
+Do not delete prior official records when a new version is uploaded.
+
+Preserve record history.
+
+====================================================================
+27. EXISTING VERIFICATION-PENDING RECORDS
+====================================================================
+
+Do not delete existing Verification Pending records.
+
+Do not automatically activate them.
+
+For records created by a Platform Global Admin, provide:
+
+Review & Activate
+
+The Global Admin must:
+
+- review required fields
+- resolve missing dates
+- attach or reference at least one official record
+- complete activation confirmation
+
+Stop creating new second-person verification requests for Global Admin submissions.
+
+Preserve historical verifier information for records that were already independently verified.
+
+Allow legacy status:
+
+VERIFICATION_PENDING
+
+to remain readable until reviewed.
+
+====================================================================
+28. SIDEBAR VISIBILITY AFTER ACTIVATION
+====================================================================
+
+Before an official record is activated:
+
+- normal organization users do not see Certification
+- only Platform Global Admin sees the organization administration action
+
+After activation:
+
+Show Certification to users with:
+
+certification.view
+
+and an eligible active Level 2 organization.
+
+For Level 1-only organizations:
+
+Certification remains hidden even if the user holds a high organization role.
+
+====================================================================
+29. ERROR HANDLING
+====================================================================
+
+Replace raw internal errors.
+
+Examples:
+
+Missing start date:
+
+“Assessment Start Date is required.”
+
+Missing completion date:
+
+“Assessment Completion Date is required.”
+
+Invalid UID:
+
+“CMMC UID must contain exactly 10 letters or numbers.”
+
+Missing official record:
+
+“Upload or reference at least one official supporting record before activation.”
+
+Invalid date order:
+
+“Assessment Completion Date cannot be earlier than Assessment Start Date.”
+
+Unauthorized:
+
+“Only a Platform Global Admin may activate an official CMMC certification record.”
+
+Ineligible organization:
+
+“This organization does not have an active CMMC Level 2 package.”
+
+Do not expose:
+
+- camelCase field names
+- stack traces
+- SQL errors
+- storage paths
+- internal IDs unnecessarily
+
+====================================================================
+30. AUDIT LOGGING
+====================================================================
+
+Log:
+
+- certification workflow opened
+- certification draft created
+- certification field changed
+- official record uploaded
+- official record referenced
+- official record previewed
+- official record downloaded
+- official record replaced
+- official record archived
+- activation attempted
+- activation failed
+- certification activated
+- Conditional deadline calculated
+- Final status recorded
+- legacy pending record activated
+- unauthorized access attempted
+- Level 1 certification route denied
+
+Include:
+
+- acting user
+- platform role
+- organization
+- certification record
+- previous status
+- new status
+- CMMC UID
+- supporting record IDs
+- timestamp
+- IP address
+- user agent
+- success/failure
+
+Do not log full document contents.
+
+====================================================================
+31. PRODUCTION DATA SAFETY
+====================================================================
+
+Do not:
+
+- delete existing certification records
+- delete existing verification history
+- delete official files
+- change active organization packages
+- change control statuses
+- change Evidence
+- change SSP
+- change POA&M
+- change Monitoring
+- change Roadmap
+- change Annual Self-Assessment
+- re-seed organizations
+- auto-activate pending records
+- expose Level 2 certification data to Level 1 organizations
+
+Use additive nullable fields where needed.
+
+Provide a dry-run impact report before any data migration.
+
+====================================================================
+32. AUTOMATED TESTS
+====================================================================
+
+Add frontend and backend tests.
+
+Eligibility tests:
+
+- Level 1-only organization has no Certification action.
+- Level 1 direct route is denied.
+- Level 1 direct API is denied.
+- Level 2 organization may use Record C3PAO Status.
+- Organization with both L1 and L2 remains eligible.
+
+Global Admin tests:
+
+- Global Admin may create and activate directly.
+- No second verifier is created.
+- Submit for Verification does not appear.
+- non-Global Admin cannot activate.
+
+Validation tests:
+
+- required fields display asterisks.
+- Assessment Start Date is required.
+- Assessment Completion Date is required.
+- inline errors display before step progression.
+- raw camelCase errors are not shown.
+- date ordering is validated.
+- CMMC UID is normalized and validated.
+- Assessment Reference is optional if distinct.
+
+Official-record tests:
+
+- actual file upload works.
+- external reference works.
+- at least one official record/reference is required.
+- preview and download work.
+- unauthorized user cannot access a record.
+- another organization cannot access the record.
+- invalid MIME type is rejected.
+- failed upload does not activate certification.
+
+Activation tests:
+
+- valid record activates successfully.
+- invalid record does not partially activate.
+- official records are preserved.
+- module becomes visible after activation.
+- normal organization data remains unchanged.
+
+Legacy tests:
+
+- existing Verification Pending record remains.
+- Global Admin may review and activate it.
+- it is not automatically activated.
+
+====================================================================
+33. ACCEPTANCE TESTS
+====================================================================
+
+Test A — CMMC Level 1:
+
+Open Organizations.
+
+Expected:
+
+OnCall247 or another Level 1-only organization does not display a Certification button.
+
+Direct certification URL is unavailable.
+
+Test B — CMMC Level 2:
+
+Open an eligible Level 2 organization.
+
+Expected:
+
+Platform Global Admin sees:
+
+Record C3PAO Status
+
+Test C — Required Dates:
+
+Leave Assessment Start Date empty.
+
+Expected:
+
+- field is marked required
+- inline error appears
+- user cannot continue
+- no raw toast appears
+
+Repeat for Assessment Completion Date.
+
+Test D — Official Record:
+
+Upload a PDF C3PAO Assessment Report.
+
+Expected:
+
+- file uploads
+- metadata is saved
+- preview works
+- record appears in the final review
+- activation may proceed
+
+Test E — No Supporting Record:
+
+Complete all fields but upload no record.
+
+Expected:
+
+Activation is blocked.
+
+Test F — Global Admin Activation:
+
+Complete all fields and attach an official record.
+
+Expected:
+
+- button says Activate Certification Record
+- no second-person verification appears
+- record activates
+- audit event is created
+- Certification module becomes visible
+
+Test G — Conditional:
+
+Record Conditional Level 2 (C3PAO).
+
+Expected:
+
+- 180-day deadline is calculated
+- closeout tracking is enabled
+- existing records are preserved
+
+Test H — Organization Isolation:
+
+Attempt to access another organization’s assessment report.
+
+Expected:
+
+HTTP 403 or 404.
+No file metadata or content is returned.
+
+Test I — Existing Pending Record:
+
+Open an existing Verification Pending record created by Global Admin.
+
+Expected:
+
+Global Admin can Review & Activate it after correcting missing information and adding an official record.
+
+Test J — Production Safety:
+
+No existing controls, Evidence, SSP, POA&M, Monitoring, Roadmap, Annual Self-Assessment, packages, users, or organizations are deleted or overwritten.
+
+====================================================================
+34. MOST IMPORTANT RULES
+====================================================================
+
+1. C3PAO certification functionality is never available to a CMMC Level 1-only organization.
+
+2. A Platform Global Admin can directly activate a complete official record without a second verifier.
+
+3. Every backend-required field must be visibly required and validated before submission.
+
+4. The Official Records step must upload or reference real records rather than use a confirmation checkbox.
+
+5. Control HUB records an official status; it does not issue or certify the organization.
+
+6. Official records remain private, organization-scoped, versioned, and auditable.
