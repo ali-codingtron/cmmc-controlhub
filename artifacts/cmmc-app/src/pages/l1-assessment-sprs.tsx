@@ -9,7 +9,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import {
   ChevronLeft, FileCheck, Download, CheckCircle2, XCircle, CircleDot,
-  Loader2, AlertTriangle, Lock, Shield, Pen, Info,
+  Loader2, AlertTriangle, Lock, Shield, Pen, Info, FileText,
 } from "lucide-react";
 import { useOrg } from "@/context/OrgContext";
 import { useQueryClient } from "@tanstack/react-query";
@@ -41,10 +41,42 @@ function findingColor(f: L1FindingValue): string {
   }
 }
 
+// ── Download helper ────────────────────────────────────────────────────────
+
+async function downloadL1Report(
+  assessmentId: string,
+  reportType: string,
+  orgId: string,
+  filename: string
+): Promise<void> {
+  const token = localStorage.getItem("auth_token");
+  const res = await fetch(`/api/l1-assessment/${assessmentId}/reports/${reportType}`, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      "X-Organization-ID": orgId,
+    },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as any).error ?? `HTTP ${res.status}`);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 export default function L1AssessmentSprs({ id }: { id: string }) {
   const { activeOrg } = useOrg();
   const orgId = activeOrg?.id ?? "";
   const qc = useQueryClient();
+
+  const [downloadingReport, setDownloadingReport] = useState<string | null>(null);
 
   const [sprsForm, setSprsForm] = useState({
     submittedBy: "",
@@ -174,6 +206,38 @@ export default function L1AssessmentSprs({ id }: { id: string }) {
           </div>
         </div>
         {isReadOnly && <Lock className="h-4 w-4 text-muted-foreground ml-2" />}
+        {/* Download Reports panel */}
+        <div className="ml-auto flex items-center gap-1.5 flex-wrap">
+          {[
+            { type: "main-report",       label: "Full Report",     ext: "pdf", always: true },
+            { type: "workpaper",         label: "Workpaper",       ext: "xlsx", always: true },
+            { type: "far-crosswalk",     label: "FAR Crosswalk",   ext: "xlsx", always: true },
+            { type: "affirmation-record",label: "Affirmation Rec.",ext: "pdf", onlyAffirmed: true },
+          ].filter(r => r.always || (r.onlyAffirmed && isAffirmed)).map((r) => (
+            <button
+              key={r.type}
+              onClick={async () => {
+                setDownloadingReport(r.type);
+                try {
+                  await downloadL1Report(id, r.type, orgId,
+                    `L1_${r.type.replace(/-/g, "_")}_${assessment.assessmentYear}.${r.ext}`);
+                } catch (err: any) {
+                  alert(err.message ?? "Download failed");
+                } finally {
+                  setDownloadingReport(null);
+                }
+              }}
+              disabled={downloadingReport === r.type}
+              title={`Download ${r.label}`}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-accent transition-colors disabled:opacity-50"
+            >
+              {downloadingReport === r.type
+                ? <Loader2 className="h-3 w-3 animate-spin" />
+                : <FileText className="h-3 w-3" />}
+              <span className="hidden sm:inline">{r.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Workflow status banner */}
@@ -202,10 +266,24 @@ export default function L1AssessmentSprs({ id }: { id: string }) {
             <h2 className="font-semibold text-sm">SPRS Worksheet Preview</h2>
           </div>
           <button
-            onClick={() => alert("SPRS worksheet download will be available in a future release (Task 4).")}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-accent transition-colors"
+            onClick={async () => {
+              setDownloadingReport("sprs-worksheet");
+              try {
+                await downloadL1Report(id, "sprs-worksheet", orgId,
+                  `SPRS_Worksheet_${assessment.assessmentYear}.pdf`);
+              } catch (err: any) {
+                alert(err.message ?? "Download failed");
+              } finally {
+                setDownloadingReport(null);
+              }
+            }}
+            disabled={downloadingReport === "sprs-worksheet"}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-accent transition-colors disabled:opacity-50"
           >
-            <Download className="h-3.5 w-3.5" /> Download Worksheet
+            {downloadingReport === "sprs-worksheet"
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              : <Download className="h-3.5 w-3.5" />}
+            {downloadingReport === "sprs-worksheet" ? "Generating…" : "Download Worksheet"}
           </button>
         </div>
 

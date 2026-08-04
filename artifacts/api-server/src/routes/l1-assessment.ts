@@ -19,6 +19,7 @@ import { Router } from "express";
 import { createHash } from "crypto";
 import { randomUUID } from "crypto";
 import { eq, and, desc, asc, inArray } from "drizzle-orm";
+import l1ReportsRouter from "./l1-assessment-reports";
 import {
   db,
   level1AnnualAssessmentsTable,
@@ -2142,5 +2143,9 @@ router.post("/:id/finalize", requireAuth, requireOrg, async (req, res): Promise<
     res.status(500).json({ error: "Failed to finalize assessment" });
   }
 });
+
+// ── Mount report sub-router ──────────────────────────────────────────────────
+// Handles GET /l1-assessment/:id/reports/* (9 endpoints)
+router.use("/:id/reports", l1ReportsRouter);
 
 export default router;

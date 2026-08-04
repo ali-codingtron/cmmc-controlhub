@@ -3,10 +3,11 @@
  */
 import { useOrg } from "@/context/OrgContext";
 import { useGetL1History } from "@workspace/api-client-react";
+import { useState } from "react";
 import { Link } from "wouter";
 import {
   History, Lock, ChevronLeft, Plus, Download, ChevronRight,
-  CheckCircle2, XCircle, CircleDot, Shield,
+  CheckCircle2, XCircle, CircleDot, Shield, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { L1Assessment } from "@workspace/api-client-react";
@@ -25,10 +26,46 @@ function statusLabel(a: HistoryAssessment): { label: string; bg: string; text: s
   return { label: "In Progress", bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200" };
 }
 
+async function downloadL1MainReport(
+  assessmentId: string,
+  assessmentYear: number,
+  orgId: string,
+  setLoading: (id: string | null) => void
+) {
+  setLoading(assessmentId);
+  try {
+    const token = localStorage.getItem("auth_token");
+    const res = await fetch(`/api/l1-assessment/${assessmentId}/reports/main-report`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        "X-Organization-ID": orgId,
+      },
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as any).error ?? `HTTP ${res.status}`);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `L1_Assessment_Report_${assessmentYear}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (err: any) {
+    alert(err.message ?? "Download failed");
+  } finally {
+    setLoading(null);
+  }
+}
+
 export default function L1AssessmentHistory() {
   const { activeOrg } = useOrg();
   const { data, isLoading } = useGetL1History(activeOrg?.id);
   const assessments = data?.assessments ?? [];
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   return (
     <div className="space-y-5 max-w-5xl mx-auto">
@@ -121,11 +158,14 @@ export default function L1AssessmentHistory() {
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         <button
-                          onClick={() => alert("Report download will be available in a future release.")}
-                          className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-border hover:bg-accent transition-colors text-muted-foreground"
-                          title="Download report (coming soon)"
+                          onClick={() => downloadL1MainReport(a.id, a.assessmentYear, activeOrg?.id ?? "", setDownloadingId)}
+                          disabled={downloadingId === a.id}
+                          className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-border hover:bg-accent transition-colors text-muted-foreground disabled:opacity-50"
+                          title="Download full assessment report (PDF)"
                         >
-                          <Download className="h-3 w-3" />
+                          {downloadingId === a.id
+                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                            : <Download className="h-3 w-3" />}
                           <span className="hidden sm:inline">Report</span>
                         </button>
                         <Link href={`/l1-assessment/${a.id}`} className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-border hover:bg-accent transition-colors">
