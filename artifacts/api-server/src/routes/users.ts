@@ -69,8 +69,6 @@ router.get("/users", requireAuth, async (req, res) => {
       mfaResetRequired: usersTable.mfaResetRequired,
       lockedUntil: usersTable.lockedUntil,
       failedLoginCount: usersTable.failedLoginCount,
-      isBreakGlass: usersTable.isBreakGlass,
-      mfaExempt: usersTable.mfaExempt,
       invitationExpiresAt: userInvitationsTable.expiresAt,
     })
     .from(usersTable)
@@ -249,8 +247,6 @@ router.get("/users/:id", requireAuth, async (req, res) => {
       createdAt: usersTable.createdAt,
       updatedAt: usersTable.updatedAt,
       mfaEnabled: usersTable.mfaEnabled,
-      mfaExempt: usersTable.mfaExempt,
-      isBreakGlass: usersTable.isBreakGlass,
       authProvider: usersTable.authProvider,
       invitationStatus: userInvitationsTable.status,
       invitationExpiresAt: userInvitationsTable.expiresAt,
@@ -277,8 +273,6 @@ router.get("/users/:id", requireAuth, async (req, res) => {
     ...user,
     platformRole: normalizePlatformRole(user.role),
     platformRoleLabel: roleLabel(normalizePlatformRole(user.role) === "global_admin" ? "admin" : "none"),
-    /** True when this account is protected from routine destructive edits. */
-    isProtected: user.isBreakGlass,
     /** Legacy global role still stored on the account, surfaced for the migration report. */
     legacyRole: (LEGACY_GLOBAL_ROLES as readonly string[]).includes(user.role) ? user.role : null,
   });
@@ -315,15 +309,6 @@ router.patch("/users/:id", requireAuth, requireRole("admin"), async (req, res) =
 
   if (!existing) {
     res.status(404).json({ error: "Not found" });
-    return;
-  }
-
-  if (existing.isBreakGlass) {
-    await logAudit(req, "updated", "user", req.params.id as string, {
-      entityLabel: existing.email,
-      newValue: { blocked: true, reason: "protected break-glass account" },
-    });
-    res.status(403).json({ error: "The break-glass emergency account cannot be modified through the UI. Use the CLI script to rotate credentials." });
     return;
   }
 
@@ -435,18 +420,13 @@ router.patch("/users/:id", requireAuth, requireRole("admin"), async (req, res) =
 // ── Delete user ──────────────────────────────────────────────────────────────
 router.delete("/users/:id", requireAuth, requireRole("admin"), async (req, res) => {
   const [existing] = await db
-    .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, role: usersTable.role, isBreakGlass: usersTable.isBreakGlass })
+    .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, role: usersTable.role })
     .from(usersTable)
     .where(eq(usersTable.id, req.params.id as string))
     .limit(1);
 
   if (!existing) {
     res.status(404).json({ error: "Not found" });
-    return;
-  }
-
-  if (existing.isBreakGlass) {
-    res.status(403).json({ error: "The break-glass emergency account cannot be deleted. Deactivate it via the CLI if needed." });
     return;
   }
 
@@ -524,18 +504,13 @@ router.delete("/users/:id", requireAuth, requireRole("admin"), async (req, res) 
 // ── Deactivate user ──────────────────────────────────────────────────────────
 router.post("/users/:id/deactivate", requireAuth, requireRole("admin"), async (req, res) => {
   const [existing] = await db
-    .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, role: usersTable.role, isBreakGlass: usersTable.isBreakGlass })
+    .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, role: usersTable.role })
     .from(usersTable)
     .where(eq(usersTable.id, req.params.id as string))
     .limit(1);
 
   if (!existing) {
     res.status(404).json({ error: "Not found" });
-    return;
-  }
-
-  if (existing.isBreakGlass) {
-    res.status(403).json({ error: "The break-glass emergency account cannot be deactivated through the UI. Use the CLI script to manage it." });
     return;
   }
 

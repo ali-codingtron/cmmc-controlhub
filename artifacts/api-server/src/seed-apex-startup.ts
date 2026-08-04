@@ -29,7 +29,6 @@ import { logger } from "./lib/logger";
 const APEX_ORG_ID = "7a2f5c8e-4b3d-4a9f-8e2c-1d0a5b6c7d8f";
 const APEX_ORG_NAME = "APEX Solutions";
 const ADMIN_EMAIL = "admin@example.com";
-const SYSADMIN_EMAIL = "sysadmin@controlhub.com";
 
 function daysFromNow(n: number): Date {
   const d = new Date();
@@ -207,15 +206,6 @@ export async function seedApexSolutions(): Promise<void> {
     id: randomUUID(), organizationId: APEX_ORG_ID, userId: adminUserId,
     role: "org_admin", status: "active", joinedAt: new Date(),
   }).onConflictDoNothing();
-
-  const [sysadmin] = await db.select({ id: usersTable.id }).from(usersTable)
-    .where(eq(usersTable.email, SYSADMIN_EMAIL)).limit(1);
-  if (sysadmin) {
-    await db.insert(organizationUsersTable).values({
-      id: randomUUID(), organizationId: APEX_ORG_ID, userId: sysadmin.id,
-      role: "org_admin", status: "active", joinedAt: new Date(),
-    }).onConflictDoNothing();
-  }
 
   // 4. Control assessments
   const allControls = await db.select({ id: controlsTable.id, controlId: controlsTable.controlId })

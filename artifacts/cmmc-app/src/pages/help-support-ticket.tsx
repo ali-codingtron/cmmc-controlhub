@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useSearch } from "wouter";
 import { AlertTriangle, CheckCircle2, LifeBuoy, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -111,6 +111,9 @@ export default function HelpSupportTicket() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<TicketSuccessResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Always open at the top of the page
+  useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, []);
 
   const { data: helpContext } = useQuery<HelpContext>({
     queryKey: ["help-context"],

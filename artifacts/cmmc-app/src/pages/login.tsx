@@ -892,7 +892,18 @@ export default function Login() {
 
         {/* Bottom: Carme Technology */}
         <div className="relative z-10 space-y-0.5">
-          <p className="text-white text-sm font-semibold">Carme Technology</p>
+          <a
+            href="https://carmetechnology.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block"
+          >
+            <img
+              src="/carme-technology-logo.png"
+              alt="Carme Technology"
+              className="h-10 w-auto object-contain opacity-90 hover:opacity-100 transition-opacity"
+            />
+          </a>
           <p className="text-slate-500 text-xs">Compliance technology for defense contractors and regulated organizations.</p>
         </div>
       </aside>

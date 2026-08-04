@@ -108,7 +108,7 @@ export default function DemoLanding() {
             <span className="font-bold text-lg text-white tracking-tight">Control HUB</span>
             <span className="hidden sm:flex items-center gap-1 text-xs text-slate-500 font-medium">
               <span className="text-slate-600 mx-1">·</span>
-              <img src={carmetechLogo} alt="Carme Technology" className="h-8" />
+              <span className="text-slate-400">Carme Technology</span>
             </span>
           </div>
           <div className="flex items-center gap-2">

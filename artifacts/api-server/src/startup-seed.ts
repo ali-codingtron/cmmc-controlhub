@@ -136,54 +136,6 @@ async function seedInitialAdmin() {
   logger.info("Initial admin created: admin@example.com / Admin1234! — change this password immediately");
 }
 
-async function seedBreakGlassAccount() {
-  const BREAK_GLASS_EMAIL = "sysadmin@controlhub.com";
-
-  const [existing] = await db
-    .select({ id: usersTable.id })
-    .from(usersTable)
-    .where(eq(usersTable.email, BREAK_GLASS_EMAIL))
-    .limit(1);
-
-  let userId: string;
-
-  if (!existing) {
-    userId = randomUUID();
-    const hash = await bcrypt.hash("Admin1234!", 10);
-    await db.insert(usersTable).values({
-      id: userId,
-      name: "System Administrator (Break Glass)",
-      email: BREAK_GLASS_EMAIL,
-      passwordHash: hash,
-      role: "admin",
-      status: "active",
-      title: "System Administrator",
-      department: "Information Technology",
-      isActive: true,
-      isBreakGlass: true,
-      mfaExempt: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }).onConflictDoNothing();
-    logger.info({ email: BREAK_GLASS_EMAIL }, "Break-glass account created — change the password immediately");
-  } else {
-    userId = existing.id;
-  }
-
-  // NOTE: Deliberately does NOT create an organization_users row per organization.
-  //
-  // The break-glass account is a Global Admin (users.role = "admin"), which grants
-  // platform-wide access to every organization through the platform role alone.
-  // Materialising one membership per organization here previously appended 10 rows
-  // on every server start: the `.onConflictDoNothing()` guard was a no-op because
-  // the table's only unique index is the primary key on `id`, and `id` was a fresh
-  // randomUUID() each run. That produced ~1,346 redundant rows and made the Users
-  // table report "+1164 more" while role edits silently hit only one duplicate.
-  //
-  // Platform role is authoritative for Global Admins — see resolveEffectiveAccess().
-  logger.info({ email: BREAK_GLASS_EMAIL }, "Break-glass account verified (platform-wide access via Global Admin role)");
-}
-
 async function seedDocumentTemplates() {
   // Incremental: fetch existing titles so new templates added to the data file
   // are picked up on the next server start even when the table already has data.
@@ -489,8 +441,7 @@ async function seedHelpContent() {
     });
   }
 
-  // ── FAQs: upsert by question text (no unique constraint on question — use onConflictDoNothing
-  //    for new rows; existing rows are left as-is since there is no unique slug for FAQs)
+  // ── FAQs: upsert by question text (unique constraint: faq_items_question_unique)
   for (const faq of FAQ_ITEMS) {
     await db.insert(faqItemsTable).values({
       id: randomUUID(),
@@ -504,7 +455,18 @@ async function seedHelpContent() {
       status: "published",
       createdAt: new Date(),
       updatedAt: new Date(),
-    }).onConflictDoNothing();
+    }).onConflictDoUpdate({
+      target: faqItemsTable.question,
+      set: {
+        answer: faq.answer,
+        category: faq.category,
+        requiredCapabilities: faq.requiredCapabilities ?? null,
+        packageKeys: faq.packageKeys ?? null,
+        moduleKey: faq.moduleKey ?? null,
+        sortOrder: faq.sortOrder,
+        updatedAt: new Date(),
+      },
+    });
   }
 
   if (catCount === 0) {
@@ -1429,6 +1391,8 @@ async function migrateHelpNewColumns() {
     )`,
     // support_tickets: add internal_notes column if missing (added in schema v2)
     `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS internal_notes text`,
+    // faq_items: unique constraint on question prevents duplicate seed inserts
+    `ALTER TABLE faq_items ADD CONSTRAINT IF NOT EXISTS faq_items_question_unique UNIQUE (question)`,
     // support_ticket_attachments table
     `CREATE TABLE IF NOT EXISTS support_ticket_attachments (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1939,7 +1903,6 @@ export async function runStartupSeed() {
     // ─────────────────────────────────────────────────────────────────────
     await seedDomainControls();
     await seedInitialAdmin();
-    await seedBreakGlassAccount();
     await migrateHelpNewColumns();
     await seedDocumentTemplates();
     await seedMonitoringItems();

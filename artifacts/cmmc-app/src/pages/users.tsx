@@ -1900,7 +1900,7 @@ function EditDialog({ user, open, onClose, onSuccess }: EditDialogProps) {
       form.title !== savedForm.title ||
       form.department !== savedForm.department);
 
-  const isProtected = detail?.isProtected === true || detail?.isBreakGlass === true;
+  const isProtected = detail?.isProtected === true;
   const isSelf = detail?.id === authUser?.id;
 
   const validate = () => {
@@ -1977,11 +1977,6 @@ function EditDialog({ user, open, onClose, onSuccess }: EditDialogProps) {
             {detail && isGlobalAdminRole(detail.role) && (
               <Badge variant="outline" className="border-blue-400 text-blue-700 bg-blue-50 gap-1 text-[10px]">
                 <ShieldCheck className="h-3 w-3" /> Global Admin
-              </Badge>
-            )}
-            {detail?.isBreakGlass && (
-              <Badge variant="outline" className="border-red-500 text-red-700 bg-red-50 gap-1 text-[10px]">
-                <ShieldAlert className="h-3 w-3" /> Break-Glass
               </Badge>
             )}
             {isProtected && (
@@ -2085,18 +2080,6 @@ function EditDialog({ user, open, onClose, onSuccess }: EditDialogProps) {
             <>
               {activeTab === "details" && (
                 <div className="space-y-4">
-                  {isProtected && (
-                    <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex items-start gap-2">
-                      <ShieldAlert className="h-4 w-4 mt-0.5 shrink-0" />
-                      <div>
-                        <p className="font-medium">Protected emergency account</p>
-                        <p className="text-xs mt-0.5">
-                          The break-glass account cannot be edited, deactivated, demoted or deleted
-                          from this screen. Use the dedicated CLI script to rotate its credentials.
-                        </p>
-                      </div>
-                    </div>
-                  )}
                   <UserForm data={form} onChange={setField} isEdit={true} errors={errors} />
                   <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground border-t pt-3">
                     <div>
@@ -2105,7 +2088,7 @@ function EditDialog({ user, open, onClose, onSuccess }: EditDialogProps) {
                     </div>
                     <div>
                       <span className="font-medium text-foreground">MFA: </span>
-                      {detail.mfaExempt ? "Exempt" : detail.mfaEnabled ? "Enabled" : "Not enrolled"}
+                      {detail.mfaEnabled ? "Enabled" : "Not enrolled"}
                     </div>
                     <div>
                       <span className="font-medium text-foreground">Created: </span>
@@ -2123,11 +2106,6 @@ function EditDialog({ user, open, onClose, onSuccess }: EditDialogProps) {
                   userId={detail.id}
                   onDirtyChange={setOrgsDirty}
                   disabled={isProtected}
-                  disabledReason={
-                    isProtected
-                      ? "The break-glass account's access comes from its Global Admin platform role and cannot be changed here."
-                      : undefined
-                  }
                 />
               )}
               {activeTab === "permissions" && isAdmin && (
@@ -2699,11 +2677,6 @@ export default function Users() {
                           <ShieldCheck className="h-3.5 w-3.5 text-blue-500 shrink-0" />
                         )}
                         {u.name}
-                        {u.isBreakGlass && (
-                          <Badge variant="outline" className="border-red-500 text-red-700 gap-1 text-xs bg-red-50 shrink-0">
-                            <ShieldAlert className="h-3 w-3" /> Break-Glass
-                          </Badge>
-                        )}
                         {u.id === me?.id && (
                           <Badge variant="secondary" className="text-[10px] px-1 py-0">
                             You
@@ -2789,12 +2762,7 @@ export default function Users() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            {u.isBreakGlass ? (
-                              <DropdownMenuItem disabled className="text-xs text-muted-foreground gap-2">
-                                <ShieldAlert className="h-4 w-4 text-red-500" />
-                                Break-glass account — protected
-                              </DropdownMenuItem>
-                            ) : isInvited(u) ? (
+                            {isInvited(u) ? (
                               <>
                                 <DropdownMenuItem
                                   onClick={() => handleResendInvite(u)}
@@ -2905,19 +2873,17 @@ export default function Users() {
                                 )}
                               </>
                             )}
-                            {!u.isBreakGlass && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={() => open("delete", u)}
-                                  className="gap-2 text-red-600 focus:text-red-600"
-                                  disabled={u.id === me?.id}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                  Delete User
-                                </DropdownMenuItem>
-                              </>
-                            )}
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => open("delete", u)}
+                                className="gap-2 text-red-600 focus:text-red-600"
+                                disabled={u.id === me?.id}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                Delete User
+                              </DropdownMenuItem>
+                            </>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

@@ -1,11 +1,9 @@
 import jwt from "jsonwebtoken";
 import { Request, Response, NextFunction } from "express";
-import { db, usersTable, breakGlassSessionsTable, auditLogsTable } from "@workspace/db";
+import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { createHash, randomUUID } from "crypto";
 
 const JWT_SECRET = process.env.SESSION_SECRET ?? "cmmc-dev-secret-change-in-prod";
-const BREAK_GLASS_IDLE_MINUTES = 15;
 
 export interface AuthUser {
   id: string;
@@ -26,10 +24,6 @@ export function verifyToken(token: string): AuthUser | null {
   }
 }
 
-export function hashJwtToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
-}
-
 declare global {
   namespace Express {
     interface Request {
@@ -37,21 +31,8 @@ declare global {
       orgId?: string;
       /** Org-specific role resolved by requireOrg middleware — use this for all org-scoped permission checks. */
       orgRole?: string;
-      isBreakGlass?: boolean;
     }
   }
-}
-
-function logSessionRevoked(session: { id: string; userId: string }, reason: string) {
-  db.insert(auditLogsTable).values({
-    id: randomUUID(),
-    userId: session.userId,
-    action: "break_glass_session_revoked" as any,
-    entityType: "break_glass_session",
-    entityId: session.id,
-    newValue: { reason, revokedAt: new Date().toISOString() },
-    timestamp: new Date(),
-  }).catch(() => {});
 }
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
@@ -74,50 +55,6 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   if (!dbUser[0] || !dbUser[0].isActive) {
     res.status(401).json({ error: "User not found or inactive" });
     return;
-  }
-
-  if (dbUser[0].isBreakGlass) {
-    const tokenHash = hashJwtToken(token);
-    const [session] = await db
-      .select()
-      .from(breakGlassSessionsTable)
-      .where(eq(breakGlassSessionsTable.tokenHash, tokenHash))
-      .limit(1);
-
-    if (!session || session.revokedAt) {
-      res.status(401).json({ error: "Break-glass session has been revoked" });
-      return;
-    }
-
-    const now = new Date();
-
-    if (session.expiresAt < now) {
-      db.update(breakGlassSessionsTable)
-        .set({ revokedAt: now })
-        .where(eq(breakGlassSessionsTable.id, session.id))
-        .catch(() => {});
-      logSessionRevoked(session, "absolute_expiry");
-      res.status(401).json({ error: "Break-glass session has expired" });
-      return;
-    }
-
-    const idleLimit = new Date(session.lastActiveAt.getTime() + BREAK_GLASS_IDLE_MINUTES * 60 * 1000);
-    if (now > idleLimit) {
-      db.update(breakGlassSessionsTable)
-        .set({ revokedAt: now })
-        .where(eq(breakGlassSessionsTable.id, session.id))
-        .catch(() => {});
-      logSessionRevoked(session, "idle_timeout");
-      res.status(401).json({ error: "Break-glass session timed out due to inactivity" });
-      return;
-    }
-
-    db.update(breakGlassSessionsTable)
-      .set({ lastActiveAt: now })
-      .where(eq(breakGlassSessionsTable.id, session.id))
-      .catch(() => {});
-
-    req.isBreakGlass = true;
   }
 
   req.authUser = user;

@@ -130,13 +130,20 @@ export default function HelpMyTickets() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {isGlobalAdmin && (
-            <Button
-              variant={viewAll ? "default" : "outline"}
-              size="sm"
-              onClick={() => setViewAll(!viewAll)}
-            >
-              {viewAll ? "View My Tickets" : "View All Tickets"}
-            </Button>
+            <>
+              <Button
+                variant={viewAll ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewAll(!viewAll)}
+              >
+                {viewAll ? "View My Tickets" : "View All Tickets"}
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/help/admin">
+                  Manage &amp; Resolve Tickets
+                </Link>
+              </Button>
+            </>
           )}
           <Button asChild size="sm">
             <Link href="/help/support-ticket">

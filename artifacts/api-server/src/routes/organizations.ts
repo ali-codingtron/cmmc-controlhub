@@ -33,26 +33,6 @@ function requireAdmin(req: any, res: any, next: any) {
 router.get("/organizations/my-orgs", requireAuth, async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
 
-  if (req.isBreakGlass) {
-    const allOrgs = await db
-      .select({
-        id: organizationsTable.id,
-        name: organizationsTable.name,
-        shortName: organizationsTable.shortName,
-        cmmcTargetLevel: organizationsTable.cmmcTargetLevel,
-        industry: organizationsTable.industry,
-        isActive: organizationsTable.isActive,
-        isTestOrganization: organizationsTable.isTestOrganization,
-        certificationModuleState: organizationsTable.certificationModuleState,
-        role: sql<string>`'admin'`,
-      })
-      .from(organizationsTable)
-      .where(eq(organizationsTable.isActive, true))
-      .orderBy(organizationsTable.name);
-    res.json(allOrgs);
-    return;
-  }
-
   const memberships = await db
     .select({
       id: organizationsTable.id,
@@ -521,21 +501,13 @@ router.post("/organizations/:id/users", requireAuth, requireAdmin, async (req, r
   }
 
   const [target] = await db
-    .select({ email: usersTable.email, isBreakGlass: usersTable.isBreakGlass })
+    .select({ email: usersTable.email })
     .from(usersTable)
     .where(eq(usersTable.id, userId))
     .limit(1);
 
   if (!target) {
     res.status(400).json({ error: "User not found" });
-    return;
-  }
-
-  if (target.isBreakGlass) {
-    res.status(403).json({
-      error:
-        "The break-glass emergency account is protected. Its access comes from the Global Admin platform role and cannot be changed here.",
-    });
     return;
   }
 
@@ -731,21 +703,13 @@ router.delete("/organizations/:id/users/:userId", requireAuth, requireAdmin, asy
   const targetUserId = req.params.userId as string;
 
   const [target] = await db
-    .select({ email: usersTable.email, isBreakGlass: usersTable.isBreakGlass })
+    .select({ email: usersTable.email })
     .from(usersTable)
     .where(eq(usersTable.id, targetUserId))
     .limit(1);
 
   if (!target) {
     res.status(404).json({ error: "User not found" });
-    return;
-  }
-
-  if (target.isBreakGlass) {
-    res.status(403).json({
-      error:
-        "The break-glass emergency account is protected. Its access comes from the Global Admin platform role and cannot be changed here.",
-    });
     return;
   }
 
