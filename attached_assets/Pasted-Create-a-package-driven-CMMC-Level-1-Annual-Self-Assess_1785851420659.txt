@@ -1,0 +1,1267 @@
+Create a package-driven CMMC Level 1 Annual Self-Assessment module using Control HUB’s 17-requirement CMMC Level 1 operating model and a complete FAR 52.204-21 crosswalk.
+
+IMPORTANT DESIGN DECISION:
+
+Control HUB will use CMMC Level 1 as the primary user-facing package.
+
+The application will contain:
+
+- 17 operational CMMC Level 1 assessment requirements
+- 15 FAR 52.204-21 safeguarding requirements
+- one authoritative implementation and evidence record for each of the 17 CMMC assessment requirements
+- a roll-up mapping from the 17 CMMC assessment requirements to the 15 FAR safeguarding requirements
+
+Do not create a second duplicate set of implementation narratives, evidence, statuses, tasks, or assessment findings for FAR 52.204-21.
+
+CMMC Level 1 is the primary Control HUB assessment model.
+
+FAR 52.204-21 is the authoritative source and reporting crosswalk.
+
+====================================================================
+1. TERMINOLOGY
+====================================================================
+
+Use these labels consistently throughout Control HUB:
+
+Primary user-facing label:
+
+17 CMMC Level 1 Assessment Requirements
+
+Secondary authority label:
+
+Mapped to FAR 52.204-21
+
+FAR summary label:
+
+15 FAR Basic Safeguarding Requirements
+
+Dashboard example:
+
+17 CMMC Level 1 Requirements
+15 FAR Safeguarding Requirements
+
+Do not display:
+
+17 FAR Requirements
+
+Do not claim that FAR 52.204-21 contains 17 separately numbered clauses.
+
+The 17 requirements are Control HUB’s operational CMMC Level 1 assessment rows.
+
+====================================================================
+2. STRICT SCOPE
+====================================================================
+
+Add or update only:
+
+- CMMC Level 1 Annual Self-Assessment
+- CMMC Level 1 requirement data
+- FAR 52.204-21 mappings
+- assessment scope
+- annual-cycle workflow
+- requirement and objective findings
+- evidence linking
+- assessment methods
+- management review
+- SPRS preparation
+- affirmation tracking
+- annual reminders
+- assessment history
+- Level 1 reports
+- Level 1 dashboard card
+- Level 1 permissions and audit logging
+
+Do not redesign:
+
+- general Controls
+- general Evidence Repository
+- Documentation
+- SSP
+- Monitoring Tracker
+- POA&M
+- Implementation Roadmap
+- Microsoft Pre-Assessment
+- Users & Roles
+- Certification & Sustainment
+- organization package assignments
+- CMMC Level 2 assessment data
+
+Reuse existing:
+
+- organization records
+- control records
+- evidence records
+- users
+- tasks
+- notifications
+- reports
+- storage
+- audit logging
+
+Do not duplicate physical evidence files.
+
+====================================================================
+3. RUN A READ-ONLY DIAGNOSTIC FIRST
+====================================================================
+
+Before changing production data, inspect and report:
+
+- current CMMC Level 1 package key
+- current Level 1 requirement count
+- current 17 requirement IDs
+- current requirement titles
+- current FAR references
+- current evidence mappings
+- current implementation narratives
+- current organization statuses
+- existing annual-assessment records
+- duplicate requirements
+- requirements missing FAR mappings
+- requirements mapped to the wrong FAR clause
+- existing Level 1 organizations
+- organizations showing Level 2 assessment content incorrectly
+
+Generate:
+
+artifacts/cmmc-l1/CMMC_L1_Requirement_Diagnostic.md
+
+Also generate:
+
+artifacts/cmmc-l1/CMMC_L1_FAR_Mapping_Dry_Run.xlsx
+
+Columns:
+
+- Existing Requirement ID
+- Existing Requirement Title
+- Existing Domain
+- Proposed Canonical Key
+- Proposed FAR Clause
+- Existing Evidence Count
+- Existing Narrative Present
+- Mapping Status
+- Conflict
+- Recommended Action
+
+Do not modify production data during this diagnostic.
+
+Do not renumber existing production requirements automatically.
+
+====================================================================
+4. CANONICAL 17-REQUIREMENT MODEL
+====================================================================
+
+Use 17 operational CMMC Level 1 assessment requirements.
+
+Preserve the application’s current stable requirement IDs where possible.
+
+If current IDs are inconsistent, add a stable canonical key without changing the displayed production ID.
+
+The 17 operational requirements are:
+
+1. Authorized Access Control
+   Domain: Access Control
+   FAR Mapping: 52.204-21(b)(1)(i)
+
+2. Transaction and Function Control
+   Domain: Access Control
+   FAR Mapping: 52.204-21(b)(1)(ii)
+
+3. External Information System Connections
+   Domain: Access Control
+   FAR Mapping: 52.204-21(b)(1)(iii)
+
+4. Publicly Accessible Information
+   Domain: Access Control
+   FAR Mapping: 52.204-21(b)(1)(iv)
+
+5. User, Process, and Device Identification
+   Domain: Identification and Authentication
+   FAR Mapping: 52.204-21(b)(1)(v)
+
+6. User, Process, and Device Authentication
+   Domain: Identification and Authentication
+   FAR Mapping: 52.204-21(b)(1)(vi)
+
+7. Media Sanitization and Destruction
+   Domain: Media Protection
+   FAR Mapping: 52.204-21(b)(1)(vii)
+
+8. Authorized Physical Access
+   Domain: Physical Protection
+   FAR Mapping: 52.204-21(b)(1)(viii)
+
+9. Visitor Escort and Monitoring
+   Domain: Physical Protection
+   FAR Mapping: 52.204-21(b)(1)(ix)
+
+10. Physical Access Logs
+    Domain: Physical Protection
+    FAR Mapping: 52.204-21(b)(1)(ix)
+
+11. Physical Access Devices
+    Domain: Physical Protection
+    FAR Mapping: 52.204-21(b)(1)(ix)
+
+12. Boundary Protection
+    Domain: System and Communications Protection
+    FAR Mapping: 52.204-21(b)(1)(x)
+
+13. Public System Separation
+    Domain: System and Communications Protection
+    FAR Mapping: 52.204-21(b)(1)(xi)
+
+14. Flaw Identification, Reporting, and Remediation
+    Domain: System and Information Integrity
+    FAR Mapping: 52.204-21(b)(1)(xii)
+
+15. Malicious Code Protection
+    Domain: System and Information Integrity
+    FAR Mapping: 52.204-21(b)(1)(xiii)
+
+16. Malicious Code Protection Updates
+    Domain: System and Information Integrity
+    FAR Mapping: 52.204-21(b)(1)(xiv)
+
+17. Periodic and Real-Time Scanning
+    Domain: System and Information Integrity
+    FAR Mapping: 52.204-21(b)(1)(xv)
+
+The three operational requirements:
+
+- Visitor Escort and Monitoring
+- Physical Access Logs
+- Physical Access Devices
+
+must roll up to the same FAR clause:
+
+52.204-21(b)(1)(ix)
+
+Do not merge those three operational records in the Control HUB user interface.
+
+====================================================================
+5. REQUIREMENT AND AUTHORITY DATA MODEL
+====================================================================
+
+Use or extend a requirement model similar to:
+
+ComplianceRequirement
+- id
+- canonical_key
+- displayed_requirement_id
+- title
+- statement
+- domain_code
+- package_key
+- information_type
+- active
+- sort_order
+- created_at
+- updated_at
+
+Create an authority mapping:
+
+RequirementAuthorityMapping
+- id
+- requirement_id
+- authority_key
+- authority_clause
+- authority_title
+- relationship_type
+- rollup_group
+- source_version
+- created_at
+- updated_at
+
+Authority key:
+
+FAR_52_204_21
+
+Relationship type:
+
+IMPLEMENTS
+
+Enforce uniqueness:
+
+requirement_id + authority_key + authority_clause
+
+Do not create duplicate requirement records merely to display FAR references.
+
+====================================================================
+6. PACKAGE BEHAVIOR
+====================================================================
+
+Primary package:
+
+CMMC_L1
+
+Authority mapping:
+
+FAR_52_204_21
+
+When CMMC Level 1 is selected for an organization:
+
+- automatically make the FAR 52.204-21 mapping available
+- do not require the Global Admin to select FAR separately
+- do not create duplicate FAR controls
+- do not create duplicate evidence requirements
+- do not create duplicate readiness percentages
+
+If FAR 52.204-21 is also selected explicitly:
+
+- display it as a linked authority
+- do not create another set of implementation records
+- do not double-count controls
+- do not double-count evidence
+- do not double-count progress
+
+Preferred package card:
+
+CMMC Level 1
+17 Assessment Requirements
+
+Mapped Authority:
+FAR 52.204-21
+15 Safeguarding Requirements
+
+====================================================================
+7. FAR ROLL-UP LOGIC
+====================================================================
+
+The 17 CMMC requirement findings are the primary assessment results.
+
+Calculate the 15 FAR clause results from those findings.
+
+For FAR clauses with one mapped CMMC requirement:
+
+FAR clause result equals the mapped CMMC requirement result.
+
+For FAR clause 52.204-21(b)(1)(ix):
+
+The FAR clause is satisfied only when all three mapped CMMC requirements are:
+
+- MET
+or
+- valid NOT APPLICABLE
+
+The three mapped requirements are:
+
+- Visitor Escort and Monitoring
+- Physical Access Logs
+- Physical Access Devices
+
+If any of the three is NOT MET:
+
+FAR 52.204-21(b)(1)(ix) = NOT MET
+
+If any of the three is Not Yet Assessed:
+
+FAR 52.204-21(b)(1)(ix) = Not Yet Assessed
+
+Do not average the three findings.
+
+Do not calculate a numeric percentage for the FAR clause.
+
+====================================================================
+8. MODULE VISIBILITY
+====================================================================
+
+Sidebar label:
+
+Annual Self-Assessment
+
+Show only when:
+
+- CMMC Level 1 is active for the selected organization
+- the user has level1_assessment.view
+
+Do not make this module manually optional.
+
+It is package-driven.
+
+When CMMC Level 1 is not active:
+
+- hide the sidebar item
+- deny direct routes
+- deny API access
+- return no Level 1 assessment data
+
+====================================================================
+9. PAGE TITLE AND DASHBOARD
+====================================================================
+
+Use:
+
+CMMC Level 1 Annual Self-Assessment
+
+Subtitle:
+
+“Assess the organization’s 17 CMMC Level 1 requirements and document compliance with FAR 52.204-21.”
+
+Top cards:
+
+- Current Assessment Cycle
+- Assessment Status
+- 17 CMMC Requirements Reviewed
+- 15 FAR Clauses Satisfied
+- Evidence Ready
+- Management Review
+- SPRS Status
+- Annual Affirmation
+- Due Date
+
+Example:
+
+17 CMMC Requirements:
+12 MET
+1 Not Applicable
+4 Not Yet Assessed
+
+FAR Roll-Up:
+11 of 15 Satisfied
+
+Do not show:
+
+- 110 controls
+- Level 2 score
+- CUI readiness
+- C3PAO certification
+- Conditional Level 1
+
+====================================================================
+10. ANNUAL ASSESSMENT RECORD
+====================================================================
+
+Create:
+
+Level1AnnualAssessment
+- id
+- organization_id
+- assessment_year
+- scope_name
+- assessment_scope_type
+- status
+- assessment_date
+- due_date
+- employee_count
+- included_cage_codes
+- cage_codes_accessing_system
+- assessment_owner_user_id
+- management_reviewer_user_id
+- affirming_official_user_id
+- prior_assessment_id
+- cmmc_uid
+- cmmc_status
+- cmmc_status_date
+- expiration_date
+- sprs_submission_date
+- sprs_submitted_by
+- affirmation_date
+- affirmed_by
+- locked_at
+- locked_by
+- retention_until
+- created_at
+- updated_at
+- row_version
+
+Statuses:
+
+- NOT_STARTED
+- SCOPE_REVIEW
+- IN_PROGRESS
+- REMEDIATION_REQUIRED
+- READY_FOR_MANAGEMENT_REVIEW
+- CHANGES_REQUESTED
+- READY_FOR_SPRS
+- PENDING_AFFIRMATION
+- FINAL_LEVEL_1_SELF
+- EXPIRED
+- SUPERSEDED
+
+Enforce a safe uniqueness rule using:
+
+organization_id + assessment_year + scope_name
+
+Do not overwrite a prior annual assessment.
+
+====================================================================
+11. START NEW ANNUAL CYCLE
+====================================================================
+
+Button:
+
+Start Annual Self-Assessment
+
+When selected:
+
+1. Create a new annual assessment record.
+2. Reference the previous assessment.
+3. Copy prior scope as proposed information.
+4. Copy prior implementation narratives as proposed information.
+5. Copy prior evidence links as references.
+6. Create 17 assessment-requirement rows.
+7. Reset all findings to NOT_YET_ASSESSED.
+8. Mark prior evidence as NEEDS_REVALIDATION.
+9. Preserve the prior annual assessment unchanged.
+10. Create an audit event.
+
+Do not carry forward prior MET findings as current results.
+
+Do not automatically mark old evidence current.
+
+====================================================================
+12. ASSESSMENT SCOPE
+====================================================================
+
+Collect:
+
+- Enterprise or Enclave
+- Scope Name
+- Assessment Date
+- Included CAGE Codes
+- CAGE Codes Accessing the Assessed System
+- Number of Employees
+- Locations
+- In-Scope Assets
+- In-Scope Users and Roles
+- In-Scope Facilities
+- External Service Providers
+- Specialized Assets
+- Out-of-Scope Assets
+- Assessment Owner
+- Management Reviewer
+- Affirming Official
+
+Use FCI terminology.
+
+Do not use CUI terminology unless another separately selected package requires it.
+
+Add:
+
+Compare to Prior Assessment
+
+Show:
+
+- assets added
+- assets removed
+- services added
+- services removed
+- provider changes
+- location changes
+- personnel-group changes
+- CAGE-code changes
+
+Require human confirmation of the scope.
+
+====================================================================
+13. REQUIREMENT ASSESSMENT
+====================================================================
+
+Create one assessment row for each of the 17 operational CMMC Level 1 requirements.
+
+Model:
+
+Level1AssessmentRequirement
+- id
+- assessment_id
+- requirement_id
+- finding
+- implementation_narrative_snapshot
+- assessment_summary
+- inherited
+- inheritance_source
+- na_rationale
+- reviewed_by
+- reviewed_at
+- created_at
+- updated_at
+
+Finding values:
+
+- NOT_YET_ASSESSED
+- MET
+- NOT_MET
+- NOT_APPLICABLE
+
+Each requirement page should show:
+
+- CMMC Requirement ID
+- CMMC Requirement Title
+- Requirement Statement
+- Domain
+- FAR 52.204-21 Mapping
+- Assessment Objectives
+- Implementation Narrative
+- Assessment Methods
+- Evidence
+- Inherited Implementation
+- Assessor Notes
+- Finding
+- Reviewed By
+- Reviewed Date
+
+CMMC must remain the primary identity.
+
+FAR should appear as:
+
+Authority Mapping
+
+not as a separate duplicate control.
+
+====================================================================
+14. ASSESSMENT OBJECTIVES
+====================================================================
+
+Create:
+
+Level1AssessmentObjective
+- id
+- assessment_requirement_id
+- objective_id
+- objective_statement
+- result
+- assessment_methods
+- assessor_notes
+- inherited
+- inheritance_source
+- reviewed_by
+- reviewed_at
+
+Objective results:
+
+- NOT_REVIEWED
+- SATISFIED
+- NOT_SATISFIED
+- NOT_APPLICABLE
+
+A CMMC requirement may be MET only when every applicable objective is:
+
+- SATISFIED
+or
+- valid NOT_APPLICABLE
+
+One NOT_SATISFIED objective causes the CMMC requirement to be NOT_MET.
+
+Do not allow a manual requirement dropdown to bypass objective findings.
+
+====================================================================
+15. ASSESSMENT METHODS
+====================================================================
+
+Allow:
+
+- Examine
+- Interview
+- Test
+
+Record:
+
+- method
+- assessment object
+- document or mechanism reviewed
+- person interviewed
+- test performed
+- expected result
+- actual result
+- performed by
+- date
+- notes
+
+Do not require every method for every requirement.
+
+Require enough assessment information to support the finding.
+
+====================================================================
+16. EVIDENCE LINKING
+====================================================================
+
+Reuse existing Evidence records.
+
+Create:
+
+Level1AssessmentEvidenceLink
+- id
+- assessment_id
+- assessment_requirement_id
+- assessment_objective_id
+- evidence_id
+- assessment_use
+- qualification
+- linked_by
+- linked_at
+- reviewer_note
+
+Assessment use:
+
+- EXAMINE
+- INTERVIEW_SUPPORT
+- TEST_RESULT
+- SCOPE_SUPPORT
+- INHERITED_EVIDENCE
+- MANAGEMENT_APPROVAL
+- SPRS_CONFIRMATION
+- AFFIRMATION_CONFIRMATION
+
+Qualification:
+
+- QUALIFIES
+- NEEDS_REVALIDATION
+- DRAFT_DOES_NOT_QUALIFY
+- EXPIRED
+- SUPERSEDED
+- MISSING_CONTEXT
+- NEEDS_REVIEW
+
+Do not duplicate physical files.
+
+One Evidence record may support several CMMC requirements and assessment objectives.
+
+Do not mark a requirement MET solely because evidence is linked.
+
+====================================================================
+17. NOT MET AND REMEDIATION
+====================================================================
+
+When a requirement is NOT MET:
+
+Assessment status becomes:
+
+REMEDIATION_REQUIRED
+
+Allow:
+
+- Create Control Task
+- Create Remediation Task
+- Create Evidence Request
+- Assign Owner
+- Set Target Date
+- Record Corrective Action
+- Reassess Requirement
+
+Do not create:
+
+- a CMMC Level 1 assessment POA&M
+- Conditional Level 1 status
+- Level 1 POA&M closeout
+
+Existing operational task or corrective-action mechanisms may be used to manage remediation.
+
+Do not present those internal tasks as an eligible CMMC assessment POA&M.
+
+The assessment cannot be finalized while any applicable requirement remains NOT MET.
+
+====================================================================
+18. VALIDATION GATE
+====================================================================
+
+Add:
+
+Validate Assessment
+
+Blocking validation:
+
+- scope confirmed
+- assessment date entered
+- scope type entered
+- employee count entered
+- included CAGE codes reviewed
+- all 17 CMMC requirements assessed
+- no Not Yet Assessed findings
+- no NOT MET findings
+- every MET requirement has all applicable objectives satisfied
+- every MET requirement has qualifying evidence
+- every N/A has rationale and approval
+- inherited objectives have evidence
+- assessment methods are recorded
+- all 15 FAR clauses roll up as satisfied
+- management reviewer assigned
+- affirming official assigned
+- no CMMC assessment POA&M is used
+
+Show:
+
+- Passed
+- Warning
+- Blocking Error
+
+Do not allow status selection to bypass validation.
+
+====================================================================
+19. MANAGEMENT REVIEW
+====================================================================
+
+Action:
+
+Submit for Management Review
+
+Reviewer actions:
+
+- Approve for SPRS
+- Request Changes
+
+Reviewer must confirm:
+
+- assessment scope
+- all 17 CMMC findings
+- all 15 FAR roll-ups
+- assessment-objective findings
+- evidence sufficiency
+- N/A rationales
+- inherited implementation
+- no outstanding NOT MET findings
+- SPRS information readiness
+
+After approval:
+
+status = READY_FOR_SPRS
+
+Record:
+
+- reviewer
+- approval date
+- comments
+- assessment version
+
+====================================================================
+20. SPRS PREPARATION
+====================================================================
+
+Create:
+
+SPRS & Affirmation
+
+Prepare an SPRS worksheet containing:
+
+- Organization
+- Assessment Date
+- Enterprise or Enclave
+- Number of Employees
+- Included CAGE Codes
+- CAGE Codes Accessing the Assessed System
+- 17 CMMC Requirement Summary
+- 15 FAR Clause Roll-Up
+- Overall FAR 52.204-21 Compliance Result
+- Management Reviewer
+- Affirming Official
+
+Buttons:
+
+- Download SPRS Entry Worksheet
+- Mark Entered in SPRS
+- Upload SPRS Confirmation
+- Send to Affirming Official
+
+Do not display a Submit to SPRS button unless a supported and authorized integration exists.
+
+When marked entered in SPRS, require:
+
+- submitted by
+- submission date
+- submission reference
+- confirmation evidence
+
+====================================================================
+21. AFFIRMATION
+====================================================================
+
+Workflow:
+
+READY_FOR_SPRS
+→ PENDING_AFFIRMATION
+→ FINAL_LEVEL_1_SELF
+
+The Affirming Official reviews:
+
+- assessment scope
+- 17 CMMC requirements
+- 15 FAR clause roll-up
+- evidence index
+- N/A rationales
+- management approval
+- SPRS information
+
+Require confirmation:
+
+“I have reviewed the CMMC Level 1 self-assessment results and am authorized to affirm the organization’s continuing compliance.”
+
+Record:
+
+- Affirming Official
+- Title
+- Email
+- Affirmation Date
+- SPRS Confirmation
+- CMMC UID
+- CMMC Status Date
+- Expiration Date
+
+Control HUB records preparation, approval, and proof.
+
+Do not claim that Control HUB itself issued the status.
+
+====================================================================
+22. FINALIZATION
+====================================================================
+
+When Final Level 1 (Self) is recorded:
+
+1. Lock the annual assessment findings.
+2. Lock the scope snapshot.
+3. Lock all 17 CMMC requirement snapshots.
+4. Lock the 15 FAR roll-up results.
+5. Lock implementation narratives used for the assessment.
+6. Lock evidence-reference snapshots.
+7. Preserve management approval.
+8. Preserve affirmation confirmation.
+9. Generate artifact hashes.
+10. Set the retention date.
+11. Generate final reports.
+12. Schedule annual reminders.
+13. Create an audit event.
+
+Do not make the underlying Evidence files globally immutable.
+
+Lock the assessment snapshot and its references.
+
+====================================================================
+23. REPORTS
+====================================================================
+
+Generate:
+
+- CMMC Level 1 Annual Self-Assessment Report.pdf
+- 17-Requirement CMMC Level 1 Workpaper.xlsx
+- FAR 52.204-21 Crosswalk and Roll-Up.xlsx
+- Assessment Objective Workpaper.xlsx
+- Evidence Index.xlsx
+- FCI Scope Summary.pdf
+- SPRS Entry Worksheet.pdf
+- Affirmation Record.pdf
+- Assessment Artifact Hash Manifest.xlsx
+
+The main report should show:
+
+CMMC Level 1 Assessment Summary
+
+- 17 CMMC Requirements
+- MET
+- NOT MET
+- NOT APPLICABLE
+- 15 FAR Safeguarding Requirements
+- FAR Clauses Satisfied
+- Assessment Scope
+- Assessment Date
+- Evidence Summary
+- Management Approval
+- SPRS Status
+- Affirmation Status
+
+Do not call the report a certificate.
+
+====================================================================
+24. DASHBOARD AND REMINDERS
+====================================================================
+
+Add an organization dashboard card:
+
+CMMC Level 1 Annual Self-Assessment
+
+Show:
+
+- Current Cycle
+- Assessment Status
+- Due Date
+- 17 CMMC Requirements Reviewed
+- MET
+- NOT MET
+- NOT APPLICABLE
+- 15 FAR Clauses Satisfied
+- Evidence Ready
+- Management Review
+- SPRS Status
+- Affirmation Status
+
+Reminders:
+
+- 120 days before due
+- 90 days
+- 60 days
+- 30 days
+- 14 days
+- 7 days
+- Due Today
+- Overdue
+
+Do not automatically create a successful next assessment.
+
+A future cycle must revalidate scope, findings, and evidence.
+
+====================================================================
+25. ASSESSMENT HISTORY
+====================================================================
+
+Add:
+
+Assessment History
+
+Columns:
+
+- Assessment Year
+- Scope
+- Assessment Date
+- Status
+- CMMC Findings
+- FAR Roll-Up
+- CMMC UID
+- Status Date
+- Expiration Date
+- Affirming Official
+- Reports
+- Actions
+
+Actions:
+
+- View
+- Download Assessment Report
+- Download FAR Crosswalk
+- Download Evidence Index
+- Download Affirmation Record
+- Compare to Current Cycle
+
+Finalized historical assessments are read-only.
+
+====================================================================
+26. PERMISSIONS
+====================================================================
+
+Add capabilities:
+
+- level1_assessment.view
+- level1_assessment.create
+- level1_assessment.edit_scope
+- level1_assessment.assess
+- level1_assessment.link_evidence
+- level1_assessment.review
+- level1_assessment.approve_na
+- level1_assessment.prepare_sprs
+- level1_assessment.affirm
+- level1_assessment.finalize
+- level1_assessment.view_history
+- level1_assessment.correct_locked
+
+Recommended:
+
+Global Admin:
+all permissions
+
+Organization Admin:
+manage within assigned organization
+
+Compliance Manager:
+assessment owner and preparation
+
+IT Contributor:
+assigned objectives, evidence, and remediation tasks
+
+Reviewer:
+management review and N/A approval
+
+Executive Viewer:
+read-only summaries
+
+Assessor Read-Only:
+read-only access where granted
+
+Affirming Official:
+affirmation review and confirmation
+
+Backend authorization is required.
+
+====================================================================
+27. AUDIT LOGGING
+====================================================================
+
+Log:
+
+- annual assessment created
+- scope confirmed
+- CMMC finding changed
+- objective finding changed
+- FAR roll-up recalculated
+- evidence linked or unlinked
+- inheritance recorded
+- N/A rationale approved
+- remediation task created
+- validation run
+- management review submitted
+- changes requested
+- approved for SPRS
+- marked entered in SPRS
+- sent to Affirming Official
+- affirmation recorded
+- CMMC UID recorded
+- assessment finalized
+- assessment locked
+- locked assessment corrected
+- report downloaded
+
+Include:
+
+- user
+- organization
+- assessment
+- CMMC requirement
+- FAR clause
+- objective
+- previous value
+- new value
+- reason
+- timestamp
+- success/failure
+
+Do not log full evidence content.
+
+====================================================================
+28. PRODUCTION DATA SAFETY
+====================================================================
+
+Do not:
+
+- delete current Level 1 controls
+- renumber current Level 1 controls automatically
+- change existing implementation narratives
+- change evidence mappings
+- duplicate evidence
+- create duplicate FAR controls
+- create a CMMC Level 1 assessment POA&M
+- automatically mark requirements MET
+- overwrite prior assessments
+- falsely claim SPRS submission
+- issue a certification
+- alter organization package assignments
+- alter Level 2 assessment records
+- alter SSP, Monitoring, Roadmap, Pre-Assessment, or Documentation data
+
+Use additive nullable schema changes.
+
+Require a dry-run report before any data repair.
+
+====================================================================
+29. ACCEPTANCE TESTS
+====================================================================
+
+Test A — Requirement Count:
+
+Open a CMMC Level 1 organization.
+
+Expected:
+
+- 17 CMMC Level 1 requirements are displayed
+- 15 FAR safeguarding requirements are displayed as mapped authority
+- no duplicate FAR control records exist
+
+Test B — Physical Protection Roll-Up:
+
+Set:
+
+- Visitor Escort = MET
+- Physical Access Logs = MET
+- Physical Access Devices = NOT MET
+
+Expected:
+
+FAR 52.204-21(b)(1)(ix) = NOT MET
+
+Test C — Full Completion:
+
+All 17 CMMC requirements are MET or valid N/A.
+
+Expected:
+
+- all 15 FAR clauses roll up as satisfied
+- assessment may proceed to management review
+
+Test D — Evidence:
+
+One evidence record supports three CMMC requirements.
+
+Expected:
+
+- one physical file
+- one Evidence record
+- three assessment links
+- no duplicate file
+
+Test E — NOT MET:
+
+One CMMC requirement is NOT MET.
+
+Expected:
+
+- assessment becomes Remediation Required
+- management review is blocked
+- no assessment POA&M or Conditional Level 1 is created
+
+Test F — New Cycle:
+
+Start a new annual assessment.
+
+Expected:
+
+- prior annual record remains locked
+- 17 new findings begin as Not Yet Assessed
+- evidence requires revalidation
+- prior MET findings are not carried forward automatically
+
+Test G — SPRS:
+
+Expected:
+
+- worksheet contains both the 17 CMMC requirement results and 15 FAR clause roll-up
+- Control HUB does not falsely claim it submitted to SPRS
+
+Test H — Package Deduplication:
+
+Organization has CMMC Level 1 and FAR 52.204-21 selected.
+
+Expected:
+
+- one implementation set
+- one evidence set
+- one annual assessment
+- FAR appears as authority/crosswalk
+- no double counting
+
+Test I — Reporting:
+
+Expected:
+
+- main report shows 17 CMMC requirements
+- FAR crosswalk shows 15 safeguards
+- FAR clause (ix) shows its three mapped CMMC requirements
+
+Test J — Production Safety:
+
+No existing control, evidence, SSP, monitoring, POA&M, roadmap, package, or prior assessment record is deleted or overwritten.
+
+====================================================================
+30. MOST IMPORTANT RULES
+====================================================================
+
+1. Control HUB uses 17 CMMC Level 1 requirements as its primary operational assessment model.
+
+2. FAR 52.204-21 remains the authoritative source and 15-clause reporting crosswalk.
+
+3. Do not create duplicate FAR implementation records.
+
+4. All 17 CMMC findings must be completed before finalization.
+
+5. The 15 FAR results are calculated from the mapped 17 CMMC findings.
+
+6. FAR clause 52.204-21(b)(1)(ix) rolls up from three separate CMMC operational requirements.
+
+7. Level 1 is assessed annually.
+
+8. Do not create a CMMC assessment POA&M or Conditional Level 1 status.
+
+9. Prior annual assessments remain immutable historical snapshots.
