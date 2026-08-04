@@ -36,7 +36,20 @@ export type OrgPermission =
   | "org.admin"
   | "reports.generate"
   | "preassessment.run"
-  | "ssp.edit";
+  | "ssp.edit"
+  // ── CMMC L1 Annual Self-Assessment ───────────────────────────────────────
+  | "level1_assessment.view"
+  | "level1_assessment.start"
+  | "level1_assessment.edit"
+  | "level1_assessment.submit"
+  | "level1_assessment.affirm"
+  | "level1_assessment.delete"
+  | "level1_assessment.manage_objectives"
+  | "level1_assessment.link_evidence"
+  | "level1_assessment.unlink_evidence"
+  | "level1_assessment.manage_requirements"
+  | "level1_assessment.export"
+  | "level1_assessment.correct_locked";
 
 const ALL_PERMISSIONS: OrgPermission[] = [
   "documents.generate", "documents.edit", "documents.approve", "documents.delete",
@@ -49,6 +62,19 @@ const ALL_PERMISSIONS: OrgPermission[] = [
   "monitoring.update",
   "users.manage", "org.admin",
   "reports.generate", "preassessment.run", "ssp.edit",
+  // L1 Annual Self-Assessment
+  "level1_assessment.view",
+  "level1_assessment.start",
+  "level1_assessment.edit",
+  "level1_assessment.submit",
+  "level1_assessment.affirm",
+  "level1_assessment.delete",
+  "level1_assessment.manage_objectives",
+  "level1_assessment.link_evidence",
+  "level1_assessment.unlink_evidence",
+  "level1_assessment.manage_requirements",
+  "level1_assessment.export",
+  "level1_assessment.correct_locked",
 ];
 
 const ROLE_PERMISSIONS: Record<string, OrgPermission[]> = {
@@ -65,6 +91,16 @@ const ROLE_PERMISSIONS: Record<string, OrgPermission[]> = {
     "roadmap.view", "roadmap.update",
     "monitoring.update",
     "reports.generate", "preassessment.run", "ssp.edit",
+    // L1 Annual Self-Assessment: managers can view, start, edit, submit, manage, export
+    "level1_assessment.view",
+    "level1_assessment.start",
+    "level1_assessment.edit",
+    "level1_assessment.submit",
+    "level1_assessment.manage_objectives",
+    "level1_assessment.link_evidence",
+    "level1_assessment.unlink_evidence",
+    "level1_assessment.manage_requirements",
+    "level1_assessment.export",
   ],
   it_contributor: [
     "evidence.edit",
@@ -74,16 +110,29 @@ const ROLE_PERMISSIONS: Record<string, OrgPermission[]> = {
     "tasks.close", "tasks.view_activity",
     "roadmap.view",
     "monitoring.update",
+    // L1 Annual Self-Assessment: contributors can view, edit objectives/evidence, export
+    "level1_assessment.view",
+    "level1_assessment.edit",
+    "level1_assessment.manage_objectives",
+    "level1_assessment.link_evidence",
+    "level1_assessment.unlink_evidence",
+    "level1_assessment.export",
   ],
   reviewer: [
     "roadmap.view",
     "tasks.view_activity",
+    "level1_assessment.view",
+    "level1_assessment.export",
   ],
   executive_viewer: [
     "roadmap.view",
     "tasks.view_activity",
+    "level1_assessment.view",
+    "level1_assessment.export",
   ],
-  assessor: [],
+  assessor: [
+    "level1_assessment.view",
+  ],
 };
 
 const PERMISSION_SETS: Record<string, Set<OrgPermission>> = {};

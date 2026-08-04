@@ -6,6 +6,7 @@ import {
   timestamp,
   pgEnum,
   uniqueIndex,
+  unique,
 } from "drizzle-orm/pg-core";
 import { organizationsTable } from "./organizations";
 import { usersTable } from "./users";
@@ -110,6 +111,8 @@ export const complianceRequirementsTable = pgTable("compliance_requirements", {
     .notNull()
     .references(() => compliancePackagesTable.id),
   requirementId: text("requirement_id").notNull(),
+  /** Stable cross-package key, e.g. "L1-AC-1". Added for L1 Annual Assessment linkage. */
+  canonicalKey: text("canonical_key"),
   familyCode: text("family_code"),
   familyName: text("family_name"),
   title: text("title").notNull(),
@@ -138,6 +141,45 @@ export const requirementCrosswalkTable = pgTable("requirement_crosswalk", {
   notes: text("notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+// ── Requirement Authority Mappings ──────────────────────────────────────────
+
+/**
+ * Maps a compliance requirement to a specific clause in an external authority
+ * (e.g. FAR 52.204-21, DFARS 252.204-7012). Supports roll-up groups where
+ * multiple requirements share a single authority clause (e.g. FAR clause (ix)
+ * covers three CMMC L1 Physical Protection requirements).
+ */
+export const requirementAuthorityMappingsTable = pgTable(
+  "requirement_authority_mappings",
+  {
+    id: text("id").primaryKey(),
+    requirementId: text("requirement_id")
+      .notNull()
+      .references(() => complianceRequirementsTable.id, { onDelete: "cascade" }),
+    /** Short identifier for the authority, e.g. "FAR_52_204_21" */
+    authorityKey: text("authority_key").notNull(),
+    /** The specific clause, e.g. "(i)", "(ix)", "b(1)" */
+    authorityClause: text("authority_clause").notNull(),
+    /** How the requirement relates to the authority clause */
+    relationshipType: text("relationship_type").notNull().default("IMPLEMENTS"),
+    /**
+     * Optional grouping label for clauses that map to multiple requirements.
+     * E.g. "ix" tags all three Physical Protection rows that share FAR clause (ix).
+     */
+    rollupGroup: text("rollup_group"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    unique("req_authority_mappings_uniq").on(
+      t.requirementId,
+      t.authorityKey,
+      t.authorityClause
+    ),
+  ]
+);
 
 // ── DFARS Obligations ────────────────────────────────────────────────────────
 
@@ -189,5 +231,6 @@ export type CompliancePackage = typeof compliancePackagesTable.$inferSelect;
 export type OrganizationPackage = typeof organizationPackagesTable.$inferSelect;
 export type ComplianceRequirement = typeof complianceRequirementsTable.$inferSelect;
 export type RequirementCrosswalk = typeof requirementCrosswalkTable.$inferSelect;
+export type RequirementAuthorityMapping = typeof requirementAuthorityMappingsTable.$inferSelect;
 export type DfarsObligation = typeof dfarsObligationsTable.$inferSelect;
 export type DfarsObligationStatus = typeof dfarsObligationStatusTable.$inferSelect;

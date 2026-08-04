@@ -83,6 +83,7 @@ export const organizationUsersTable = pgTable("organization_users", {
 export const orgFeatureKeyEnum = pgEnum("org_feature_key", [
   "IMPLEMENTATION_ROADMAP",
   "PRE_ASSESSMENT",
+  "L1_ANNUAL_ASSESSMENT",
 ]);
 
 export const organizationFeaturesTable = pgTable(

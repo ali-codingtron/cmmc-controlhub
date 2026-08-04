@@ -20,7 +20,7 @@ import {
   docTemplatePlaceholderManifestTable,
   docTemplateControlMapsTable,
 } from "@workspace/db";
-import { count, eq, sql, inArray } from "drizzle-orm";
+import { count, eq, sql, inArray, and } from "drizzle-orm";
 import { seedMonitoringItemsForOrg, migrateMonitoringLevelForOrg } from "./routes/monitoring";
 import { seedControlConfigure } from "./routes/configure";
 import { seedRoadmapActions, seedProcedureSteps } from "./routes/roadmap";
@@ -36,6 +36,7 @@ import {
   dfarsObligationsTable,
   complianceRequirementsTable,
   requirementCrosswalkTable,
+  requirementAuthorityMappingsTable,
 } from "@workspace/db";
 import {
   COMPLIANCE_FRAMEWORKS,
@@ -1884,6 +1885,359 @@ async function generateDocTemplateApplicabilityCsv() {
   }
 }
 
+// ── Task 79: L1 Annual Assessment schema migrations ───────────────────────────
+
+async function migrateOrgFeatureEnumL1Annual() {
+  // L1_ANNUAL_ASSESSMENT was added to org_feature_key enum for L1 Assessment module.
+  try {
+    await db.execute(sql.raw(
+      `ALTER TYPE org_feature_key ADD VALUE IF NOT EXISTS 'L1_ANNUAL_ASSESSMENT'`
+    ));
+  } catch (_e) {
+    // Already exists or DDL not allowed in transaction — safe to ignore
+  }
+}
+
+async function migrateL1AssessmentTables() {
+  // Create enums for Level 1 assessment if they don't already exist
+  const enumStmts = [
+    `DO $$ BEGIN
+       IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'level1_assessment_status') THEN
+         CREATE TYPE level1_assessment_status AS ENUM ('draft', 'in_progress', 'submitted', 'affirmed', 'locked');
+       END IF;
+     END $$`,
+    `DO $$ BEGIN
+       IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'level1_finding') THEN
+         CREATE TYPE level1_finding AS ENUM ('met', 'not_met', 'not_applicable', 'not_reviewed');
+       END IF;
+     END $$`,
+    `DO $$ BEGIN
+       IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'level1_objective_result') THEN
+         CREATE TYPE level1_objective_result AS ENUM ('satisfied', 'other_than_satisfied', 'not_applicable', 'not_reviewed');
+       END IF;
+     END $$`,
+    `DO $$ BEGIN
+       IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'level1_assessment_use') THEN
+         CREATE TYPE level1_assessment_use AS ENUM ('examine', 'interview', 'test');
+       END IF;
+     END $$`,
+    `DO $$ BEGIN
+       IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'level1_evidence_qualification') THEN
+         CREATE TYPE level1_evidence_qualification AS ENUM ('directly_applicable', 'partially_applicable', 'supplementary');
+       END IF;
+     END $$`,
+  ];
+
+  // Create tables
+  const tableStmts = [
+    // 1. Top-level annual assessment record
+    `CREATE TABLE IF NOT EXISTS level1_annual_assessments (
+      id text PRIMARY KEY,
+      organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      assessment_year integer NOT NULL,
+      scope_name text NOT NULL DEFAULT 'Default',
+      title text NOT NULL,
+      description text,
+      status level1_assessment_status NOT NULL DEFAULT 'draft',
+      affirming_official_name text,
+      affirming_official_title text,
+      affirming_official_id text REFERENCES users(id) ON DELETE SET NULL,
+      affirmed_at timestamptz,
+      submitted_at timestamptz,
+      submitted_by_id text REFERENCES users(id) ON DELETE SET NULL,
+      locked_at timestamptz,
+      locked_by_id text REFERENCES users(id) ON DELETE SET NULL,
+      overall_score integer,
+      snapshot_metadata text,
+      created_by_id text REFERENCES users(id) ON DELETE SET NULL,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS level1_annual_assessments_org_year_scope_uniq
+      ON level1_annual_assessments(organization_id, assessment_year, scope_name)`,
+
+    // 2. Per-requirement finding within an assessment
+    `CREATE TABLE IF NOT EXISTS level1_assessment_requirements (
+      id text PRIMARY KEY,
+      assessment_id text NOT NULL REFERENCES level1_annual_assessments(id) ON DELETE CASCADE,
+      requirement_id text NOT NULL,
+      canonical_key text,
+      requirement_title text,
+      finding level1_finding NOT NULL DEFAULT 'not_reviewed',
+      implementation_narrative text,
+      assessor_notes text,
+      na_justification text,
+      last_updated_by_id text REFERENCES users(id) ON DELETE SET NULL,
+      sort_order integer NOT NULL DEFAULT 0,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS level1_assessment_requirements_assessment_req_uniq
+      ON level1_assessment_requirements(assessment_id, requirement_id)`,
+
+    // 3. Detailed determination objectives per requirement
+    `CREATE TABLE IF NOT EXISTS level1_assessment_objectives (
+      id text PRIMARY KEY,
+      assessment_requirement_id text NOT NULL REFERENCES level1_assessment_requirements(id) ON DELETE CASCADE,
+      objective_text text NOT NULL,
+      result level1_objective_result NOT NULL DEFAULT 'not_reviewed',
+      notes text,
+      sort_order integer NOT NULL DEFAULT 0,
+      last_updated_by_id text REFERENCES users(id) ON DELETE SET NULL,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`,
+
+    // 4. Evidence links for the assessment
+    `CREATE TABLE IF NOT EXISTS level1_assessment_evidence_links (
+      id text PRIMARY KEY,
+      assessment_id text NOT NULL REFERENCES level1_annual_assessments(id) ON DELETE CASCADE,
+      assessment_requirement_id text REFERENCES level1_assessment_requirements(id) ON DELETE CASCADE,
+      evidence_item_id text,
+      evidence_description text,
+      assessment_use level1_assessment_use NOT NULL DEFAULT 'examine',
+      qualification level1_evidence_qualification NOT NULL DEFAULT 'directly_applicable',
+      file_key text,
+      file_name text,
+      notes text,
+      linked_by_id text REFERENCES users(id) ON DELETE SET NULL,
+      linked_at timestamptz NOT NULL DEFAULT now(),
+      created_at timestamptz NOT NULL DEFAULT now()
+    )`,
+
+    // 5. Requirement ↔ external authority clause mappings
+    `CREATE TABLE IF NOT EXISTS requirement_authority_mappings (
+      id text PRIMARY KEY,
+      requirement_id text NOT NULL REFERENCES compliance_requirements(id) ON DELETE CASCADE,
+      authority_key text NOT NULL,
+      authority_clause text NOT NULL,
+      relationship_type text NOT NULL DEFAULT 'IMPLEMENTS',
+      rollup_group text,
+      notes text,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (requirement_id, authority_key, authority_clause)
+    )`,
+    `CREATE INDEX IF NOT EXISTS requirement_authority_mappings_authority_key_idx
+      ON requirement_authority_mappings(authority_key)`,
+  ];
+
+  // Add canonical_key column to compliance_requirements if not present
+  const columnStmt = `ALTER TABLE compliance_requirements ADD COLUMN IF NOT EXISTS canonical_key text`;
+
+  for (const stmt of [...enumStmts, ...tableStmts, columnStmt]) {
+    try {
+      await db.execute(sql.raw(stmt));
+    } catch (_e) {
+      // Already exists — safe to ignore
+    }
+  }
+}
+
+// ── L1 requirement → FAR 52.204-21 authority mappings ────────────────────────
+
+/**
+ * Canonical keys for each of the 17 CMMC Level 1 practices.
+ * Stable identifiers used for cross-package linkage in the L1 Annual Assessment.
+ */
+const L1_CANONICAL_KEY_MAP: Record<string, { canonicalKey: string; farClause: string; rollupGroup?: string }> = {
+  "AC.L1-3.1.1":  { canonicalKey: "L1-AC-1",  farClause: "(i)" },
+  "AC.L1-3.1.2":  { canonicalKey: "L1-AC-2",  farClause: "(ii)" },
+  "AC.L1-3.1.20": { canonicalKey: "L1-AC-3",  farClause: "(iii)" },
+  "AC.L1-3.1.22": { canonicalKey: "L1-AC-4",  farClause: "(iv)" },
+  "IA.L1-3.5.1":  { canonicalKey: "L1-IA-1",  farClause: "(v)" },
+  "IA.L1-3.5.2":  { canonicalKey: "L1-IA-2",  farClause: "(vi)" },
+  "MP.L1-3.8.3":  { canonicalKey: "L1-MP-1",  farClause: "(vii)" },
+  "PE.L1-3.10.1": { canonicalKey: "L1-PE-1",  farClause: "(viii)" },
+  // FAR clause (ix) covers three Physical Protection requirements:
+  // Visitor Escort, Physical Access Logs, and Physical Access Devices
+  "PE.L1-3.10.3": { canonicalKey: "L1-PE-2",  farClause: "(ix)", rollupGroup: "ix" },
+  "PE.L1-3.10.4": { canonicalKey: "L1-PE-3",  farClause: "(ix)", rollupGroup: "ix" },
+  "PE.L1-3.10.5": { canonicalKey: "L1-PE-4",  farClause: "(ix)", rollupGroup: "ix" },
+  "SC.L1-3.13.1": { canonicalKey: "L1-SC-1",  farClause: "(x)" },
+  "SC.L1-3.13.5": { canonicalKey: "L1-SC-2",  farClause: "(xi)" },
+  "SI.L1-3.14.1": { canonicalKey: "L1-SI-1",  farClause: "(xii)" },
+  "SI.L1-3.14.2": { canonicalKey: "L1-SI-2",  farClause: "(xiii)" },
+  "SI.L1-3.14.4": { canonicalKey: "L1-SI-3",  farClause: "(xiv)" },
+  "SI.L1-3.14.5": { canonicalKey: "L1-SI-4",  farClause: "(xv)" },
+};
+
+async function seedL1RequirementAuthorityMappings() {
+  // Fetch existing authority mapping count for the FAR authority to detect first-run
+  const [{ cnt: existingMappingCount }] = await db
+    .select({ cnt: count() })
+    .from(requirementAuthorityMappingsTable)
+    .where(eq(requirementAuthorityMappingsTable.authorityKey, "FAR_52_204_21"));
+
+  // Fetch the 17 CMMC L1 requirements from compliance_requirements (pkg-cmmc-l1-self)
+  const l1Reqs = await db
+    .select({
+      id: complianceRequirementsTable.id,
+      requirementId: complianceRequirementsTable.requirementId,
+      canonicalKey: complianceRequirementsTable.canonicalKey,
+    })
+    .from(complianceRequirementsTable)
+    .where(eq(complianceRequirementsTable.packageId, "pkg-cmmc-l1-self"));
+
+  if (l1Reqs.length === 0) {
+    // Requirements not yet seeded — will be resolved on next startup
+    return;
+  }
+
+  // Upsert canonical_key on each L1 compliance_requirement row
+  let canonicalKeyUpdates = 0;
+  for (const req of l1Reqs) {
+    const mapping = L1_CANONICAL_KEY_MAP[req.requirementId];
+    if (mapping && !req.canonicalKey) {
+      await db.execute(sql.raw(
+        `UPDATE compliance_requirements SET canonical_key = '${mapping.canonicalKey}' WHERE id = '${req.id}'`
+      ));
+      canonicalKeyUpdates++;
+    }
+  }
+
+  if (Number(existingMappingCount) >= l1Reqs.length) {
+    // Already seeded; just apply any missing canonical key updates
+    if (canonicalKeyUpdates > 0) {
+      logger.info({ canonicalKeyUpdates }, "Updated missing canonical_key values on L1 compliance requirements");
+    }
+    return;
+  }
+
+  logger.info("Seeding L1 requirement → FAR 52.204-21 authority mappings...");
+
+  let inserted = 0;
+  for (const req of l1Reqs) {
+    const meta = L1_CANONICAL_KEY_MAP[req.requirementId];
+    if (!meta) continue;
+
+    await db
+      .insert(requirementAuthorityMappingsTable)
+      .values({
+        id: randomUUID(),
+        requirementId: req.id,
+        authorityKey: "FAR_52_204_21",
+        authorityClause: meta.farClause,
+        relationshipType: "IMPLEMENTS",
+        rollupGroup: meta.rollupGroup ?? null,
+        notes: `${req.requirementId} (${meta.canonicalKey}) implements FAR 52.204-21 clause ${meta.farClause}`,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: [
+          requirementAuthorityMappingsTable.requirementId,
+          requirementAuthorityMappingsTable.authorityKey,
+          requirementAuthorityMappingsTable.authorityClause,
+        ],
+        set: {
+          relationshipType: "IMPLEMENTS",
+          rollupGroup: meta.rollupGroup ?? null,
+          updatedAt: new Date(),
+        },
+      });
+    inserted++;
+  }
+
+  logger.info(
+    { inserted, canonicalKeyUpdates },
+    "L1 requirement authority mappings seeded (FAR 52.204-21)"
+  );
+}
+
+// ── L1 requirement startup diagnostic ─────────────────────────────────────────
+
+/**
+ * Non-blocking diagnostic that logs L1 requirement health at startup.
+ * Logs to server log only — does not throw and does not block startup.
+ */
+async function diagnoseL1Requirements() {
+  try {
+    const EXPECTED_CANONICAL_KEYS = Object.values(L1_CANONICAL_KEY_MAP).map(m => m.canonicalKey);
+    const EXPECTED_COUNT = EXPECTED_CANONICAL_KEYS.length; // 17
+
+    // 1. Total L1 requirement count in pkg-cmmc-l1-self
+    const [{ cnt: totalCount }] = await db
+      .select({ cnt: count() })
+      .from(complianceRequirementsTable)
+      .where(eq(complianceRequirementsTable.packageId, "pkg-cmmc-l1-self"));
+
+    // 2. L1 requirements that have a canonical_key set
+    const withCanonicalKey = await db
+      .select({ requirementId: complianceRequirementsTable.requirementId })
+      .from(complianceRequirementsTable)
+      .where(
+        and(
+          eq(complianceRequirementsTable.packageId, "pkg-cmmc-l1-self"),
+          sql`${complianceRequirementsTable.canonicalKey} IS NOT NULL`
+        )
+      );
+
+    // 3. L1 requirements missing FAR authority mappings
+    const l1Reqs = await db
+      .select({ id: complianceRequirementsTable.id, requirementId: complianceRequirementsTable.requirementId })
+      .from(complianceRequirementsTable)
+      .where(eq(complianceRequirementsTable.packageId, "pkg-cmmc-l1-self"));
+
+    const mappedReqIds = new Set<string>();
+    if (l1Reqs.length > 0) {
+      const mappings = await db
+        .select({ requirementId: requirementAuthorityMappingsTable.requirementId })
+        .from(requirementAuthorityMappingsTable)
+        .where(
+          and(
+            eq(requirementAuthorityMappingsTable.authorityKey, "FAR_52_204_21"),
+            inArray(requirementAuthorityMappingsTable.requirementId, l1Reqs.map(r => r.id))
+          )
+        );
+      for (const m of mappings) mappedReqIds.add(m.requirementId);
+    }
+
+    const missingFarMappings = l1Reqs
+      .filter(r => !mappedReqIds.has(r.id))
+      .map(r => r.requirementId);
+
+    // 4. Requirements sharing a FAR clause outside expected rollup group
+    const clauseIxMappings = await db
+      .select({
+        requirementId: requirementAuthorityMappingsTable.requirementId,
+        rollupGroup: requirementAuthorityMappingsTable.rollupGroup,
+      })
+      .from(requirementAuthorityMappingsTable)
+      .where(
+        and(
+          eq(requirementAuthorityMappingsTable.authorityKey, "FAR_52_204_21"),
+          eq(requirementAuthorityMappingsTable.authorityClause, "(ix)")
+        )
+      );
+
+    const unexpectedClauseIx = clauseIxMappings.filter(m => m.rollupGroup !== "ix");
+
+    // 5. Which canonical keys are missing
+    const presentRequirementIds = new Set(l1Reqs.map(r => r.requirementId));
+    const missingCanonicalKeys = EXPECTED_CANONICAL_KEYS.filter(key => {
+      const controlId = Object.entries(L1_CANONICAL_KEY_MAP).find(([, v]) => v.canonicalKey === key)?.[0];
+      return !controlId || !presentRequirementIds.has(controlId);
+    });
+
+    logger.info(
+      {
+        l1RequirementCount: Number(totalCount),
+        expectedCount: EXPECTED_COUNT,
+        withCanonicalKey: withCanonicalKey.length,
+        missingFarMappings: missingFarMappings.length > 0 ? missingFarMappings : "none",
+        unexpectedClauseIx: unexpectedClauseIx.length > 0 ? unexpectedClauseIx.map(m => m.requirementId) : "none",
+        missingCanonicalKeys: missingCanonicalKeys.length > 0 ? missingCanonicalKeys : "none",
+      },
+      "[L1 Diagnostic] L1 requirement health check complete"
+    );
+  } catch (err: any) {
+    logger.warn({ err: err.message }, "[L1 Diagnostic] Non-blocking L1 requirement diagnostic failed");
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export async function runStartupSeed() {
   try {
     await migrateSsoTable();
@@ -1923,6 +2277,13 @@ export async function runStartupSeed() {
     await seedLevel1Templates();
     await seedDocTemplatePlaceholderManifest();
     await generateDocTemplateApplicabilityCsv();
+    // ─────────────────────────────────────────────────────────────────────
+    // ── Task 79: L1 Annual Assessment — DB schema & seed data ─────────────
+    await migrateOrgFeatureEnumL1Annual();
+    await migrateL1AssessmentTables();
+    await seedL1RequirementAuthorityMappings();
+    // Non-blocking startup diagnostic — logs to server log only
+    diagnoseL1Requirements().catch(() => {/* already caught internally */});
     // ─────────────────────────────────────────────────────────────────────
   } catch (err) {
     logger.error({ err }, "Startup seed failed — app will continue but may lack reference data");

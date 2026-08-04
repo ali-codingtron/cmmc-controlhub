@@ -18,3 +18,4 @@ export * from "./help";
 export * from "./sso";
 export * from "./frameworks";
 export * from "./certification";
+export * from "./level1-assessment";
