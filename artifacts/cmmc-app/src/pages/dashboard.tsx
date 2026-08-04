@@ -3,10 +3,12 @@ import {
   useGetReadinessByDomain,
   useGetRecentActivity,
   useListOrgPackages,
+  useGetL1Assessment,
 } from "@workspace/api-client-react";
 import { useOrg } from "@/context/OrgContext";
 import { useIsAssessor } from "@/lib/auth";
 import { useRoadmapFeature } from "@/context/RoadmapFeatureContext";
+import { useL1AssessmentFeature } from "@/context/L1AssessmentFeatureContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Link } from "wouter";
@@ -39,6 +41,9 @@ import {
   Shield,
   Map,
   ClipboardList,
+  ClipboardCheck,
+  FileCheck,
+  Lock,
 } from "lucide-react";
 
 function relativeTime(ts: string | Date | null | undefined): string {
@@ -196,6 +201,7 @@ export default function Dashboard() {
   const { activeOrg, isLoading: orgLoading } = useOrg();
   const isAssessor = useIsAssessor();
   const { isRoadmapEnabled } = useRoadmapFeature();
+  const { isL1Active } = useL1AssessmentFeature();
   const queryClient = useQueryClient();
   const { data: summary, isLoading: summaryLoading } = useGetDashboardSummary({
     query: { enabled: !!activeOrg } as any,
@@ -212,6 +218,12 @@ export default function Dashboard() {
     { query: { enabled: !!activeOrg?.id, staleTime: 120000 } as any }
   );
   const activePkgs = orgPackages.filter(p => p.isActive);
+
+  const { data: l1Data } = useGetL1Assessment(
+    isL1Active ? activeOrg?.id : undefined,
+    { query: { enabled: !!activeOrg?.id && isL1Active, staleTime: 60000 } } as any
+  );
+  const l1Assessment = l1Data?.assessment;
 
   const handleRefresh = () => {
     queryClient.invalidateQueries();
@@ -634,6 +646,52 @@ export default function Dashboard() {
                   <ArrowRight className="h-3.5 w-3.5" />
                 </span>
               </div>
+            </CardContent>
+          </Card>
+        </Link>
+      )}
+
+      {/* ── L1 Annual Self-Assessment card (L1 active orgs only) ── */}
+      {isL1Active && (
+        <Link href={l1Assessment ? `/l1-assessment/${l1Assessment.id}` : "/l1-assessment"} className="block">
+          <Card className="border border-emerald-200 bg-emerald-50/40 dark:border-emerald-800 dark:bg-emerald-950/20 shadow-sm hover:shadow-md transition-shadow">
+            <CardContent className="p-4 flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-3 shrink-0">
+                <div className="h-10 w-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+                  {l1Assessment?.isReadOnly ? <Lock className="h-5 w-5 text-emerald-700" /> : <ClipboardCheck className="h-5 w-5 text-emerald-700 dark:text-emerald-300" />}
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">CMMC L1 Annual Self-Assessment</p>
+                  <p className="text-sm font-bold">
+                    {l1Assessment ? l1Assessment.title : "No active assessment"}
+                  </p>
+                </div>
+              </div>
+              {l1Assessment ? (
+                <>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span className={cn(
+                      "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border",
+                      l1Assessment.isReadOnly ? "bg-slate-100 text-slate-700 border-slate-200" :
+                      l1Assessment.status === "affirmed" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
+                      l1Assessment.status === "submitted" ? "bg-blue-100 text-blue-700 border-blue-200" :
+                      "bg-amber-100 text-amber-700 border-amber-200"
+                    )}>
+                      {l1Assessment.isReadOnly ? "Locked" :
+                       l1Assessment.status === "affirmed" ? "Affirmed" :
+                       l1Assessment.status === "submitted" ? "Submitted" : "In Progress"}
+                    </span>
+                    <span>Year {l1Assessment.assessmentYear}</span>
+                  </div>
+                  <span className="flex items-center gap-1 text-xs font-medium text-emerald-700 ml-auto">
+                    View Assessment <ArrowRight className="h-3.5 w-3.5" />
+                  </span>
+                </>
+              ) : (
+                <span className="flex items-center gap-1 text-xs font-medium text-emerald-700 ml-auto">
+                  Start Assessment <ArrowRight className="h-3.5 w-3.5" />
+                </span>
+              )}
             </CardContent>
           </Card>
         </Link>

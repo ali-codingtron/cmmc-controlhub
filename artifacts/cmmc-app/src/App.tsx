@@ -7,7 +7,8 @@ import { OrgProvider, useOrg } from "@/context/OrgContext";
 import { DemoModeProvider } from "@/context/DemoModeContext";
 import { RoadmapFeatureProvider, useRoadmapFeature } from "@/context/RoadmapFeatureContext";
 import { PreAssessmentFeatureProvider, usePreAssessmentFeature } from "@/context/PreAssessmentFeatureContext";
-import { Map, Cable } from "lucide-react";
+import { L1AssessmentFeatureProvider, useL1AssessmentFeature } from "@/context/L1AssessmentFeatureContext";
+import { Map, Cable, ClipboardCheck } from "lucide-react";
 import { Layout } from "@/components/layout/layout";
 import NotFound from "@/pages/not-found";
 import DemoLanding from "@/pages/demo-landing";
@@ -67,6 +68,12 @@ import PaResults from "@/pages/pa-results";
 import PaFindings from "@/pages/pa-findings";
 import PaEvidenceRequests from "@/pages/pa-evidence-requests";
 import PaRoadmap from "@/pages/pa-roadmap";
+import L1Assessment from "@/pages/l1-assessment";
+import L1AssessmentHistory from "@/pages/l1-assessment-history";
+import L1AssessmentNew from "@/pages/l1-assessment-new";
+import L1AssessmentWorkbench from "@/pages/l1-assessment-workbench";
+import L1AssessmentRequirement from "@/pages/l1-assessment-requirement";
+import L1AssessmentSprs from "@/pages/l1-assessment-sprs";
 import InviteAccept from "@/pages/invite-accept";
 import ForgotPassword from "@/pages/forgot-password";
 import ResetPassword from "@/pages/reset-password";
@@ -166,6 +173,27 @@ function PreAssessmentDisabledPage() {
 function PreAssessmentRouteGuard({ children }: { children: React.ReactNode }) {
   const { isPreAssessmentEnabled } = usePreAssessmentFeature();
   if (!isPreAssessmentEnabled) return <PreAssessmentDisabledPage />;
+  return <>{children}</>;
+}
+
+function L1AssessmentDisabledPage() {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center p-6">
+      <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+        <ClipboardCheck className="h-8 w-8 text-muted-foreground" />
+      </div>
+      <h2 className="text-xl font-semibold">Annual Self-Assessment Not Enabled</h2>
+      <p className="text-muted-foreground max-w-md">
+        The CMMC Level 1 Annual Self-Assessment module is not active for this organization.
+        Contact your administrator to enable the CMMC Level 1 package.
+      </p>
+    </div>
+  );
+}
+
+function L1AssessmentRouteGuard({ children }: { children: React.ReactNode }) {
+  const { isL1Active } = useL1AssessmentFeature();
+  if (!isL1Active) return <L1AssessmentDisabledPage />;
   return <>{children}</>;
 }
 
@@ -303,6 +331,25 @@ function AppRoutes() {
               <Route path="/pre-assessment/results/:id">
                 {(params: { id: string }) => <PreAssessmentRouteGuard><PaResults id={params.id} /></PreAssessmentRouteGuard>}
               </Route>
+              {/* L1 Annual Self-Assessment routes */}
+              <Route path="/l1-assessment">
+                {() => <L1AssessmentRouteGuard><L1Assessment /></L1AssessmentRouteGuard>}
+              </Route>
+              <Route path="/l1-assessment/new">
+                {() => <L1AssessmentRouteGuard><L1AssessmentNew /></L1AssessmentRouteGuard>}
+              </Route>
+              <Route path="/l1-assessment/history">
+                {() => <L1AssessmentRouteGuard><L1AssessmentHistory /></L1AssessmentRouteGuard>}
+              </Route>
+              <Route path="/l1-assessment/:id/sprs">
+                {(params: { id: string }) => <L1AssessmentRouteGuard><L1AssessmentSprs id={params.id} /></L1AssessmentRouteGuard>}
+              </Route>
+              <Route path="/l1-assessment/:id/requirement/:reqId">
+                {(params: { id: string; reqId: string }) => <L1AssessmentRouteGuard><L1AssessmentRequirement assessmentId={params.id} reqId={params.reqId} /></L1AssessmentRouteGuard>}
+              </Route>
+              <Route path="/l1-assessment/:id">
+                {(params: { id: string }) => <L1AssessmentRouteGuard><L1AssessmentWorkbench id={params.id} /></L1AssessmentRouteGuard>}
+              </Route>
               <Route path="/certification" component={Certification} />
               <Route path="/dfars-obligations" component={DfarsObligations} />
               <Route path="/crosswalk" component={Crosswalk} />
@@ -331,11 +378,13 @@ function App() {
           <OrgProvider>
             <RoadmapFeatureProvider>
               <PreAssessmentFeatureProvider>
+                <L1AssessmentFeatureProvider>
                 <DemoModeProvider>
                   <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
                     <AppRoutes />
                   </WouterRouter>
                 </DemoModeProvider>
+                </L1AssessmentFeatureProvider>
               </PreAssessmentFeatureProvider>
             </RoadmapFeatureProvider>
           </OrgProvider>

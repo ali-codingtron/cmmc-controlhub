@@ -18,6 +18,7 @@ import {
   BarChart3,
   Map,
   Cable,
+  ClipboardCheck,
   HelpCircle,
   FileCheck2,
   GitCompare,
@@ -30,6 +31,7 @@ import { useOrg } from "@/context/OrgContext";
 import { useDemoMode } from "@/context/DemoModeContext";
 import { useRoadmapFeature } from "@/context/RoadmapFeatureContext";
 import { usePreAssessmentFeature } from "@/context/PreAssessmentFeatureContext";
+import { useL1AssessmentFeature } from "@/context/L1AssessmentFeatureContext";
 import { useListOrgPackages } from "@workspace/api-client-react";
 import { useState, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -175,6 +177,7 @@ export function Sidebar() {
   const { isDemoMode } = useDemoMode();
   const { isRoadmapEnabled } = useRoadmapFeature();
   const { isPreAssessmentEnabled } = usePreAssessmentFeature();
+  const { isL1Active } = useL1AssessmentFeature();
   // Use org-specific role for feature gating; fall back to global role for backward compat
   const effectiveOrgRole = isAdmin ? "admin" : (activeOrg?.role ?? user?.role ?? "");
   const canRunAssessment = isAdmin || ["compliance_manager", "reviewer", "org_admin"].includes(effectiveOrgRole);
@@ -182,6 +185,9 @@ export function Sidebar() {
   const canViewPreAssessment = canRunAssessment && isPreAssessmentEnabled;
   const isPreAssessmentActive = location.startsWith("/pre-assessment");
   const [preAssessmentExpanded, setPreAssessmentExpanded] = useState(isPreAssessmentActive);
+  const isL1AssessmentActive = location.startsWith("/l1-assessment");
+  const [l1AssessmentExpanded, setL1AssessmentExpanded] = useState(isL1AssessmentActive);
+  const canViewL1Assessment = canRunAssessment && isL1Active;
 
   const { data: orgPackages = [] } = useListOrgPackages(activeOrg?.id ?? "", {
     query: { enabled: !!activeOrg?.id } as any,
@@ -295,6 +301,49 @@ export function Sidebar() {
                     { href: "/pre-assessment/findings", label: "Findings" },
                     { href: "/pre-assessment/evidence-requests", label: "Evidence Requests" },
                     { href: "/pre-assessment/roadmap", label: "Recommended Roadmap" },
+                  ].map((item) => {
+                    const isActive = location === item.href || location.startsWith(item.href + "/");
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={cn(
+                          "flex items-center px-3 py-1.5 rounded-md text-xs transition-colors",
+                          isActive
+                            ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                            : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                        )}
+                      >
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* L1 Annual Self-Assessment section */}
+          {canViewL1Assessment && (
+            <>
+              <button
+                onClick={() => setL1AssessmentExpanded((v) => !v)}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                  isL1AssessmentActive
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                )}
+              >
+                <ClipboardCheck className="h-4 w-4 shrink-0" />
+                <span className="flex-1 text-left">Annual Self-Assessment</span>
+                <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", l1AssessmentExpanded && "rotate-90")} />
+              </button>
+              {l1AssessmentExpanded && (
+                <div className="ml-3 pl-3 border-l border-sidebar-border space-y-0.5">
+                  {[
+                    { href: "/l1-assessment", label: "Overview" },
+                    { href: "/l1-assessment/history", label: "Assessment History" },
                   ].map((item) => {
                     const isActive = location === item.href || location.startsWith(item.href + "/");
                     return (
