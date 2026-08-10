@@ -625,27 +625,32 @@ async function seedComplianceFrameworks() {
       .onConflictDoNothing();
   }
 
-  for (let i = 0; i < DFARS_OBLIGATIONS.length; i++) {
-    const ob = DFARS_OBLIGATIONS[i];
-    await db
-      .insert(dfarsObligationsTable)
-      .values({
-        id: randomUUID(),
-        packageId: ob.packageId,
-        clauseNumber: ob.clauseNumber,
-        obligationTitle: ob.obligationTitle,
-        obligationDescription: ob.obligationDescription,
-        requiredArtifacts: ob.requiredArtifacts,
-        requiredProcess: ob.requiredProcess,
-        applicableTo: ob.applicableTo,
-        flowdownRequired: ob.flowdownRequired,
-        incidentReportingRequired: ob.incidentReportingRequired,
-        assessmentRequired: ob.assessmentRequired,
-        sortOrder: ob.sortOrder,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .onConflictDoNothing();
+  // Only seed DFARS obligations when the table is empty — avoids duplicates on
+  // repeated restarts (onConflictDoNothing can't fire because each call uses a
+  // fresh randomUUID(), so we guard with a row-count check instead).
+  const existingObligations = await db.select({ id: dfarsObligationsTable.id }).from(dfarsObligationsTable).limit(1);
+  if (existingObligations.length === 0) {
+    for (let i = 0; i < DFARS_OBLIGATIONS.length; i++) {
+      const ob = DFARS_OBLIGATIONS[i];
+      await db
+        .insert(dfarsObligationsTable)
+        .values({
+          id: randomUUID(),
+          packageId: ob.packageId,
+          clauseNumber: ob.clauseNumber,
+          obligationTitle: ob.obligationTitle,
+          obligationDescription: ob.obligationDescription,
+          requiredArtifacts: ob.requiredArtifacts,
+          requiredProcess: ob.requiredProcess,
+          applicableTo: ob.applicableTo,
+          flowdownRequired: ob.flowdownRequired,
+          incidentReportingRequired: ob.incidentReportingRequired,
+          assessmentRequired: ob.assessmentRequired,
+          sortOrder: ob.sortOrder,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+    }
   }
 
   logger.info(
