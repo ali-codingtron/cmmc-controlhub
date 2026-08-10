@@ -625,6 +625,18 @@ async function seedComplianceFrameworks() {
       .onConflictDoNothing();
   }
 
+  // One-time deduplication: remove any duplicate obligations keeping the
+  // earliest row per (package_id, clause_number, sort_order). Safe to run on
+  // every startup — it's a no-op when data is already clean.
+  await db.execute(sql`
+    DELETE FROM dfars_obligations
+    WHERE id NOT IN (
+      SELECT DISTINCT ON (package_id, clause_number, sort_order) id
+      FROM dfars_obligations
+      ORDER BY package_id, clause_number, sort_order, created_at ASC
+    )
+  `);
+
   // Only seed DFARS obligations when the table is empty — avoids duplicates on
   // repeated restarts (onConflictDoNothing can't fire because each call uses a
   // fresh randomUUID(), so we guard with a row-count check instead).
