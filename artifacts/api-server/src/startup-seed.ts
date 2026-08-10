@@ -2280,6 +2280,123 @@ async function diagnoseL1Requirements() {
   }
 }
 
+// ── Unique-constraint back-fills ───────────────────────────────────────────────
+// Several seed tables used randomUUID() as PK with onConflictDoNothing(), but had
+// no DB-level unique constraint on their natural key.  If the application-level
+// count guard ever misfired, duplicates would accumulate silently.  These
+// idempotent migrations:
+//   1. Detect and remove any pre-existing duplicate rows (keeping the oldest).
+//   2. Create a unique index so the DB enforces the natural key going forward.
+// Errors during index creation (other than "already exists", which IF NOT EXISTS
+// handles) are logged as warnings but do not abort startup — the seed guards
+// remain the primary defence and the index is a belt-and-suspenders layer.
+
+type ConstraintSpec = {
+  indexName: string;
+  table: string;
+  columns: string[];
+  dedupeOrderBy: string;
+};
+
+async function migrateNaturalKeyConstraints() {
+  const specs: ConstraintSpec[] = [
+    // compliance_requirements: natural key (package_id, requirement_id).
+    // Seeded with per-package count guards; constraint is the DB-level safety net.
+    {
+      indexName: "compliance_requirements_package_req_unique",
+      table: "compliance_requirements",
+      columns: ["package_id", "requirement_id"],
+      dedupeOrderBy: "created_at ASC",
+    },
+    // requirement_crosswalk: natural key (source, target, relationship_type).
+    // A source→target pair CAN have multiple relationship types (maps_to,
+    // equivalent, derived_from) — all three columns form the natural key.
+    {
+      indexName: "requirement_crosswalk_src_tgt_rel_unique",
+      table: "requirement_crosswalk",
+      columns: ["source_requirement_id", "target_requirement_id", "relationship_type"],
+      dedupeOrderBy: "created_at ASC",
+    },
+    // doc_template_control_maps: natural key (template_id, nist_control_number).
+    // Inserted only for new templates; constraint prevents double-inserts on retry.
+    {
+      indexName: "doc_template_control_maps_tmpl_nist_unique",
+      table: "doc_template_control_maps",
+      columns: ["template_id", "nist_control_number"],
+      dedupeOrderBy: "id ASC",
+    },
+    // checklist_items: natural key (template_id, sort_order).
+    // Inserted only for new templates; guards against partial-failure re-runs.
+    {
+      indexName: "checklist_items_template_sort_unique",
+      table: "checklist_items",
+      columns: ["template_id", "sort_order"],
+      dedupeOrderBy: "id ASC",
+    },
+  ];
+
+  for (const spec of specs) {
+    // ── Step 1: Check whether the unique index already exists ─────────────
+    const existsResult = await db.execute(sql.raw(
+      `SELECT 1 FROM pg_indexes WHERE indexname = '${spec.indexName}' LIMIT 1`
+    ));
+    if ((existsResult.rows ?? existsResult as any[]).length > 0) {
+      // Index already in place — nothing to do.
+      continue;
+    }
+
+    // ── Step 2: Detect and purge pre-existing duplicates ─────────────────
+    const colList = spec.columns.join(", ");
+    const dupQuery = `
+      SELECT ${colList}, COUNT(*) AS cnt
+      FROM ${spec.table}
+      GROUP BY ${colList}
+      HAVING COUNT(*) > 1
+    `;
+    const dupResult = await db.execute(sql.raw(dupQuery));
+    const dupRows = (dupResult.rows ?? dupResult as any[]);
+
+    if (dupRows.length > 0) {
+      logger.warn(
+        { table: spec.table, naturalKey: colList, duplicateGroups: dupRows.length },
+        `[seed] Duplicate rows detected in ${spec.table} on (${colList}) — removing extras before creating unique index`
+      );
+
+      // Delete all but the oldest row per duplicate group.
+      const dedupeStmt = `
+        DELETE FROM ${spec.table}
+        WHERE id NOT IN (
+          SELECT DISTINCT ON (${colList}) id
+          FROM ${spec.table}
+          ORDER BY ${colList}, ${spec.dedupeOrderBy}
+        )
+      `;
+      const dedupeResult = await db.execute(sql.raw(dedupeStmt));
+      logger.warn(
+        { table: spec.table, removed: (dedupeResult as any).rowCount ?? "?" },
+        `[seed] Removed duplicate rows from ${spec.table}`
+      );
+    }
+
+    // ── Step 3: Create the unique index ───────────────────────────────────
+    try {
+      await db.execute(sql.raw(
+        `CREATE UNIQUE INDEX IF NOT EXISTS ${spec.indexName} ON ${spec.table} (${colList})`
+      ));
+      logger.info(
+        { table: spec.table, index: spec.indexName },
+        `[seed] Created unique index ${spec.indexName}`
+      );
+    } catch (err: any) {
+      // Log the failure with full context — do not silently discard it.
+      logger.warn(
+        { table: spec.table, index: spec.indexName, err: err?.message },
+        `[seed] Could not create unique index ${spec.indexName} — seed guards remain active but DB-level enforcement is absent`
+      );
+    }
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function runStartupSeed() {
@@ -2329,6 +2446,11 @@ export async function runStartupSeed() {
     await seedL1RequirementAuthorityMappings();
     // Non-blocking startup diagnostic — logs to server log only
     diagnoseL1Requirements().catch(() => {/* already caught internally */});
+    // ─────────────────────────────────────────────────────────────────────
+    // ── Duplicate-prevention: natural-key unique constraints ──────────────
+    // Adds DB-level uniqueness to seed tables that previously relied only on
+    // application-level count guards.  Idempotent (IF NOT EXISTS).
+    await migrateNaturalKeyConstraints();
     // ─────────────────────────────────────────────────────────────────────
   } catch (err) {
     logger.error({ err }, "Startup seed failed — app will continue but may lack reference data");
