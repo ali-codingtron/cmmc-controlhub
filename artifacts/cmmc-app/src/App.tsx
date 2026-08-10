@@ -9,7 +9,8 @@ import { RoadmapFeatureProvider, useRoadmapFeature } from "@/context/RoadmapFeat
 import { PreAssessmentFeatureProvider, usePreAssessmentFeature } from "@/context/PreAssessmentFeatureContext";
 import { L1AssessmentFeatureProvider, useL1AssessmentFeature } from "@/context/L1AssessmentFeatureContext";
 import { CrosswalkFeatureProvider, useCrosswalkFeature } from "@/context/CrosswalkFeatureContext";
-import { Map, Cable, ClipboardCheck, GitCompare } from "lucide-react";
+import { DfarsFeatureProvider, useDfarsFeature } from "@/context/DfarsFeatureContext";
+import { Map, Cable, ClipboardCheck, GitCompare, FileCheck2 } from "lucide-react";
 import { Layout } from "@/components/layout/layout";
 import NotFound from "@/pages/not-found";
 import DemoLanding from "@/pages/demo-landing";
@@ -219,6 +220,27 @@ function CrosswalkRouteGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function DfarsDisabledPage() {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center p-6">
+      <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+        <FileCheck2 className="h-8 w-8 text-muted-foreground" />
+      </div>
+      <h2 className="text-xl font-semibold">DFARS Obligations Not Enabled</h2>
+      <p className="text-muted-foreground max-w-md">
+        The DFARS Obligations module is not enabled for this organization.
+        A Global Administrator can enable it from the organization settings.
+      </p>
+    </div>
+  );
+}
+
+function DfarsRouteGuard({ children }: { children: React.ReactNode }) {
+  const { isDfarsEnabled } = useDfarsFeature();
+  if (!isDfarsEnabled) return <DfarsDisabledPage />;
+  return <>{children}</>;
+}
+
 function AppRoutes() {
   return (
     <Switch>
@@ -373,7 +395,9 @@ function AppRoutes() {
                 {(params: { id: string }) => <L1AssessmentRouteGuard><L1AssessmentWorkbench id={params.id} /></L1AssessmentRouteGuard>}
               </Route>
               <Route path="/certification" component={Certification} />
-              <Route path="/dfars-obligations" component={DfarsObligations} />
+              <Route path="/dfars-obligations">
+                {() => <DfarsRouteGuard><DfarsObligations /></DfarsRouteGuard>}
+              </Route>
               <Route path="/crosswalk">
                 {() => <CrosswalkRouteGuard><Crosswalk /></CrosswalkRouteGuard>}
               </Route>
@@ -404,11 +428,13 @@ function App() {
               <PreAssessmentFeatureProvider>
                 <L1AssessmentFeatureProvider>
                   <CrosswalkFeatureProvider>
-                    <DemoModeProvider>
-                      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-                        <AppRoutes />
-                      </WouterRouter>
-                    </DemoModeProvider>
+                    <DfarsFeatureProvider>
+                      <DemoModeProvider>
+                        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                          <AppRoutes />
+                        </WouterRouter>
+                      </DemoModeProvider>
+                    </DfarsFeatureProvider>
                   </CrosswalkFeatureProvider>
                 </L1AssessmentFeatureProvider>
               </PreAssessmentFeatureProvider>

@@ -33,6 +33,7 @@ import { useRoadmapFeature } from "@/context/RoadmapFeatureContext";
 import { usePreAssessmentFeature } from "@/context/PreAssessmentFeatureContext";
 import { useL1AssessmentFeature } from "@/context/L1AssessmentFeatureContext";
 import { useCrosswalkFeature } from "@/context/CrosswalkFeatureContext";
+import { useDfarsFeature } from "@/context/DfarsFeatureContext";
 import { useListOrgPackages } from "@workspace/api-client-react";
 import { useState, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -180,6 +181,7 @@ export function Sidebar() {
   const { isPreAssessmentEnabled } = usePreAssessmentFeature();
   const { isL1Active } = useL1AssessmentFeature();
   const { isCrosswalkEnabled } = useCrosswalkFeature();
+  const { isDfarsEnabled } = useDfarsFeature();
   // Use org-specific role for feature gating; fall back to global role for backward compat
   const effectiveOrgRole = isAdmin ? "admin" : (activeOrg?.role ?? user?.role ?? "");
   const canRunAssessment = isAdmin || ["compliance_manager", "reviewer", "org_admin"].includes(effectiveOrgRole);
@@ -217,7 +219,7 @@ export function Sidebar() {
         <nav className="px-2 space-y-1">
           <NavLink href="/" icon={LayoutDashboard} label="Dashboard" />
           <NavLink href="/controls" icon={ShieldCheck} label="Controls" />
-          {hasDfarsPackage && (
+          {isDfarsEnabled && hasDfarsPackage && (
             <NavLink href="/dfars-obligations" icon={FileCheck2} label="DFARS Obligations" />
           )}
           {isCrosswalkEnabled && hasMultiplePackages && (

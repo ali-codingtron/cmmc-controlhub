@@ -85,6 +85,7 @@ export const orgFeatureKeyEnum = pgEnum("org_feature_key", [
   "PRE_ASSESSMENT",
   "L1_ANNUAL_ASSESSMENT",
   "FRAMEWORK_CROSSWALK",
+  "DFARS_OBLIGATIONS",
 ]);
 
 export const organizationFeaturesTable = pgTable(

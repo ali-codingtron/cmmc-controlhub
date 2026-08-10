@@ -16,6 +16,7 @@ import {
   Map as MapIcon,
   Cable,
   GitCompare,
+  FileCheck2,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useOrg } from "@/context/OrgContext";
@@ -190,7 +191,7 @@ function EditOrgDialog({
   // Feature action state
   const [featureActionDialog, setFeatureActionDialog] = useState<{
     action: "enable" | "disable";
-    featureTarget: "IMPLEMENTATION_ROADMAP" | "PRE_ASSESSMENT" | "FRAMEWORK_CROSSWALK";
+    featureTarget: "IMPLEMENTATION_ROADMAP" | "PRE_ASSESSMENT" | "FRAMEWORK_CROSSWALK" | "DFARS_OBLIGATIONS";
   } | null>(null);
   const [featureChangeReason, setFeatureChangeReason] = useState("");
   const [featureActionLoading, setFeatureActionLoading] = useState(false);
@@ -219,11 +220,14 @@ function EditOrgDialog({
   const isPreAssessmentEnabled = preAssessmentFeature?.enabled ?? true;
   const crosswalkFeature = orgFeatures.find((f) => f.featureKey === "FRAMEWORK_CROSSWALK");
   const isCrosswalkEnabled = crosswalkFeature?.enabled ?? true;
+  const dfarsFeature = orgFeatures.find((f) => f.featureKey === "DFARS_OBLIGATIONS");
+  const isDfarsEnabled = dfarsFeature?.enabled ?? true;
 
   const FEATURE_LABELS: Record<string, string> = {
     IMPLEMENTATION_ROADMAP: "Implementation Roadmap",
     PRE_ASSESSMENT: "Pre-Assessment",
     FRAMEWORK_CROSSWALK: "Framework Crosswalk",
+    DFARS_OBLIGATIONS: "DFARS Obligations",
   };
 
   async function handleFeatureToggle() {
@@ -255,8 +259,9 @@ function EditOrgDialog({
       });
       setFeatureActionDialog(null);
       setFeatureChangeReason("");
-      refetchFeatures();
-      queryClient.invalidateQueries({ queryKey: ["org-features", orgId] });
+      // Force-refetch ALL org-features subscribers (sidebar, context providers, etc.)
+      // so the sidebar link disappears immediately without requiring a page refresh.
+      await queryClient.refetchQueries({ queryKey: ["org-features"] });
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally {
@@ -585,6 +590,51 @@ function EditOrgDialog({
                       </div>
                     </div>
                   </div>
+
+                  {/* DFARS Obligations */}
+                  <div className="rounded-lg border border-border p-4 flex items-start gap-4">
+                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                      <FileCheck2 className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold">DFARS Obligations</span>
+                        {isDfarsEnabled ? (
+                          <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-[10px] px-2 py-0.5">
+                            Enabled
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-muted-foreground text-[10px] px-2 py-0.5">
+                            Disabled
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                        Contract compliance obligation tracking for DFARS clauses 252.204-7012, 7019, 7020, and 7021.
+                      </p>
+                      <div className="mt-3">
+                        {isDfarsEnabled ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs h-7 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+                            onClick={() => setFeatureActionDialog({ action: "disable", featureTarget: "DFARS_OBLIGATIONS" })}
+                          >
+                            Disable Module
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs h-7 text-emerald-600 border-emerald-200 hover:bg-emerald-50 hover:border-emerald-300"
+                            onClick={() => setFeatureActionDialog({ action: "enable", featureTarget: "DFARS_OBLIGATIONS" })}
+                          >
+                            Enable Module
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -609,6 +659,8 @@ function EditOrgDialog({
                   ? <Cable className="h-4 w-4 text-primary" />
                   : featureActionDialog.featureTarget === "FRAMEWORK_CROSSWALK"
                   ? <GitCompare className="h-4 w-4 text-primary" />
+                  : featureActionDialog.featureTarget === "DFARS_OBLIGATIONS"
+                  ? <FileCheck2 className="h-4 w-4 text-primary" />
                   : <MapIcon className="h-4 w-4 text-primary" />
                 }
                 {featureActionDialog.action === "enable" ? "Enable" : "Disable"}{" "}
@@ -616,6 +668,8 @@ function EditOrgDialog({
                   ? "Pre-Assessment"
                   : featureActionDialog.featureTarget === "FRAMEWORK_CROSSWALK"
                   ? "Framework Crosswalk"
+                  : featureActionDialog.featureTarget === "DFARS_OBLIGATIONS"
+                  ? "DFARS Obligations"
                   : "Implementation Roadmap"}
               </DialogTitle>
             </DialogHeader>
@@ -623,26 +677,30 @@ function EditOrgDialog({
               {featureActionDialog.action === "disable" ? (
                 <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 text-sm text-amber-800 dark:text-amber-400">
                   <p className="font-semibold mb-1">
-                    ⚠ This will hide the {featureActionDialog.featureTarget === "PRE_ASSESSMENT" ? "Pre-Assessment" : featureActionDialog.featureTarget === "FRAMEWORK_CROSSWALK" ? "Framework Crosswalk" : "Roadmap"} module
+                    ⚠ This will hide the {featureActionDialog.featureTarget === "PRE_ASSESSMENT" ? "Pre-Assessment" : featureActionDialog.featureTarget === "FRAMEWORK_CROSSWALK" ? "Framework Crosswalk" : featureActionDialog.featureTarget === "DFARS_OBLIGATIONS" ? "DFARS Obligations" : "Roadmap"} module
                   </p>
                   <p>
                     {featureActionDialog.featureTarget === "PRE_ASSESSMENT"
                       ? "Users will no longer see the Pre-Assessment module in their sidebar. Existing assessment data and connections are preserved and can be re-enabled at any time."
                       : featureActionDialog.featureTarget === "FRAMEWORK_CROSSWALK"
                       ? "Users will no longer see the Framework Crosswalk in their sidebar. No data is lost and it can be re-enabled at any time."
+                      : featureActionDialog.featureTarget === "DFARS_OBLIGATIONS"
+                      ? "Users will no longer see the DFARS Obligations module in their sidebar. Existing obligation status and tracking data is preserved and can be re-enabled at any time."
                       : "Users will no longer see the Implementation Roadmap in their sidebar or dashboard. Existing roadmap data is preserved and can be re-enabled at any time."}
                   </p>
                 </div>
               ) : (
                 <div className="rounded-md bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-3 text-sm text-emerald-800 dark:text-emerald-400">
                   <p className="font-semibold mb-1">
-                    Enable {featureActionDialog.featureTarget === "PRE_ASSESSMENT" ? "Pre-Assessment" : featureActionDialog.featureTarget === "FRAMEWORK_CROSSWALK" ? "Framework Crosswalk" : "Implementation Roadmap"}
+                    Enable {featureActionDialog.featureTarget === "PRE_ASSESSMENT" ? "Pre-Assessment" : featureActionDialog.featureTarget === "FRAMEWORK_CROSSWALK" ? "Framework Crosswalk" : featureActionDialog.featureTarget === "DFARS_OBLIGATIONS" ? "DFARS Obligations" : "Implementation Roadmap"}
                   </p>
                   <p>
                     {featureActionDialog.featureTarget === "PRE_ASSESSMENT"
                       ? "Users with compliance manager or reviewer access will see the Pre-Assessment module in the sidebar."
                       : featureActionDialog.featureTarget === "FRAMEWORK_CROSSWALK"
                       ? "Users will see the Framework Crosswalk link in the sidebar when this organization has an active package."
+                      : featureActionDialog.featureTarget === "DFARS_OBLIGATIONS"
+                      ? "Users will see the DFARS Obligations module in the sidebar when this organization has an active DFARS package."
                       : "Users with compliance manager or reviewer access will see the Implementation Roadmap in the sidebar and dashboard."}
                   </p>
                 </div>
