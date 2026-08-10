@@ -32,6 +32,7 @@ import { useDemoMode } from "@/context/DemoModeContext";
 import { useRoadmapFeature } from "@/context/RoadmapFeatureContext";
 import { usePreAssessmentFeature } from "@/context/PreAssessmentFeatureContext";
 import { useL1AssessmentFeature } from "@/context/L1AssessmentFeatureContext";
+import { useCrosswalkFeature } from "@/context/CrosswalkFeatureContext";
 import { useListOrgPackages } from "@workspace/api-client-react";
 import { useState, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -178,6 +179,7 @@ export function Sidebar() {
   const { isRoadmapEnabled } = useRoadmapFeature();
   const { isPreAssessmentEnabled } = usePreAssessmentFeature();
   const { isL1Active } = useL1AssessmentFeature();
+  const { isCrosswalkEnabled } = useCrosswalkFeature();
   // Use org-specific role for feature gating; fall back to global role for backward compat
   const effectiveOrgRole = isAdmin ? "admin" : (activeOrg?.role ?? user?.role ?? "");
   const canRunAssessment = isAdmin || ["compliance_manager", "reviewer", "org_admin"].includes(effectiveOrgRole);
@@ -218,17 +220,8 @@ export function Sidebar() {
           {hasDfarsPackage && (
             <NavLink href="/dfars-obligations" icon={FileCheck2} label="DFARS Obligations" />
           )}
-          {hasMultiplePackages && (
+          {isCrosswalkEnabled && hasMultiplePackages && (
             <NavLink href="/crosswalk" icon={GitCompare} label="Framework Crosswalk" />
-          )}
-          {!isDemoMode && activeOrg && activeOrg.cmmcTargetLevel !== "L1" && [
-            "CONDITIONAL_L2_C3PAO",
-            "FINAL_L2_C3PAO",
-            "EXPIRED",
-            "SUSPENDED",
-            "INVALIDATED",
-          ].includes(activeOrg.certificationModuleState ?? "") && (
-            <NavLink href="/certification" icon={Award} label="Certification" />
           )}
           <NavLink href="/evidence" icon={FileText} label="Evidence" />
           <NavLink href="/monitoring" icon={Activity} label="Monitoring Tracker" />
@@ -478,6 +471,15 @@ export function Sidebar() {
             </div>
           )}
 
+          {!isDemoMode && activeOrg && activeOrg.cmmcTargetLevel !== "L1" && [
+            "CONDITIONAL_L2_C3PAO",
+            "FINAL_L2_C3PAO",
+            "EXPIRED",
+            "SUSPENDED",
+            "INVALIDATED",
+          ].includes(activeOrg.certificationModuleState ?? "") && (
+            <NavLink href="/certification" icon={Award} label="Certification" />
+          )}
           <NavLink href="/help" icon={HelpCircle} label="Help & User Guide" />
           <NavLink href="/settings" icon={Settings} label="Settings" />
 

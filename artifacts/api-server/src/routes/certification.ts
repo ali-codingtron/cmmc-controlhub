@@ -289,9 +289,9 @@ router.post("/initiate", requireAuth, requireOrg, requireL2CertificationEligible
   }
 
   const currentState = await getOrgCertState(orgId);
-  if (!["NOT_AVAILABLE", "EXPIRED"].includes(currentState)) {
+  if (!["NOT_AVAILABLE", "EXPIRED", "VERIFICATION_PENDING"].includes(currentState)) {
     res.status(400).json({
-      error: "Certification can only be initiated when the module is in NOT_AVAILABLE or EXPIRED state.",
+      error: "Certification can only be initiated when the module is in NOT_AVAILABLE, EXPIRED, or Verification Pending state.",
     });
     return;
   }

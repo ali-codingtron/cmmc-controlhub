@@ -515,7 +515,7 @@ function OverviewTab({ record, health }: { record: CertificationRecord; health: 
 
 // ─── Official Records Tab ─────────────────────────────────────────────────────
 
-function OfficialRecordsTab() {
+function OfficialRecordsTab({ canEdit }: { canEdit: boolean }) {
   const { activeOrg } = useOrg();
   const { toast } = useToast();
   const [records, setRecords] = useState<any[]>([]);
@@ -579,10 +579,12 @@ function OfficialRecordsTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="text-sm text-slate-500">{records.length} official record{records.length !== 1 ? "s" : ""}</div>
-        <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
-          <Plus className="h-4 w-4" />
-          Add Record
-        </button>
+        {canEdit && (
+          <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
+            <Plus className="h-4 w-4" />
+            Add Record
+          </button>
+        )}
       </div>
 
       {showAdd && (
@@ -655,7 +657,7 @@ function OfficialRecordsTab() {
 
 // ─── Affirmations Tab ─────────────────────────────────────────────────────────
 
-function AffirmationsTab({ record }: { record: CertificationRecord }) {
+function AffirmationsTab({ record, canEdit }: { record: CertificationRecord; canEdit: boolean }) {
   const { activeOrg } = useOrg();
   const { toast } = useToast();
   const [affirmations, setAffirmations] = useState<any[]>([]);
@@ -710,9 +712,11 @@ function AffirmationsTab({ record }: { record: CertificationRecord }) {
           <div className="text-sm font-medium text-slate-700">Annual Affirmations</div>
           <div className="text-xs text-slate-500 mt-0.5">Next due: {fmtDate(record.nextAffirmationDue)}</div>
         </div>
-        <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
-          <Plus className="h-4 w-4" /> Add Affirmation
-        </button>
+        {canEdit && (
+          <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+            <Plus className="h-4 w-4" /> Add Affirmation
+          </button>
+        )}
       </div>
 
       {showAdd && (
@@ -778,7 +782,7 @@ function AffirmationsTab({ record }: { record: CertificationRecord }) {
 
 // ─── Change Impact Tab ─────────────────────────────────────────────────────────
 
-function ChangeImpactTab() {
+function ChangeImpactTab({ canEdit }: { canEdit: boolean }) {
   const { activeOrg } = useOrg();
   const { toast } = useToast();
   const [changes, setChanges] = useState<any[]>([]);
@@ -842,9 +846,11 @@ function ChangeImpactTab() {
           <div className="text-sm font-medium text-slate-700">Change Impact Register</div>
           <div className="text-xs text-slate-500 mt-0.5">Track changes that may affect your certified scope or controls.</div>
         </div>
-        <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
-          <Plus className="h-4 w-4" /> Record Change
-        </button>
+        {canEdit && (
+          <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+            <Plus className="h-4 w-4" /> Record Change
+          </button>
+        )}
       </div>
 
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 flex gap-2">
@@ -916,7 +922,7 @@ function ChangeImpactTab() {
 
 // ─── POA&M Closeout Tab ───────────────────────────────────────────────────────
 
-function PoamCloseoutTab({ record }: { record: CertificationRecord }) {
+function PoamCloseoutTab({ record, canEdit }: { record: CertificationRecord; canEdit: boolean }) {
   const { activeOrg } = useOrg();
   const { toast } = useToast();
   const [data, setData] = useState<{ items: any[]; certificationRecord: CertificationRecord | null }>({ items: [], certificationRecord: null });
@@ -986,9 +992,11 @@ function PoamCloseoutTab({ record }: { record: CertificationRecord }) {
 
       <div className="flex items-center justify-between">
         <div className="text-sm font-medium text-slate-700">{data.items.length} POA&M Item{data.items.length !== 1 ? "s" : ""}</div>
-        <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
-          <Plus className="h-4 w-4" /> Add Item
-        </button>
+        {canEdit && (
+          <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+            <Plus className="h-4 w-4" /> Add Item
+          </button>
+        )}
       </div>
 
       {showAdd && (
@@ -1272,7 +1280,7 @@ function SustainmentTab() {
 
 // ─── Scope Tab (placeholder with instruction) ────────────────────────────────
 
-function ScopeTab({ record }: { record: CertificationRecord }) {
+function ScopeTab({ record, canEdit }: { record: CertificationRecord; canEdit: boolean }) {
   const { activeOrg } = useOrg();
   const { toast } = useToast();
   const [scope, setScope] = useState<any>(null);
@@ -1319,9 +1327,11 @@ function ScopeTab({ record }: { record: CertificationRecord }) {
           <Layers className="h-10 w-10 text-slate-300 mx-auto mb-3" />
           <div className="text-sm font-medium text-slate-600 mb-1">No Scope Snapshot</div>
           <div className="text-xs text-slate-400 mb-4">Create a point-in-time snapshot of your certified assessment scope.</div>
-          <button onClick={() => setShowCreate(true)} className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
-            Create Scope Snapshot
-          </button>
+          {canEdit && (
+            <button onClick={() => setShowCreate(true)} className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+              Create Scope Snapshot
+            </button>
+          )}
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -1330,7 +1340,7 @@ function ScopeTab({ record }: { record: CertificationRecord }) {
               <div className="font-semibold text-sm text-slate-800">{scope.scopeName}</div>
               <div className="text-xs text-slate-500">Snapshot recorded {fmtDate(scope.createdAt)}</div>
             </div>
-            <button onClick={() => setShowCreate(true)} className="text-xs text-blue-600 hover:text-blue-800">Update Snapshot</button>
+            {canEdit && <button onClick={() => setShowCreate(true)} className="text-xs text-blue-600 hover:text-blue-800">Update Snapshot</button>}
           </div>
           <div className="p-5 grid grid-cols-2 gap-4 text-sm">
             <div>
@@ -1397,6 +1407,7 @@ export default function Certification() {
 
   const orgRole = activeOrg?.role ?? "";
   const userRole = user?.role ?? "";
+  const canEdit = userRole === "admin" || orgRole === "org_admin";
 
   async function loadStatus() {
     if (!activeOrg) return;
@@ -1650,12 +1661,12 @@ export default function Certification() {
         {record ? (
           <>
             {activeTab === "overview" && <OverviewTab record={record} health={health} />}
-            {activeTab === "records" && <OfficialRecordsTab />}
-            {activeTab === "scope" && <ScopeTab record={record} />}
-            {activeTab === "affirmations" && <AffirmationsTab record={record} />}
+            {activeTab === "records" && <OfficialRecordsTab canEdit={canEdit} />}
+            {activeTab === "scope" && <ScopeTab record={record} canEdit={canEdit} />}
+            {activeTab === "affirmations" && <AffirmationsTab record={record} canEdit={canEdit} />}
             {activeTab === "sustainment" && <SustainmentTab />}
-            {activeTab === "changes" && <ChangeImpactTab />}
-            {activeTab === "poam-closeout" && <PoamCloseoutTab record={record} />}
+            {activeTab === "changes" && <ChangeImpactTab canEdit={canEdit} />}
+            {activeTab === "poam-closeout" && <PoamCloseoutTab record={record} canEdit={canEdit} />}
             {activeTab === "recertification" && <RecertificationTab record={record} />}
             {activeTab === "history" && <HistoryTab />}
           </>

@@ -8,7 +8,8 @@ import { DemoModeProvider } from "@/context/DemoModeContext";
 import { RoadmapFeatureProvider, useRoadmapFeature } from "@/context/RoadmapFeatureContext";
 import { PreAssessmentFeatureProvider, usePreAssessmentFeature } from "@/context/PreAssessmentFeatureContext";
 import { L1AssessmentFeatureProvider, useL1AssessmentFeature } from "@/context/L1AssessmentFeatureContext";
-import { Map, Cable, ClipboardCheck } from "lucide-react";
+import { CrosswalkFeatureProvider, useCrosswalkFeature } from "@/context/CrosswalkFeatureContext";
+import { Map, Cable, ClipboardCheck, GitCompare } from "lucide-react";
 import { Layout } from "@/components/layout/layout";
 import NotFound from "@/pages/not-found";
 import DemoLanding from "@/pages/demo-landing";
@@ -197,6 +198,27 @@ function L1AssessmentRouteGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function CrosswalkDisabledPage() {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center p-6">
+      <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+        <GitCompare className="h-8 w-8 text-muted-foreground" />
+      </div>
+      <h2 className="text-xl font-semibold">Framework Crosswalk Not Enabled</h2>
+      <p className="text-muted-foreground max-w-md">
+        The Framework Crosswalk module is not enabled for this organization.
+        A Global Administrator can enable it from the organization settings.
+      </p>
+    </div>
+  );
+}
+
+function CrosswalkRouteGuard({ children }: { children: React.ReactNode }) {
+  const { isCrosswalkEnabled } = useCrosswalkFeature();
+  if (!isCrosswalkEnabled) return <CrosswalkDisabledPage />;
+  return <>{children}</>;
+}
+
 function AppRoutes() {
   return (
     <Switch>
@@ -352,7 +374,9 @@ function AppRoutes() {
               </Route>
               <Route path="/certification" component={Certification} />
               <Route path="/dfars-obligations" component={DfarsObligations} />
-              <Route path="/crosswalk" component={Crosswalk} />
+              <Route path="/crosswalk">
+                {() => <CrosswalkRouteGuard><Crosswalk /></CrosswalkRouteGuard>}
+              </Route>
               <Route path="/admin/package-migration" component={AdminPackageMigration} />
               <Route path="/help/article/:slug" component={HelpArticle} />
               <Route path="/help/faq" component={HelpFaq} />
@@ -379,11 +403,13 @@ function App() {
             <RoadmapFeatureProvider>
               <PreAssessmentFeatureProvider>
                 <L1AssessmentFeatureProvider>
-                <DemoModeProvider>
-                  <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-                    <AppRoutes />
-                  </WouterRouter>
-                </DemoModeProvider>
+                  <CrosswalkFeatureProvider>
+                    <DemoModeProvider>
+                      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                        <AppRoutes />
+                      </WouterRouter>
+                    </DemoModeProvider>
+                  </CrosswalkFeatureProvider>
                 </L1AssessmentFeatureProvider>
               </PreAssessmentFeatureProvider>
             </RoadmapFeatureProvider>
