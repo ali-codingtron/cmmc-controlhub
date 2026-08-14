@@ -42,3 +42,10 @@ id = "Jv7wLBBVRoyUYbRYiDkoL"
 uri = "file://attached_assets/carme-logo-no-bg.png"
 type = "image"
 title = "Carme Technology Compliance Logo (no background, clean)"
+
+[[outputs]]
+id = "6rrQCQfly7YXLvmLWn4O0"
+uri = "file://generated-assets/ControlHUB_Technical_Overview.docx"
+type = "word_document"
+title = "ControlHUB Technical Overview (complete)"
+description = "All 8 requested sections: app structure & dependencies, hosting, dev & production DB, file storage, SSO, email, env vars, scheduled jobs, DNS, integrations."
