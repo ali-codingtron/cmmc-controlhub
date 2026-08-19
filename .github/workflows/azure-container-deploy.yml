@@ -1,0 +1,111 @@
+name: Build and deploy ControlHUB container
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Serializing production releases prevents an earlier deployment from restarting
+# the web app after a newer image has already been configured.
+concurrency:
+  group: controlhub-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  ACR_NAME: ${{ secrets.ACR_NAME }}
+  ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
+  ACR_REPOSITORY: ${{ secrets.ACR_REPOSITORY }}
+  AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
+  AZURE_WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_NAME }}
+
+jobs:
+  build-and-deploy:
+    name: Build, publish, and deploy
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      # AZURE_CREDENTIALS is a service-principal JSON document stored as a
+      # GitHub Environment or repository secret. It is never written to disk
+      # or echoed by this workflow.
+      - name: Sign in to Azure
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Sign in to Azure Container Registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          az acr login --name "$ACR_NAME"
+
+      - name: Build and push image
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE_URI="${ACR_LOGIN_SERVER}/${ACR_REPOSITORY}:sha-${GITHUB_SHA}"
+          LATEST_URI="${ACR_LOGIN_SERVER}/${ACR_REPOSITORY}:latest"
+
+          docker build --pull --tag "$IMAGE_URI" --tag "$LATEST_URI" .
+          docker push "$IMAGE_URI"
+          docker push "$LATEST_URI"
+
+          # Tags are intentionally pushed for traceability, but a tag can be
+          # repointed. Resolve and deploy the registry-issued content digest.
+          IMAGE_DIGEST="$(az acr repository show \
+            --name "$ACR_NAME" \
+            --image "${ACR_REPOSITORY}:sha-${GITHUB_SHA}" \
+            --query digest \
+            --output tsv)"
+          case "$IMAGE_DIGEST" in
+            sha256:*)
+              IMAGE_URI="${ACR_LOGIN_SERVER}/${ACR_REPOSITORY}@${IMAGE_DIGEST}"
+              ;;
+            *)
+              echo "The pushed image did not resolve to the expected ACR digest." >&2
+              exit 1
+              ;;
+          esac
+
+          echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+
+      # The web app's system-assigned managed identity must have the AcrPull
+      # role on the registry. This allows App Service to pull private images
+      # without storing registry credentials in App Settings.
+      - name: Deploy immutable image to Azure App Service
+        shell: bash
+        env:
+          IMAGE_URI: ${{ steps.image.outputs.image_uri }}
+        run: |
+          set -euo pipefail
+
+          az webapp config set \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --generic-configurations '{"acrUseManagedIdentityCreds": true}'
+
+          az webapp config container set \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --container-image-name "$IMAGE_URI" \
+            --container-registry-url "https://${ACR_LOGIN_SERVER}"
+
+          # The image listens on 8080. This is a non-secret App Service
+          # setting required for custom container port forwarding.
+          az webapp config appsettings set \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --settings WEBSITES_PORT=8080 \
+            --output none
+
+          az webapp restart \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME"

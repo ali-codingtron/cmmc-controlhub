@@ -341,88 +341,96 @@ az webapp deployment source config-zip \
 
 ---
 
-### 5. CI/CD with GitHub Actions
+### 5. CI/CD with GitHub Actions and ACR
 
-Create `.github/workflows/azure-deploy.yml`:
+This repository includes `.github/workflows/azure-container-deploy.yml`. On
+every push to `main` (or from **Run workflow** in GitHub), it:
 
-```yaml
-name: Deploy to Azure Web App
+1. Builds the production image from the root `Dockerfile`.
+2. Pushes it to Azure Container Registry (ACR) with both `sha-<commit>` and
+   `latest` tags.
+3. Resolves the pushed image's registry digest, configures Azure App Service to
+   run that immutable digest, and restarts the app so it pulls the new image.
 
-on:
-  push:
-    branches:
-      - main
+The SHA tag remains useful for identifying the source commit, but the
+deployment itself never relies on a mutable image tag.
 
-env:
-  NODE_VERSION: "24.x"
+#### GitHub Environment secrets
 
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
+Create a protected GitHub Environment named `production`, then add these
+environment secrets. Repository secrets also work, but an environment allows
+deployment approvals and tighter access control.
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+| Secret | Value |
+|--------|-------|
+| `AZURE_CREDENTIALS` | Service-principal JSON used by `azure/login` |
+| `AZURE_RESOURCE_GROUP` | Resource group that contains the Web App |
+| `AZURE_WEBAPP_NAME` | Azure App Service Web App name |
+| `ACR_NAME` | ACR resource name, without `.azurecr.io` |
+| `ACR_LOGIN_SERVER` | ACR login server, for example `controlhub.azurecr.io` |
+| `ACR_REPOSITORY` | Repository name inside ACR, for example `controlhub` |
 
-      - name: Set up Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
+Create a service principal for the workflow and store its JSON output as the
+`AZURE_CREDENTIALS` secret. Grant that identity only:
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
+- **AcrPush** on the ACR resource, so it can publish images.
+- **Website Contributor** on the target Web App, so it can update the image
+  reference and restart the app.
 
-      - name: Get pnpm store directory
-        id: pnpm-cache
-        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: ${{ runner.os }}-pnpm-
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build frontend
-        run: pnpm --filter @workspace/cmmc-app run build
-
-      - name: Build API
-        run: pnpm --filter @workspace/api-server run build
-
-      - name: Create deployment package
-        run: |
-          zip -r deploy.zip \
-            package.json \
-            pnpm-workspace.yaml \
-            pnpm-lock.yaml \
-            artifacts/api-server/dist \
-            artifacts/cmmc-app/dist \
-            --exclude "*/node_modules/*"
-
-      - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: controlhub
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: deploy.zip
-```
-
-**Set the `AZURE_WEBAPP_PUBLISH_PROFILE` secret:**
+The workflow pins third-party actions to full commit SHAs. Keep those pins
+current through Dependabot or a deliberate action-version review; do not
+replace them with moving major-version tags in a production deployment job.
 
 ```bash
-# Download the publish profile
-az webapp deployment list-publishing-profiles \
-  --name controlhub \
-  --resource-group rg-controlhub \
-  --xml
+ACR_ID=$(az acr show --name <acr-name> --resource-group <resource-group> --query id --output tsv)
+WEBAPP_ID=$(az webapp show --name <webapp-name> --resource-group <resource-group> --query id --output tsv)
+
+az ad sp create-for-rbac \
+  --name "github-controlhub-deploy" \
+  --role "AcrPush" \
+  --scopes "$ACR_ID" \
+  --sdk-auth
+
+# Assign Website Contributor to the same service principal at the Web App scope.
+az role assignment create \
+  --assignee "<service-principal-app-id>" \
+  --role "Website Contributor" \
+  --scope "$WEBAPP_ID"
 ```
 
-Copy the XML output and add it as a GitHub repository secret named `AZURE_WEBAPP_PUBLISH_PROFILE`.
+#### Allow the Web App to pull private ACR images
+
+The workflow uses the Web App's system-assigned managed identity to pull the
+image. Run this once before the first deployment:
+
+```bash
+az webapp identity assign \
+  --name <webapp-name> \
+  --resource-group <resource-group>
+
+WEBAPP_PRINCIPAL_ID=$(az webapp identity show \
+  --name <webapp-name> \
+  --resource-group <resource-group> \
+  --query principalId \
+  --output tsv)
+
+ACR_ID=$(az acr show \
+  --name <acr-name> \
+  --resource-group <resource-group> \
+  --query id \
+  --output tsv)
+
+az role assignment create \
+  --assignee-object-id "$WEBAPP_PRINCIPAL_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role AcrPull \
+  --scope "$ACR_ID"
+```
+
+The workflow sets `WEBSITES_PORT=8080` for the custom container. Keep all
+application configuration—including database credentials, Microsoft SSO,
+Resend, and Azure Blob storage—in Azure App Service App Settings or Key Vault
+references. Do not copy those runtime secrets into GitHub.
 
 ---
 
