@@ -4,31 +4,40 @@ on:
   push:
     branches:
       - main
+      - dev
   workflow_dispatch:
+    inputs:
+      target_environment:
+        description: GitHub Environment to deploy
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
 
-# Serializing production releases prevents an earlier deployment from restarting
-# the web app after a newer image has already been configured.
+# Serializing releases per environment prevents an earlier deployment from
+# restarting an environment after a newer image has been configured.
 concurrency:
-  group: controlhub-production
+  group: controlhub-${{ inputs.target_environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
   cancel-in-progress: false
 
 permissions:
   contents: read
   id-token: write
 
-env:
-  ACR_NAME: ${{ secrets.ACR_NAME }}
-  ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
-  ACR_REPOSITORY: ${{ secrets.ACR_REPOSITORY }}
-  AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
-  AZURE_WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_NAME }}
-
 jobs:
   build-and-deploy:
-    name: Build, publish, and deploy
+    name: Build, publish, and deploy (${{ inputs.target_environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }})
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    environment: production
+    if: github.event_name != 'workflow_dispatch' || (inputs.target_environment == 'production' && github.ref == 'refs/heads/main') || (inputs.target_environment == 'staging' && github.ref == 'refs/heads/dev')
+    environment: ${{ inputs.target_environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+    env:
+      DEPLOY_ENV: ${{ inputs.target_environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+      ACR_NAME: ${{ secrets.ACR_NAME }}
+      ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
+      ACR_REPOSITORY: ${{ secrets.ACR_REPOSITORY }}
+      AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
+      AZURE_WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_NAME }}
 
     steps:
       - name: Check out source
@@ -54,8 +63,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          IMAGE_URI="${ACR_LOGIN_SERVER}/${ACR_REPOSITORY}:sha-${GITHUB_SHA}"
-          LATEST_URI="${ACR_LOGIN_SERVER}/${ACR_REPOSITORY}:latest"
+          IMAGE_TAG="${DEPLOY_ENV}-sha-${GITHUB_SHA}"
+          IMAGE_URI="${ACR_LOGIN_SERVER}/${ACR_REPOSITORY}:${IMAGE_TAG}"
+          LATEST_URI="${ACR_LOGIN_SERVER}/${ACR_REPOSITORY}:${DEPLOY_ENV}-latest"
 
           docker build --pull --tag "$IMAGE_URI" --tag "$LATEST_URI" .
           docker push "$IMAGE_URI"
@@ -65,7 +75,7 @@ jobs:
           # repointed. Resolve and deploy the registry-issued content digest.
           IMAGE_DIGEST="$(az acr repository show \
             --name "$ACR_NAME" \
-            --image "${ACR_REPOSITORY}:sha-${GITHUB_SHA}" \
+            --image "${ACR_REPOSITORY}:${IMAGE_TAG}" \
             --query digest \
             --output tsv)"
           case "$IMAGE_DIGEST" in

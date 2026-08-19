@@ -343,28 +343,48 @@ az webapp deployment source config-zip \
 
 ### 5. CI/CD with GitHub Actions and ACR
 
-This repository includes `.github/workflows/azure-container-deploy.yml`. On
-every push to `main` (or from **Run workflow** in GitHub), it:
+This repository includes `.github/workflows/azure-container-deploy.yml`. It
+deploys each environment independently:
+
+- Pushes to `main` deploy the `production` GitHub Environment.
+- Pushes to `dev` deploy the `staging` GitHub Environment.
+- **Run workflow** requires an explicit environment choice and only proceeds
+  when the selected environment matches the branch.
+
+For the selected environment, it:
 
 1. Builds the production image from the root `Dockerfile`.
-2. Pushes it to Azure Container Registry (ACR) with both `sha-<commit>` and
-   `latest` tags.
-3. Resolves the pushed image's registry digest, configures Azure App Service to
-   run that immutable digest, and restarts the app so it pulls the new image.
+2. Pushes it to Azure Container Registry (ACR) with both
+   `<environment>-sha-<commit>` and `<environment>-latest` tags.
+3. Resolves the pushed image's registry digest, configures the matching Azure
+   App Service to run that immutable digest, and restarts the app so it pulls
+   the new image.
 
 The SHA tag remains useful for identifying the source commit, but the
 deployment itself never relies on a mutable image tag.
 
-Manual runs selected against any ref other than `main` are skipped. This keeps
-production credentials from being used by unreviewed branch code.
+Environment-prefixed tags prevent staging and production from overwriting each
+other's traceability tags accidentally. They are not an authorization boundary.
 
 #### GitHub Environment secrets
 
-Create a protected GitHub Environment named `production`, then add these
-environment secrets. Repository secrets also work, but an environment allows
-deployment approvals and tighter access control. In the Environment settings,
-restrict deployment branches and tags to the protected `main` branch; add
-required reviewers when appropriate.
+Create two protected GitHub Environments named `production` and `staging`.
+Add the same secret names to each Environment, but use values for that
+environment's Azure subscription, resource group, Web App, registry, and
+federated identity. Use a separate ACR for each environment and a separate
+Microsoft Entra deployment identity for each ACR. Repository secrets are not
+recommended because they cannot separate staging access from production access.
+
+Do not give the staging identity `AcrPush` access to the production registry,
+or vice versa. A shared registry with broad `AcrPush` permissions allows one
+environment to replace another environment's tags before its digest is resolved.
+If a shared registry is unavoidable, use Azure Container Registry ABAC
+repository permissions with separate repositories and writer identities; simple
+tag prefixes do not provide the required security boundary.
+
+In the Environment settings, restrict `production` deployments to the
+protected `main` branch and `staging` deployments to the protected `dev`
+branch. Add required reviewers to `production` when appropriate.
 
 | Secret | Value |
 |--------|-------|
@@ -379,27 +399,30 @@ required reviewers when appropriate.
 
 The workflow uses GitHub Actions OIDC federation, so it does not need an Azure
 client secret or `AZURE_CREDENTIALS` JSON secret. Create a Microsoft Entra app
-registration and its corresponding service principal, add a federated
-credential for the protected GitHub Environment, and save its client ID, tenant
-ID, and subscription ID as the three Azure secrets above.
+registration and its corresponding service principal for each environment, add
+a federated credential for each protected GitHub Environment, and save each
+identity's client ID, tenant ID, and subscription ID in that Environment's
+secrets.
 
-The federated credential must use:
+The federated credentials must use:
 
 - Issuer: `https://token.actions.githubusercontent.com`
-- Subject: `repo:<github-owner>/<github-repository>:environment:production`
+- Production subject: `repo:<github-owner>/<github-repository>:environment:production`
+- Staging subject: `repo:<github-owner>/<github-repository>:environment:staging`
 - Audience: `api://AzureADTokenExchange`
 
-Grant that identity only:
+Grant each identity only on resources for its own environment:
 
-- **AcrPush** on the ACR resource, so it can publish images.
-- **Website Contributor** on the target Web App, so it can update the image
-  reference and restart the app.
+- **AcrPush** on its environment's ACR resource, so it can publish images.
+- **Website Contributor** on its environment's Web App, so it can update the
+  image reference and restart the app.
 
 The workflow pins third-party actions to full commit SHAs. Keep those pins
 current through Dependabot or a deliberate action-version review; do not
 replace them with moving major-version tags in a production deployment job.
 
 ```bash
+DEPLOY_ENV="<staging-or-production>"
 AZURE_CLIENT_ID="<application-client-id>"
 ACR_ID=$(az acr show --name <acr-name> --resource-group <resource-group> --query id --output tsv)
 WEBAPP_ID=$(az webapp show --name <webapp-name> --resource-group <resource-group> --query id --output tsv)
@@ -415,16 +438,16 @@ az role assignment create \
   --scope "$WEBAPP_ID"
 ```
 
-Create the GitHub federated credential in the app registration with the Azure
-portal, or use the Azure CLI command below after replacing the owner and
-repository:
+Create one GitHub federated credential per app registration in the Azure
+portal, or use the Azure CLI command below once for each environment after
+replacing the owner and repository:
 
 ```bash
-cat > github-production-federated-credential.json <<'JSON'
+cat > "github-${DEPLOY_ENV}-federated-credential.json" <<JSON
 {
-  "name": "github-production",
+  "name": "github-${DEPLOY_ENV}",
   "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "repo:<github-owner>/<github-repository>:environment:production",
+  "subject": "repo:<github-owner>/<github-repository>:environment:${DEPLOY_ENV}",
   "description": "GitHub Actions production deployment",
   "audiences": [
     "api://AzureADTokenExchange"
@@ -434,14 +457,15 @@ JSON
 
 az ad app federated-credential create \
   --id "$AZURE_CLIENT_ID" \
-  --parameters github-production-federated-credential.json
-rm github-production-federated-credential.json
+  --parameters "github-${DEPLOY_ENV}-federated-credential.json"
+rm "github-${DEPLOY_ENV}-federated-credential.json"
 ```
 
-#### Allow the Web App to pull private ACR images
+#### Allow each Web App to pull its private ACR images
 
-The workflow uses the Web App's system-assigned managed identity to pull the
-image. Run this once before the first deployment:
+The workflow uses each Web App's system-assigned managed identity to pull
+images from its own ACR. Run this once for both Web Apps before their first
+deployment, using the matching registry and resource group each time:
 
 ```bash
 az webapp identity assign \
