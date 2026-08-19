@@ -60,7 +60,7 @@ if (existsSync(frontendDist)) {
 
   // SPA fallback — every non-API request gets index.html so client-side
   // routing handles the path instead of Express returning 404
-  app.get("*", (_req, res) => {
+  app.get("/{*path}", (_req, res) => {
     res.sendFile(path.join(frontendDist, "index.html"));
   });
 }

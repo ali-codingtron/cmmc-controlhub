@@ -14,11 +14,13 @@
 # ──────────────────────────────────────────────────────────────────────────────
 
 # ─── Stage 1: Builder ─────────────────────────────────────────────────────────
-FROM node:24-alpine AS builder
+FROM node:24-bookworm-slim AS builder
 
 # Build tools required to compile any native add-ons during `pnpm install`.
 # (bcryptjs is pure-JS so these are rarely needed, but kept as a safety net.)
-RUN apk add --no-cache python3 make g++
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
 
 # Activate pnpm through corepack (ships with Node ≥ 16, no extra install)
 RUN corepack enable && corepack prepare pnpm@10 --activate
@@ -57,10 +59,10 @@ RUN pnpm --filter @workspace/api-server run build
 # package and copies them — including any workspace packages — into a clean
 # directory. Workspace packages bundled by esbuild are included but never
 # loaded at runtime (the bundle is self-contained for those).
-RUN pnpm --filter @workspace/api-server deploy /deploy
+RUN pnpm --filter @workspace/api-server deploy --legacy /deploy
 
 # ─── Stage 2: Runner ──────────────────────────────────────────────────────────
-FROM node:24-alpine AS runner
+FROM node:24-bookworm-slim AS runner
 
 WORKDIR /app
 

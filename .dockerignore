@@ -23,8 +23,10 @@ replit.nix
 .cache/
 .agents/
 
-# Development / generated assets not needed at runtime
-attached_assets/
+# Development / generated assets not needed at runtime. The ControlHUB brand
+# mark is imported by the Vite frontend and must remain in the build context.
+attached_assets/*
+!attached_assets/carme-logo-no-bg.png
 generated-assets/
 generated-guides/
 prisma/

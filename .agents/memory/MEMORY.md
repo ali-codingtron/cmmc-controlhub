@@ -20,3 +20,4 @@
 - [SSP module upgrade](ssp-module-upgrade.md) — package-aware template registry, prefill wizard, DOCX engine; actual placeholder key naming (Roman numerals for L1, NIST ref for L2).
 - [Help Center v2 overhaul](help-center-v2.md) — 19 cats, 30 articles, 28 FAQs, support tickets, resolveHelpContext, canSeeArticle filtering, MarkdownContent XSS fix, FAQ upsert gap.
 - [C3PAO certification backend](c3pao-certification-backend.md) — shared Zod schema in @workspace/db; L2 eligibility via requireL2CertificationEligible; activationMethod column; c3paoAssessmentReference alias.
+- [Azure Blob deployment storage](azure-blob-storage.md) — Azure App Service deployments use a private Blob container with managed identity, not Replit/GCS storage.

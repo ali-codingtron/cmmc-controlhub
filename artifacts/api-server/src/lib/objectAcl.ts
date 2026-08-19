@@ -1,4 +1,17 @@
-import { File } from "@google-cloud/storage";
+export interface ObjectFile {
+  name: string;
+  exists(): Promise<[boolean]>;
+  getMetadata(): Promise<
+    [
+      {
+        metadata?: Record<string, string>;
+      },
+    ]
+  >;
+  setMetadata(options: {
+    metadata: Record<string, string>;
+  }): Promise<void>;
+}
 
 const ACL_POLICY_METADATA_KEY = "custom:aclPolicy";
 
@@ -68,7 +81,7 @@ function createObjectAccessGroup(
 }
 
 export async function setObjectAclPolicy(
-  objectFile: File,
+  objectFile: ObjectFile,
   aclPolicy: ObjectAclPolicy,
 ): Promise<void> {
   const [exists] = await objectFile.exists();
@@ -84,7 +97,7 @@ export async function setObjectAclPolicy(
 }
 
 export async function getObjectAclPolicy(
-  objectFile: File,
+  objectFile: ObjectFile,
 ): Promise<ObjectAclPolicy | null> {
   const [metadata] = await objectFile.getMetadata();
   const aclPolicy = metadata?.metadata?.[ACL_POLICY_METADATA_KEY];
@@ -100,7 +113,7 @@ export async function canAccessObject({
   requestedPermission,
 }: {
   userId?: string;
-  objectFile: File;
+  objectFile: ObjectFile;
   requestedPermission: ObjectPermission;
 }): Promise<boolean> {
   const aclPolicy = await getObjectAclPolicy(objectFile);

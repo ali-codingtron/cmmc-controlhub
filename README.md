@@ -49,7 +49,7 @@ A full-stack web application for managing CMMC (Cybersecurity Maturity Model Cer
 | API         | Node.js 24, Express 5, ESM (esbuild bundle)     |
 | Database    | PostgreSQL (Drizzle ORM)                        |
 | Auth        | Session-based + Microsoft Entra ID (SSO), TOTP MFA |
-| File Storage| Replit Object Storage / Google Cloud Storage    |
+| File Storage| Azure Blob Storage (managed identity supported) |
 | Email       | Resend or SMTP (runtime switch via `EMAIL_PROVIDER`) |
 | Package Mgr | pnpm 10 (workspaces)                            |
 
@@ -145,9 +145,57 @@ pnpm --filter @workspace/db run db:push
 
 ---
 
+## Azure Blob Storage
+
+ControlHUB stores evidence, generated documents, SSP files, and other uploads in
+a single **private Azure Blob Storage container**. The API reads its configuration
+from Azure App Service App Settings; no credentials are baked into the container.
+
+### Recommended production setup: managed identity
+
+1. Create a Storage Account and a private Blob container, for example
+   `controlhub`.
+2. In the Azure Web App, enable **System assigned** managed identity.
+3. Grant that identity the **Storage Blob Data Contributor** role on the storage
+   account. Account scope is required because the API generates short-lived
+   user-delegation SAS URLs for direct browser uploads.
+4. Add these App Settings:
+
+   ```text
+   AZURE_STORAGE_ACCOUNT_URL=https://<storage-account>.blob.core.windows.net
+   AZURE_STORAGE_CONTAINER=controlhub
+   AZURE_STORAGE_PRIVATE_PREFIX=private
+   AZURE_STORAGE_PUBLIC_PREFIXES=public
+   ```
+
+The managed identity receives credentials automatically from Azure at runtime.
+It also generates short-lived SAS URLs for any direct browser upload flow.
+
+### Alternative: connection string
+
+For local development or where managed identity is not available, set
+`AZURE_STORAGE_CONNECTION_STRING` instead of `AZURE_STORAGE_ACCOUNT_URL`. Do
+not set both. Store the connection string in an Azure Key Vault reference in
+production.
+
+```text
+AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=<storage-account>;AccountKey=<account-key>;EndpointSuffix=core.windows.net
+AZURE_STORAGE_CONTAINER=controlhub
+AZURE_STORAGE_PRIVATE_PREFIX=private
+AZURE_STORAGE_PUBLIC_PREFIXES=public
+```
+
+`AZURE_STORAGE_ACCOUNT_NAME` and `AZURE_STORAGE_ACCOUNT_KEY` are also supported
+as a legacy key-based alternative. The complete variable template is in
+`.env.example`.
+
+---
+
 ## Deploying to Azure Web App (Linux · Node.js 24 LTS)
 
-The API server (`artifacts/api-server`) is the single deployable unit. Before deploying, configure it to also serve the compiled React frontend as static files (see [Step 3](#3-serve-the-frontend-from-the-api)).
+The API server (`artifacts/api-server`) is the single deployable unit. It already
+serves the compiled React frontend as static files, so both the SPA and API run
+from the same container.
 
 ### 1. One-time Azure Setup
 
@@ -224,9 +272,9 @@ az webapp config set \
 
 ### 3. Serve the Frontend from the API
 
-Azure Web App runs a **single process**. Add static file serving to the Express app so the compiled React SPA is served alongside the API.
-
-Open `artifacts/api-server/src/app.ts` and add the following block **after** the `/api` router registration:
+Azure Web App runs a **single process**. This repository already configures the
+Express API to serve the compiled React SPA after the `/api` router. The
+production setup is equivalent to:
 
 ```typescript
 import path from "path";
@@ -242,8 +290,8 @@ const frontendDist = path.resolve(__dirname, "../../cmmc-app/dist/public");
 // Serve static assets (JS, CSS, images)
 app.use(express.static(frontendDist));
 
-// SPA fallback — send index.html for any non-API route
-app.get("*", (_req, res) => {
+// SPA fallback — Express 5 requires a named wildcard parameter
+app.get("/{*path}", (_req, res) => {
   res.sendFile(path.join(frontendDist, "index.html"));
 });
 ```
