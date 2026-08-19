@@ -355,23 +355,41 @@ every push to `main` (or from **Run workflow** in GitHub), it:
 The SHA tag remains useful for identifying the source commit, but the
 deployment itself never relies on a mutable image tag.
 
+Manual runs selected against any ref other than `main` are skipped. This keeps
+production credentials from being used by unreviewed branch code.
+
 #### GitHub Environment secrets
 
 Create a protected GitHub Environment named `production`, then add these
 environment secrets. Repository secrets also work, but an environment allows
-deployment approvals and tighter access control.
+deployment approvals and tighter access control. In the Environment settings,
+restrict deployment branches and tags to the protected `main` branch; add
+required reviewers when appropriate.
 
 | Secret | Value |
 |--------|-------|
-| `AZURE_CREDENTIALS` | Service-principal JSON used by `azure/login` |
+| `AZURE_CLIENT_ID` | Azure app registration / service principal client ID |
+| `AZURE_TENANT_ID` | Microsoft Entra tenant ID |
+| `AZURE_SUBSCRIPTION_ID` | Azure subscription ID |
 | `AZURE_RESOURCE_GROUP` | Resource group that contains the Web App |
 | `AZURE_WEBAPP_NAME` | Azure App Service Web App name |
 | `ACR_NAME` | ACR resource name, without `.azurecr.io` |
 | `ACR_LOGIN_SERVER` | ACR login server, for example `controlhub.azurecr.io` |
 | `ACR_REPOSITORY` | Repository name inside ACR, for example `controlhub` |
 
-Create a service principal for the workflow and store its JSON output as the
-`AZURE_CREDENTIALS` secret. Grant that identity only:
+The workflow uses GitHub Actions OIDC federation, so it does not need an Azure
+client secret or `AZURE_CREDENTIALS` JSON secret. Create a Microsoft Entra app
+registration and its corresponding service principal, add a federated
+credential for the protected GitHub Environment, and save its client ID, tenant
+ID, and subscription ID as the three Azure secrets above.
+
+The federated credential must use:
+
+- Issuer: `https://token.actions.githubusercontent.com`
+- Subject: `repo:<github-owner>/<github-repository>:environment:production`
+- Audience: `api://AzureADTokenExchange`
+
+Grant that identity only:
 
 - **AcrPush** on the ACR resource, so it can publish images.
 - **Website Contributor** on the target Web App, so it can update the image
@@ -382,20 +400,42 @@ current through Dependabot or a deliberate action-version review; do not
 replace them with moving major-version tags in a production deployment job.
 
 ```bash
+AZURE_CLIENT_ID="<application-client-id>"
 ACR_ID=$(az acr show --name <acr-name> --resource-group <resource-group> --query id --output tsv)
 WEBAPP_ID=$(az webapp show --name <webapp-name> --resource-group <resource-group> --query id --output tsv)
 
-az ad sp create-for-rbac \
-  --name "github-controlhub-deploy" \
-  --role "AcrPush" \
-  --scopes "$ACR_ID" \
-  --sdk-auth
-
-# Assign Website Contributor to the same service principal at the Web App scope.
 az role assignment create \
-  --assignee "<service-principal-app-id>" \
+  --assignee "$AZURE_CLIENT_ID" \
+  --role "AcrPush" \
+  --scope "$ACR_ID"
+
+az role assignment create \
+  --assignee "$AZURE_CLIENT_ID" \
   --role "Website Contributor" \
   --scope "$WEBAPP_ID"
+```
+
+Create the GitHub federated credential in the app registration with the Azure
+portal, or use the Azure CLI command below after replacing the owner and
+repository:
+
+```bash
+cat > github-production-federated-credential.json <<'JSON'
+{
+  "name": "github-production",
+  "issuer": "https://token.actions.githubusercontent.com",
+  "subject": "repo:<github-owner>/<github-repository>:environment:production",
+  "description": "GitHub Actions production deployment",
+  "audiences": [
+    "api://AzureADTokenExchange"
+  ]
+}
+JSON
+
+az ad app federated-credential create \
+  --id "$AZURE_CLIENT_ID" \
+  --parameters github-production-federated-credential.json
+rm github-production-federated-credential.json
 ```
 
 #### Allow the Web App to pull private ACR images
