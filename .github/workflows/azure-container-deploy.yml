@@ -5,15 +5,6 @@ on:
     branches:
       - main
       - staging
-  workflow_dispatch:
-    inputs:
-      target_environment:
-        description: GitHub Environment to deploy
-        required: true
-        type: choice
-        options:
-          - staging
-          - production
 
 permissions:
   contents: read
@@ -29,38 +20,21 @@ jobs:
       - name: Resolve the explicit deployment target
         id: resolve
         shell: bash
-        env:
-          TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
         run: |
           set -euo pipefail
 
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
-            case "$GITHUB_REF:$TARGET_ENVIRONMENT" in
-              refs/heads/staging:staging)
-                deploy_environment="staging"
-                ;;
-              refs/heads/main:production)
-                deploy_environment="production"
-                ;;
-              *)
-                echo "::error::Manual runs must use staging on the staging branch or production on the main branch."
-                exit 1
-                ;;
-            esac
-          else
-            case "$GITHUB_REF" in
-              refs/heads/staging)
-                deploy_environment="staging"
-                ;;
-              refs/heads/main)
-                deploy_environment="production"
-                ;;
-              *)
-                echo "::error::Only the staging and main branches can deploy to Azure App Service."
-                exit 1
-                ;;
-            esac
-          fi
+          case "$GITHUB_REF" in
+            refs/heads/staging)
+              deploy_environment="staging"
+              ;;
+            refs/heads/main)
+              deploy_environment="production"
+              ;;
+            *)
+              echo "::error::Only the staging and main branches can deploy to Azure App Service."
+              exit 1
+              ;;
+          esac
 
           echo "deploy_environment=$deploy_environment" >> "$GITHUB_OUTPUT"
 

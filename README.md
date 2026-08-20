@@ -350,8 +350,8 @@ deploys each environment independently:
 - Pushes to `main` deploy the `production` GitHub Environment.
 - Pushes to `dev` remain in the Replit development environment and do not
   trigger an Azure deployment.
-- **Run workflow** requires an explicit environment choice and only proceeds
-  when the selected environment matches the branch.
+- There is no manual environment selector: the target branch determines the
+  Azure environment automatically.
 
 For the selected environment, it:
 
