@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   resolve_environment:
@@ -60,14 +59,12 @@ jobs:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      # OIDC exchanges the short-lived GitHub token for an Azure access token.
-      # No Azure client secret or service-principal JSON is stored in GitHub.
+      # Authenticate with the Azure service principal stored in the protected
+      # GitHub Environment secret AZURE_CREDENTIALS.
       - name: Sign in to Azure
         uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Sign in to Azure Container Registry
         shell: bash
