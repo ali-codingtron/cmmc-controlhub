@@ -5,7 +5,7 @@ description: Security constraints for ControlHUB GitHub Actions deployments to A
 
 Azure releases authenticate GitHub Actions to Azure through OIDC, not a stored
 service-principal credential. Production maps only from the protected main
-branch and staging only from the protected dev branch; the workflow must
+branch and staging only from the protected staging branch; the workflow must
 independently refuse mismatched manual runs. App Service must be configured with
 the fully-qualified ACR manifest digest after each push, not an image tag.
 

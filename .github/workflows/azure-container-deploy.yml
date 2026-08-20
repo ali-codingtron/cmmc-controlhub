@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - dev
+      - staging
   workflow_dispatch:
     inputs:
       target_environment:
@@ -15,24 +15,67 @@ on:
           - staging
           - production
 
-# Serializing releases per environment prevents an earlier deployment from
-# restarting an environment after a newer image has been configured.
-concurrency:
-  group: controlhub-${{ inputs.target_environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
-  cancel-in-progress: false
-
 permissions:
   contents: read
   id-token: write
 
 jobs:
-  build-and-deploy:
-    name: Build, publish, and deploy (${{ inputs.target_environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }})
+  resolve_environment:
+    name: Validate deployment branch
     runs-on: ubuntu-latest
-    if: github.event_name != 'workflow_dispatch' || (inputs.target_environment == 'production' && github.ref == 'refs/heads/main') || (inputs.target_environment == 'staging' && github.ref == 'refs/heads/dev')
-    environment: ${{ inputs.target_environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+    outputs:
+      deploy_environment: ${{ steps.resolve.outputs.deploy_environment }}
+    steps:
+      - name: Resolve the explicit deployment target
+        id: resolve
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
+        run: |
+          set -euo pipefail
+
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            case "$GITHUB_REF:$TARGET_ENVIRONMENT" in
+              refs/heads/staging:staging)
+                deploy_environment="staging"
+                ;;
+              refs/heads/main:production)
+                deploy_environment="production"
+                ;;
+              *)
+                echo "::error::Manual runs must use staging on the staging branch or production on the main branch."
+                exit 1
+                ;;
+            esac
+          else
+            case "$GITHUB_REF" in
+              refs/heads/staging)
+                deploy_environment="staging"
+                ;;
+              refs/heads/main)
+                deploy_environment="production"
+                ;;
+              *)
+                echo "::error::Only the staging and main branches can deploy to Azure App Service."
+                exit 1
+                ;;
+            esac
+          fi
+
+          echo "deploy_environment=$deploy_environment" >> "$GITHUB_OUTPUT"
+
+  build-and-deploy:
+    name: Build, publish, and deploy (${{ needs.resolve_environment.outputs.deploy_environment }})
+    needs: resolve_environment
+    runs-on: ubuntu-latest
+    # Serializing releases per environment prevents an earlier deployment from
+    # restarting an environment after a newer image has been configured.
+    concurrency:
+      group: controlhub-${{ needs.resolve_environment.outputs.deploy_environment }}
+      cancel-in-progress: false
+    environment: ${{ needs.resolve_environment.outputs.deploy_environment }}
     env:
-      DEPLOY_ENV: ${{ inputs.target_environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+      DEPLOY_ENV: ${{ needs.resolve_environment.outputs.deploy_environment }}
       ACR_NAME: ${{ secrets.ACR_NAME }}
       ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
       ACR_REPOSITORY: ${{ secrets.ACR_REPOSITORY }}

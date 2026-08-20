@@ -346,8 +346,10 @@ az webapp deployment source config-zip \
 This repository includes `.github/workflows/azure-container-deploy.yml`. It
 deploys each environment independently:
 
+- Pushes to `staging` deploy the `staging` GitHub Environment.
 - Pushes to `main` deploy the `production` GitHub Environment.
-- Pushes to `dev` deploy the `staging` GitHub Environment.
+- Pushes to `dev` remain in the Replit development environment and do not
+  trigger an Azure deployment.
 - **Run workflow** requires an explicit environment choice and only proceeds
   when the selected environment matches the branch.
 
@@ -383,7 +385,7 @@ repository permissions with separate repositories and writer identities; simple
 tag prefixes do not provide the required security boundary.
 
 In the Environment settings, restrict `production` deployments to the
-protected `main` branch and `staging` deployments to the protected `dev`
+protected `main` branch and `staging` deployments to the protected `staging`
 branch. Add required reviewers to `production` when appropriate.
 
 | Secret | Value |
