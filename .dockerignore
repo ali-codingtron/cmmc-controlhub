@@ -1,0 +1,44 @@
+# Dependencies — reinstalled inside the image
+node_modules
+**/node_modules
+
+# Build output — produced inside the image
+**/dist
+**/.expo
+
+# Git
+.git
+.gitignore
+
+# Secrets and local config — never bake into the image
+.env
+.env.*
+!.env.example
+
+# Replit-specific files
+.replit
+replit.nix
+.replitignore
+.local/
+.cache/
+.agents/
+
+# Development / generated assets not needed at runtime. The ControlHUB brand
+# mark is imported by the Vite frontend and must remain in the build context.
+attached_assets/*
+!attached_assets/carme-logo-no-bg.png
+generated-assets/
+generated-guides/
+prisma/
+
+# Logs and OS noise
+*.log
+npm-debug.log
+yarn-error.log
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.sublime-workspace
